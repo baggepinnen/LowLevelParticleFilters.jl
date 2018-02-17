@@ -2,7 +2,7 @@ module LowLevelParticleFilters
 
 export ParticleFilter, PFstate, num_particles
 
-using StatsBase, Plots, Distributions, StaticArrays, TimerOutputs, Parameters
+using StatsBase, Plots, Distributions, StaticArrays, Parameters
 
 
 struct PFstate{PT<:AbstractArray, FT<:AbstractFloat}
