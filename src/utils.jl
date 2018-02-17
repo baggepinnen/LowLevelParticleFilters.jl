@@ -1,11 +1,8 @@
-export weigthed_mean, resample, plot_trajectories, scatter_particles
+export weigthed_mean, resample, plot_trajectories, scatter_particles, logsumexp!
 
 function logsumexp!(w)
     offset = maximum(w)
-    normConstant = zero(eltype(w))
-    for i = eachindex(w)
-        normConstant += exp(w[i]-offset)
-    end
+    normConstant = sum(w->exp(w-offset), w)
     w .-= log(normConstant) + offset
 end
 
@@ -21,10 +18,12 @@ weigthed_mean(pf::ParticleFilter) = weigthed_mean(pf.state)
 
 shouldresample(w) = rand() < 0.5
 
-function resample(w)
+resample(s::PFstate) = resample(s.w, s.j, s.bins)
+resample(w) = resample(w, zeros(Int,length(w)), zeros(length(w)))
+
+function resample(w, j, bins)
+
     N = length(w)
-    j = Array{Int64}(N)
-    bins = Array{Float64}(N)
     bins[1] = exp(w[1])
     for i = 2:N
         bins[i] = bins[i-1] + exp(w[i])

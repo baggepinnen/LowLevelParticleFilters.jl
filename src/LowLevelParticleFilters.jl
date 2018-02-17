@@ -9,6 +9,8 @@ struct PFstate{PT<:AbstractArray, FT<:AbstractFloat}
     x::Vector{PT}
     xprev::Vector{PT}
     w::Vector{FT}
+    j::Vector{Int64}
+    bins::Vector{Float64}
 end
 
 @with_kw struct ParticleFilter{ST,FT,GT}
@@ -25,7 +27,7 @@ function ParticleFilter(N::Integer, p0::Distribution, dynamics_function::Functio
     xprev = Vector{SVector{length(p0),eltype(p0)}}([rand(p0) for n=1:N])
     x = similar(xprev)
     w = fill(log(1/N), N)
-    s = PFstate(x,xprev,w)
+    s = PFstate(x,xprev,w, Vector{Int}(N), Vector{Float64}(N))
     ParticleFilter(state = s, dynamics = dynamics_function, measurement = measurement_function)
 end
 
@@ -35,7 +37,7 @@ function (pf::ParticleFilter)(u, y)
     g = pf.measurement
     N = num_particles(s)
     if shouldresample(s.w)
-        j = resample(s.w)
+        j = resample(s)
         f(s.x, s.xprev, u, j)
         fill!(s.w, log(1/N))
     else # Resample not needed
