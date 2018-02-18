@@ -2,30 +2,32 @@
 
 [![Build Status](https://travis-ci.org/baggepinnen/LowLevelParticleFilters.jl.svg?branch=master)](https://travis-ci.org/baggepinnen/LowLevelParticleFilters.jl)
 
-# Define problem
+# Usage
+Defining a particle filter is straight forward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u)` and the noise distribution `dg` in the measurement function `measurement(x)`. The distribution of the initial state `d0` must also be provided. An example for a linear Gaussian system is given below.
 ```julia
 using LowLevelParticleFilters, StaticArrays, Distributions, RecursiveArrayTools, StatPlots
 
+n = 2   # Dinemsion of state
+m = 2   # Dinemsion of input
+p = 2   # Dinemsion of measurements
+N = 500 # Number of particles
 
-n = 2 # Dinemsion of state
-m = 2 # Dinemsion of input
-p = 2 # Dinemsion of measurements
+dg = MvNormal(p,1.0)          # Dynamics noise Distribution
+df = MvNormal(n,1.0)          # Measurement noise Distribution
+d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
 
-const dg = MvNormal(p,1.0)          # Dynamics noise Distribution
-const df = MvNormal(n,1.0)          # Measurement noise Distribution
-const d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
-
-# Define random lienar state-space system
+# Define random linenar state-space system x' = Ax + Bu; y = Cx
 Tr = randn(n,n)
 const A = SMatrix{n,n}(Tr*diagm(linspace(0.5,0.99,n))/Tr)
 const B = @SMatrix randn(n,m)
 const C = @SMatrix randn(p,n)
 
-dynamics(x,u) = A*x .+ B*u
+dynamics(x,u)  = A*x .+ B*u
 measurement(x) = C*x
+pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 ```
 
-Simulate svereal times with varying number of particles and number of time steps
+To see how the performance varies with the number of particles, we simulate several times
 ```julia
 
 function run_test()
@@ -114,7 +116,7 @@ plot(svec, -lls, yscale=:log10, xscale=:log10, title="Negative log-likelihood", 
 ```
 ![window](figs/svec.png)
 
-as we can see, the result is quite noisy due to the stochastic filtering.
+as we can see, the result is quite noisy due to the stochastic nature of particle filtering.
 
 
 ## MAP estiamtion
@@ -133,10 +135,13 @@ Now we call the function `negative_log_likelihood_fun` that returns a function t
 averaging = 3
 nll       = negative_log_likelihood_fun(filter_from_parameters,priors,u,y,averaging)
 ```
-We can optimize `nll` with out favourite optimizer, e.g.,
+the parameter `averaging >= 1` can be set to reduce the Monte-Carlo error associated with estimating log likelihood by and SMC method. Oftentimes is is better to increase the number of particles instead.
+
+We can optimize `nll(θ)` with our favourite optimizer, e.g.,
 ```julia
 using Optim
-res = optimize(nll, [2.,2], show_trace=true, iterations=50)
+initial_θ_guess = [2.0, 2.0]
+res = optimize(nll, initial_θ_guess, show_trace=true, iterations=50)
 @show res
 θ   = Optim.minimizer(res)
 pfθ = filter_from_parameters(θ)
@@ -153,3 +158,5 @@ res = Results of Optimization Algorithm
    * Reached Maximum Number of Iterations: true
  * Objective Calls: 142
 ```
+
+Standard tricks apply, such as performing the parameter search in log-space and using global/black box methods, see e.g. [BlackBoxOptim.jl](https://github.com/robertfeldt/BlackBoxOptim.jl)
