@@ -1,4 +1,4 @@
-using LowLevelParticleFilters, StaticArrays, Distributions, Optim, RecursiveArrayTools, BenchmarkTools
+using LowLevelParticleFilters, StaticArrays, Distributions, Optim, RecursiveArrayTools, BenchmarkTools, StatPlots
 
 # Define problem
 
@@ -12,7 +12,7 @@ const d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
 
 # Define random lienar state-space system
 Tr = randn(n,n)
-const A = SMatrix{n,n}(Tr*diagm(linspace(0.5,0.99,n))/Tr)
+const A = SMatrix{n,n}(Tr*diagm(linspace(0.5,0.95,n))/Tr)
 const B = @SMatrix randn(n,m)
 const C = @SMatrix randn(p,n)
 
@@ -66,7 +66,7 @@ gui()
 
 
 
-N     = 500 # Number of particles
+N     = 1000 # Number of particles
 T     = 200 # Number of time steps
 M     = 100 # Number of smoothed backwards trajectories
 pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
@@ -96,15 +96,15 @@ plot(svec, -lls, yscale=:log10, xscale=:log10)
 
 
 
-filter_from_parameters(θ) = ParticleFilter(N, dynamics, measurement, MvNormal(n,θ[1]), MvNormal(p,θ[2]), d0)
-priors = [Distributions.Gamma(1,10),Distributions.Gamma(1,10)]
+filter_from_parameters(θ) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
+priors = [Distributions.Gamma(1,1),Distributions.Gamma(1,1)]
 averaging = 3
 nll       = negative_log_likelihood_fun(filter_from_parameters,priors,u,y,averaging)
-plot_priors(priors, xscale=:log10, yscale=:log10)
+# plot_priors(priors, xscale=:log10, yscale=:log10)
 
 # plot(logspace(-2,2,100), nll, xscale=:log10, yscale=:log10)
 
-res = optimize(nll, [2., 2.], show_trace=true, iterations=50)
+res = optimize(nll, log.([2., 2.]), show_trace=true, iterations=50)
 @show res
-θ   = Optim.minimizer(res)
-pfθ = filter_from_parameters(θ)
+θ   = Optim.minimizer(res) .|> exp
+pfθ = filter_from_parameters(log.(θ))

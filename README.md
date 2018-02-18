@@ -4,7 +4,7 @@
 
 # Define problem
 ```julia
-using LowLevelParticleFilters, StaticArrays, Distributions, RecursiveArrayTools
+using LowLevelParticleFilters, StaticArrays, Distributions, RecursiveArrayTools, StatPlots
 
 
 n = 2 # Dinemsion of state
@@ -113,7 +113,8 @@ end
 plot(svec, -lls, yscale=:log10, xscale=:log10, title="Negative log-likelihood", xlabel="Dynamics noise variance")
 ```
 ![window](figs/svec.png)
-as we can see, the result is quite noise due to the stochastic filtering.
+
+as we can see, the result is quite noisy due to the stochastic filtering.
 
 
 ## MAP estiamtion

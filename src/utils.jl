@@ -5,7 +5,7 @@ function logsumexp!(w)
     nc = sum(w->exp(w-offset), w)
     nc = log(nc) + offset
     w .-= nc
-    nc
+    nc - log(length(w))
 end
 
 function weigthed_mean(x,w)
