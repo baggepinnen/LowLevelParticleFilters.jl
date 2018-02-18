@@ -1,4 +1,4 @@
-export weigthed_mean, resample, plot_trajectories, scatter_particles, logsumexp!
+export weigthed_mean, plot_trajectories, scatter_particles, logsumexp!
 
 function logsumexp!(w)
     offset = maximum(w)
@@ -16,32 +16,12 @@ end
 weigthed_mean(s) = weigthed_mean(s.x,s.w)
 weigthed_mean(pf::ParticleFilter) = weigthed_mean(pf.state)
 
-shouldresample(w) = rand() < 0.5
-
-resample(s::PFstate) = resample(s.w, s.j, s.bins)
-resample(w) = resample(w, zeros(Int,length(w)), zeros(length(w)))
-
-function resample(w, j, bins)
-
-    N = length(w)
-    bins[1] = exp(w[1])
-    for i = 2:N
-        bins[i] = bins[i-1] + exp(w[i])
-    end
-    s = (rand()/N):(1/N):bins[end]
-    bo = 1
-    for i = 1:N
-        @inbounds for b = bo:N
-            if s[i] < bins[b]
-                j[i] = b
-                bo = b
-                break
-            end
-        end
-    end
-    return j
+function Base.mean(xb::Matrix{SVector})
+    M,T = size(xb,2)
+    n = length(xb[1])
+    xbm = sum(xb,1)[:] ./ M
+    reinterpret(Float64, xbm, (n,T))
 end
-
 
 function plot_trajectories(pf,y,xt)
     xa = reinterpret(Float64, pf.s.x, (length(pf.s.x[1]), length(pf.s.x)))

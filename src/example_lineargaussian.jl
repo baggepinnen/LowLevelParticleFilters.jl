@@ -13,6 +13,9 @@ const A = SMatrix{n,n}(T*diagm(linspace(0.5,0.99,n))/T)
 const B = @SMatrix randn(n,m)
 const C = @SMatrix randn(p,n)
 
+# TODO: rewrite such that f and g only works on single particle. Include pf and pg in pf struct
+# Dynamics without noise is sometimes needed and the densities are for sure needed
+
 function linear_gaussian_f(x,xp,u,j)
     Bu = B*u
     @inbounds for i = eachindex(x)
@@ -20,12 +23,20 @@ function linear_gaussian_f(x,xp,u,j)
     end
     x
 end
-function linear_gaussian_f(x,u)
+function linear_gaussian_f!(x,u)
     Bu = B*u
     @inbounds for i = eachindex(x)
         x[i] =  A*x[i] .+ Bu .+ rand(pf)
     end
     x
+end
+function linear_gaussian_f(x,u)
+    Bu = B*u
+    xout = similar(x)
+    @inbounds for i = eachindex(x)
+        xout[i] =  A*x[i] .+ Bu .+ rand(pf)
+    end
+    xout
 end
 
 function linear_gaussian_g(w,x,y)
@@ -91,3 +102,23 @@ function plotting(RMSE)
 end
 
 plotting(RMSE)
+
+
+N = 100
+T = 200
+M = 100
+filter = ParticleFilter(N, p0, linear_gaussian_f, linear_gaussian_g)
+u = [randn(m) for t=1:T]
+y = Vector{Vector{Float64}}(T)
+x = Vector{Vector{Float64}}(T)
+x[1] = rand(p0)
+for t = 1:T-1
+    y[t] = C*x[t] .+ rand(pg)
+    x[t+1] = linear_gaussian_f([x[t]],u[t])[]
+end
+y[T] = C*x[T] .+ rand(pg)
+
+@btime LowLevelParticleFilters.particle_smooth(filter, M, u, y, pf)
+
+plot(xbm')
+plot!(hcat(x...)', l=:dash)
