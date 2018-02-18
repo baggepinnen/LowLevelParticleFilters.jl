@@ -1,6 +1,6 @@
 
 
-shouldresample(w) = rand() < 0.5
+shouldresample(w) = true
 
 resample(pf::ParticleFilter, M=num_particles(pf)) = resample(pf.resampling_strategy, pf.s.w, pf.s.j, pf.s.bins)
 resample(T::Type{<:ResamplingStrategy}, s::PFstate, M=num_particles(s)) = resample(T, s.w, s.j, s.bins)
