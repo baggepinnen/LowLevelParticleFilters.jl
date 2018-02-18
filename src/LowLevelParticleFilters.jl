@@ -40,7 +40,7 @@ particletype(s::PFstate) = eltype(s.x)
 
 function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density)
     xprev = Vector{SVector{length(initial_density),eltype(initial_density)}}([rand(initial_density) for n=1:N])
-    x = similar(xprev)
+    x = deepcopy(xprev)
     w = fill(log(1/N), N)
     s = PFstate(x,xprev,w, Vector{Int}(N), Vector{Float64}(N))
     ParticleFilter(state = s, dynamics = dynamics, measurement = measurement,
@@ -87,11 +87,13 @@ function particle_smooth(pf, M, u, y)
     T = length(y)
     N = num_particles(pf)
     xf,wf,ll = forward_trajectory(pf, u, y)
-
+    @assert M <= N "Must extend cache size of bins and j to allow this"
     xb = Array{particletype(pf)}(M,T)
     wexp = exp.(wf)
     j = resample(ResampleSystematicExp, wexp[:,T], M)
-    xb[:,T] = xf[j, T]
+    for i = 1:M
+        xb[i,T] = xf[j[i], T]
+    end
     wb = Vector{Float64}(N)
     for t = T-1:-1:1
         for m = 1:M
@@ -111,8 +113,11 @@ end
 
 function negative_log_likelihood_fun(filter_from_parameters,priors,u,y,mc=1)
     function (θ)
-        pf = filter_from_parameters(θ)
-        median([-loglik(pf,u,y) for j = 1:mc]) - sum(i->logpdf(priors[i], θ[i]), eachindex(priors))
+        lls = map(1:mc) do j
+            pf = filter_from_parameters(θ)
+            -loglik(pf,u,y)  - sum(i->logpdf(priors[i], θ[i]), eachindex(priors))
+        end
+        median(lls)
     end
 end
 

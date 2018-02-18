@@ -1,10 +1,10 @@
 
-
 shouldresample(w) = true
 
-resample(pf::ParticleFilter, M=num_particles(pf)) = resample(pf.resampling_strategy, pf.s.w, pf.s.j, pf.s.bins)
-resample(T::Type{<:ResamplingStrategy}, s::PFstate, M=num_particles(s)) = resample(T, s.w, s.j, s.bins)
-resample(T::Type{<:ResamplingStrategy}, w, M=num_particles(pf)) = resample(T, w, zeros(Int,length(w)), zeros(length(w)))
+resample(pf::ParticleFilter, M=num_particles(pf)) = resample(pf.resampling_strategy, pf.state.w, pf.state.j, pf.state.bins, M)
+resample(T::Type{<:ResamplingStrategy}, s::PFstate, M=num_particles(s)) = resample(T, s.w, s.j, s.bins, M)
+resample(T::Type{<:ResamplingStrategy}, w, M=length(w)) = resample(T, w, zeros(Int,length(w)), zeros(length(w)), M)
+resample(w::AbstractArray) = resample(ResampleSystematic,w)
 
 function resample(::Type{ResampleSystematic}, w, j, bins, M = length(w))
     N = length(w)
@@ -12,7 +12,7 @@ function resample(::Type{ResampleSystematic}, w, j, bins, M = length(w))
     for i = 2:N
         bins[i] = bins[i-1] + exp(w[i])
     end
-    s = (rand()/M):(1/M):bins[end]
+    s = (rand()/M):(1/M):bins[M]
     bo = 1
     for i = 1:N
         @inbounds for b = bo:N
@@ -29,8 +29,11 @@ end
 
 function resample(::Type{ResampleSystematicExp}, w, j, bins, M = length(w))
     N = length(w)
-    cumsum!(bins, w)
-    s = (rand()/M):(1/M):bins[end]
+    bins[1] = exp(w[1])
+    for i = 2:N
+        bins[i] = bins[i-1] + exp(w[i])
+    end
+    s = (rand()/M):(1/M):bins[M]
     bo = 1
     for i = 1:N
         @inbounds for b = bo:N
