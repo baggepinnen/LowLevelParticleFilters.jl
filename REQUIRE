@@ -3,4 +3,5 @@ StaticArrays
 StatsBase
 Distributions
 Parameters
-Plots
+StatPlots
+Lazy
