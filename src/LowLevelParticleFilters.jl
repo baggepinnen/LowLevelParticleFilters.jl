@@ -1,6 +1,6 @@
 module LowLevelParticleFilters
 
-export ParticleFilter, PFstate, num_particles, weights, particles, particletype, particle_smooth, sample_measurement, simulate, loglik, negative_log_likelihood_fun, forward_trajectory, mean_trajectory, reset!
+export ParticleFilter, AdvancedParticleFilter, PFstate, num_particles, weights, particles, particletype, particle_smooth, sample_measurement, simulate, loglik, negative_log_likelihood_fun, forward_trajectory, mean_trajectory, reset!
 
 using StatsBase, Parameters, Lazy, Reexport
 @reexport using Distributions
@@ -12,47 +12,7 @@ abstract type ResamplingStrategy end
 struct ResampleSystematic <: ResamplingStrategy end
 struct ResampleSystematicExp <: ResamplingStrategy end
 
-
-struct PFstate{PT<:AbstractArray, FT<:AbstractFloat}
-    x::Vector{PT}
-    xprev::Vector{PT}
-    w::Vector{FT}
-    j::Vector{Int64}
-    bins::Vector{Float64}
-    t::Ref{Int}
-end
-
-@with_kw struct ParticleFilter{ST,FT,GT,FDT,GDT,IDT,RST<:DataType}
-    state::ST
-    dynamics::FT
-    measurement::GT
-    dynamics_density::FDT
-    measurement_density::GDT
-    initial_density::IDT
-    resample_threshold::Float64 = 0.1
-    resampling_strategy::RST = ResampleSystematic
-end
-
-num_particles(s::AbstractArray) = length(s)
-num_particles(s::PFstate) = num_particles(s.x)
-weights(s::PFstate) = s.w
-particles(s::PFstate) = s.x
-particletype(s::PFstate) = eltype(s.x)
-
-@forward ParticleFilter.state num_particles, weights, particles, particletype
-
-"""
-ParticleFilter(num_particles, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density)
-"""
-function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density)
-    xprev = Vector{SVector{length(initial_density),eltype(initial_density)}}([rand(initial_density) for n=1:N])
-    x = deepcopy(xprev)
-    w = fill(log(1/N), N)
-    s = PFstate(x,xprev,w, Vector{Int}(N), Vector{Float64}(N),Ref(1))
-    ParticleFilter(state = s, dynamics = dynamics, measurement = measurement,
-    dynamics_density=dynamics_density, measurement_density=measurement_density,
-    initial_density=initial_density)
-end
+include("PFtypes.jl")
 
 function reset!(pf)
     s = pf.state
@@ -67,33 +27,34 @@ end
 
 function predict!(pf,u, t = pf.state.t[])
     s = pf.state
-    f,df = pf.dynamics, pf.dynamics_density
     N = num_particles(s)
     if shouldresample(s.w)
-        j = resample(pf.resampling_strategy, s)
-        propagate_particles!(s.x, s.xprev, u, j, f, df, t)
+        j = resample(pf)
+        propagate_particles!(pf, u, j, t)
         fill!(s.w, log(1/N))
     else # Resample not needed
-        propagate_particles!(s.x, s.xprev, u, f, df, t)
+        propagate_particles!(pf, u, t)
     end
     pf.state.t[] += 1
 end
 
-function correct!(pf,y, t = pf.state.t[])
-    s = pf.state
-    g,dg = pf.measurement, pf.measurement_density
-    measurement_equation!(s.w, s.x, y, g, dg, t)
-    loklik = logsumexp!(s.w)
+function correct!(pf, y, t = pf.state.t[])
+    measurement_equation!(pf, y, t)
+    loklik = logsumexp!(pf.state.w)
 end
 
-
-function (pf::ParticleFilter)(u, y, t = pf.state.t[])
+function update!(pf::AbstractParticleFilter, u, y, t = pf.state.t[])
     s = pf.state
-    predict!(pf,u, t)
-    loklik = correct!(pf,y, t)
+    predict!(pf, u, t)
+    loklik = correct!(pf, y, t)
     copy!(s.xprev, s.x)
     loklik
 end
+
+
+(pf::ParticleFilter)(u, y, t = pf.state.t[]) =  update!(pf, u, y, t)
+(pf::AdvancedParticleFilter)(u, y, t = pf.state.t[]) =  update!(pf, u, y, t)
+
 
 """
 x,w,ll = forward_trajectory(pf, u::Vector{Vector}, y::Vector{Vector})
@@ -178,52 +139,6 @@ function negative_log_likelihood_fun(filter_from_parameters,priors,u,y,mc=1)
     end
 end
 
-function measurement_equation!(w,x,y,g::Function,dg::Distribution, t)
-    @inbounds for i = 1:length(w)
-        w[i] += logpdf(dg, Vector(y-g(x[i],t)))
-        w[i] = ifelse(w[i] < -1000, -1000, w[i])
-    end
-    w
-end
-
-function propagate_particles!(x,xp,u,j, f::Function, df::Distribution, t)
-    @inbounds for i = eachindex(x)
-        x[i] =  f(xp[j[i]] ,u, t) + rand(df)
-    end
-    x
-end
-
-function propagate_particles!(x,xp,u, f::Function, df::Distribution, t)
-    @inbounds for i = eachindex(x)
-        x[i] =  f(xp[i] ,u, t) + rand(df)
-    end
-    x
-end
-
-function propagate_particles!(x,xp,u,f::Function, t)
-    @inbounds for i = eachindex(x)
-        x[i] =  f(xp[i] ,u, t)
-    end
-    x
-end
-
-function propagate_particles(xp,u, f::Function, df::Distribution, t)
-    x = similar(xp)
-    @inbounds for i = eachindex(x)
-        x[i] =  f(xp[i] ,u, t) + rand(df)
-    end
-    x
-end
-
-function propagate_particles(xp,u,f::Function, t)
-    x = similar(xp)
-    @inbounds for i = eachindex(x)
-        x[i] =  f(xp[i] ,u, t)
-    end
-    x
-end
-
-sample_measurement(pf,x, t) = pf.measurement(x, t) .+ rand(pf.measurement_density)
 
 function simulate(pf,T,du)
     u = [rand(du) for t=1:T]

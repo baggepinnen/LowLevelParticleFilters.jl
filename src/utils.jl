@@ -16,7 +16,7 @@ function weigthed_mean(x,w)
     return xh
 end
 weigthed_mean(s) = weigthed_mean(s.x,s.w)
-weigthed_mean(pf::ParticleFilter) = weigthed_mean(pf.state)
+weigthed_mean(pf::AbstractParticleFilter) = weigthed_mean(pf.state)
 
 function smoothed_mean(xb)
     M,T = size(xb)
@@ -59,9 +59,26 @@ function scatter_particles(pf,xt,t; kwargs...)
 end
 
 function plot_priors(priors; kwargs...)
-    fig = plot(priors[1]; kwargs...)
+    fig = plot(priors[1]; layout=length(priors), kwargs...)
     for i = 2:length(priors)
-        plot!(priors[i])
+        plot!(priors[i], subplot=i)
     end
     fig
+end
+
+"""
+`numparameters(f)`
+Returns the number of parameters of `f` for the method which has the most parameters. This function is shamefully borrowed from [DiffEqBase.jl](https://github.com/JuliaDiffEq/DiffEqBase.jl/blob/master/src/utils.jl#L6)
+"""
+function numargs(f)
+  numparam = maximum([num_types_in_tuple(m.sig) for m in methods(f)])
+  return (numparam-1) #-1 in v0.5 since it adds f as the first parameter
+end
+
+function num_types_in_tuple(sig)
+  length(sig.parameters)
+end
+
+function num_types_in_tuple(sig::UnionAll)
+  length(Base.unwrap_unionall(sig).parameters)
 end

@@ -1,7 +1,7 @@
 
 shouldresample(w) = true
 
-resample(pf::ParticleFilter, M=num_particles(pf)) = resample(pf.resampling_strategy, pf.state.w, pf.state.j, pf.state.bins, M)
+resample(pf::AbstractParticleFilter, M=num_particles(pf)) = resample(pf.resampling_strategy, pf.state.w, pf.state.j, pf.state.bins, M)
 resample(T::Type{<:ResamplingStrategy}, s::PFstate, M=num_particles(s)) = resample(T, s.w, s.j, s.bins, M)
 resample(T::Type{<:ResamplingStrategy}, w, M=length(w)) = resample(T, w, zeros(Int,length(w)), zeros(length(w)), M)
 resample(w::AbstractArray) = resample(ResampleSystematic,w)

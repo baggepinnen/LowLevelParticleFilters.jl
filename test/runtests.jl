@@ -25,7 +25,7 @@ end
 
 
 @testset "resample" begin
-s = PFstate([zeros(10)],[zeros(10)],ones(10),zeros(Int,10),zeros(10))
+s = PFstate([zeros(10)],[zeros(10)],ones(10),zeros(Int,10),zeros(10), Ref(1))
 logsumexp!(s.w)
 @test resample(s.w) ≈ 1:10
 
