@@ -12,8 +12,8 @@ m = 2   # Dinemsion of input
 p = 2   # Dinemsion of measurements
 N = 500 # Number of particles
 
-dg = MvNormal(p,1.0)          # Dynamics noise Distribution
-df = MvNormal(n,1.0)          # Measurement noise Distribution
+df = MvNormal(n,1.0)          # Dynamics noise Distribution
+dg = MvNormal(p,1.0)          # Measurement noise Distribution
 d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
 
 # Define random linenar state-space system x' = Ax + Bu; y = Cx
