@@ -103,10 +103,11 @@ sample_measurement(pf, x, t) = pf.measurement(x, t) .+ rand(pf.measurement_densi
 
 
 
-@with_kw struct AdvancedParticleFilter{ST,FT,GT,IDT,RST<:DataType} <: AbstractParticleFilter
+@with_kw struct AdvancedParticleFilter{ST,FT,GT,FDT,IDT,RST<:DataType} <: AbstractParticleFilter
     state::ST
     dynamics::FT
     measurement::GT
+    dynamics_density::FDT = Normal()
     initial_density::IDT
     resample_threshold::Float64 = 0.1
     resampling_strategy::RST = ResampleSystematic
@@ -116,13 +117,13 @@ end
 """
 ParticleFilter(num_particles, dynamics::Function, measurement::Function, initial_density)
 """
-function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, initial_density)
+function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, dynamics_density, initial_density)
     xprev = Vector{SVector{length(initial_density),eltype(initial_density)}}([rand(initial_density) for n=1:N])
     x = deepcopy(xprev)
     w = fill(log(1/N), N)
     s = PFstate(x,xprev,w, Vector{Int}(N), Vector{Float64}(N),Ref(1))
 
-    AdvancedParticleFilter(state = s, dynamics = dynamics, measurement = measurement,
+    AdvancedParticleFilter(state = s, dynamics = dynamics, measurement = measurement, dynamics_density=dynamics_density,
     initial_density=initial_density)
 end
 

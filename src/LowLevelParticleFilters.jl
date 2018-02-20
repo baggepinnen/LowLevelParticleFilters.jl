@@ -61,7 +61,7 @@ x,w,ll = forward_trajectory(pf, u::Vector{Vector}, y::Vector{Vector})
 
 This function resets the particle filter to the initial state distribution upon start
 """
-function forward_trajectory(pf, u::Vector{Vector}, y::Vector{Vector})
+function forward_trajectory(pf, u::Vector, y::Vector)
     reset!(pf)
     T = length(y)
     N = num_particles(pf)
@@ -94,6 +94,9 @@ function mean_trajectory(pf, u::Vector, y::Vector)
     x,ll
 end
 
+# Catch-all method that assumes additive noise
+Distributions.pdf(d::Distribution,x,xp,t) = pdf(d,Vector(x.-xp))
+
 """
 xb = particle_smooth(pf, M, u, y)
 """
@@ -112,7 +115,7 @@ function particle_smooth(pf, M, u, y)
     for t = T-1:-1:1
         for m = 1:M
             for n = 1:N
-                wb[n] = wexp[n,t]*pdf(pf.dynamics_density, Vector(xb[m,t+1] .- xf[n,t])) + eps()
+                wb[n] = wexp[n,t]*pdf(pf.dynamics_density, xb[m,t+1], xf[n,t], t) + eps()
             end
             i = draw_one_categorical(wb)
             xb[m,t] = xf[i, t]
