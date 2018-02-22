@@ -1,4 +1,4 @@
-export weigthed_mean, plot_trajectories, scatter_particles, logsumexp!, smoothed_mean, smoothed_cov, smoothed_trajs, plot_priors
+export weigthed_mean, weigthed_cov, plot_trajectories, scatter_particles, logsumexp!, smoothed_mean, smoothed_cov, smoothed_trajs, plot_priors
 
 function logsumexp!(w)
     offset = maximum(w)
@@ -8,15 +8,31 @@ function logsumexp!(w)
     nc - log(length(w))
 end
 
-function weigthed_mean(x,w)
+function weigthed_mean(x,w::AbstractVector)
     xh = zeros(size(x[1]))
     @inbounds @simd  for i = eachindex(x)
         xh .+= x[i].*exp(w[i])
     end
     return xh
 end
+function weigthed_mean(x,w::AbstractMatrix)
+    N,T = size(x)
+    xh = zeros(eltype(x), T)
+    for t = 1:T
+        @inbounds @simd for i = 1:N
+            xh[t] = xh[t] + x[i,t].*exp(w[i,t])
+        end
+    end
+    return xh
+end
 weigthed_mean(s) = weigthed_mean(s.x,s.w)
 weigthed_mean(pf::AbstractParticleFilter) = weigthed_mean(pf.state)
+
+function weigthed_cov(x,w)
+    N,T = size(x)
+    n = length(x[1])
+    [cov(reinterpret(Float64, x[:,t], (n,N)),ProbabilityWeights(exp.(w[:,t])), 2, corrected=true) for t = 1:T]
+end
 
 function smoothed_mean(xb)
     M,T = size(xb)
@@ -28,7 +44,7 @@ end
 function smoothed_cov(xb)
     M,T = size(xb)
     n = length(xb[1])
-    xbc = [cov(reinterpret(Float64, xb[:,t], (n,M))) for t = 1:T]
+    xbc = [cov(reinterpret(Float64, xb[:,t], (n,M)),2) for t = 1:T]
 end
 
 function smoothed_trajs(xb)
@@ -71,14 +87,14 @@ end
 Returns the number of parameters of `f` for the method which has the most parameters. This function is shamefully borrowed from [DiffEqBase.jl](https://github.com/JuliaDiffEq/DiffEqBase.jl/blob/master/src/utils.jl#L6)
 """
 function numargs(f)
-  numparam = maximum([num_types_in_tuple(m.sig) for m in methods(f)])
-  return (numparam-1) #-1 in v0.5 since it adds f as the first parameter
+    numparam = maximum([num_types_in_tuple(m.sig) for m in methods(f)])
+    return (numparam-1) #-1 in v0.5 since it adds f as the first parameter
 end
 
 function num_types_in_tuple(sig)
-  length(sig.parameters)
+    length(sig.parameters)
 end
 
 function num_types_in_tuple(sig::UnionAll)
-  length(Base.unwrap_unionall(sig).parameters)
+    length(Base.unwrap_unionall(sig).parameters)
 end

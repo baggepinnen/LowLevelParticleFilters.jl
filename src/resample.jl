@@ -1,5 +1,20 @@
-
-shouldresample(w) = true
+function shouldresample(pf::AbstractParticleFilter)
+    w = weights(pf)
+    N = num_particles(pf)
+    th = 1/(N*pf.resample_threshold)
+    initial = round(Int, 1/th)
+    s = zero(eltype(w))
+    @inbounds @simd for i = 1:initial
+        s += exp(w[i])^2
+    end
+    for i = initial+1:N
+        s += exp(w[i])^2
+        if s > th
+            return true
+        end
+    end
+    return false
+end
 
 resample(pf::AbstractParticleFilter, M=num_particles(pf)) = resample(pf.resampling_strategy, pf.state.w, pf.state.j, pf.state.bins, M)
 resample(T::Type{<:ResamplingStrategy}, s::PFstate, M=num_particles(s)) = resample(T, s.w, s.j, s.bins, M)
@@ -53,8 +68,12 @@ end
 # There is probably lots of room for improvement here. All bins need not be formed in the beginning.
 # One only has to keep 1 values, the current upper limit, no array needed.
 # """
-function draw_one_categorical(w)
-    bins = cumsum(w)
+function draw_one_categorical(pf,w)
+    bins = pf.state.bins
+    bins[1] = exp(w[1])
+    for i = 2:length(w)
+        bins[i] = bins[i-1] + exp(w[i])
+    end
     s = rand()*bins[end]
     midpoint = round(Int64,length(bins)÷2)
     if s < bins[midpoint]

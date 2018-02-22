@@ -1,3 +1,30 @@
+
+abstract type AbstractFilter end
+abstract type AbstractKalmanFilter <: AbstractFilter end
+abstract type AbstractParticleFilter <: AbstractFilter end
+
+
+@with_kw mutable struct KalmanFilter{AT,BT,CT,DT,R1T,R2T,R2DT,D0T,XT,RT} <: AbstractKalmanFilter
+    A::AT
+    B::BT
+    C::CT
+    D::DT
+    R1::R1T
+    R2::R2T
+    R2d::R2DT
+    d0::D0T
+    x::XT
+    R::RT
+    t::Ref{Int} = Ref(1)
+end
+
+"""
+KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
+"""
+function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
+    KalmanFilter(A,B,C,D,R1,R2,MvNormal(R2), d0, Vector(d0.μ), d0.Σ.mat, Ref(1))
+end
+
 struct PFstate{PT<:AbstractArray, FT<:AbstractFloat}
     x::Vector{PT}
     xprev::Vector{PT}
@@ -6,9 +33,6 @@ struct PFstate{PT<:AbstractArray, FT<:AbstractFloat}
     bins::Vector{Float64}
     t::Ref{Int}
 end
-
-
-abstract type AbstractParticleFilter end
 
 @with_kw struct ParticleFilter{ST,FT,GT,FDT,GDT,IDT,RST<:DataType} <: AbstractParticleFilter
     state::ST
@@ -55,7 +79,7 @@ end
 
 
 function measurement_equation!(pf, y, t, d=pf.measurement_density)
-    g = pf.measurement
+    x,w,g = pf.state.x, pf.state.w, pf.measurement
     @inbounds for i = 1:num_particles(pf)
         w[i] += logpdf(d, Vector(y-g(x[i],t)))
         w[i] = ifelse(w[i] < -1000, -1000, w[i])
@@ -96,9 +120,6 @@ function propagate_particles(pf::ParticleFilter,u, t, d=pf.dynamics_density)
 end
 
 
-sample_measurement(pf, x, t) = pf.measurement(x, t) .+ rand(pf.measurement_density)
-
-
 # Advanced =================================================================================
 
 
@@ -109,7 +130,7 @@ sample_measurement(pf, x, t) = pf.measurement(x, t) .+ rand(pf.measurement_densi
     measurement::GT
     dynamics_density::FDT = Normal()
     initial_density::IDT
-    resample_threshold::Float64 = 0.1
+    resample_threshold::Float64 = 0.5
     resampling_strategy::RST = ResampleSystematic
 end
 
@@ -168,15 +189,30 @@ function propagate_particles(pf::AdvancedParticleFilter, u, t::Int, noise::Bool=
     x
 end
 
-sample_measurement(pf::AdvancedParticleFilter, x, t) = pf.measurement(x, t)
 
 # ==========================================================================================
+
+sample_state(kf::AbstractKalmanFilter) = rand(kf.d0)
+sample_state(pf::AbstractParticleFilter) = rand(pf.initial_density)
+
+sample_state(kf::AbstractKalmanFilter, x, u, t) = kf.A*x .+ kf.B*u .+ rand(MvNormal(kf.R1))
+sample_state(pf::ParticleFilter, x, u, t) = pf.dynamics(x,u,t) + rand(pf.dynamics_density)
+sample_state(pf::AdvancedParticleFilter, x, u, t) = pf.dynamics(x,u,t,true)
+sample_measurement(kf::AbstractKalmanFilter, x, t) = kf.C*x .+ rand(MvNormal(kf.R2))
+sample_measurement(pf, x, t) = pf.measurement(x, t) .+ rand(pf.measurement_density)
+sample_measurement(pf::AdvancedParticleFilter, x, t) = pf.measurement(x, t)
 
 num_particles(s::AbstractArray) = length(s)
 num_particles(s::PFstate) = num_particles(s.x)
 weights(s::PFstate) = s.w
 particles(s::PFstate) = s.x
 particletype(s::PFstate) = eltype(s.x)
+particletype(kf::AbstractKalmanFilter) = typeof(kf.x)
+covtype(kf::AbstractKalmanFilter) = typeof(kf.R)
+index(pf::AbstractParticleFilter) = pf.state.t[]
+index(f::AbstractFilter) = f.t[]
+state(kf::AbstractKalmanFilter) = kf.x
+covariance(kf::AbstractKalmanFilter) = kf.R
 
 @forward ParticleFilter.state num_particles, weights, particles, particletype
 @forward AdvancedParticleFilter.state num_particles, weights, particles, particletype
