@@ -1,5 +1,9 @@
 export weigthed_mean, weigthed_cov, plot_trajectories, scatter_particles, logsumexp!, smoothed_mean, smoothed_cov, smoothed_trajs, plot_priors
 
+"""
+ll = logsumexp!(w)
+Normalizes the weight vector `w` and returns the weighted log-likelihood
+"""
 function logsumexp!(w)
     offset = maximum(w)
     nc = sum(w->exp(w-offset), w)

@@ -2,6 +2,14 @@
 
 [![Build Status](https://travis-ci.org/baggepinnen/LowLevelParticleFilters.jl.svg?branch=master)](https://travis-ci.org/baggepinnen/LowLevelParticleFilters.jl)
 
+# Types
+We provide three filter types
+- `ParticleFilter`
+- `AdvancedParticleFilter`
+- `KalmanFilter`
+
+All three can be used for filtering, smoothing and MCMC inference using the marginal Metropolis algorithm.
+
 # Usage
 Defining a particle filter is straight forward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u)` and the noise distribution `dg` in the measurement function `measurement(x)`. The distribution of the initial state `d0` must also be provided. An example for a linear Gaussian system is given below.
 ```julia
@@ -42,12 +50,12 @@ function run_test()
                 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
                 u = randn(m)
                 x = rand(d0)
-                y = sample_measurement(pf,x)
+                y = sample_measurement(pf,x,1)
                 error = 0.0
                 @inbounds for t = 1:T-1
                     pf(u, y) # Update the particle filter
                     x .= dynamics(x,u)
-                    y .= sample_measurement(pf,x)
+                    y .= sample_measurement(pf,x,t)
                     randn!(u)
                     error += sum(abs2,x-weigthed_mean(pf))
                 end # t
@@ -87,7 +95,7 @@ du    = MvNormal(2,1) # Control input distribution
 x,u,y = simulate(pf,T,du)
 
 
-xb  = particle_smooth(pf, M, u, y)
+xb  = smooth(pf, M, u, y)
 xbm = smoothed_mean(xb)
 xbc = smoothed_cov(xb)
 xbt = smoothed_trajs(xb)
@@ -112,7 +120,7 @@ lls = map(svec) do s
     pfs = ParticleFilter(N, dynamics, measurement, MvNormal(n,s), dg, d0)
     loglik(pfs,u,y)
 end
-plot(svec, -lls, yscale=:log10, xscale=:log10, title="Negative log-likelihood", xlabel="Dynamics noise variance")
+plot(svec, -lls, yscale=:log10, xscale=:log10, title="Negative log-likelihood", xlabel="Dynamics noise standard deviation")
 ```
 ![window](figs/svec.png)
 
@@ -130,18 +138,18 @@ we also need to define prior distributions for all parameters in the parameter v
 priors = [Distributions.Gamma(1,10),Distributions.Gamma(1,10)]
 plot_priors(priors, xscale=:log10, yscale=:log10)
 ```
-Now we call the function `negative_log_likelihood_fun` that returns a function to be minimized
+Now we call the function `log_likelihood_fun` that returns a function to be minimized
 ```julia
 averaging = 3
-nll       = negative_log_likelihood_fun(filter_from_parameters,priors,u,y,averaging)
+ll       = log_likelihood_fun(filter_from_parameters,priors,u,y,averaging)
 ```
 the parameter `averaging >= 1` can be set to reduce the Monte-Carlo error associated with estimating log likelihood by and SMC method. Oftentimes is is better to increase the number of particles instead.
 
-We can optimize `nll(θ)` with our favourite optimizer, e.g.,
+We can optimize `ll(θ)` with our favourite optimizer, e.g.,
 ```julia
 using Optim
 initial_θ_guess = [2.0, 2.0]
-res = optimize(nll, initial_θ_guess, show_trace=true, iterations=50)
+res = optimize(θ -> -ll(θ), initial_θ_guess, show_trace=true, iterations=50)
 @show res
 θ   = Optim.minimizer(res)
 pfθ = filter_from_parameters(θ)

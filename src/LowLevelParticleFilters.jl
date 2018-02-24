@@ -1,6 +1,6 @@
 module LowLevelParticleFilters
 
-export KalmanFilter, ParticleFilter, AdvancedParticleFilter, PFstate, index, state, covariance, num_particles, weights, particles, particletype, smooth, sample_measurement, simulate, loglik, negative_log_likelihood_fun, forward_trajectory, mean_trajectory, reset!, metropolis
+export KalmanFilter, ParticleFilter, AdvancedParticleFilter, PFstate, index, state, covariance, num_particles, weights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, reset!, metropolis
 
 using StatsBase, Parameters, Lazy, Reexport
 @reexport using Distributions
@@ -21,6 +21,9 @@ function reset!(kf::AbstractKalmanFilter)
     kf.R = copy(kf.d0.Σ.mat)
 end
 
+"""
+    Reset the filter to initial state and covariance/distribution
+"""
 function reset!(pf)
     s = pf.state
     for i = eachindex(s.xprev)
@@ -47,6 +50,10 @@ function correct!(kf::AbstractKalmanFilter, y, t = index(kf))
     logpdf(R2d, e)
 end
 
+"""
+    predict!(f,u, t = index(f))
+Move filter state forward in time using dynamics equation and input vector `u`.
+"""
 function predict!(pf,u, t = index(pf))
     s = pf.state
     N = num_particles(s)
@@ -61,11 +68,19 @@ function predict!(pf,u, t = index(pf))
     pf.state.t[] += 1
 end
 
+"""
+ correct!(f, y, t = index(f))
+Update state/covariance/weights based on measurement `y`,  returns loglikelihood.
+"""
 function correct!(pf, y, t = index(pf))
     measurement_equation!(pf, y, t)
     loklik = logsumexp!(pf.state.w)
 end
 
+"""
+ll = update!(f::AbstractFilter, u, y, t = index(f))
+Perform one step of `predict!` and `correct!`, returns loglikelihood.
+"""
 function update!(f::AbstractFilter, u, y, t = index(f))
     predict!(f, u, t)
     loklik = correct!(f, y, t)
@@ -106,6 +121,10 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector)
     x,xt,R,Rt,ll
 end
 
+"""
+xT,RT = smooth(kf::AbstractKalmanFilter, u::Vector, y::Vector)
+Rewturns smoothed estimates of state `x` and covariance `R` given all input output data `u,y`
+"""
 function smooth(kf::AbstractKalmanFilter, u::Vector, y::Vector)
     reset!(kf)
     T            = length(y)
@@ -121,6 +140,7 @@ function smooth(kf::AbstractKalmanFilter, u::Vector, y::Vector)
     end
     xT,RT
 end
+
 
 function forward_trajectory(pf, u::Vector, y::Vector)
     reset!(pf)
@@ -193,29 +213,37 @@ function loglik(f,u,y)
 end
 
 """
-nll(θ) = negative_log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors::Vector{Distribution}, u, y, averaging=1)
+ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors::Vector{Distribution}, u, y, averaging=1)
 """
-function negative_log_likelihood_fun(filter_from_parameters,priors::Vector{<:Distribution},u,y,mc=1)
+function log_likelihood_fun(filter_from_parameters,priors::Vector{<:Distribution},u,y,mc=1)
     function (θ)
         lls = map(1:mc) do j
-            nll = -sum(i->logpdf(priors[i], θ[i]), eachindex(priors))
-            isfinite(nll) || return Inf
+            ll = sum(i->logpdf(priors[i], θ[i]), eachindex(priors))
+            isfinite(ll) || return Inf
             pf = filter_from_parameters(θ)
-            nll -= loglik(pf,u,y)
+            ll += loglik(pf,u,y)
         end
         median(lls)
     end
 end
 
 naive_sampler(θ₀) =  θ -> θ .+ rand(MvNormal(0.1abs.(θ₀)))
-function metropolis(nll, R, θ₀, draw = naive_sampler(θ₀))
+
+"""
+    metropolis(ll::Function(θ), R::Int, θ₀::Vector, draw::Function(θ) = naive_sampler(θ₀))
+
+Performs MCMC sampling using the marginal Metropolis (-Hastings) algorithm
+`draw = θ -> θ'` samples a new parameter vector given an old parameter vector. The distribution must be symmetric, e.g., a Gaussian.
+See `log_likelihood_fun`
+"""
+function metropolis(ll, R, θ₀, draw = naive_sampler(θ₀))
     params    = Vector{typeof(θ₀)}(R)
     lls       = Vector{Float64}(R)
     params[1] = θ₀
-    lls[1]    = -nll(θ₀)
+    lls[1]    = ll(θ₀)
     for i = 2:R
         θ = draw(params[i-1])
-        ll = -nll(θ)
+        ll = ll(θ)
         if rand() < exp(ll-lls[i-1])
             params[i] = θ
             lls[i] = ll
@@ -228,7 +256,9 @@ function metropolis(nll, R, θ₀, draw = naive_sampler(θ₀))
 end
 
 """
-simulate(f::AbstractFilter,T::Int,du::Distribution)
+x,u,y = simulate(f::AbstractFilter,T::Int,du::Distribution)
+Simulate dynamical system forward in time, returns state sequence, inputs and measurements
+`du` is a distribution of random inputs
 """
 function simulate(f::AbstractFilter,T::Int,du::Distribution)
     u = [rand(du) for t=1:T]
@@ -239,7 +269,7 @@ function simulate(f::AbstractFilter,T::Int,du::Distribution)
         y[t] = sample_measurement(f,x[t], t)
         x[t+1] = sample_state(f, x[t], u[t], t)
     end
-    y[T] = sample_measurement(f,x[T], t)
+    y[T] = sample_measurement(f,x[T], T)
     x,u,y
 end
 

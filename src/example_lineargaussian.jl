@@ -31,12 +31,12 @@ function run_test()
                 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
                 u = randn(m)
                 x = rand(d0)
-                y = sample_measurement(pf,x)
+                y = sample_measurement(pf,x,1)
                 error = 0.0
                 @inbounds for t = 1:T-1
                     pf(u, y) # Update the particle filter
                     x .= dynamics(x,u)
-                    y .= sample_measurement(pf,x)
+                    y .= sample_measurement(pf,x,t)
                     randn!(u)
                     error += sum(abs2,x-weigthed_mean(pf))
                 end # t
@@ -73,7 +73,7 @@ pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 du    = MvNormal(2,1) # Control input distribution
 x,u,y = simulate(pf,T,du)
 
-xb  = particle_smooth(pf, M, u, y)
+xb  = smooth(pf, M, u, y)
 xbm = smoothed_mean(xb)
 xbc = smoothed_cov(xb)
 xbt = smoothed_trajs(xb)
@@ -99,12 +99,12 @@ plot(svec, -lls, yscale=:log10, xscale=:log10)
 filter_from_parameters(θ) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
 priors = [Distributions.Gamma(1,1),Distributions.Gamma(1,1)]
 averaging = 3
-nll       = negative_log_likelihood_fun(filter_from_parameters,priors,u,y,averaging)
+nll       = log_likelihood_fun(filter_from_parameters,priors,u,y,averaging)
 # plot_priors(priors, xscale=:log10, yscale=:log10)
 
 # plot(logspace(-2,2,100), nll, xscale=:log10, yscale=:log10)
 
-res = optimize(nll, log.([2., 2.]), show_trace=true, iterations=50)
+res = optimize(θ -> -ll(θ), log.([2., 2.]), show_trace=true, iterations=50)
 @show res
 θ   = Optim.minimizer(res) .|> exp
 pfθ = filter_from_parameters(log.(θ))

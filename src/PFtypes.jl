@@ -56,18 +56,14 @@ function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, d
     s = PFstate(x,xprev,w, Vector{Int}(N), Vector{Float64}(N),Ref(1))
     nf = numargs(dynamics)
     if nf < 3
-        f = (x,u,t,p) -> dynamics(x,u)
-    elseif nf < 4
-        f = (x,u,t,p) -> dynamics(x,u,t)
+        f = (x,u,t) -> dynamics(x,u)
     else
         f = dynamics
     end
 
     ng = numargs(measurement)
-    if ng < 3
-        g = (x,u,t,p) -> measurement(x,u)
-    elseif ng < 4
-        g = (x,u,t,p) -> measurement(x,u,t)
+    if ng < 2
+        g = (x,t) -> measurement(x)
     else
         g = measurement
     end
@@ -155,7 +151,7 @@ function measurement_equation!(pf::AdvancedParticleFilter, y, t)
     x = particles(pf)
     @inbounds for i = 1:num_particles(pf)
         w[i] += g(x[i],y,t)
-        w[i] = ifelse(w[i] < -1000, -1000, w[i])
+        w[i] = ifelse(w[i] < -10000, -10000, w[i])
     end
     w
 end
