@@ -1,0 +1,11 @@
+name = "LowLevelParticleFilters"
+uuid = "d9d29d28-c116-5dba-9239-57a5fe23875b"
+
+[deps]
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+Lazy = "50d2b5c4-7a5e-59d5-8109-a42b560f39c0"
+Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
+Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
+StatPlots = "60ddc479-9b66-56df-82fc-76a74619b69c"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
