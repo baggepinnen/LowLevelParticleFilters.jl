@@ -35,26 +35,26 @@ weigthed_mean(pf::AbstractParticleFilter) = weigthed_mean(pf.state)
 function weigthed_cov(x,w)
     N,T = size(x)
     n = length(x[1])
-    [cov(reinterpret(Float64, x[:,t], (n,N)),ProbabilityWeights(exp.(w[:,t])), 2, corrected=true) for t = 1:T]
+    [cov(copy(reshape(reinterpret(Float64, x[:,t]),n,N)),ProbabilityWeights(exp.(w[:,t])), dims=2, corrected=true) for t = 1:T]
 end
 
 function smoothed_mean(xb)
     M,T = size(xb)
     n = length(xb[1])
-    xbm = sum(xb,1)[:] ./ M
-    reinterpret(Float64, xbm, (n,T))
+    xbm = sum(xb,dims=1)[:] ./ M
+    copy(reshape(reinterpret(Float64, xbm), n,T))
 end
 
 function smoothed_cov(xb)
     M,T = size(xb)
     n = length(xb[1])
-    xbc = [cov(reinterpret(Float64, xb[:,t], (n,M)),2) for t = 1:T]
+    xbc = [cov(copy(reshape(reinterpret(Float64, xb[:,t]),n,M)),dims=2) for t = 1:T]
 end
 
 function smoothed_trajs(xb)
     M,T = size(xb)
     n = length(xb[1])
-    reinterpret(Float64, xb, (n,M,T))
+    copy(reshape(reinterpret(Float64, xb), n,M,T))
 end
 
 function plot_trajectories(pf,y,xt)

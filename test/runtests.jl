@@ -1,6 +1,7 @@
 using LowLevelParticleFilters
 import LowLevelParticleFilters.resample
-using Base.Test
+using Test, Random
+Random.seed!(0)
 
 
 @testset "weigthed_mean" begin

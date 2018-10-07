@@ -53,7 +53,7 @@ function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, d
     xprev = Vector{SVector{length(initial_density),eltype(initial_density)}}([rand(initial_density) for n=1:N])
     x = deepcopy(xprev)
     w = fill(log(1/N), N)
-    s = PFstate(x,xprev,w, Vector{Int}(N), Vector{Float64}(N),Ref(1))
+    s = PFstate(x,xprev,w, Vector{Int}(undef,N), Vector{Float64}(undef,N),Ref(1))
     nf = numargs(dynamics)
     if nf < 3
         f = (x,u,t) -> dynamics(x,u)
@@ -77,7 +77,7 @@ end
 function measurement_equation!(pf, y, t, d=pf.measurement_density)
     x,w,g = pf.state.x, pf.state.w, pf.measurement
     @inbounds for i = 1:num_particles(pf)
-        w[i] += logpdf(d, Vector(y-g(x[i],t)))
+        w[i] += logpdf(d, Vector(y.-g(x[i],t)))[]
         w[i] = ifelse(w[i] < -1000, -1000, w[i])
     end
     w

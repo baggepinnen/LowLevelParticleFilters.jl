@@ -2,7 +2,7 @@ module LowLevelParticleFilters
 
 export KalmanFilter, ParticleFilter, AdvancedParticleFilter, PFstate, index, state, covariance, num_particles, weights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, reset!, metropolis
 
-using StatsBase, Parameters, Lazy, Reexport
+using StatsBase, Parameters, Lazy, Reexport, Random
 @reexport using Distributions
 @reexport using StatPlots
 @reexport using StaticArrays
@@ -64,7 +64,8 @@ function predict!(pf,u, t = index(pf))
     else # Resample not needed
         propagate_particles!(pf, u, t)
     end
-    copy!(s.xprev, s.x)
+    # copy!(s.xprev, s.x)
+    s.xprev .= copy(s.x) # TODO: above line was working before
     pf.state.t[] += 1
 end
 
@@ -101,10 +102,10 @@ This Function resets the filter to the initial state distribution upon start
 function forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector)
     reset!(kf)
     T     = length(y)
-    x     = Array{particletype(kf)}(T)
-    xt    = Array{particletype(kf)}(T)
-    R     = Array{covtype(kf)}(T)
-    Rt    = Array{covtype(kf)}(T)
+    x     = Array{particletype(kf)}(undef,T)
+    xt    = Array{particletype(kf)}(undef,T)
+    R     = Array{covtype(kf)}(undef,T)
+    Rt    = Array{covtype(kf)}(undef,T)
     x[1]  = state(kf)       |> copy
     R[1]  = covariance(kf)  |> copy
     ll    = correct!(kf, y[1], 1)
@@ -146,8 +147,8 @@ function forward_trajectory(pf, u::Vector, y::Vector)
     reset!(pf)
     T = length(y)
     N = num_particles(pf)
-    x = Array{particletype(pf)}(N,T)
-    w = Array{Float64}(N,T)
+    x = Array{particletype(pf)}(undef,N,T)
+    w = Array{Float64}(undef,N,T)
     ll = 0.0
     for t = 1:T
         ll += pf(u[t], y[t], t)
@@ -168,7 +169,7 @@ function mean_trajectory(pf, u::Vector, y::Vector)
     reset!(pf)
     T = length(y)
     N = num_particles(pf)
-    x = Array{particletype(pf)}(T)
+    x = Array{particletype(pf)}(undef,T)
     ll = 0.0
     for t = 1:T
         ll += pf(u[t], y[t], t)
@@ -189,12 +190,12 @@ function smooth(pf::AbstractParticleFilter, M, u, y)
     N = num_particles(pf)
     xf,wf,ll = forward_trajectory(pf, u, y)
     @assert M <= N "Must extend cache size of bins and j to allow this"
-    xb = Array{particletype(pf)}(M,T)
+    xb = Array{particletype(pf)}(undef,M,T)
     j = resample(ResampleSystematic, wf[:,T], M)
     for i = 1:M
         xb[i,T] = xf[j[i], T]
     end
-    wb = Vector{Float64}(N)
+    wb = Vector{Float64}(undef,N)
     for t = T-1:-1:1
         for m = 1:M
             for n = 1:N
@@ -262,8 +263,8 @@ Simulate dynamical system forward in time, returns state sequence, inputs and me
 """
 function simulate(f::AbstractFilter,T::Int,du::Distribution)
     u = [rand(du) for t=1:T]
-    y = Vector{Vector{Float64}}(T)
-    x = Vector{Vector{Float64}}(T)
+    y = Vector{Vector{Float64}}(undef,T)
+    x = Vector{Vector{Float64}}(undef,T)
     x[1] = sample_state(f)
     for t = 1:T-1
         y[t] = sample_measurement(f,x[t], t)

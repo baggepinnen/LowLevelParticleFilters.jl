@@ -26,7 +26,7 @@ d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
 
 # Define random linenar state-space system x' = Ax + Bu; y = Cx
 Tr = randn(n,n)
-const A = SMatrix{n,n}(Tr*diagm(linspace(0.5,0.99,n))/Tr)
+const A = SMatrix{n,n}(Tr*diagm(0=>range(0.5, stop=0.99, length=n))/Tr)
 const B = @SMatrix randn(n,m)
 const C = @SMatrix randn(p,n)
 
@@ -104,8 +104,8 @@ plot(xbm', ribbon=2xbs, lab="Smoothed mean")
 plot!(vecvec_to_mat(x), l=:dash, lab="True state")
 
 plot(vecvec_to_mat(x), l=(4,), layout=(2,1), reuse=false, show=false, lab="True state")
-scatter!(xbt[1,:,:]', subplot=1, show=false, lab="Backwards trajectories")
-scatter!(xbt[2,:,:]', subplot=2, lab="Backwards trajectories")
+scatter!(xbt[1,:,:]', subplot=1, show=false, lab="Backwards trajectories", m=(1,:black, 0.5))
+scatter!(xbt[2,:,:]', subplot=2, lab="Backwards trajectories", m=(1,:black, 0.5))
 ```
 ![window](figs/smooth.png)
 

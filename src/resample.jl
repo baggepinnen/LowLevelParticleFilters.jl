@@ -70,23 +70,24 @@ end
 # """
 function draw_one_categorical(pf,w)
     bins = pf.state.bins
-    bins[1] = exp(w[1])
+    bins .= exp.(w)
     for i = 2:length(w)
-        bins[i] = bins[i-1] + exp(w[i])
+        bins[i] += bins[i-1]
     end
     s = rand()*bins[end]
-    midpoint = round(Int64,length(bins)÷2)
+    midpoint = length(bins)÷2
     if s < bins[midpoint]
         for b = 1:midpoint
-            if s < bins[b]
+            if s <= bins[b]
                 return b
             end
         end
     else
         for b = midpoint:length(bins)
-            if s < bins[b]
+            if s <= bins[b]
                 return b
             end
         end
     end
+    length(bins)
 end
