@@ -76,6 +76,7 @@ end
 
 function measurement_equation!(pf, y, t, d=pf.measurement_density)
     x,w,g = pf.state.x, pf.state.w, pf.measurement
+    any(ismissing.(y)) && return w
     @inbounds for i = 1:num_particles(pf)
         w[i] += logpdf(d, Vector(y.-g(x[i],t)))[]
         w[i] = ifelse(w[i] < -1000, -1000, w[i])
@@ -105,12 +106,12 @@ end
 
 
 function propagate_particles(pf::ParticleFilter,u, t, d=pf.dynamics_density)
-    f= pf.dynamics
-    xp = pf.state.xprev
-    x = similar(xp)
+    f     = pf.dynamics
+    xp    = pf.state.xprev
+    x     = similar(xp)
     noise = zeros(length(x[1]))
     @inbounds for i = eachindex(x)
-        x[i] =  f(xp[i] ,u, t) + rand!(d, noise)
+        x[i] =  f(xp[i], u, t) + rand!(d, noise)
     end
     x
 end
@@ -148,6 +149,7 @@ end
 function measurement_equation!(pf::AdvancedParticleFilter, y, t)
     g = pf.measurement
     w = weights(pf)
+    any(ismissing.(y)) && return w
     x = particles(pf)
     @inbounds for i = 1:num_particles(pf)
         w[i] += g(x[i],y,t)
@@ -160,7 +162,7 @@ function propagate_particles!(pf::AdvancedParticleFilter, u, j, t::Int, noise::B
     f = pf.dynamics
     x,xp = pf.state.x, pf.state.xprev
     @inbounds for i = eachindex(x)
-        x[i] =  f(xp[j[i]] ,u, t, noise)
+        x[i] =  f(xp[j[i]], u, t, noise)
     end
     x
 end
@@ -169,7 +171,7 @@ function propagate_particles!(pf::AdvancedParticleFilter, u, t::Int, noise::Bool
     f = pf.dynamics
     x,xp = pf.state.x, pf.state.xprev
     @inbounds for i = eachindex(x)
-        x[i] =  f(xp[i] ,u, t, noise)
+        x[i] =  f(xp[i], u, t, noise)
     end
     x
 end
@@ -180,7 +182,7 @@ function propagate_particles(pf::AdvancedParticleFilter, u, t::Int, noise::Bool=
     xp = pf.state.xprev
     x = similar(xp)
     @inbounds for i = eachindex(x)
-        x[i] =  f(xp[i] ,u, t, noise)
+        x[i] =  f(xp[i], u, t, noise)
     end
     x
 end
