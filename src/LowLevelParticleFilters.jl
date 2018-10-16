@@ -64,8 +64,8 @@ function predict!(pf,u, t = index(pf))
     else # Resample not needed
         propagate_particles!(pf, u, t)
     end
-    # copy!(s.xprev, s.x)
-    s.xprev .= copy(s.x) # TODO: above line was working before
+    copyto!(s.xprev, s.x)
+    # s.xprev .= copy(s.x) # TODO: above line was working before
     pf.state.t[] += 1
 end
 
