@@ -2,7 +2,7 @@ module LowLevelParticleFilters
 
 export KalmanFilter, ParticleFilter, AdvancedParticleFilter, PFstate, index, state, covariance, num_particles, weights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, reset!, metropolis
 
-using StatsBase, Parameters, Lazy, Reexport, Random
+using StatsBase, Parameters, Lazy, Reexport, Random, LinearAlgebra
 @reexport using Distributions
 @reexport using StatPlots
 @reexport using StaticArrays
@@ -36,17 +36,29 @@ end
 
 function predict!(kf::AbstractKalmanFilter, u, t = index(kf))
     @unpack A,B,x,R,R1 = kf
-    x .= A*x .+ B*u
-    R .= A*R*A' .+ R1
+    if ndims(A) == 3
+        At = A[:,:,t]
+        Bt = B[:,:,t]
+    else
+        At = A
+        Bt = B
+    end
+    x .= At*x .+ Bt*u
+    R .= At*R*At' .+ R1
     kf.t[] += 1
 end
 
 function correct!(kf::AbstractKalmanFilter, y, t = index(kf))
     @unpack C,x,R,R2,R2d = kf
-    e   = y-C*x
-    K   = (R*C')/(C*R*C' + R2)
+    if ndims(C) == 3
+        Ct = C[:,:,t]
+    else
+        Ct = C
+    end
+    e   = y-Ct*x
+    K   = (R*Ct')/(Ct*R*Ct' + R2)
     x .+= K*e
-    R  .= (I - K*C)*R
+    R  .= (I - K*Ct)*R
     logpdf(R2d, e)
 end
 
@@ -115,16 +127,16 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector)
         predict!(kf, u[t], t)
         x[t]   = state(kf)              |> copy
         R[t]   = covariance(kf)         |> copy
-        ll     += correct!(kf, y[t], t)
-        xt[t] = state(kf)               |> copy
-        Rt[t] = covariance(kf)          |> copy
+        ll    += correct!(kf, y[t], t)
+        xt[t]  = state(kf)              |> copy
+        Rt[t]  = covariance(kf)         |> copy
     end
     x,xt,R,Rt,ll
 end
 
 """
 xT,RT = smooth(kf::AbstractKalmanFilter, u::Vector, y::Vector)
-Rewturns smoothed estimates of state `x` and covariance `R` given all input output data `u,y`
+Returns smoothed estimates of state `x` and covariance `R` given all input output data `u,y`
 """
 function smooth(kf::AbstractKalmanFilter, u::Vector, y::Vector)
     reset!(kf)
