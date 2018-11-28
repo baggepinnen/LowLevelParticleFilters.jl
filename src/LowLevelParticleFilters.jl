@@ -19,6 +19,7 @@ Base.Vector(v::Distributions.ZeroVector) = zeros(eltype(v), length(v))
 function reset!(kf::AbstractKalmanFilter)
     kf.x .= Vector(kf.d0.μ)
     kf.R = copy(kf.d0.Σ.mat)
+    kf.t[] = 1
 end
 
 """
@@ -124,7 +125,7 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector)
     xt[1] = state(kf)       |> copy
     Rt[1] = covariance(kf)  |> copy
     for t = 2:T
-        predict!(kf, u[t], t)
+        predict!(kf, u[t-1], t-1)
         x[t]   = state(kf)              |> copy
         R[t]   = covariance(kf)         |> copy
         ll    += correct!(kf, y[t], t)
@@ -135,7 +136,7 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector)
 end
 
 """
-xT,RT = smooth(kf::AbstractKalmanFilter, u::Vector, y::Vector)
+xT,RT,ll = smooth(kf::AbstractKalmanFilter, u::Vector, y::Vector)
 Returns smoothed estimates of state `x` and covariance `R` given all input output data `u,y`
 """
 function smooth(kf::AbstractKalmanFilter, u::Vector, y::Vector)
@@ -151,7 +152,7 @@ function smooth(kf::AbstractKalmanFilter, u::Vector, y::Vector)
         xT[t] = xt[t] .+ C*(xT[t+1] .- x[t+1])
         RT[t] = Rt[t] .+ C*(RT[t+1] .- R[t+1])*C'
     end
-    xT,RT
+    xT,RT,ll
 end
 
 
@@ -195,7 +196,7 @@ end
 Distributions.logpdf(d::Distribution,x,xp,t) = logpdf(d,Vector(x.-xp))
 
 """
-xb = smooth(pf, M, u, y)
+xb,ll = smooth(pf, M, u, y)
 """
 function smooth(pf::AbstractParticleFilter, M, u, y)
     T = length(y)
@@ -217,7 +218,7 @@ function smooth(pf::AbstractParticleFilter, M, u, y)
             xb[m,t] = xf[i, t]
         end
     end
-    return xb
+    return xb,ll
 end
 
 function loglik(f,u,y)
