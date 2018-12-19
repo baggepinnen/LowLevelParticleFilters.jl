@@ -22,7 +22,7 @@ end
 KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
 """
 function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
-    KalmanFilter(A,B,C,D,R1,R2,MvNormal(R2), d0, Vector(d0.μ), d0.Σ.mat, Ref(1))
+    KalmanFilter(A,B,C,D,R1,R2,MvNormal(R2), d0, Vector(d0.μ), Matrix(d0.Σ), Ref(1))
 end
 
 struct PFstate{PT<:AbstractArray, FT<:AbstractFloat}

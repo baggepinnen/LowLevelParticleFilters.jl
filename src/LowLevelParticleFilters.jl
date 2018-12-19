@@ -18,7 +18,7 @@ Base.Vector(v::Distributions.ZeroVector) = zeros(eltype(v), length(v))
 
 function reset!(kf::AbstractKalmanFilter)
     kf.x .= Vector(kf.d0.μ)
-    kf.R = copy(kf.d0.Σ.mat)
+    kf.R = copy(Matrix(kf.d0.Σ))
     kf.t[] = 1
 end
 
