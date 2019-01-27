@@ -1,6 +1,9 @@
 # LowLevelParticleFilters
 
 [![Build Status](https://travis-ci.org/baggepinnen/LowLevelParticleFilters.jl.svg?branch=master)](https://travis-ci.org/baggepinnen/LowLevelParticleFilters.jl)
+[![Coverage Status](https://coveralls.io/repos/github/baggepinnen/LowLevelParticleFilters.jl/badge.svg?branch=master)](https://coveralls.io/github/baggepinnen/LowLevelParticleFilters.jl?branch=master)
+[![codecov](https://codecov.io/gh/baggepinnen/LowLevelParticleFilters.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/baggepinnen/LowLevelParticleFilters.jl)
+
 
 # Types
 We provide three filter types
@@ -14,7 +17,7 @@ All three can be used for filtering, smoothing and MCMC inference using the marg
 ## Particle filter
 Defining a particle filter is straight forward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u)` and the noise distribution `dg` in the measurement function `measurement(x)`. The distribution of the initial state `d0` must also be provided. An example for a linear Gaussian system is given below.
 ```julia
-using LowLevelParticleFilters, StaticArrays, Distributions, StatPlots, Random
+using LowLevelParticleFilters, StaticArrays, Distributions, StatPlots, Random, LinearAlgebra
 
 n = 2   # Dinemsion of state
 m = 2   # Dinemsion of input
@@ -89,8 +92,12 @@ gui()
 A Kalman filter is easily created using the constructor. Many of the functions defined for particle filters, are defined also for Kalman filters, e.g.:
 ```julia
 eye(n) = Matrix{Float64}(I,n,n)
-kf = KalmanFilter(A, B, I, 0, eye(n), eye(p), MvNormal(x[1]))
-x,xt,R,Rt,ll = forward_trajectory(kf, u, x) # filtered, prediction, pred cov, filter cov, loglik
+kf = KalmanFilter(A, B, I, 0, eye(n), eye(p), MvNormal([x[1]]))
+T     = 200 # Number of time steps
+du    = MvNormal(2,1) # Control input distribution
+x,u,y = LowLevelParticleFilters.simulate(kf,T,du)
+
+x,xt,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
 xT,R,lls = smooth(kf, u, x) # Smoothed state, smoothed cov, loglik
 ```
 It can also be called in a loop like the `pf` above
@@ -135,7 +142,7 @@ We provide som basic functionality for maximum likelihood estimation and MAP est
 ## ML estimation
 Plot likelihood as function of the variance of the dynamics noise
 ```julia
-svec = logspace(-2,2,50)
+svec = exp10.(range(-2, stop=2, length=50))
 lls = map(svec) do s
     pfs = ParticleFilter(N, dynamics, measurement, MvNormal(n,s), dg, d0)
     loglik(pfs,u,y)
