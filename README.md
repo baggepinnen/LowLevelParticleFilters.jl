@@ -11,9 +11,10 @@ We provide three filter types
 All three can be used for filtering, smoothing and MCMC inference using the marginal Metropolis algorithm.
 
 # Usage
+## Particle filter
 Defining a particle filter is straight forward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u)` and the noise distribution `dg` in the measurement function `measurement(x)`. The distribution of the initial state `d0` must also be provided. An example for a linear Gaussian system is given below.
 ```julia
-using LowLevelParticleFilters, StaticArrays, Distributions, RecursiveArrayTools, StatPlots
+using LowLevelParticleFilters, StaticArrays, Distributions, StatPlots, Random
 
 n = 2   # Dinemsion of state
 m = 2   # Dinemsion of input
@@ -45,7 +46,8 @@ function run_test()
     propagated_particles = 0
     t = @elapsed for (Ti,T) = enumerate(time_steps)
         for (Ni,N) = enumerate(particle_count)
-            montecarlo_runs = 2*maximum(particle_count)*maximum(time_steps) ÷ T ÷ N
+            montecarlo_runs = 4*maximum(particle_count)*maximum(time_steps) ÷ T ÷ N
+            Random.seed!(0)
             E = sum(1:montecarlo_runs) do mc_run
                 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
                 u = randn(m)
@@ -83,6 +85,26 @@ gui()
 ```
 ![window](figs/rmse.png)
 
+## Kalman filter
+A Kalman filter is easily created using the constructor. Many of the functions defined for particle filters, are defined also for Kalman filters, e.g.:
+```julia
+eye(n) = Matrix{Float64}(I,n,n)
+kf = KalmanFilter(A, B, I, 0, eye(n), eye(p), MvNormal(x[1]))
+x,xt,R,Rt,ll = forward_trajectory(kf, u, x) # filtered, prediction, pred cov, filter cov, loglik
+xT,R,lls = smooth(kf, u, x) # Smoothed state, smoothed cov, loglik
+```
+It can also be called in a loop like the `pf` above
+```julia
+for t = 1:T
+    kf(u,y) # Performs both predict! and correct!
+    # alternatively
+    predict!(kf, u, t)
+    x   = state(kf)
+    R   = covariance(kf)
+    ll += correct!(kf, y, t) # Returns loglik
+end
+```
+
 # Smoothing
 
 We also provide a particle smoother, based on forward filtering, backward simulation (FFBS)
@@ -94,16 +116,14 @@ pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 du    = MvNormal(2,1) # Control input distribution
 x,u,y = simulate(pf,T,du)
 
-
-xb  = smooth(pf, M, u, y)
+xb  = smooth(pf, M, u, y)[1]
 xbm = smoothed_mean(xb)
 xbc = smoothed_cov(xb)
 xbt = smoothed_trajs(xb)
-xbs = [diag(xbc) for xbc in xbc] |> vecvec_to_mat .|> sqrt
+xbs = hcat([diag(xbc) for xbc in xbc]...)' .|> sqrt
 plot(xbm', ribbon=2xbs, lab="Smoothed mean")
-plot!(vecvec_to_mat(x), l=:dash, lab="True state")
-
-plot(vecvec_to_mat(x), l=(4,), layout=(2,1), reuse=false, show=false, lab="True state")
+plot!(hcat(x...)', l=:dash, lab="True state")
+plot(hcat(x...)', l=(4,), layout=(2,1), reuse=false, show=false, lab="True state")
 scatter!(xbt[1,:,:]', subplot=1, show=false, lab="Backwards trajectories", m=(1,:black, 0.5))
 scatter!(xbt[2,:,:]', subplot=2, lab="Backwards trajectories", m=(1,:black, 0.5))
 ```
@@ -141,30 +161,8 @@ plot_priors(priors, xscale=:log10, yscale=:log10)
 Now we call the function `log_likelihood_fun` that returns a function to be minimized
 ```julia
 averaging = 3
-ll       = log_likelihood_fun(filter_from_parameters,priors,u,y,averaging)
+ll = log_likelihood_fun(filter_from_parameters,priors,u,y,averaging)
 ```
 the parameter `averaging >= 1` can be set to reduce the Monte-Carlo error associated with estimating log likelihood by and SMC method. Oftentimes is is better to increase the number of particles instead.
 
-We can optimize `ll(θ)` with our favourite optimizer, e.g.,
-```julia
-using Optim
-initial_θ_guess = [2.0, 2.0]
-res = optimize(θ -> -ll(θ), initial_θ_guess, show_trace=true, iterations=50)
-@show res
-θ   = Optim.minimizer(res)
-pfθ = filter_from_parameters(θ)
-```
-```julia
-res = Results of Optimization Algorithm
- * Algorithm: Nelder-Mead
- * Starting Point: [2.0,2.0]
- * Minimizer: [1.975160015361007,0.9439091703520719]
- * Minimum: 1.060930e+03
- * Iterations: 50
- * Convergence: false
-   *  √(Σ(yᵢ-ȳ)²)/n < 1.0e-08: false
-   * Reached Maximum Number of Iterations: true
- * Objective Calls: 142
-```
-
-Standard tricks apply, such as performing the parameter search in log-space and using global/black box methods, see e.g. [BlackBoxOptim.jl](https://github.com/robertfeldt/BlackBoxOptim.jl)
+Optimization of the log likelihood can be done by, e.g., global/black box methods, see [BlackBoxOptim.jl](https://github.com/robertfeldt/BlackBoxOptim.jl). Standard tricks apply, such as performing the parameter search in log-space etc.
