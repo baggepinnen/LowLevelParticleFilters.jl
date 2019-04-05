@@ -135,12 +135,12 @@ We provide som basic functionality for maximum likelihood estimation and MAP est
 ## ML estimation
 Plot likelihood as function of the variance of the dynamics noise
 ```julia
-svec = logspace(-2,2,50)
+svec = exp10.(LinRange(-1,2,50))
 lls = map(svec) do s
     pfs = ParticleFilter(N, dynamics, measurement, MvNormal(n,s), dg, d0)
     loglik(pfs,u,y)
 end
-plot(svec, -lls, yscale=:log10, xscale=:log10, title="Negative log-likelihood", xlabel="Dynamics noise standard deviation")
+plot(svec, -lls, xscale=:log10, title="Negative log-likelihood", xlabel="Dynamics noise standard deviation")
 ```
 ![window](figs/svec.png)
 

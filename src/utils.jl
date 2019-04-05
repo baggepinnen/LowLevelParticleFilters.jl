@@ -2,18 +2,18 @@ export weigthed_mean, weigthed_cov, plot_trajectories, scatter_particles, logsum
 
 """
 ll = logsumexp!(w)
-Normalizes the weight vector `w` and returns the weighted log-likelihood
+Normalizes the weight vector `w` and returns the weighted log-likelihood (without the normalizing constant log(N))
 
 https://arxiv.org/pdf/1412.8695.pdf eq 3.8 for p(y)
 """
 function logsumexp!(w,we)
     offset = maximum(w)
-    w  .-= offset
-    we  .= exp.(w)
+    # w  .-= offset
+    we  .= exp.(w .- offset)
     s    = sum(we)
     we .*= 1/s
-    w  .-= log(s)
-    s + offset - log(length(w)) # TODO: make sure this is correct
+    w  .-= (log(s) + offset)
+    s + offset - log(length(w))
 end
 
 function weigthed_mean(x,we::AbstractVector)

@@ -149,7 +149,7 @@ function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Fun
 end
 
 
-function measurement_equation!(pf::AdvancedParticleFilter, y, t)
+Base.@propagate_inbounds function measurement_equation!(pf::AdvancedParticleFilter, y, t)
     g = pf.measurement
     w = weights(pf)
     any(ismissing.(y)) && return w
@@ -161,7 +161,7 @@ function measurement_equation!(pf::AdvancedParticleFilter, y, t)
     w
 end
 
-function propagate_particles!(pf::AdvancedParticleFilter, u, j, t::Int, noise::Bool=true)
+Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilter, u, j, t::Int, noise::Bool=true)
     f = pf.dynamics
     x,xp = pf.state.x, pf.state.xprev
     @inbounds for i = eachindex(x)
@@ -170,7 +170,7 @@ function propagate_particles!(pf::AdvancedParticleFilter, u, j, t::Int, noise::B
     x
 end
 
-function propagate_particles!(pf::AdvancedParticleFilter, u, t::Int, noise::Bool=true)
+Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilter, u, t::Int, noise::Bool=true)
     f = pf.dynamics
     x,xp = pf.state.x, pf.state.xprev
     @inbounds for i = eachindex(x)
@@ -180,7 +180,7 @@ function propagate_particles!(pf::AdvancedParticleFilter, u, t::Int, noise::Bool
 end
 
 
-function propagate_particles(pf::AdvancedParticleFilter, u, t::Int, noise::Bool=true)
+Base.@propagate_inbounds function propagate_particles(pf::AdvancedParticleFilter, u, t::Int, noise::Bool=true)
     f  = pf.dynamics
     xp = pf.state.xprev
     x  = similar(xp)

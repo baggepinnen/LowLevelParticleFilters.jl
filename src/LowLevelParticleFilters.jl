@@ -57,11 +57,13 @@ function correct!(kf::AbstractKalmanFilter, y, t = index(kf))
     else
         Ct = C
     end
+    F   = Ct*R*Ct'
+    F   = 0.5(F+F')
     e   = y-Ct*x
-    K   = (R*Ct')/(Ct*R*Ct' + R2)
+    K   = (R*Ct')/(F + R2)
     x .+= K*e
     R  .= (I - K*Ct)*R
-    logpdf(R2d, e) - 1/2*logdet(R1) # TODO: this is only an approximation and is not correct, should involve R as well, logpdf(CRC', e) 1/2*logdet(CRC') ish
+    logpdf(MvNormal(F), e) - 1/2*logdet(F)
 end
 
 """
@@ -84,7 +86,7 @@ function predict!(pf,u, t = index(pf))
 end
 
 """
- correct!(f, y, t = index(f))
+ ll = correct!(f, y, t = index(f))
 Update state/covariance/weights based on measurement `y`,  returns loglikelihood.
 """
 function correct!(pf, y, t = index(pf))
@@ -233,15 +235,18 @@ end
 ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors::Vector{Distribution}, u, y, averaging=1)
 """
 function log_likelihood_fun(filter_from_parameters,priors::Vector{<:Distribution},u,y,mc=1)
+    T = length(u)
+    @warn "This function is probably incorrect"
     function (θ)
         length(θ) == length(priors) || throw(ArgumentError("Input must have same length as priors"))
         lls = map(1:mc) do j
             ll = sum(i->logpdf(priors[i], θ[i]), eachindex(priors))
             isfinite(ll) || return Inf
             pf = filter_from_parameters(θ)
-            ll += loglik(pf,u,y)
+            N = num_particles(pf)
+            ll += loglik(pf,u,y)# + T*(logdetcov(pf.dynamics_density) - logdetcov(pf.measurement_density) - log(2pi))
         end
-        median(lls)
+        median(lls)/T
     end
 end
 

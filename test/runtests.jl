@@ -44,11 +44,3 @@ end
         @test minimum(j) >= 1
     end
 end
-
-
-# testpf = ParticleFilter(100, p0, linear_gaussian_f, linear_gaussian_g)
-# @btime resample(testpf.state)
-# w = randn(1000); we = similar(w)
-# @btime LowLevelParticleFilters.logsumexp!($w) # ≈ 15 μs
-# @code_warntype LowLevelParticleFilters.logsumexp!(w,we)
-# @code_warntype LowLevelParticleFilters.resample(we, zeros(Int,length(we)), zeros(length(we)))
