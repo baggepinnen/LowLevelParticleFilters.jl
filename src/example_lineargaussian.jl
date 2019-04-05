@@ -132,3 +132,23 @@ heatmap(VGz, xticks=(1:8,round.(v,digits=1)),yticks=(1:8,round.(v,digits=1)), xl
 # VGx, VGy = meshgrid(1:10,1:5)
 # VGz = ((x,y) -> x*y).(VGx,VGy)
 # heatmap(VGz, yticks=(1:10,1:10), xticks=(1:5,1:5))
+
+
+##
+
+
+filter_from_parameters(θ) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
+priors = [Normal(0,0.1),Normal(0,0.1)]
+ll       = log_likelihood_fun(filter_from_parameters,priors,u,y,1)
+θ₀ = log.([1.,1.])
+draw = θ -> θ .+ rand(MvNormal(0.1ones(2)))
+burnin = 200
+# @time theta, lls = metropolis(ll, 2000, θ₀, draw)
+@time thetalls = LowLevelParticleFilters.metropolis_threaded(burnin, ll, 5000, θ₀, draw)
+# thetam = reduce(hcat, theta)'
+histogram(exp.(thetalls[:,1:2]), layout=3)
+plot!(thetalls[:,3], subplot=3)
+
+
+const VPSM = Vector{Pair{String, Matrix{Float64}}}
+complexobj::VPSM
