@@ -28,7 +28,7 @@ end
 function reset!(pf)
     s = pf.state
     for i = eachindex(s.xprev)
-        s.xprev[i] = rand(pf.initial_density)
+        s.xprev[i] = rand(pf.rng, pf.initial_density)
         s.x[i] = copy(s.xprev[i])
     end
     fill!(s.w, log(1/num_particles(pf)))
@@ -57,11 +57,13 @@ function correct!(kf::AbstractKalmanFilter, y, t = index(kf))
     else
         Ct = C
     end
+    F   = Ct*R*Ct'
+    F   = 0.5(F+F')
     e   = y-Ct*x
-    K   = (R*Ct')/(Ct*R*Ct' + R2)
+    K   = (R*Ct')/(F + R2)
     x .+= K*e
     R  .= (I - K*Ct)*R
-    logpdf(R2d, e) - 1/2*logdet(R1) # TODO: this is only an approximation and is not correct, should involve R as well, logpdf(CRC', e) 1/2*logdet(CRC') ish
+    logpdf(MvNormal(F), e) - 1/2*logdet(F)
 end
 
 """
@@ -84,7 +86,7 @@ function predict!(pf,u, t = index(pf))
 end
 
 """
- correct!(f, y, t = index(f))
+ ll = correct!(f, y, t = index(f))
 Update state/covariance/weights based on measurement `y`,  returns loglikelihood.
 """
 function correct!(pf, y, t = index(pf))
@@ -233,15 +235,18 @@ end
 ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors::Vector{Distribution}, u, y, averaging=1)
 """
 function log_likelihood_fun(filter_from_parameters,priors::Vector{<:Distribution},u,y,mc=1)
+    T = length(u)
+    @warn "This function is probably incorrect"
     function (θ)
         length(θ) == length(priors) || throw(ArgumentError("Input must have same length as priors"))
         lls = map(1:mc) do j
             ll = sum(i->logpdf(priors[i], θ[i]), eachindex(priors))
             isfinite(ll) || return Inf
             pf = filter_from_parameters(θ)
-            ll += loglik(pf,u,y)
+            N = num_particles(pf)
+            ll += loglik(pf,u,y)# + T*(logdetcov(pf.dynamics_density) - logdetcov(pf.measurement_density) - log(2pi))
         end
-        median(lls)
+        median(lls)/T
     end
 end
 
@@ -251,26 +256,40 @@ naive_sampler(θ₀) =  θ -> θ .+ rand(MvNormal(0.1abs.(θ₀)))
     metropolis(ll::Function(θ), R::Int, θ₀::Vector, draw::Function(θ) = naive_sampler(θ₀))
 
 Performs MCMC sampling using the marginal Metropolis (-Hastings) algorithm
-`draw = θ -> θ'` samples a new parameter vector given an old parameter vector. The distribution must be symmetric, e.g., a Gaussian.
+`draw = θ -> θ'` samples a new parameter vector given an old parameter vector. The distribution must be symmetric, e.g., a Gaussian. `R` is the number of iterations.
 See `log_likelihood_fun`
 """
 function metropolis(ll, R, θ₀, draw = naive_sampler(θ₀))
-    params    = Vector{typeof(θ₀)}(R)
-    lls       = Vector{Float64}(R)
+    params    = Vector{typeof(θ₀)}(undef,R)
+    lls       = Vector{Float64}(undef,R)
     params[1] = θ₀
     lls[1]    = ll(θ₀)
     for i = 2:R
         θ = draw(params[i-1])
-        ll = ll(θ)
-        if rand() < exp(ll-lls[i-1])
+        lli = ll(θ)
+        if rand() < exp(lli-lls[i-1])
             params[i] = θ
-            lls[i] = ll
+            lls[i] = lli
         else
             params[i] = params[i-1]
             lls[i] = lls[i-1]
         end
     end
     params, lls
+end
+
+function metropolis_threaded(burnin, args...)
+    res = []
+    mtx = Threads.Mutex()
+    Threads.@threads for i = 1:Threads.nthreads()
+        p,l = metropolis(args...)
+        resi = [reduce(hcat,p)' l]
+        resi = resi[burnin+1:end,:]
+        lock(mtx)
+        push!(res, resi)
+        unlock(mtx)
+    end
+    reduce(vcat,res)
 end
 
 """
