@@ -16,6 +16,19 @@ function logsumexp!(w,we)
     s + offset - log(length(w)) # TODO: make sure this is correct
 end
 
+import Pkg
+if "Yeppp" ∈ keys(Pkg.installed())
+    @eval import Yeppp
+    @eval function logsumexp!(w,we)
+        offset = maximum(w)
+        w  .-= offset
+        Yeppp.exp!(we,w)
+        s    = sum(we)
+        we .*= 1/s
+        w  .-= log(s)
+        s + offset - log(length(w)) # TODO: make sure this is correct
+    end
+end
 function weigthed_mean(x,we::AbstractVector)
     xh = zeros(size(x[1]))
     @inbounds @simd  for i = eachindex(x)
