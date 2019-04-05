@@ -160,9 +160,7 @@ plot_priors(priors, xscale=:log10, yscale=:log10)
 ```
 Now we call the function `log_likelihood_fun` that returns a function to be minimized
 ```julia
-averaging = 3
-ll = log_likelihood_fun(filter_from_parameters,priors,u,y,averaging)
+ll = log_likelihood_fun(filter_from_parameters,priors,u,y)
 ```
-the parameter `averaging >= 1` can be set to reduce the Monte-Carlo error associated with estimating log likelihood by and SMC method. Oftentimes is is better to increase the number of particles instead.
 
 Optimization of the log likelihood can be done by, e.g., global/black box methods, see [BlackBoxOptim.jl](https://github.com/robertfeldt/BlackBoxOptim.jl). Standard tricks apply, such as performing the parameter search in log-space etc.

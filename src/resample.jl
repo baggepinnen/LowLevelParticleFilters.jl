@@ -1,9 +1,9 @@
 function shouldresample(pf::AbstractParticleFilter)
-    we = expweights(pf)
-    N = num_particles(pf)
-    th = 1/(N*pf.resample_threshold)
+    we      = expweights(pf)
+    N       = num_particles(pf)
+    th      = 1/(N*pf.resample_threshold)
     initial = round(Int, 1/th)
-    s = zero(eltype(we))
+    s       = zero(eltype(we))
     @inbounds @simd for i = 1:initial
         s += we[i]^2
     end

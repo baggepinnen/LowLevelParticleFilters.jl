@@ -2,7 +2,7 @@ export weigthed_mean, weigthed_cov, plot_trajectories, scatter_particles, logsum
 
 """
 ll = logsumexp!(w)
-Normalizes the weight vector `w` and returns the weighted log-likelihood (without the normalizing constant log(N))
+Normalizes the weight vector `w` and returns the weighted log-likelihood
 
 https://arxiv.org/pdf/1412.8695.pdf eq 3.8 for p(y)
 """
@@ -13,23 +13,22 @@ function logsumexp!(w,we)
     s    = sum(we)
     we .*= 1/s
     w  .-= (log(s) + offset)
-    s + offset - log(length(w))
+    s/exp(-offset) - log(length(w))
 end
 
-import Pkg
-if "Yeppp" ∈ keys(Pkg.installed())
-    @eval import Yeppp
-    @eval function logsumexp!(w,we)
-        offset = maximum(w)
-        w  .-= offset
-        Yeppp.exp!(we,w)
-        s    = sum(we)
-        we .*= 1/s
-        w  .-= log(s)
-        s + offset - log(length(w)) # TODO: make sure this is correct
-    end
+
+function logsumexp!(w,we)
+    offset = maximum(w)
+    w  .-= offset
+    Yeppp.exp!(we,w)
+    s    = sum(we)
+    we .*= 1/s
+    w  .-= log(s)
+    s/exp(-offset) - log(length(w)) # TODO: make sure this is correct
 end
+
 function weigthed_mean(x,we::AbstractVector)
+    @assert sum(we) ≈ 1
     xh = zeros(size(x[1]))
     @inbounds @simd  for i = eachindex(x)
         xh .+= x[i].*we[i]
@@ -37,6 +36,7 @@ function weigthed_mean(x,we::AbstractVector)
     return xh
 end
 function weigthed_mean(x,we::AbstractMatrix)
+    @assert sum(we) ≈ 1
     N,T = size(x)
     xh = zeros(eltype(x), T)
     for t = 1:T

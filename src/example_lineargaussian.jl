@@ -10,7 +10,7 @@ const dg = MvNormal(p,1.0)          # Dynamics noise Distribution
 const df = MvNormal(n,1.0)          # Measurement noise Distribution
 const d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
 
-# Define random lienar state-space system
+# Define random linenar state-space system
 Tr = randn(n,n)
 const A = SMatrix{n,n}(Tr*diagm(0=>LinRange(0.5,0.95,n))/Tr)
 const B = @SMatrix randn(n,m)
@@ -20,20 +20,20 @@ dynamics(x,u) = A*x .+ B*u
 measurement(x) = C*x
 
 function run_test()
-    particle_count = Int[10, 20, 50, 100, 200, 500, 1000]
-    time_steps = Int[20, 100, 200]
+    particle_count = [10, 20, 50, 100, 200, 500, 1000]
+    time_steps = [20, 100, 200]
     RMSE = zeros(length(particle_count),length(time_steps)) # Store the RMS errors
     propagated_particles = 0
     t = @elapsed for (Ti,T) = enumerate(time_steps)
         for (Ni,N) = enumerate(particle_count)
-            montecarlo_runs = 2*maximum(particle_count)*maximum(time_steps) ÷ T ÷ N
+            montecarlo_runs = 10*maximum(particle_count)*maximum(time_steps) ÷ T ÷ N
             E = sum(1:montecarlo_runs) do mc_run
                 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
                 u = randn(m)
                 x = rand(d0)
                 y = sample_measurement(pf,x,1)
                 error = 0.0
-                for t = 1:T-1
+                @inbounds for t = 1:T-1
                     pf(u, y) # Update the particle filter
                     x .= dynamics(x,u)
                     y .= sample_measurement(pf,x,t)
@@ -66,7 +66,7 @@ gui()
 
 
 ##
-N     = 200 # Number of particles
+N     = 2000 # Number of particles
 T     = 200 # Number of time steps
 M     = 100 # Number of smoothed backwards trajectories
 pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
@@ -87,20 +87,20 @@ scatter!(xbt[1,:,:]', subplot=1, show=false, m=(1,:black, 0.5))
 scatter!(xbt[2,:,:]', subplot=2, m=(1,:black, 0.5))
 
 ##
-svec = exp10.(LinRange(-1,2,50))
+svec = exp10.(LinRange(-0.7,1,40))
 llspf = map(svec) do s
     df = MvNormal(n,s)
     pfs = ParticleFilter(N, dynamics, measurement, df, dg, d0)
-    loglik(pfs,u,y) + length(u)/2*(logdetcov(df) - log(2pi))
+    loglik(pfs,u,y)
 end
-plot(svec, llspf, yscale=:identity, xscale=:log10, lab="PF", title="Loglik")
+plot(svec, llspf, yscale=:identity, xscale=:log10, ylabel="PF (blue)", title="Loglik")
 ##
 eye(n) = Matrix{Float64}(I,n,n)
 llskf = map(svec) do s
-    kfs = KalmanFilter(A, B, I, 0, s^2*eye(n), eye(p), MvNormal(x[1]))
+    kfs = KalmanFilter(A, B, I, 0, s^2*eye(n), eye(p), d0)
     loglik(kfs,u,y)
 end
-plot!(svec, llskf, yscale=:identity, xscale=:log10, lab="Kalman")
+plot!(twinx(),svec, llskf, yscale=:identity, xscale=:log10, ylabel="Kalman (red)", c=:red)
 ##
 # Same thing with KF
 kf = KalmanFilter(A, B, I, 0, eye(n), eye(p), MvNormal(x[1]))
@@ -116,9 +116,8 @@ plot!(vecvec_to_mat(x), lab="true")
 
 
 filter_from_parameters(θ) = ParticleFilter(N, dynamics, measurement, MvNormal(n,θ[1]), MvNormal(p,θ[2]), d0)
-priors = [Distributions.Gamma(1,1),Distributions.Gamma(1,1)]
-averaging = 1
-ll       = log_likelihood_fun(filter_from_parameters,priors,u,y,averaging)
+priors = [Distributions.Gamma(1.5,1),Distributions.Gamma(1.5,1)]
+ll       = log_likelihood_fun(filter_from_parameters,priors,u,y)
 plot_priors(priors)
 v = exp10.(LinRange(-1,1,8))
 llxy = (x,y) -> ll([x;y])
@@ -136,19 +135,17 @@ heatmap(VGz, xticks=(1:8,round.(v,digits=1)),yticks=(1:8,round.(v,digits=1)), xl
 
 ##
 
-
+N = 1000
 filter_from_parameters(θ) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
-priors = [Normal(0,0.1),Normal(0,0.1)]
+priors = [Normal(1,2),Normal(1,2)]
 ll       = log_likelihood_fun(filter_from_parameters,priors,u,y,1)
 θ₀ = log.([1.,1.])
 draw = θ -> θ .+ rand(MvNormal(0.1ones(2)))
 burnin = 200
-# @time theta, lls = metropolis(ll, 2000, θ₀, draw)
-@time thetalls = LowLevelParticleFilters.metropolis_threaded(burnin, ll, 5000, θ₀, draw)
-# thetam = reduce(hcat, theta)'
-histogram(exp.(thetalls[:,1:2]), layout=3)
-plot!(thetalls[:,3], subplot=3)
+@time theta, lls = metropolis(ll, 50000, θ₀, draw)
+thetam = reduce(hcat, theta)'
+histogram(exp.(thetam), layout=(3,1)); plot!(lls, subplot=3)
 
-
-const VPSM = Vector{Pair{String, Matrix{Float64}}}
-complexobj::VPSM
+# @time thetalls = LowLevelParticleFilters.metropolis_threaded(burnin, ll, 500, θ₀, draw)
+# histogram(exp.(thetalls[:,1:2]), layout=3)
+# plot!(thetalls[:,3], subplot=3)

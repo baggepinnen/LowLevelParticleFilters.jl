@@ -2,7 +2,7 @@ module LowLevelParticleFilters
 
 export KalmanFilter, ParticleFilter, AdvancedParticleFilter, PFstate, index, state, covariance, num_particles, weights, expweights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, reset!, metropolis
 
-using StatsBase, Parameters, Lazy, Reexport, Random, LinearAlgebra
+using StatsBase, Parameters, Lazy, Reexport, Yeppp, Random, LinearAlgebra
 @reexport using Distributions
 @reexport using StatsPlots
 @reexport using StaticArrays
@@ -232,25 +232,24 @@ function loglik(f,u,y)
 end
 
 """
-ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors::Vector{Distribution}, u, y, averaging=1)
+ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors::Vector{Distribution}, u, y)
+
+returns function θ -> p(y|θ)p(θ)
 """
 function log_likelihood_fun(filter_from_parameters,priors::Vector{<:Distribution},u,y,mc=1)
-    T = length(u)
-    @warn "This function is probably incorrect"
     function (θ)
         length(θ) == length(priors) || throw(ArgumentError("Input must have same length as priors"))
-        lls = map(1:mc) do j
-            ll = sum(i->logpdf(priors[i], θ[i]), eachindex(priors))
-            isfinite(ll) || return Inf
-            pf = filter_from_parameters(θ)
-            N = num_particles(pf)
-            ll += loglik(pf,u,y)# + T*(logdetcov(pf.dynamics_density) - logdetcov(pf.measurement_density) - log(2pi))
-        end
-        median(lls)/T
+        ll = sum(i->logpdf(priors[i], θ[i]), eachindex(priors))
+        isfinite(ll) || return Inf
+        pf = filter_from_parameters(θ)
+        ll += loglik(pf,u,y)
     end
 end
 
-naive_sampler(θ₀) =  θ -> θ .+ rand(MvNormal(0.1abs.(θ₀)))
+function naive_sampler(θ₀)
+    !any(iszero.(θ₀)) || throw(ArgumentError("Naive sampler does not work if initial parameter vector contains zeros (it was going to return θ -> θ .+ rand(MvNormal(0.1abs.(θ₀))), but that is not a good ideas if θ₀ is zero."))
+    θ -> θ .+ rand(MvNormal(0.1abs.(θ₀)))
+end
 
 """
     metropolis(ll::Function(θ), R::Int, θ₀::Vector, draw::Function(θ) = naive_sampler(θ₀))
@@ -258,6 +257,21 @@ naive_sampler(θ₀) =  θ -> θ .+ rand(MvNormal(0.1abs.(θ₀)))
 Performs MCMC sampling using the marginal Metropolis (-Hastings) algorithm
 `draw = θ -> θ'` samples a new parameter vector given an old parameter vector. The distribution must be symmetric, e.g., a Gaussian. `R` is the number of iterations.
 See `log_likelihood_fun`
+
+# Example:
+```julia
+filter_from_parameters(θ) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
+priors = [Normal(0,0.1),Normal(0,0.1)]
+ll     = log_likelihood_fun(filter_from_parameters,priors,u,y,1)
+θ₀ = log.([1.,1.]) # Initial point
+draw = θ -> θ .+ rand(MvNormal(0.1ones(2))) # Function that proposes new parameters (has to be symmetric)
+burnin = 200 # If using threaded call, provide number of burnin iterations
+# @time theta, lls = metropolis(ll, 2000, θ₀, draw) # Run single threaded
+# thetam = reduce(hcat, theta)'
+@time thetalls = LowLevelParticleFilters.metropolis_threaded(burnin, ll, 5000, θ₀, draw) # run on all threads, will provide (2000-burnin)*nthreads() samples
+histogram(exp.(thetalls[:,1:2]), layout=3)
+plot!(thetalls[:,3], subplot=3) # if threaded call, log likelihoods are in the last column
+```
 """
 function metropolis(ll, R, θ₀, draw = naive_sampler(θ₀))
     params    = Vector{typeof(θ₀)}(undef,R)
