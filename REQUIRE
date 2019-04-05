@@ -3,5 +3,6 @@ StaticArrays
 StatsBase
 Distributions
 Parameters
-StatPlots
+StatsPlots
 Lazy
+Reexport

@@ -1,10 +1,10 @@
 module LowLevelParticleFilters
 
-export KalmanFilter, ParticleFilter, AdvancedParticleFilter, PFstate, index, state, covariance, num_particles, weights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, reset!, metropolis
+export KalmanFilter, ParticleFilter, AdvancedParticleFilter, PFstate, index, state, covariance, num_particles, weights, expweights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, reset!, metropolis
 
 using StatsBase, Parameters, Lazy, Reexport, Random, LinearAlgebra
 @reexport using Distributions
-@reexport using StatPlots
+@reexport using StatsPlots
 @reexport using StaticArrays
 
 abstract type ResamplingStrategy end
@@ -32,6 +32,7 @@ function reset!(pf)
         s.x[i] = copy(s.xprev[i])
     end
     fill!(s.w, log(1/num_particles(pf)))
+    fill!(s.we, 1/num_particles(pf))
     s.t[] = 1
 end
 
@@ -50,7 +51,7 @@ function predict!(kf::AbstractKalmanFilter, u, t = index(kf))
 end
 
 function correct!(kf::AbstractKalmanFilter, y, t = index(kf))
-    @unpack C,x,R,R2,R2d = kf
+    @unpack C,x,R,R1,R2,R2d = kf
     if ndims(C) == 3
         Ct = C[:,:,t]
     else
@@ -60,7 +61,7 @@ function correct!(kf::AbstractKalmanFilter, y, t = index(kf))
     K   = (R*Ct')/(Ct*R*Ct' + R2)
     x .+= K*e
     R  .= (I - K*Ct)*R
-    logpdf(R2d, e)
+    logpdf(R2d, e) - 1/2*logdet(R1) # TODO: this is only an approximation and is not correct, should involve R as well, logpdf(CRC', e) 1/2*logdet(CRC') ish
 end
 
 """
@@ -74,11 +75,11 @@ function predict!(pf,u, t = index(pf))
         j = resample(pf)
         propagate_particles!(pf, u, j, t)
         fill!(s.w, log(1/N))
+        fill!(s.we, 1/N)
     else # Resample not needed
         propagate_particles!(pf, u, t)
     end
     copyto!(s.xprev, s.x)
-    # s.xprev .= copy(s.x) # TODO: above line was working before
     pf.state.t[] += 1
 end
 
@@ -88,7 +89,7 @@ Update state/covariance/weights based on measurement `y`,  returns loglikelihood
 """
 function correct!(pf, y, t = index(pf))
     measurement_equation!(pf, y, t)
-    loklik = logsumexp!(pf.state.w)
+    loklik = logsumexp!(pf.state.w, pf.state.we)
 end
 
 """
@@ -162,13 +163,15 @@ function forward_trajectory(pf, u::Vector, y::Vector)
     N = num_particles(pf)
     x = Array{particletype(pf)}(undef,N,T)
     w = Array{Float64}(undef,N,T)
+    we = Array{Float64}(undef,N,T)
     ll = 0.0
     for t = 1:T
         ll += pf(u[t], y[t], t)
         x[:,t] .= particles(pf)
         w[:,t] .= weights(pf)
+        we[:,t] .= expweights(pf)
     end
-    x,w,ll
+    x,w,we,ll
 end
 
 
@@ -201,10 +204,10 @@ xb,ll = smooth(pf, M, u, y)
 function smooth(pf::AbstractParticleFilter, M, u, y)
     T = length(y)
     N = num_particles(pf)
-    xf,wf,ll = forward_trajectory(pf, u, y)
+    xf,wf,wef,ll = forward_trajectory(pf, u, y)
     @assert M <= N "Must extend cache size of bins and j to allow this"
     xb = Array{particletype(pf)}(undef,M,T)
-    j = resample(ResampleSystematic, wf[:,T], M)
+    j = resample(ResampleSystematic, wef[:,T], M)
     for i = 1:M
         xb[i,T] = xf[j[i], T]
     end
@@ -223,7 +226,7 @@ end
 
 function loglik(f,u,y)
     reset!(f)
-    ll = sum((x)->f(x[1],x[2]), zip(u, y))
+    ll = sum(x->f(x[1],x[2]), zip(u, y))
 end
 
 """
@@ -231,6 +234,7 @@ ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors
 """
 function log_likelihood_fun(filter_from_parameters,priors::Vector{<:Distribution},u,y,mc=1)
     function (θ)
+        length(θ) == length(priors) || throw(ArgumentError("Input must have same length as priors"))
         lls = map(1:mc) do j
             ll = sum(i->logpdf(priors[i], θ[i]), eachindex(priors))
             isfinite(ll) || return Inf

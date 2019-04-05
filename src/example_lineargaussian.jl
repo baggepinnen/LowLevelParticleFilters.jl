@@ -1,4 +1,4 @@
-using LowLevelParticleFilters, StaticArrays, Distributions, Optim, RecursiveArrayTools, BenchmarkTools, StatPlots
+using LowLevelParticleFilters, StaticArrays, Distributions, Optim, RecursiveArrayTools, BenchmarkTools, StatsPlots
 
 # Define problem
 
@@ -12,7 +12,7 @@ const d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
 
 # Define random lienar state-space system
 Tr = randn(n,n)
-const A = SMatrix{n,n}(Tr*diagm(linspace(0.5,0.95,n))/Tr)
+const A = SMatrix{n,n}(Tr*diagm(0=>LinRange(0.5,0.95,n))/Tr)
 const B = @SMatrix randn(n,m)
 const C = @SMatrix randn(p,n)
 
@@ -20,7 +20,7 @@ dynamics(x,u) = A*x .+ B*u
 measurement(x) = C*x
 
 function run_test()
-    particle_count = Int[20, 50, 100, 200, 500, 1000, 10_000]
+    particle_count = Int[10, 20, 50, 100, 200, 500, 1000]
     time_steps = Int[20, 100, 200]
     RMSE = zeros(length(particle_count),length(time_steps)) # Store the RMS errors
     propagated_particles = 0
@@ -33,7 +33,7 @@ function run_test()
                 x = rand(d0)
                 y = sample_measurement(pf,x,1)
                 error = 0.0
-                @inbounds for t = 1:T-1
+                for t = 1:T-1
                     pf(u, y) # Update the particle filter
                     x .= dynamics(x,u)
                     y .= sample_measurement(pf,x,t)
@@ -58,7 +58,7 @@ end
 
 
 time_steps     = [20, 100, 200]
-particle_count = [20, 50, 100, 200, 500, 1000, 10_000]
+particle_count = [10, 20, 50, 100, 200, 500, 1000]
 nT             = length(time_steps)
 leg            = reshape(["$(time_steps[i]) time steps" for i = 1:nT], 1,:)
 plot(particle_count,RMSE,xscale=:log10, ylabel="RMS errors", xlabel=" Number of particles", lab=leg)
@@ -73,7 +73,7 @@ pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 du    = MvNormal(2,1) # Control input distribution
 x,u,y = simulate(pf,T,du)
 
-xb  = smooth(pf, M, u, y)
+xb,ll = smooth(pf, M, u, y)
 xbm = smoothed_mean(xb)
 xbc = smoothed_cov(xb)
 xbt = smoothed_trajs(xb)
@@ -86,14 +86,30 @@ scatter!(xbt[1,:,:]', subplot=1, show=false, m=(1,:black, 0.5))
 scatter!(xbt[2,:,:]', subplot=2, m=(1,:black, 0.5))
 
 
-svec = logspace(-2,2,50)
-lls = map(svec) do s
+svec = exp10.(LinRange(-2,2,50))
+llspf = map(svec) do s
     pfs = ParticleFilter(N, dynamics, measurement, MvNormal(n,s), dg, d0)
     loglik(pfs,u,y)
 end
-plot(svec, -lls, yscale=:log10, xscale=:log10)
+plot(svec, -llspf, yscale=:log10, xscale=:log10, lab="PF", title="Loglik")
+llskf = map(svec) do s
+    kfs = KalmanFilter(A, B, I, 0, s^2*eye(n), eye(p), MvNormal(x[1]))
+    loglik(kfs,u,y)
+end
+plot!(svec, -llskf, yscale=:log10, xscale=:log10, lab="Kalman")
 
+# Same thing with KF
+eye(n) = Matrix{Float64}(I,n,n)
+kf = KalmanFilter(A, B, I, 0, eye(n), eye(p), MvNormal(x[1]))
+xf,xh,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
+xT,R,lls = smooth(kf, u, x) # Smoothed state, smoothed cov, loglik
 
+# Compare to kf
+xpf,wpf,wepf,llpf = forward_trajectory(pf, u, y)
+plot(vecvec_to_mat(xT), lab="Kalman smooth", layout=2)
+plot!(xbm', lab="pf smooth")
+plot!(vecvec_to_mat(x), lab="true")
+#
 
 
 filter_from_parameters(θ) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
@@ -101,10 +117,11 @@ priors = [Distributions.Gamma(1,1),Distributions.Gamma(1,1)]
 averaging = 3
 nll       = log_likelihood_fun(filter_from_parameters,priors,u,y,averaging)
 # plot_priors(priors, xscale=:log10, yscale=:log10)
+v = exp10.(LinRange(0,2,8))
+nllxy = (x,y) -> nll([x;y])
+heatmap(v,v,nllxy, xscale=:log10, yscale=:log10)
 
-# plot(logspace(-2,2,100), nll, xscale=:log10, yscale=:log10)
-
-res = optimize(θ -> -ll(θ), log.([2., 2.]), show_trace=true, iterations=50)
+res = optimize(θ -> nll(θ), log.([2., 2.]), show_trace=true, iterations=50)
 @show res
 θ   = Optim.minimizer(res) .|> exp
 pfθ = filter_from_parameters(log.(θ))
