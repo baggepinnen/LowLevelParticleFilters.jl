@@ -205,8 +205,10 @@ end
 Distributions.logpdf(d::Distribution,x,xp,t) = logpdf(d,x-xp)
 Distributions.sqmahal(d::MvNormal, x::StaticArray) = Distributions.invquad(d.Σ, x - d.μ)
 @inline PDMats.invquad(a::PDMats.ScalMat, x::StaticVector) = dot(x,x) * a.inv_value
-PDMats.invquad(a::PDMats.PDMat, x::StaticVector) = dot(x, a \ x)
+PDMats.invquad(a::PDMats.PDMat, x::StaticVector) = dot(x, a \ x) # \ not implemented
+Base.:(\)(a::PDMats.PDMat, x::StaticVector) = a.chol \ x
 PDMats.invquad(a::PDMats.PDiagMat, x::StaticVector) = PDMats.wsumsq(a.inv_diag, x)
+
 """
 xb,ll = smooth(pf, M, u, y)
 """
