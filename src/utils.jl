@@ -8,17 +8,6 @@ https://arxiv.org/pdf/1412.8695.pdf eq 3.8 for p(y)
 """
 function logsumexp!(w,we)
     offset = maximum(w)
-    # w  .-= offset
-    we  .= exp.(w .- offset)
-    s    = sum(we)
-    we .*= 1/s
-    w  .-= (log(s) + offset)
-    s/exp(-offset) - log(length(w))
-end
-
-
-function logsumexp!(w,we)
-    offset = maximum(w)
     w  .-= offset
     Yeppp.exp!(we,w)
     s    = sum(we)
@@ -26,6 +15,16 @@ function logsumexp!(w,we)
     w  .-= log(s)
     s/exp(-offset) - log(length(w)) # TODO: make sure this is correct
 end
+
+# function logsumexp!(w,we)
+#     offset = maximum(w)
+#     # w  .-= offset
+#     we  .= exp.(w .- offset)
+#     s    = sum(we)
+#     we .*= 1/s
+#     w  .-= (log(s) + offset)
+#     s/exp(-offset) - log(length(w))
+# end
 
 function weigthed_mean(x,we::AbstractVector)
     @assert sum(we) ≈ 1

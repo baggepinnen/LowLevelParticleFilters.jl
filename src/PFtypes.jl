@@ -81,7 +81,7 @@ Base.@propagate_inbounds function measurement_equation!(pf, y, t, d=pf.measureme
     x,w,g = pf.state.x, pf.state.w, pf.measurement
     any(ismissing.(y)) && return w
     for i = 1:num_particles(pf)
-        w[i] += logpdf(d, Vector(y.-g(x[i],t)))[]
+        w[i] += logpdf(d, y-g(x[i],t))
         w[i] = ifelse(w[i] < -1000, -1000, w[i])
     end
     w

@@ -26,18 +26,18 @@ function run_test()
     propagated_particles = 0
     t = @elapsed for (Ti,T) = enumerate(time_steps)
         for (Ni,N) = enumerate(particle_count)
-            montecarlo_runs = 10*maximum(particle_count)*maximum(time_steps) ÷ T ÷ N
+            montecarlo_runs = 1*maximum(particle_count)*maximum(time_steps) ÷ T ÷ N
             E = sum(1:montecarlo_runs) do mc_run
                 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
-                u = randn(m)
-                x = rand(d0)
-                y = sample_measurement(pf,x,1)
+                u = SVector{2,Float64}(randn(2))
+                x = SVector{2,Float64}(rand(d0))
+                y = SVector{2,Float64}(sample_measurement(pf,x,1))
                 error = 0.0
                 @inbounds for t = 1:T-1
                     pf(u, y) # Update the particle filter
-                    x .= dynamics(x,u)
-                    y .= sample_measurement(pf,x,t)
-                    randn!(u)
+                    x = dynamics(x,u)
+                    y = SVector{2,Float64}(sample_measurement(pf,x,t))
+                    u = @SVector randn(2)
                     error += sum(abs2,x-weigthed_mean(pf))
                 end # t
                 √(error/T)
@@ -72,7 +72,8 @@ M     = 100 # Number of smoothed backwards trajectories
 pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 du    = MvNormal(2,1) # Control input distribution
 x,u,y = simulate(pf,T,du)
-
+tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
+x,u,y = tosvec.((x,u,y))
 ##
 xb,ll = smooth(pf, M, u, y)
 xbm = smoothed_mean(xb)
@@ -103,7 +104,7 @@ end
 plot!(twinx(),svec, llskf, yscale=:identity, xscale=:log10, ylabel="Kalman (red)", c=:red)
 ##
 # Same thing with KF
-kf = KalmanFilter(A, B, I, 0, eye(n), eye(p), MvNormal(x[1]))
+kf = KalmanFilter(A, B, I, 0, eye(n), eye(p), MvNormal(2,1))
 xf,xh,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
 xT,R,lls = smooth(kf, u, x) # Smoothed state, smoothed cov, loglik
 
@@ -142,7 +143,7 @@ ll       = log_likelihood_fun(filter_from_parameters,priors,u,y,1)
 θ₀ = log.([1.,1.])
 draw = θ -> θ .+ rand(MvNormal(0.1ones(2)))
 burnin = 200
-@time theta, lls = metropolis(ll, 50000, θ₀, draw)
+@time theta, lls = metropolis(ll, 1000, θ₀, draw)
 thetam = reduce(hcat, theta)'
 histogram(exp.(thetam), layout=(3,1)); plot!(lls, subplot=3)
 

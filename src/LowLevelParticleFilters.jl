@@ -3,9 +3,10 @@ module LowLevelParticleFilters
 export KalmanFilter, ParticleFilter, AdvancedParticleFilter, PFstate, index, state, covariance, num_particles, weights, expweights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, reset!, metropolis
 
 using StatsBase, Parameters, Lazy, Reexport, Yeppp, Random, LinearAlgebra
-@reexport using Distributions
-@reexport using StatsPlots
+import PDMats # To extend some methods on static arrays
 @reexport using StaticArrays
+@reexport using Distributions
+using StatsPlots
 
 abstract type ResamplingStrategy end
 
@@ -14,7 +15,7 @@ struct ResampleSystematicExp <: ResamplingStrategy end
 
 include("PFtypes.jl")
 
-Base.Vector(v::Distributions.ZeroVector) = zeros(eltype(v), length(v))
+# Base.Vector(v::Distributions.ZeroVector) = zeros(eltype(v), length(v))
 
 function reset!(kf::AbstractKalmanFilter)
     kf.x .= Vector(kf.d0.μ)
@@ -197,9 +198,15 @@ function mean_trajectory(pf, u::Vector, y::Vector)
 end
 
 
-# Catch-all method that assumes additive noise
-Distributions.logpdf(d::Distribution,x,xp,t) = logpdf(d,Vector(x.-xp))
 
+# Some methods to speed up distributions using static arrays
+
+@inline Base.:(-)(x::StaticArray, ::Distributions.ZeroVector) = x
+Distributions.logpdf(d::Distribution,x,xp,t) = logpdf(d,x-xp)
+Distributions.sqmahal(d::MvNormal, x::StaticArray) = Distributions.invquad(d.Σ, x - d.μ)
+@inline PDMats.invquad(a::PDMats.ScalMat, x::StaticVector) = dot(x,x) * a.inv_value
+PDMats.invquad(a::PDMats.PDMat, x::StaticVector) = dot(x, a \ x)
+PDMats.invquad(a::PDMats.PDiagMat, x::StaticVector) = PDMats.wsumsq(a.inv_diag, x)
 """
 xb,ll = smooth(pf, M, u, y)
 """
