@@ -1,5 +1,8 @@
 # # LowLevelParticleFilters
 # [![Build Status](https://travis-ci.org/baggepinnen/LowLevelParticleFilters.jl.svg?branch=master)](https://travis-ci.org/baggepinnen/LowLevelParticleFilters.jl)
+# [![Coverage Status](https://coveralls.io/repos/github/baggepinnen/LowLevelParticleFilters.jl/badge.svg?branch=master)](https://coveralls.io/github/baggepinnen/LowLevelParticleFilters.jl?branch=master)
+[![codecov](https://codecov.io/gh/baggepinnen/LowLevelParticleFilters.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/baggepinnen/LowLevelParticleFilters.jl)
+
 # This readme is auto generated from the file src/example_lineargaussian.jl using [Literate.jl](https://github.com/fredrikekre/Literate.jl)
 
 # # Types
