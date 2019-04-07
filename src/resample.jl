@@ -27,9 +27,10 @@ function resample(::Type{ResampleSystematic}, we, j, bins, M = length(we))
     for i = 2:N
         bins[i] = bins[i-1] + we[i]
     end
-    s = (rand()/M):(1/M):bins[M]
+    r = rand()/N
+    s = r:(1/N):(bins[N]+r) # Added r in the end to ensure correct length (r < 1/N)
     bo = 1
-    for i = 1:N
+    for i = 1:M
         @inbounds for b = bo:N
             if s[i] < bins[b]
                 j[i] = b
@@ -48,9 +49,10 @@ function resample(::Type{ResampleSystematicExp}, we, j, bins, M = length(we))
     for i = 2:N
         bins[i] = bins[i-1] + we[i]
     end
-    s = (rand()/M):(1/M):bins[M]
+    r = rand()/N
+    s = r:(1/N):(bins[N]+r) # Added r in the end to ensure correct length (r < 1/N)
     bo = 1
-    for i = 1:N
+    for i = 1:M
         @inbounds for b = bo:N
             if s[i] < bins[b]
                 j[i] = b

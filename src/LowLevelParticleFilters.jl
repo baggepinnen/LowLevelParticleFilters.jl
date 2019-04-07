@@ -47,7 +47,7 @@ function predict!(kf::AbstractKalmanFilter, u, t = index(kf))
         Bt = B
     end
     x .= At*x .+ Bt*u
-    R .= At*R*At' .+ R1
+    R .= At*R*At' + R1
     kf.t[] += 1
 end
 
@@ -60,10 +60,10 @@ function correct!(kf::AbstractKalmanFilter, y, t = index(kf))
     end
     F   = Ct*R*Ct'
     F   = 0.5(F+F')
-    e   = y-Ct*x
-    K   = (R*Ct')/(F + R2)
+    e   = y.-Ct*x
+    K   = (R*Ct')/(F + R2) # Do not use .+ if R2 is I
     x .+= K*e
-    R  .= (I - K*Ct)*R
+    R  .= (I - K*Ct)*R # warning against I .- A
     logpdf(MvNormal(F), e) - 1/2*logdet(F)
 end
 

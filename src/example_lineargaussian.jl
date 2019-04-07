@@ -1,7 +1,7 @@
 # # LowLevelParticleFilters
 # [![Build Status](https://travis-ci.org/baggepinnen/LowLevelParticleFilters.jl.svg?branch=master)](https://travis-ci.org/baggepinnen/LowLevelParticleFilters.jl)
 # [![Coverage Status](https://coveralls.io/repos/github/baggepinnen/LowLevelParticleFilters.jl/badge.svg?branch=master)](https://coveralls.io/github/baggepinnen/LowLevelParticleFilters.jl?branch=master)
-[![codecov](https://codecov.io/gh/baggepinnen/LowLevelParticleFilters.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/baggepinnen/LowLevelParticleFilters.jl)
+# [![codecov](https://codecov.io/gh/baggepinnen/LowLevelParticleFilters.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/baggepinnen/LowLevelParticleFilters.jl)
 
 # This readme is auto generated from the file src/example_lineargaussian.jl using [Literate.jl](https://github.com/fredrikekre/Literate.jl)
 
@@ -21,7 +21,7 @@
 
 # ## Particle filter
 # Defining a particle filter is straightforward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u)` and the noise distribution `dg` in the measurement function `measurement(x)`. The distribution of the initial state `d0` must also be provided. An example for a linear Gaussian system is given below.
-using LowLevelParticleFilters, StaticArrays, Distributions, RecursiveArrayTools, BenchmarkTools, StatsPlots
+using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions, RecursiveArrayTools, BenchmarkTools, StatsPlots
 
 # Define problem
 
