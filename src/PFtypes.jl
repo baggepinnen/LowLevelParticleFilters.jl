@@ -80,9 +80,16 @@ end
 Base.@propagate_inbounds function measurement_equation!(pf, y, t, d=pf.measurement_density)
     x,w,g = pf.state.x, pf.state.w, pf.measurement
     any(ismissing.(y)) && return w
-    for i = 1:num_particles(pf)
-        w[i] += logpdf(d, y-g(x[i],t))
-        w[i] = ifelse(w[i] < -1000, -1000, w[i])
+    if length(y) == 1
+        for i = 1:num_particles(pf)
+            w[i] += logpdf(d, (y-g(x[i],t))[1])
+            # w[i] = ifelse(w[i] < -10000000, -10000000, w[i])
+        end
+    else
+        for i = 1:num_particles(pf)
+            w[i] += logpdf(d, y-g(x[i],t))
+            # w[i] = ifelse(w[i] < -10000000, -10000000, w[i])
+        end
     end
     w
 end

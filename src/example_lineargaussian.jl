@@ -1,3 +1,23 @@
+# # LowLevelParticleFilters
+# [![Build Status](https://travis-ci.org/baggepinnen/LowLevelParticleFilters.jl.svg?branch=master)](https://travis-ci.org/baggepinnen/LowLevelParticleFilters.jl)
+# This readme is auto generated from the file src/example_lineargaussian.jl using [Literate.jl](https://github.com/fredrikekre/Literate.jl)
+
+# # Types
+# We provide three filter types
+# - `ParticleFilter`: This filter is simple to use and assumes that both dynamics noise and measurement noise are additive.
+# - `AdvancedParticleFilter`: This filter gives you more flexibility, at the expense of having to define a few more functions.
+# - `KalmanFilter`. Is what you would expect. Has the same features as the particle filters, but is restricted to linear dynamics and gaussian noise.
+
+# # Functionality
+# - Filtering
+# - Smoothing
+# - Parameter estimation using ML or PMMH (Particle Marginal Metropolis Hastings)
+
+# # Usage example
+# This example demostrates how we set up the filters, both PF and KF, for a simple linear system.
+
+# ## Particle filter
+# Defining a particle filter is straightforward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u)` and the noise distribution `dg` in the measurement function `measurement(x)`. The distribution of the initial state `d0` must also be provided. An example for a linear Gaussian system is given below.
 using LowLevelParticleFilters, StaticArrays, Distributions, RecursiveArrayTools, BenchmarkTools, StatsPlots
 
 # Define problem
@@ -18,6 +38,8 @@ const C = @SMatrix randn(p,n)
 
 dynamics(x,u) = A*x .+ B*u
 measurement(x) = C*x
+
+# To see how the performance varies with the number of particles, we simulate several times
 
 function run_test()
     particle_count = [10, 20, 50, 100, 200, 500, 1000]
@@ -49,104 +71,141 @@ function run_test()
         @show T
     end # T
     println("Propagated $propagated_particles particles in $t seconds for an average of $(propagated_particles/t/1000) particles per millisecond")
-    #
     return RMSE
 end
 
-##
 @time RMSE = run_test()
+# Propagated 4200000 particles in 3.393759761 seconds for an average of 1237.565501325419 particles per millisecond
 
-
+# We then plot the results
 time_steps     = [20, 100, 200]
 particle_count = [10, 20, 50, 100, 200, 500, 1000]
 nT             = length(time_steps)
 leg            = reshape(["$(time_steps[i]) time steps" for i = 1:nT], 1,:)
 plot(particle_count,RMSE,xscale=:log10, ylabel="RMS errors", xlabel=" Number of particles", lab=leg)
 gui()
+# ![window](figs/rmse.png)
 
 
-##
+
+# # Smoothing
+# We also provide a particle smoother, based on forward filtering, backward simulation (FFBS)
+
 N     = 2000 # Number of particles
 T     = 200 # Number of time steps
 M     = 100 # Number of smoothed backwards trajectories
 pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 du    = MvNormal(2,1) # Control input distribution
-x,u,y = simulate(pf,T,du)
+x,u,y = simulate(pf,T,du) # Simuate trajectory using the model in the filter
 tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
 x,u,y = tosvec.((x,u,y))
-##
-xb,ll = smooth(pf, M, u, y)
-xbm = smoothed_mean(xb)
-xbc = smoothed_cov(xb)
-xbt = smoothed_trajs(xb)
+
+xb,ll = smooth(pf, M, u, y) # Sample smooting trajectories
+xbm = smoothed_mean(xb)     # Calculate the mean of smoothing trajectories
+xbc = smoothed_cov(xb)      # And covariance
+xbt = smoothed_trajs(xb)    # Can't remember what this does
 xbs = [diag(xbc) for xbc in xbc] |> vecvec_to_mat .|> sqrt
 plot(xbm', ribbon=2xbs, lab="PF smooth")
 plot!(vecvec_to_mat(x), l=:dash, lab="True")
-
+# ![window](figs/smooth.svg)
+# We can plot the particles themselves as well
 plot(vecvec_to_mat(x), l=(4,), layout=(2,1), show=false)
-scatter!(xbt[1,:,:]', subplot=1, show=false, m=(1,:black, 0.5))
-scatter!(xbt[2,:,:]', subplot=2, m=(1,:black, 0.5))
+scatter!(xbt[1,:,:]', subplot=1, show=false, m=(1,:black, 0.5), lab="Backwards trajectories")
+scatter!(xbt[2,:,:]', subplot=2, m=(1,:black, 0.5), lab="Backwards trajectories")
 
+# ![window](figs/smooth.png)
+# # Kalman filter
+# A Kalman filter is easily created using the constructor. Many of the functions defined for particle filters, are defined also for Kalman filters, e.g.:
+
+eye(n) = Matrix{Float64}(I,n,n)
+kf     = KalmanFilter(A, B, I, 0, eye(n), eye(p), MvNormal([1.,1.]))
+xf,xt,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
+xT,R,lls = smooth(kf, u, x) # Smoothed state, smoothed cov, loglik
+# It can also be called in a loop like the `pf` above
+#md for t = 1:T
+#md     kf(u,y) # Performs both predict! and correct!
+#md     # alternatively
+#md     predict!(kf, u, t)
+#md     x   = state(kf)
+#md     R   = covariance(kf)
+#md     ll += correct!(kf, y, t) # Returns loglik
+#md end
+#
+# # Parameter estimation
+# We provide som basic functionality for maximum likelihood estimation and MAP estimation
+# ## ML estimation
+# Plot likelihood as function of the variance of the dynamics noise
 ##
-svec = exp10.(LinRange(-0.7,1,40))
+svec = exp10.(LinRange(-2,2,60))
 llspf = map(svec) do s
     df = MvNormal(n,s)
     pfs = ParticleFilter(N, dynamics, measurement, df, dg, d0)
     loglik(pfs,u,y)
 end
-plot(svec, llspf, yscale=:identity, xscale=:log10, ylabel="PF (blue)", title="Loglik")
-##
+plot(svec, llspf, xscale=:log10, title="Log-likelihood", xlabel="Dynamics noise standard deviation")
+# ![window](figs/svec.png)
+# as we can see, the result is quite noisy due to the stochastic nature of particle filtering.
+# We can do the same with a Kalman filter
 eye(n) = Matrix{Float64}(I,n,n)
 llskf = map(svec) do s
     kfs = KalmanFilter(A, B, I, 0, s^2*eye(n), eye(p), d0)
     loglik(kfs,u,y)
 end
 plot!(twinx(),svec, llskf, yscale=:identity, xscale=:log10, ylabel="Kalman (red)", c=:red)
-##
-# Same thing with KF
+
+# Smoothing using KF
 kf = KalmanFilter(A, B, I, 0, eye(n), eye(p), MvNormal(2,1))
 xf,xh,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
 xT,R,lls = smooth(kf, u, x) # Smoothed state, smoothed cov, loglik
 
-# Compare to kf
-xpf,wpf,wepf,llpf = forward_trajectory(pf, u, y)
+# Plot and compare PF and KF
 plot(vecvec_to_mat(xT), lab="Kalman smooth", layout=2)
 plot!(xbm', lab="pf smooth")
 plot!(vecvec_to_mat(x), lab="true")
-##
+# ![window](figs/smoothtrajs.svg)
 
+# ## MAP estiamtion
+# To solve a MAP estimation problem, we need to define a function that takes a parameter vector and returns a particle filter
 
-filter_from_parameters(θ) = ParticleFilter(N, dynamics, measurement, MvNormal(n,θ[1]), MvNormal(p,θ[2]), d0)
-priors = [Distributions.Gamma(1.5,1),Distributions.Gamma(1.5,1)]
-ll       = log_likelihood_fun(filter_from_parameters,priors,u,y)
+filter_from_parameters(θ) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
+# The call to `exp` on the parameters is so that we can define log-normal priors
+priors = [Normal(1,2),Normal(1,2)]
 plot_priors(priors)
-v = exp10.(LinRange(-1,1,8))
+# Now we call the function `log_likelihood_fun` that returns a function to be minimized
+ll = log_likelihood_fun(filter_from_parameters,priors,u,y)
+# Since this is a low-dimensional problem, we can plot the LL on a 2d-grid
+Nv = 20
+v = exp10.(LinRange(-1,1,Nv))
 llxy = (x,y) -> ll([x;y])
 VGx, VGy = meshgrid(v,v)
 VGz = llxy.(VGx, VGy)
-heatmap(VGz, xticks=(1:8,round.(v,digits=1)),yticks=(1:8,round.(v,digits=1)), xlabel="sigma v", ylabel="sigma w") # Yes, labels are reversed
-##
+heatmap(VGz, xticks=(1:Nv,round.(v,digits=2)),yticks=(1:Nv,round.(v,digits=2)), xlabel="sigma v", ylabel="sigma w") # Yes, labels are reversed
+# ![window](figs/heatmap.svg)
+# Something seems to be off with this figure as the hottest spot is not really where we would expect it
+
+# Optimization of the log likelihood can be done by, e.g., global/black box methods, see [BlackBoxOptim.jl](https://github.com/robertfeldt/BlackBoxOptim.jl). Standard tricks apply, such as performing the parameter search in log-space etc.
 
 
-#
-# VGx, VGy = meshgrid(1:10,1:5)
-# VGz = ((x,y) -> x*y).(VGx,VGy)
-# heatmap(VGz, yticks=(1:10,1:10), xticks=(1:5,1:5))
-
-
-##
-
+# ## Bayesian inference using PMMH
+# This is pretty cool. We procede like we did for MAP above, but when calling the function `metropolis`, we will get the entire posterior distribution of the parameter vector, for the small cost of a massive increase in computational cost.
 N = 1000
 filter_from_parameters(θ) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
+# The call to `exp` on the parameters is so that we can define log-normal priors
 priors = [Normal(1,2),Normal(1,2)]
-ll       = log_likelihood_fun(filter_from_parameters,priors,u,y,1)
-θ₀ = log.([1.,1.])
+ll     = log_likelihood_fun(filter_from_parameters,priors,u,y,1)
+θ₀ = log.([1.,1.]) # Starting point
+# We also need to define a function that suggests a new point from the "proposal distribution". This can be pretty much anything, but it has to be symmetric since I was lazy and simplified an equation.
 draw = θ -> θ .+ rand(MvNormal(0.1ones(2)))
 burnin = 200
-@time theta, lls = metropolis(ll, 1000, θ₀, draw)
-thetam = reduce(hcat, theta)'
-histogram(exp.(thetam), layout=(3,1)); plot!(lls, subplot=3)
+@time theta, lls = metropolis(ll, 2000, θ₀, draw) # Run PMMH for 2000  iterations, takes about half a minute on my laptop
+thetam = reduce(hcat, theta)'[burnin+1:end,:] # Build a matrix of the output (was vecofvec)
+histogram(exp.(thetam), layout=(3,1)); plot!(lls, subplot=3) # Visualize
+# ![window](figs/histogram.svg)
 
-# @time thetalls = LowLevelParticleFilters.metropolis_threaded(burnin, ll, 500, θ₀, draw)
-# histogram(exp.(thetalls[:,1:2]), layout=3)
-# plot!(thetalls[:,3], subplot=3)
+# If you are lucky, you can run the above threaded as well. I tried my best to make particle fitlers thread safe with their own rngs etc., but your milage may vary.
+#md @time thetalls = LowLevelParticleFilters.metropolis_threaded(burnin, ll, 500, θ₀, draw)
+#md histogram(exp.(thetalls[:,1:2]), layout=3)
+#md plot!(thetalls[:,3], subplot=3)
+
+
+#jl # Compile using Literate.markdown("example_lineargaussian.jl", "..", name="README", documenter=false)
