@@ -245,7 +245,7 @@ ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors
 
 returns function θ -> p(y|θ)p(θ)
 """
-function log_likelihood_fun(filter_from_parameters,priors::Vector{<:Distribution},u,y,mc=1)
+function log_likelihood_fun(filter_from_parameters,priors::Vector{<:Distribution},u,y)
     function (θ)
         length(θ) == length(priors) || throw(ArgumentError("Input must have same length as priors"))
         ll = sum(i->logpdf(priors[i], θ[i]), eachindex(priors))
