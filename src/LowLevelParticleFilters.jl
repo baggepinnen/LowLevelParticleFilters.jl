@@ -77,8 +77,7 @@ function predict!(pf,u, t = index(pf))
     if shouldresample(pf)
         j = resample(pf)
         propagate_particles!(pf, u, j, t)
-        fill!(s.w, log(1/N))
-        fill!(s.we, 1/N)
+        reset_weights!(s)
     else # Resample not needed
         propagate_particles!(pf, u, t)
     end
@@ -92,7 +91,7 @@ Update state/covariance/weights based on measurement `y`,  returns loglikelihood
 """
 function correct!(pf, y, t = index(pf))
     measurement_equation!(pf, y, t)
-    loklik = logsumexp!(pf.state.w, pf.state.we)
+    loklik = logsumexp!(pf.state)
 end
 
 """

@@ -78,7 +78,7 @@ function run_test()
 end
 
 @time RMSE = run_test()
-# Propagated 4200000 particles in 3.393759761 seconds for an average of 1637.565501325419 particles per millisecond
+# Propagated 8400000 particles in 3.568745383 seconds for an average of 2353.7683691344473 particles per millisecond
 
 # We then plot the results
 time_steps     = [20, 100, 200]
@@ -140,15 +140,14 @@ xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 # We provide som basic functionality for maximum likelihood estimation and MAP estimation
 # ## ML estimation
 # Plot likelihood as function of the variance of the dynamics noise
-svec = exp10.(LinRange(-2,2,60))
+svec = exp10.(LinRange(-1.5,3,60))
 llspf = map(svec) do s
     df = MvNormal(n,s)
-    pfs = ParticleFilter(N, dynamics, measurement, df, dg, d0)
+    pfs = ParticleFilter(2000, dynamics, measurement, df, dg, d0)
     loglik(pfs,u,y)
 end
 plot(svec, llspf, xscale=:log10, title="Log-likelihood", xlabel="Dynamics noise standard deviation")
-# ![window](figs/svec.png)
-# as we can see, the result is quite noisy due to the stochastic nature of particle filtering.
+vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue))
 # We can do the same with a Kalman filter
 eye(n) = Matrix{Float64}(I,n,n)
 llskf = map(svec) do s
@@ -156,8 +155,11 @@ llskf = map(svec) do s
     loglik(kfs,u,y)
 end
 plot!(twinx(),svec, llskf, yscale=:identity, xscale=:log10, ylabel="Kalman (red)", c=:red)
+vline!([svec[findmax(llskf)[2]]], l=(:dash,:red))
+# ![window](figs/svec.png)
+# as we can see, the result is quite noisy due to the stochastic nature of particle filtering.
 
-# Smoothing using KF
+# ### Smoothing using KF
 kf = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal(2,1))
 xf,xh,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
 xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
@@ -179,7 +181,7 @@ plot_priors(priors)
 ll = log_likelihood_fun(filter_from_parameters,priors,u,y)
 # Since this is a low-dimensional problem, we can plot the LL on a 2d-grid
 Nv = 20
-v = exp10.(LinRange(-1,1,Nv))
+v = LinRange(-0.7,1,Nv)
 llxy = (x,y) -> ll([x;y])
 VGx, VGy = meshgrid(v,v)
 VGz = llxy.(VGx, VGy)

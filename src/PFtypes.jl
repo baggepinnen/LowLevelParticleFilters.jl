@@ -31,6 +31,7 @@ struct PFstate{PT<:AbstractArray, FT<:AbstractFloat}
     xprev::Vector{PT}
     w::Vector{FT}
     we::Vector{FT}
+    maxw::Ref{FT}
     j::Vector{Int64}
     bins::Vector{Float64}
     t::Ref{Int}
@@ -57,7 +58,7 @@ function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, d
     x = deepcopy(xprev)
     w = fill(log(1/N), N)
     we = fill(1/N, N)
-    s = PFstate(x,xprev,w,we, Vector{Int}(undef,N), Vector{Float64}(undef,N),Ref(1))
+    s = PFstate(x,xprev,w,we,Ref(0.), Vector{Int}(undef,N), Vector{Float64}(undef,N),Ref(1))
     nf = numargs(dynamics)
     if nf < 3
         f = (x,u,t) -> dynamics(x,u)
@@ -151,7 +152,7 @@ function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Fun
     x  = deepcopy(xprev)
     w  = fill(log(1/N), N)
     we = fill(1/N, N)
-    s  = PFstate(x,xprev,w, we, Vector{Int}(N), Vector{Float64}(N),Ref(1))
+    s  = PFstate(x,xprev,w, we, Ref(0.), Vector{Int}(N), Vector{Float64}(N),Ref(1))
 
     AdvancedParticleFilter(state = s, dynamics = dynamics, measurement = measurement, dynamics_density=dynamics_density,
     initial_density=initial_density)

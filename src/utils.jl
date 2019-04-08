@@ -1,21 +1,23 @@
 export weigthed_mean, weigthed_cov, plot_trajectories, scatter_particles, logsumexp!, smoothed_mean, smoothed_cov, smoothed_trajs, plot_priors
 
 """
-ll = logsumexp!(w)
+ll = logsumexp!(w, we [, maxw])
 Normalizes the weight vector `w` and returns the weighted log-likelihood
 
 https://arxiv.org/pdf/1412.8695.pdf eq 3.8 for p(y)
 """
-function logsumexp!(w,we)
+function logsumexp!(w,we,maxw=Ref(zero(eltype(w))))
     offset = maximum(w)
     w  .-= offset
     Yeppp.exp!(we,w)
     s    = sum(we)
     we .*= 1/s
     w  .-= log(s)
-    s/exp(-offset) - log(length(w)) # TODO: make sure this is correct
+    maxw[] += offset
+    log(s/exp(-maxw[])) - log(length(w)) # TODO: make sure this is correct
 end
-
+logsumexp!(s) = logsumexp!(s.w,s.we,s.maxw)
+logsumexp!(pf::AbstractParticleFilter) = logsumexp!(pf.state)
 # function logsumexp!(w,we)
 #     offset = maximum(w)
 #     # w  .-= offset
@@ -25,6 +27,14 @@ end
 #     w  .-= (log(s) + offset)
 #     s/exp(-offset) - log(length(w))
 # end
+
+function reset_weights!(s)
+    N = num_particles(s)
+    fill!(s.w, log(1/N))
+    fill!(s.we, 1/N)
+    s.maxw[] = 0
+end
+reset_weights!(pf::AbstractParticleFilter) = reset_weights!(state(pf))
 
 function weigthed_mean(x,we::AbstractVector)
     @assert sum(we) ≈ 1
