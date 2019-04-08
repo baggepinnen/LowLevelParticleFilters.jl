@@ -109,7 +109,7 @@ Random.seed!(0)
         @test all(-1e4 < s < 0 for s in llspf)
 
         llskf = map(svec) do s
-            kfs = KalmanFilter(A, B, I, 0, s^2*eye(n), eye(p), d0)
+            kfs = KalmanFilter(A, B, C, 0, s^2*eye(n), eye(p), d0)
             loglik(kfs,u,y)
         end
         @test all(-1e7 < s < 0 for s in llskf)

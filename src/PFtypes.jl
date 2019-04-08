@@ -165,7 +165,7 @@ Base.@propagate_inbounds function measurement_equation!(pf::AdvancedParticleFilt
     x = particles(pf)
     @inbounds for i = 1:num_particles(pf)
         w[i] += g(x[i],y,t)
-        w[i] = ifelse(w[i] < -10000, -10000, w[i])
+        # w[i] = ifelse(w[i] < -10000, -10000, w[i])
     end
     w
 end

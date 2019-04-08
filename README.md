@@ -60,7 +60,7 @@ function run_test()
     propagated_particles = 0
     t = @elapsed for (Ti,T) = enumerate(time_steps)
         for (Ni,N) = enumerate(particle_count)
-            montecarlo_runs = 1*maximum(particle_count)*maximum(time_steps) ÷ T ÷ N
+            montecarlo_runs = 2*maximum(particle_count)*maximum(time_steps) ÷ T ÷ N
             E = sum(1:montecarlo_runs) do mc_run
                 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
                 u = SVector{2,Float64}(randn(2))
@@ -69,7 +69,7 @@ function run_test()
                 error = 0.0
                 @inbounds for t = 1:T-1
                     pf(u, y) # Update the particle filter
-                    x = dynamics(x,u)
+                    x = dynamics(x,u) + SVector{2,Float64}(rand(df))
                     y = SVector{2,Float64}(sample_measurement(pf,x,t))
                     u = @SVector randn(2)
                     error += sum(abs2,x-weigthed_mean(pf))
@@ -89,7 +89,7 @@ end
 @time RMSE = run_test()
 ```
 
-Propagated 4200000 particles in 3.393759761 seconds for an average of 1237.565501325419 particles per millisecond
+Propagated 4200000 particles in 3.393759761 seconds for an average of 1637.565501325419 particles per millisecond
 
 We then plot the results
 
@@ -143,7 +143,7 @@ A Kalman filter is easily created using the constructor. Many of the functions d
 
 ```julia
 eye(n) = Matrix{Float64}(I,n,n)
-kf     = KalmanFilter(A, B, I, 0, eye(n), eye(p), MvNormal([1.,1.]))
+kf     = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal([1.,1.]))
 xf,xt,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
 xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 ```
@@ -183,7 +183,7 @@ We can do the same with a Kalman filter
 ```julia
 eye(n) = Matrix{Float64}(I,n,n)
 llskf = map(svec) do s
-    kfs = KalmanFilter(A, B, I, 0, s^2*eye(n), eye(p), d0)
+    kfs = KalmanFilter(A, B, C, 0, s^2*eye(n), eye(p), d0)
     loglik(kfs,u,y)
 end
 plot!(twinx(),svec, llskf, yscale=:identity, xscale=:log10, ylabel="Kalman (red)", c=:red)
@@ -192,7 +192,7 @@ plot!(twinx(),svec, llskf, yscale=:identity, xscale=:log10, ylabel="Kalman (red)
 Smoothing using KF
 
 ```julia
-kf = KalmanFilter(A, B, I, 0, eye(n), eye(p), MvNormal(2,1))
+kf = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal(2,1))
 xf,xh,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
 xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 ```
