@@ -127,6 +127,7 @@ plot!(vecvec_to_mat(x), l=:dash, lab="True")
 ```
 
 ![window](figs/smooth.svg)
+
 We can plot the particles themselves as well
 
 ```julia
@@ -136,6 +137,7 @@ scatter!(xbt[2,:,:]', subplot=2, m=(1,:black, 0.5), lab="Backwards trajectories"
 ```
 
 ![window](figs/smooth.png)
+
 # Kalman filter
 A Kalman filter is easily created using the constructor. Many of the functions defined for particle filters, are defined also for Kalman filters, e.g.:
 
@@ -151,11 +153,7 @@ It can also be called in a loop like the `pf` above
 ```julia
 for t = 1:T
     kf(u,y) # Performs both predict! and correct!
-```
-
-alternatively
-
-```julia
+    # alternatively
     predict!(kf, u, t)
     x   = state(kf)
     R   = covariance(kf)
@@ -169,7 +167,6 @@ We provide som basic functionality for maximum likelihood estimation and MAP est
 Plot likelihood as function of the variance of the dynamics noise
 
 ```julia
-
 svec = exp10.(LinRange(-2,2,60))
 llspf = map(svec) do s
     df = MvNormal(n,s)
