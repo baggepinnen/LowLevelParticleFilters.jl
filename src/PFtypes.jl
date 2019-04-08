@@ -4,7 +4,7 @@ abstract type AbstractKalmanFilter <: AbstractFilter end
 abstract type AbstractParticleFilter <: AbstractFilter end
 
 
-@with_kw mutable struct KalmanFilter{AT,BT,CT,DT,R1T,R2T,R2DT,D0T,XT,RT} <: AbstractKalmanFilter
+@with_kw struct KalmanFilter{AT,BT,CT,DT,R1T,R2T,R2DT,D0T,XT,RT} <: AbstractKalmanFilter
     A::AT
     B::BT
     C::CT
@@ -22,6 +22,7 @@ end
 KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
 """
 function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
+    all(iszero, D) || throw(ArgumentError("Nonzero D matrix not supported yet"))
     KalmanFilter(A,B,C,D,R1,R2,MvNormal(R2), d0, Vector(d0.μ), Matrix(d0.Σ), Ref(1))
 end
 

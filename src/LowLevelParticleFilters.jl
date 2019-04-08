@@ -19,7 +19,7 @@ include("PFtypes.jl")
 
 function reset!(kf::AbstractKalmanFilter)
     kf.x .= Vector(kf.d0.μ)
-    kf.R = copy(Matrix(kf.d0.Σ))
+    kf.R .= copy(Matrix(kf.d0.Σ))
     kf.t[] = 1
 end
 
@@ -58,9 +58,9 @@ function correct!(kf::AbstractKalmanFilter, y, t = index(kf))
     else
         Ct = C
     end
+    e   = y .- Ct*x
     F   = Ct*R*Ct'
     F   = 0.5(F+F')
-    e   = y.-Ct*x
     K   = (R*Ct')/(F + R2) # Do not use .+ if R2 is I
     x .+= K*e
     R  .= (I - K*Ct)*R # warning against I .- A
@@ -143,10 +143,10 @@ end
 xT,RT,ll = smooth(kf::AbstractKalmanFilter, u::Vector, y::Vector)
 Returns smoothed estimates of state `x` and covariance `R` given all input output data `u,y`
 """
-function smooth(kf::AbstractKalmanFilter, u::Vector, y::Vector)
+function smooth(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector)
     reset!(kf)
     T            = length(y)
-    x,xt,R,Rt,ll = forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector)
+    x,xt,R,Rt,ll = forward_trajectory(kf, u, y)
     xT           = similar(xt)
     RT           = similar(Rt)
     xT[end]      = xt[end]      |> copy
@@ -160,7 +160,7 @@ function smooth(kf::AbstractKalmanFilter, u::Vector, y::Vector)
 end
 
 
-function forward_trajectory(pf, u::Vector, y::Vector)
+function forward_trajectory(pf, u::AbstractVector, y::AbstractVector)
     reset!(pf)
     T = length(y)
     N = num_particles(pf)
