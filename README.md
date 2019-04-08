@@ -3,7 +3,7 @@
 [![Coverage Status](https://coveralls.io/repos/github/baggepinnen/LowLevelParticleFilters.jl/badge.svg?branch=master)](https://coveralls.io/github/baggepinnen/LowLevelParticleFilters.jl?branch=master)
 [![codecov](https://codecov.io/gh/baggepinnen/LowLevelParticleFilters.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/baggepinnen/LowLevelParticleFilters.jl)
 
-This readme is auto generated from the file src/example_lineargaussian.jl using [Literate.jl](https://github.com/fredrikekre/Literate.jl)
+This readme is auto generated from the file [src/example_lineargaussian.jl](https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/src/example_lineargaussian.jl) using [Literate.jl](https://github.com/fredrikekre/Literate.jl)
 
 # Types
 We provide three filter types
@@ -33,8 +33,8 @@ n = 2 # Dinemsion of state
 m = 2 # Dinemsion of input
 p = 2 # Dinemsion of measurements
 
-const dg = MvNormal(p,1.0)          # Dynamics noise Distribution
-const df = MvNormal(n,1.0)          # Measurement noise Distribution
+const dg = MvNormal(p,1.0)          # Measurement noise Distribution
+const df = MvNormal(n,1.0)          # Dynamics noise Distribution
 const d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
 ```
 
@@ -117,10 +117,10 @@ x,u,y = simulate(pf,T,du) # Simuate trajectory using the model in the filter
 tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
 x,u,y = tosvec.((x,u,y))
 
-xb,ll = smooth(pf, M, u, y) # Sample smooting trajectories
+xb,ll = smooth(pf, M, u, y) # Sample smooting particles
 xbm = smoothed_mean(xb)     # Calculate the mean of smoothing trajectories
 xbc = smoothed_cov(xb)      # And covariance
-xbt = smoothed_trajs(xb)    # Can't remember what this does
+xbt = smoothed_trajs(xb)    # Get smoothing trajectories
 xbs = [diag(xbc) for xbc in xbc] |> vecvec_to_mat .|> sqrt
 plot(xbm', ribbon=2xbs, lab="PF smooth")
 plot!(vecvec_to_mat(x), l=:dash, lab="True")
@@ -145,7 +145,7 @@ A Kalman filter is easily created using the constructor. Many of the functions d
 eye(n) = Matrix{Float64}(I,n,n)
 kf     = KalmanFilter(A, B, I, 0, eye(n), eye(p), MvNormal([1.,1.]))
 xf,xt,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
-xT,R,lls = smooth(kf, u, x) # Smoothed state, smoothed cov, loglik
+xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 ```
 
 It can also be called in a loop like the `pf` above
@@ -194,7 +194,7 @@ Smoothing using KF
 ```julia
 kf = KalmanFilter(A, B, I, 0, eye(n), eye(p), MvNormal(2,1))
 xf,xh,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
-xT,R,lls = smooth(kf, u, x) # Smoothed state, smoothed cov, loglik
+xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 ```
 
 Plot and compare PF and KF
@@ -239,6 +239,7 @@ heatmap(VGz, xticks=(1:Nv,round.(v,digits=2)),yticks=(1:Nv,round.(v,digits=2)), 
 ```
 
 ![window](figs/heatmap.svg)
+
 Something seems to be off with this figure as the hottest spot is not really where we would expect it
 
 Optimization of the log likelihood can be done by, e.g., global/black box methods, see [BlackBoxOptim.jl](https://github.com/robertfeldt/BlackBoxOptim.jl). Standard tricks apply, such as performing the parameter search in log-space etc.
@@ -255,7 +256,7 @@ The call to `exp` on the parameters is so that we can define log-normal priors
 
 ```julia
 priors = [Normal(1,2),Normal(1,2)]
-ll     = log_likelihood_fun(filter_from_parameters,priors,u,y,1)
+ll     = log_likelihood_fun(filter_from_parameters,priors,u,y)
 θ₀ = log.([1.,1.]) # Starting point
 ```
 

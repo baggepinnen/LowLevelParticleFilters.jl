@@ -184,7 +184,9 @@ llxy = (x,y) -> ll([x;y])
 VGx, VGy = meshgrid(v,v)
 VGz = llxy.(VGx, VGy)
 heatmap(VGz, xticks=(1:Nv,round.(v,digits=2)),yticks=(1:Nv,round.(v,digits=2)), xlabel="sigma v", ylabel="sigma w") # Yes, labels are reversed
+
 # ![window](figs/heatmap.svg)
+
 # Something seems to be off with this figure as the hottest spot is not really where we would expect it
 
 # Optimization of the log likelihood can be done by, e.g., global/black box methods, see [BlackBoxOptim.jl](https://github.com/robertfeldt/BlackBoxOptim.jl). Standard tricks apply, such as performing the parameter search in log-space etc.
