@@ -1,14 +1,14 @@
 function shouldresample(pf::AbstractParticleFilter)
-    w = weights(pf)
-    N = num_particles(pf)
-    th = 1/(N*pf.resample_threshold)
+    we      = expweights(pf)
+    N       = num_particles(pf)
+    th      = 1/(N*pf.resample_threshold)
     initial = round(Int, 1/th)
-    s = zero(eltype(w))
+    s       = zero(eltype(we))
     @inbounds @simd for i = 1:initial
-        s += exp(w[i])^2
+        s += we[i]^2
     end
     for i = initial+1:N
-        s += exp(w[i])^2
+        s += we[i]^2
         if s > th
             return true
         end
@@ -16,16 +16,16 @@ function shouldresample(pf::AbstractParticleFilter)
     return false
 end
 
-resample(pf::AbstractParticleFilter, M=num_particles(pf)) = resample(pf.resampling_strategy, pf.state.w, pf.state.j, pf.state.bins, M)
-resample(T::Type{<:ResamplingStrategy}, s::PFstate, M=num_particles(s)) = resample(T, s.w, s.j, s.bins, M)
-resample(T::Type{<:ResamplingStrategy}, w, M=length(w)) = resample(T, w, zeros(Int,length(w)), zeros(length(w)), M)
-resample(w::AbstractArray) = resample(ResampleSystematic,w)
+resample(pf::AbstractParticleFilter, M=num_particles(pf)) = resample(pf.resampling_strategy, pf.state.we, pf.state.j, pf.state.bins, M)
+resample(T::Type{<:ResamplingStrategy}, s::PFstate, M=num_particles(s)) = resample(T, s.we, s.j, s.bins, M)
+resample(T::Type{<:ResamplingStrategy}, we, M=length(we)) = resample(T, we, zeros(Int,length(we)), zeros(length(we)), M)
+resample(we::AbstractArray) = resample(ResampleSystematic,we)
 
-function resample(::Type{ResampleSystematic}, w, j, bins, M = length(w))
-    N = length(w)
-    bins[1] = exp(w[1])
+function resample(::Type{ResampleSystematic}, we, j, bins, M = length(we))
+    N = length(we)
+    bins[1] = we[1]
     for i = 2:N
-        bins[i] = bins[i-1] + exp(w[i])
+        bins[i] = bins[i-1] + we[i]
     end
     r = rand()/N
     s = r:(1/N):(bins[N]+r) # Added r in the end to ensure correct length (r < 1/N)
@@ -43,11 +43,11 @@ function resample(::Type{ResampleSystematic}, w, j, bins, M = length(w))
 end
 
 
-function resample(::Type{ResampleSystematicExp}, w, j, bins, M = length(w))
-    N = length(w)
-    bins[1] = exp(w[1])
+function resample(::Type{ResampleSystematicExp}, we, j, bins, M = length(we))
+    N = length(we)
+    bins[1] = we[1]
     for i = 2:N
-        bins[i] = bins[i-1] + exp(w[i])
+        bins[i] = bins[i-1] + we[i]
     end
     r = rand()/N
     s = r:(1/N):(bins[N]+r) # Added r in the end to ensure correct length (r < 1/N)
@@ -70,6 +70,10 @@ end
 # There is probably lots of room for improvement here. All bins need not be formed in the beginning.
 # One only has to keep 1 values, the current upper limit, no array needed.
 # """
+"""
+draw_one_categorical(pf,w)
+Obs! This function expects log-weights
+"""
 function draw_one_categorical(pf,w)
     bins = pf.state.bins
     bins .= exp.(w)

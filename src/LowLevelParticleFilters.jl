@@ -1,11 +1,12 @@
 module LowLevelParticleFilters
 
-export KalmanFilter, ParticleFilter, AdvancedParticleFilter, PFstate, index, state, covariance, num_particles, weights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, reset!, metropolis
+export KalmanFilter, ParticleFilter, AdvancedParticleFilter, PFstate, index, state, covariance, num_particles, weights, expweights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, reset!, metropolis
 
-using StatsBase, Parameters, Lazy, Reexport, Random, LinearAlgebra
-@reexport using Distributions
-@reexport using StatPlots
+using StatsBase, Parameters, Lazy, Reexport, Yeppp, Random, LinearAlgebra
+import PDMats # To extend some methods on static arrays
 @reexport using StaticArrays
+@reexport using Distributions
+using StatsPlots
 
 abstract type ResamplingStrategy end
 
@@ -14,7 +15,7 @@ struct ResampleSystematicExp <: ResamplingStrategy end
 
 include("PFtypes.jl")
 
-Base.Vector(v::Distributions.ZeroVector) = zeros(eltype(v), length(v))
+# Base.Vector(v::Distributions.ZeroVector) = zeros(eltype(v), length(v))
 
 function reset!(kf::AbstractKalmanFilter)
     kf.x .= Vector(kf.d0.μ)
@@ -28,10 +29,11 @@ end
 function reset!(pf)
     s = pf.state
     for i = eachindex(s.xprev)
-        s.xprev[i] = rand(pf.initial_density)
+        s.xprev[i] = rand(pf.rng, pf.initial_density)
         s.x[i] = copy(s.xprev[i])
     end
     fill!(s.w, log(1/num_particles(pf)))
+    fill!(s.we, 1/num_particles(pf))
     s.t[] = 1
 end
 
@@ -50,17 +52,19 @@ function predict!(kf::AbstractKalmanFilter, u, t = index(kf))
 end
 
 function correct!(kf::AbstractKalmanFilter, y, t = index(kf))
-    @unpack C,x,R,R2,R2d = kf
+    @unpack C,x,R,R1,R2,R2d = kf
     if ndims(C) == 3
         Ct = C[:,:,t]
     else
         Ct = C
     end
-    e   = y .- Ct*x
-    K   = (R*Ct')/(Ct*R*Ct' + R2) # Do not use .+ if R2 is I
+    F   = Ct*R*Ct'
+    F   = 0.5(F+F')
+    e   = y.-Ct*x
+    K   = (R*Ct')/(F + R2) # Do not use .+ if R2 is I
     x .+= K*e
     R  .= (I - K*Ct)*R # warning against I .- A
-    logpdf(R2d, e)
+    logpdf(MvNormal(F), e) - 1/2*logdet(F)
 end
 
 """
@@ -74,21 +78,21 @@ function predict!(pf,u, t = index(pf))
         j = resample(pf)
         propagate_particles!(pf, u, j, t)
         fill!(s.w, log(1/N))
+        fill!(s.we, 1/N)
     else # Resample not needed
         propagate_particles!(pf, u, t)
     end
     copyto!(s.xprev, s.x)
-    # s.xprev .= copy(s.x) # TODO: above line was working before
     pf.state.t[] += 1
 end
 
 """
- correct!(f, y, t = index(f))
+ ll = correct!(f, y, t = index(f))
 Update state/covariance/weights based on measurement `y`,  returns loglikelihood.
 """
 function correct!(pf, y, t = index(pf))
     measurement_equation!(pf, y, t)
-    loklik = logsumexp!(pf.state.w)
+    loklik = logsumexp!(pf.state.w, pf.state.we)
 end
 
 """
@@ -162,13 +166,15 @@ function forward_trajectory(pf, u::Vector, y::Vector)
     N = num_particles(pf)
     x = Array{particletype(pf)}(undef,N,T)
     w = Array{Float64}(undef,N,T)
+    we = Array{Float64}(undef,N,T)
     ll = 0.0
     for t = 1:T
         ll += pf(u[t], y[t], t)
         x[:,t] .= particles(pf)
         w[:,t] .= weights(pf)
+        we[:,t] .= expweights(pf)
     end
-    x,w,ll
+    x,w,we,ll
 end
 
 
@@ -192,8 +198,16 @@ function mean_trajectory(pf, u::Vector, y::Vector)
 end
 
 
-# Catch-all method that assumes additive noise
-Distributions.logpdf(d::Distribution,x,xp,t) = logpdf(d,Vector(x.-xp))
+
+# Some methods to speed up distributions using static arrays
+
+@inline Base.:(-)(x::StaticArray, ::Distributions.ZeroVector) = x
+Distributions.logpdf(d::Distribution,x,xp,t) = logpdf(d,x-xp)
+Distributions.sqmahal(d::MvNormal, x::StaticArray) = Distributions.invquad(d.Σ, x - d.μ)
+@inline PDMats.invquad(a::PDMats.ScalMat, x::StaticVector) = dot(x,x) * a.inv_value
+PDMats.invquad(a::PDMats.PDMat, x::StaticVector) = dot(x, a \ x) # \ not implemented
+Base.:(\)(a::PDMats.PDMat, x::StaticVector) = a.chol \ x
+PDMats.invquad(a::PDMats.PDiagMat, x::StaticVector) = PDMats.wsumsq(a.inv_diag, x)
 
 """
 xb,ll = smooth(pf, M, u, y)
@@ -201,10 +215,10 @@ xb,ll = smooth(pf, M, u, y)
 function smooth(pf::AbstractParticleFilter, M, u, y)
     T = length(y)
     N = num_particles(pf)
-    xf,wf,ll = forward_trajectory(pf, u, y)
+    xf,wf,wef,ll = forward_trajectory(pf, u, y)
     @assert M <= N "Must extend cache size of bins and j to allow this"
     xb = Array{particletype(pf)}(undef,M,T)
-    j = resample(ResampleSystematic, wf[:,T], M)
+    j = resample(ResampleSystematic, wef[:,T], M)
     for i = 1:M
         xb[i,T] = xf[j[i], T]
     end
@@ -223,50 +237,82 @@ end
 
 function loglik(f,u,y)
     reset!(f)
-    ll = sum((x)->f(x[1],x[2]), zip(u, y))
+    ll = sum(x->f(x[1],x[2]), zip(u, y))
 end
 
 """
-ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors::Vector{Distribution}, u, y, averaging=1)
+ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors::Vector{Distribution}, u, y)
+
+returns function θ -> p(y|θ)p(θ)
 """
-function log_likelihood_fun(filter_from_parameters,priors::Vector{<:Distribution},u,y,mc=1)
+function log_likelihood_fun(filter_from_parameters,priors::Vector{<:Distribution},u,y)
     function (θ)
-        lls = map(1:mc) do j
-            ll = sum(i->logpdf(priors[i], θ[i]), eachindex(priors))
-            isfinite(ll) || return Inf
-            pf = filter_from_parameters(θ)
-            ll += loglik(pf,u,y)
-        end
-        median(lls)
+        length(θ) == length(priors) || throw(ArgumentError("Input must have same length as priors"))
+        ll = sum(i->logpdf(priors[i], θ[i]), eachindex(priors))
+        isfinite(ll) || return Inf
+        pf = filter_from_parameters(θ)
+        ll += loglik(pf,u,y)
     end
 end
 
-naive_sampler(θ₀) =  θ -> θ .+ rand(MvNormal(0.1abs.(θ₀)))
+function naive_sampler(θ₀)
+    !any(iszero.(θ₀)) || throw(ArgumentError("Naive sampler does not work if initial parameter vector contains zeros (it was going to return θ -> θ .+ rand(MvNormal(0.1abs.(θ₀))), but that is not a good ideas if θ₀ is zero."))
+    θ -> θ .+ rand(MvNormal(0.1abs.(θ₀)))
+end
 
 """
     metropolis(ll::Function(θ), R::Int, θ₀::Vector, draw::Function(θ) = naive_sampler(θ₀))
 
 Performs MCMC sampling using the marginal Metropolis (-Hastings) algorithm
-`draw = θ -> θ'` samples a new parameter vector given an old parameter vector. The distribution must be symmetric, e.g., a Gaussian.
+`draw = θ -> θ'` samples a new parameter vector given an old parameter vector. The distribution must be symmetric, e.g., a Gaussian. `R` is the number of iterations.
 See `log_likelihood_fun`
+
+# Example:
+```julia
+filter_from_parameters(θ) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
+priors = [Normal(0,0.1),Normal(0,0.1)]
+ll     = log_likelihood_fun(filter_from_parameters,priors,u,y,1)
+θ₀ = log.([1.,1.]) # Initial point
+draw = θ -> θ .+ rand(MvNormal(0.1ones(2))) # Function that proposes new parameters (has to be symmetric)
+burnin = 200 # If using threaded call, provide number of burnin iterations
+# @time theta, lls = metropolis(ll, 2000, θ₀, draw) # Run single threaded
+# thetam = reduce(hcat, theta)'
+@time thetalls = LowLevelParticleFilters.metropolis_threaded(burnin, ll, 5000, θ₀, draw) # run on all threads, will provide (2000-burnin)*nthreads() samples
+histogram(exp.(thetalls[:,1:2]), layout=3)
+plot!(thetalls[:,3], subplot=3) # if threaded call, log likelihoods are in the last column
+```
 """
 function metropolis(ll, R, θ₀, draw = naive_sampler(θ₀))
-    params    = Vector{typeof(θ₀)}(R)
-    lls       = Vector{Float64}(R)
+    params    = Vector{typeof(θ₀)}(undef,R)
+    lls       = Vector{Float64}(undef,R)
     params[1] = θ₀
     lls[1]    = ll(θ₀)
     for i = 2:R
         θ = draw(params[i-1])
-        ll = ll(θ)
-        if rand() < exp(ll-lls[i-1])
+        lli = ll(θ)
+        if rand() < exp(lli-lls[i-1])
             params[i] = θ
-            lls[i] = ll
+            lls[i] = lli
         else
             params[i] = params[i-1]
             lls[i] = lls[i-1]
         end
     end
     params, lls
+end
+
+function metropolis_threaded(burnin, args...)
+    res = []
+    mtx = Threads.Mutex()
+    Threads.@threads for i = 1:Threads.nthreads()
+        p,l = metropolis(args...)
+        resi = [reduce(hcat,p)' l]
+        resi = resi[burnin+1:end,:]
+        lock(mtx)
+        push!(res, resi)
+        unlock(mtx)
+    end
+    reduce(vcat,res)
 end
 
 """

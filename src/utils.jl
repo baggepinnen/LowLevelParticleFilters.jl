@@ -3,39 +3,55 @@ export weigthed_mean, weigthed_cov, plot_trajectories, scatter_particles, logsum
 """
 ll = logsumexp!(w)
 Normalizes the weight vector `w` and returns the weighted log-likelihood
+
+https://arxiv.org/pdf/1412.8695.pdf eq 3.8 for p(y)
 """
-function logsumexp!(w)
+function logsumexp!(w,we)
     offset = maximum(w)
-    nc = sum(w->exp(w-offset), w)
-    nc = log(nc) + offset
-    w .-= nc
-    nc - log(length(w))
+    w  .-= offset
+    Yeppp.exp!(we,w)
+    s    = sum(we)
+    we .*= 1/s
+    w  .-= log(s)
+    s/exp(-offset) - log(length(w)) # TODO: make sure this is correct
 end
 
-function weigthed_mean(x,w::AbstractVector)
+# function logsumexp!(w,we)
+#     offset = maximum(w)
+#     # w  .-= offset
+#     we  .= exp.(w .- offset)
+#     s    = sum(we)
+#     we .*= 1/s
+#     w  .-= (log(s) + offset)
+#     s/exp(-offset) - log(length(w))
+# end
+
+function weigthed_mean(x,we::AbstractVector)
+    @assert sum(we) ≈ 1
     xh = zeros(size(x[1]))
     @inbounds @simd  for i = eachindex(x)
-        xh .+= x[i].*exp(w[i])
+        xh .+= x[i].*we[i]
     end
     return xh
 end
-function weigthed_mean(x,w::AbstractMatrix)
+function weigthed_mean(x,we::AbstractMatrix)
+    @assert sum(we) ≈ 1
     N,T = size(x)
     xh = zeros(eltype(x), T)
     for t = 1:T
         @inbounds @simd for i = 1:N
-            xh[t] = xh[t] + x[i,t].*exp(w[i,t])
+            xh[t] += x[i,t].*we[i,t]
         end
     end
     return xh
 end
-weigthed_mean(s) = weigthed_mean(s.x,s.w)
+weigthed_mean(s) = weigthed_mean(s.x,s.we)
 weigthed_mean(pf::AbstractParticleFilter) = weigthed_mean(pf.state)
 
-function weigthed_cov(x,w)
+function weigthed_cov(x,we)
     N,T = size(x)
     n = length(x[1])
-    [cov(copy(reshape(reinterpret(Float64, x[:,t]),n,N)),ProbabilityWeights(exp.(w[:,t])), dims=2, corrected=true) for t = 1:T]
+    [cov(copy(reshape(reinterpret(Float64, x[:,t]),n,N)),ProbabilityWeights(we[:,t]), dims=2, corrected=true) for t = 1:T]
 end
 
 function smoothed_mean(xb)
