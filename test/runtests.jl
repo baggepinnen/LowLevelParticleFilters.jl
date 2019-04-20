@@ -29,7 +29,7 @@ Random.seed!(0)
 
 
     @testset "resample" begin
-        s = PFstate([zeros(10)],[zeros(10)],ones(10),ones(10),zeros(Int,10),zeros(10), Ref(1))
+        s = PFstate(10)
         logsumexp!(s.w, s.we)
         @test resample(s.we) ≈ 1:10
 
@@ -106,13 +106,13 @@ Random.seed!(0)
             pfs = ParticleFilter(N, dynamics, measurement, df, dg, d0)
             loglik(pfs,u,y)
         end
-        @test all(-1e4 < s < 0 for s in llspf)
+        @test all(s < 0 for s in llspf)
 
         llskf = map(svec) do s
             kfs = KalmanFilter(A, B, C, 0, s^2*eye(n), eye(p), d0)
             loglik(kfs,u,y)
         end
-        @test all(-1e7 < s < 0 for s in llskf)
+        @test all(s < 0 for s in llskf)
 
 
         @testset "Metropolis" begin

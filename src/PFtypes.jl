@@ -37,6 +37,8 @@ struct PFstate{PT<:AbstractArray, FT<:AbstractFloat}
     t::Ref{Int}
 end
 
+PFstate(N::Integer) = PFstate([zeros(N)],[zeros(N)],ones(N),ones(N),Ref(0.),zeros(Int,N),zeros(N), Ref(1))
+
 @with_kw struct ParticleFilter{ST,FT,GT,FDT,GDT,IDT,RST<:DataType,RNGT} <: AbstractParticleFilter
     state::ST
     dynamics::FT
