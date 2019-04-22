@@ -2,10 +2,10 @@ module LowLevelParticleFilters
 
 export KalmanFilter, ParticleFilter, AdvancedParticleFilter, PFstate, index, state, covariance, num_particles, weights, expweights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, reset!, metropolis
 
-using StatsBase, Parameters, Lazy, Reexport, Yeppp, Random, LinearAlgebra
+using StatsBase, Parameters, Lazy, Yeppp, Random, LinearAlgebra
 import PDMats # To extend some methods on static arrays
-@reexport using StaticArrays
-@reexport using Distributions
+using StaticArrays
+using Distributions
 using StatsPlots
 
 abstract type ResamplingStrategy end

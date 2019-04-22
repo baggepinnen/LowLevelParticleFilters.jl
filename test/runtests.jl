@@ -1,6 +1,6 @@
 using LowLevelParticleFilters
 import LowLevelParticleFilters.resample
-using Test, Random, LinearAlgebra, Statistics
+using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions
 Random.seed!(0)
 
 @testset "LowLevelParticleFilters" begin
@@ -22,10 +22,6 @@ Random.seed!(0)
         logsumexp!(w,we)
         @test sum(abs, weigthed_mean(x,we)) < 0.06
     end
-
-    # @inline logsumexp!(w) = w .-= log(sum(exp, w))
-
-
 
 
     @testset "resample" begin
@@ -129,6 +125,9 @@ Random.seed!(0)
 
         end
 
+        @testset "example_lineargaussian" begin
+            include("../src/example_lineargaussian.jl")
+        end
 
     end
 

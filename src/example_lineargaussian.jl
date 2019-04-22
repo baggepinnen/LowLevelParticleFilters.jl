@@ -1,6 +1,5 @@
 # # LowLevelParticleFilters
 # [![Build Status](https://travis-ci.org/baggepinnen/LowLevelParticleFilters.jl.svg?branch=master)](https://travis-ci.org/baggepinnen/LowLevelParticleFilters.jl)
-# [![Coverage Status](https://coveralls.io/repos/github/baggepinnen/LowLevelParticleFilters.jl/badge.svg?branch=master)](https://coveralls.io/github/baggepinnen/LowLevelParticleFilters.jl?branch=master)
 # [![codecov](https://codecov.io/gh/baggepinnen/LowLevelParticleFilters.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/baggepinnen/LowLevelParticleFilters.jl)
 
 # This readme is auto generated from the file [src/example_lineargaussian.jl](https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/src/example_lineargaussian.jl) using [Literate.jl](https://github.com/fredrikekre/Literate.jl)
@@ -21,7 +20,7 @@
 
 # ## Particle filter
 # Defining a particle filter is straightforward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u)` and the noise distribution `dg` in the measurement function `measurement(x)`. The distribution of the initial state `d0` must also be provided. An example for a linear Gaussian system is given below.
-using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions, RecursiveArrayTools, BenchmarkTools, StatsPlots
+using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions,  StatsPlots
 
 # Define problem
 
@@ -41,7 +40,7 @@ const C = @SMatrix randn(p,n)
 
 dynamics(x,u) = A*x .+ B*u
 measurement(x) = C*x
-
+vecvec_to_mat(x) = copy(reduce(hcat, x)')
 # To see how the performance varies with the number of particles, we simulate several times
 
 function run_test()
@@ -180,6 +179,11 @@ plot_priors(priors)
 # Now we call the function `log_likelihood_fun` that returns a function to be minimized
 ll = log_likelihood_fun(filter_from_parameters,priors,u,y)
 # Since this is a low-dimensional problem, we can plot the LL on a 2d-grid
+function meshgrid(a,b)
+    grid_a = [i for i in a, j in b]
+    grid_b = [j for i in a, j in b]
+    grid_a, grid_b
+end
 Nv = 20
 v = LinRange(-0.7,1,Nv)
 llxy = (x,y) -> ll([x;y])
@@ -205,6 +209,7 @@ ll     = log_likelihood_fun(filter_from_parameters,priors,u,y)
 # We also need to define a function that suggests a new point from the "proposal distribution". This can be pretty much anything, but it has to be symmetric since I was lazy and simplified an equation.
 draw = θ -> θ .+ rand(MvNormal(0.1ones(2)))
 burnin = 200
+@info "Starting Metropolis algorithm"
 @time theta, lls = metropolis(ll, 2000, θ₀, draw) # Run PMMH for 2000  iterations, takes about half a minute on my laptop
 thetam = reduce(hcat, theta)'[burnin+1:end,:] # Build a matrix of the output (was vecofvec)
 histogram(exp.(thetam), layout=(3,1)); plot!(lls, subplot=3) # Visualize
