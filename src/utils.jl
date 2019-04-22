@@ -11,7 +11,7 @@ function logsumexp!(w,we,maxw=Ref(zero(eltype(w))))
     offset,maxind = findmax(w)
     w  .-= offset
     Yeppp.exp!(we,w)
-    s    = sum_all_but(we,maxind)
+    s    = sum_all_but(we,maxind) # s = ∑wₑ-1
     we .*= 1/(s+1)
     w  .-= log1p(s)
     maxw[] += offset
@@ -32,7 +32,10 @@ logsumexp!(pf::AbstractParticleFilter) = logsumexp!(pf.state)
 
 
 function sum_all_but(w,i)
-    @views(sum(w[1:i-1]) + sum(w[i+1:end]))
+    w[i] -= 1
+    s = sum(w)
+    w[i] += 1
+    s
 end
 
 function reset_weights!(s)
