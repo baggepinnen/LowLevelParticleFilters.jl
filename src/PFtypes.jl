@@ -119,18 +119,6 @@ Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u, t, 
 end
 
 
-Base.@propagate_inbounds function propagate_particles(pf::ParticleFilter,u, t, d=pf.dynamics_density)
-    f     = pf.dynamics
-    xp    = pf.state.xprev
-    x     = similar(xp)
-    noise = zeros(length(x[1]))
-    for i = eachindex(x)
-        x[i] =  f(xp[i], u, t) + rand!(pf.rng, d, noise)
-    end
-    x
-end
-
-
 # Advanced =================================================================================
 
 
@@ -191,17 +179,6 @@ end
 Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilter, u, t::Int, noise::Bool=true)
     f = pf.dynamics
     x,xp = pf.state.x, pf.state.xprev
-    @inbounds for i = eachindex(x)
-        x[i] =  f(xp[i], u, t, noise)
-    end
-    x
-end
-
-
-Base.@propagate_inbounds function propagate_particles(pf::AdvancedParticleFilter, u, t::Int, noise::Bool=true)
-    f  = pf.dynamics
-    xp = pf.state.xprev
-    x  = similar(xp)
     @inbounds for i = eachindex(x)
         x[i] =  f(xp[i], u, t, noise)
     end
