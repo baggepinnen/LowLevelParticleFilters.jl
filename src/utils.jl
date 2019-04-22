@@ -5,17 +5,19 @@ ll = logsumexp!(w, we [, maxw])
 Normalizes the weight vector `w` and returns the weighted log-likelihood
 
 https://arxiv.org/pdf/1412.8695.pdf eq 3.8 for p(y)
+https://discourse.julialang.org/t/fast-logsumexp/22827/7?u=baggepinnen for stable logsumexp
 """
 function logsumexp!(w,we,maxw=Ref(zero(eltype(w))))
-    offset = maximum(w)
+    offset,maxind = findmax(w)
     w  .-= offset
     Yeppp.exp!(we,w)
-    s    = sum(we)
-    we .*= 1/s
-    w  .-= log(s)
+    s    = sum_all_but(we,maxind)
+    we .*= 1/(s+1)
+    w  .-= log1p(s)
     maxw[] += offset
-    log(s/exp(-maxw[])) - log(length(w)) # TODO: make sure this is correct
+    log1p(s) + maxw[] - log(length(w))
 end
+
 logsumexp!(s) = logsumexp!(s.w,s.we,s.maxw)
 logsumexp!(pf::AbstractParticleFilter) = logsumexp!(pf.state)
 # function logsumexp!(w,we)
@@ -27,6 +29,11 @@ logsumexp!(pf::AbstractParticleFilter) = logsumexp!(pf.state)
 #     w  .-= (log(s) + offset)
 #     s/exp(-offset) - log(length(w))
 # end
+
+
+function sum_all_but(w,i)
+    @views(sum(w[1:i-1]) + sum(w[i+1:end]))
+end
 
 function reset_weights!(s)
     N = num_particles(s)

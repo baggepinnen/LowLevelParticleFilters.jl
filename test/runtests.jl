@@ -6,7 +6,7 @@ Random.seed!(0)
 @testset "LowLevelParticleFilters" begin
     @testset "logsumexp" begin
         w = randn(10); we = similar(w)
-        logsumexp!(w,we)
+        ll = logsumexp!(w,we)
         @test sum(we) ≈ 1
         @test sum(exp.(w)) ≈ 1
         wc = copy(w)
