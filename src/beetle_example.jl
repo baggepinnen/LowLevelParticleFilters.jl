@@ -9,4 +9,6 @@
 # where
 # et∼N(0,σe),wt∼N(0,σw)
 # ```
-# 
+# # Define the problem
+#
+using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions,  StatsPlots
