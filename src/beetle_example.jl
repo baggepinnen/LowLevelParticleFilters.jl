@@ -17,34 +17,52 @@ using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions,  Stat
 dgσ = 0.2 # the deviation of the measurement noise distribution
 dfσ = 0.3 # the deviation of the dynamics noise distribution
 
-n = 2 # Dinemsion of state: we have speed and angle, so two
+N = 1000 # Number of particles in the particle filter
+n = 4 # Dinemsion of state: we have speed and angle, so two
 p = 2 # Dinemsion of measurements, we can measure the x and the y, so also two
 
-const dg = MvNormal(p, dgσ)          # Measurement noise Distribution
-const df = MvNormal(n, dfσ)          # Dynamics noise Distribution
-# const d0 = MvNormal(randn(n), 2.0)   # Initial state Distribution ??? not sure what this is
-
-mutable struct State # a custom type to save the previous states (and avoid globals)
-    yx::SVector{2, Float64} # yx and not xy because of the sincos function (and lack of a cossin function)
-    vθ::SVector{2, Float64} # the speed and direction
-end
-
-s = State(SVector(0.0, 0.0), SVector(0.6, 0.7)) # just some initial states, coordinate at origo, with some speed and an initial direction
+dg = MvNormal(@SVector(zeros(p)), dgσ^2) # Measurement noise Distribution
+df = MvNormal(@SVector(zeros(n)), [1e-4, 1e-4, dfσ, dfσ]) # Dynamics noise Distribution NOTE: MvNormal wants a variance, not std
+d0 = MvNormal(SVector(0.0, 0.0, 0.6, 0.7), 0.2^2)   # Initial state Distribution, represents your uncretainty regarding where the beetle starts in any given video
+du = df # We set the driving noise to equal the state-drift noise for now, it will be unused since there is not control input to the system
 
 nsteps = 300 # how many steps will we have to smooth
-yxs = [SVector{2, Float64}(0, 0) for i in 1:nsteps] # saving each coordinate
 
-function step!(s::State) # stepping forward
-    s.vθ += rand(df) # add the dynamics noise
-    s.yx += SVector(sincos(s.vθ[2]))*s.vθ[1] + rand(dg) # step forward with the new speed and direction, while adding some measurement noise
+pos(s) = s[1:2]
+vel(s) = s[3]
+ϕ(s) = s[4]
+
+function dynamics(s,u) # stepping forward
+    [pos(s) + SVector(sincos(ϕ(s)))*vel(s); 0.999vel(s); ϕ(s)]
 end
 
-i = 1
-yxs[i] = s.yx # store initial coordinate
-for i in 2:nsteps
-    step!(s)
-    yxs[i] = s.yx
-end
-    
-plot(last.(yxs), first.(yxs))
+measurement(s) = s[1:2] # We observer the position coordinates with the measurement
 
+pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
+s,u,y = LowLevelParticleFilters.simulate(pf, nsteps, du)
+tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
+s,u,y = tosvec.((s,u,y))
+
+plot(last.(pos.(s)), first.(pos.(s)))
+
+vecvec_to_mat(x) = reduce(hcat, x)'
+M = 500 # Number of smoothing trajectories, NOTE: if this is set higher, the result will be better at the expense of linear scaling of the computational cost.
+sb,ll = smooth(pf, M, u, y) # Sample smooting particles (b for backward-trajectory)
+sbm = smoothed_mean(sb)     # Calculate the mean of smoothing trajectories
+sbc = smoothed_cov(sb)      # And covariance
+sbt = smoothed_trajs(sb)    # Get smoothing trajectories
+sbs = [diag(sbc) for sbc in sbc] |> vecvec_to_mat .|> sqrt
+plot(sbm', ribbon=2sbs, lab="PF smooth")
+plot(sbm[1,:],sbm[2,:], lab="Smoothed trjectories")
+
+
+
+# Parameter estimation
+svec = exp10.(LinRange(-1.5,1,60))
+llspf = map(svec) do s
+    df = MvNormal(@SVector(zeros(n)), [1e-4, 1e-4, s, s])
+    pfs = ParticleFilter(2000, dynamics, measurement, df, dg, d0)
+    loglik(pfs,u,y) # Assuming we enter the measured data y here, u can be set to zero then
+end
+plot(svec, llspf, xscale=:log10, title="Log-likelihood", xlabel="Dynamics noise standard deviation", lab="")
+vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue), lab="maximum")
