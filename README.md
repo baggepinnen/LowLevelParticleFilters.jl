@@ -37,7 +37,7 @@ const df = MvNormal(n,1.0)          # Dynamics noise Distribution
 const d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
 ```
 
-Define random linenar state-space system
+Define random linear state-space system
 
 ```julia
 Tr = randn(n,n)
@@ -45,11 +45,25 @@ const A = SMatrix{n,n}(Tr*diagm(0=>LinRange(0.5,0.95,n))/Tr)
 const B = @SMatrix randn(n,m)
 const C = @SMatrix randn(p,n)
 
+# The following two functions are required by the filter
 dynamics(x,u) = A*x .+ B*u
 measurement(x) = C*x
 ```
+We are now ready to define and use a filter
+```julia
+pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
+pf(u, y) # Perform one filtering step using input u and measurement y
+particles(pf) # Query the filter for particles, try weights(pf) or expweights(pf) as well
+x̂ = weigthed_mean(pf)
+```
 
-To see how the performance varies with the number of particles, we simulate several times
+If you want to perform filtering using vectors of inputs and measurements, try any of the functions
+```julia
+x,w,we,ll = forward_trajectory(pf, u, y)
+x̂,ll = mean_trajectory(pf, u, y)
+```
+
+To see how the performance varies with the number of particles, we simulate several times. The following code simulates the system and performs filtering using the simulated measuerments. We do this for varying number of time steps and varying number of particles.
 
 ```julia
 function run_test()
@@ -61,16 +75,16 @@ function run_test()
         for (Ni,N) = enumerate(particle_count)
             montecarlo_runs = 2*maximum(particle_count)*maximum(time_steps) ÷ T ÷ N
             E = sum(1:montecarlo_runs) do mc_run
-                pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
+                pf = ParticleFilter(N, dynamics, measurement, df, dg, d0) # Create filter
                 u = SVector{2,Float64}(randn(2))
                 x = SVector{2,Float64}(rand(d0))
                 y = SVector{2,Float64}(sample_measurement(pf,x,1))
                 error = 0.0
                 @inbounds for t = 1:T-1
                     pf(u, y) # Update the particle filter
-                    x = dynamics(x,u) + SVector{2,Float64}(rand(df))
-                    y = SVector{2,Float64}(sample_measurement(pf,x,t))
-                    u = @SVector randn(2)
+                    x = dynamics(x,u) + SVector{2,Float64}(rand(df)) # Simulate the true dynamics and add some noise
+                    y = SVector{2,Float64}(sample_measurement(pf,x,t)) # Simulate a measuerment
+                    u = @SVector randn(2) # draw a random control input
                     error += sum(abs2,x-weigthed_mean(pf))
                 end # t
                 √(error/T)
@@ -112,7 +126,7 @@ T     = 200 # Number of time steps
 M     = 100 # Number of smoothed backwards trajectories
 pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 du    = MvNormal(2,1) # Control input distribution
-x,u,y = simulate(pf,T,du) # Simuate trajectory using the model in the filter
+x,u,y = simulate(pf,T,du) # Simulate trajectory using the model in the filter
 tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
 x,u,y = tosvec.((x,u,y))
 
