@@ -66,3 +66,27 @@ llspf = map(svec) do s
 end
 plot(svec, llspf, xscale=:log10, title="Log-likelihood", xlabel="Dynamics noise standard deviation", lab="")
 vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue), lab="maximum")
+
+
+
+using DataDeps, DelimitedFiles
+register(DataDep("track", "one example track of a dung beetle", "https://s3.eu-central-1.amazonaws.com/vision-group-file-sharing/Data%20backup%20and%20storage/Yakir/track.csv", "60158980eaf665c2757c032e906fd8b4fcdacc9396d8f72257f5c78823bfd3ee"))
+xyt = readdlm(datadep"track/track.csv")
+
+using Makie, AbstractPlotting
+
+get_track(I) = [(xyt[i,1], xyt[i,2]) for i in 1:I]
+m, M = extrema(xyt[:,1:2])
+m -= 10
+M += 10
+limits = FRect(m, m, M - m, M - m)
+sc = Scene(limits = limits, scale_plot = false)
+i = Node(2)
+lines!(sc, lift(get_track, i))
+n = size(xyt,1)
+for j in 2:n
+    sleep((xyt[j,3] - xyt[j-1,3])/100) # speed up the walk by 100
+    push!(i, j)
+end
+
+
