@@ -171,7 +171,7 @@ function forward_trajectory(pf, u::AbstractVector, y::AbstractVector)
     w = Array{Float64}(undef,N,T)
     we = Array{Float64}(undef,N,T)
     ll = 0.0
-    for t = 1:T
+    @inbounds for t = 1:T
         ll += pf(u[t], y[t], t)
         x[:,t] .= particles(pf)
         w[:,t] .= weights(pf)
