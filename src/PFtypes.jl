@@ -101,9 +101,11 @@ end
 Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u,j::Vector{Int}, t, d=pf.dynamics_density)
     f = pf.dynamics
     x,xp = pf.state.x, pf.state.xprev
-    noise = zeros(length(x[1]))
+    VecT = eltype(pf.state.x)
+    D = length(VecT)
+    noise = zeros(D)
     for i = eachindex(x)
-        x[i] =  f(xp[j[i]] ,u, t) + rand!(pf.rng, d, noise)
+        x[i] =  f(xp[j[i]] ,u, t) + VecT(rand!(pf.rng, d, noise))
     end
     x
 end
@@ -111,9 +113,11 @@ end
 Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u, t, d=pf.dynamics_density)
     f = pf.dynamics
     x,xp = pf.state.x, pf.state.xprev
-    noise = zeros(length(x[1]))
+    VecT = eltype(pf.state.x)
+    D = length(VecT)
+    noise = zeros(D)
     for i = eachindex(x)
-        x[i] =  f(xp[i] ,u, t) + rand!(pf.rng, d, noise)
+        x[i] =  f(xp[i] ,u, t) + VecT(rand!(pf.rng, d, noise))
     end
     x
 end
@@ -180,7 +184,7 @@ Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilte
     f = pf.dynamics
     x,xp = pf.state.x, pf.state.xprev
     @inbounds for i = eachindex(x)
-        x[i] =  f(xp[i], u, t, noise)
+        x[i] = f(xp[i], u, t, noise)
     end
     x
 end

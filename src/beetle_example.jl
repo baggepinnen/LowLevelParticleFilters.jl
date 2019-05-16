@@ -15,7 +15,7 @@
 using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions,  StatsPlots
 
 dgσ = 0.2 # the deviation of the measurement noise distribution
-dfσ = 0.3 # the deviation of the dynamics noise distribution
+dfσ = 0.69 # the deviation of the dynamics noise distribution
 
 N = 1000 # Number of particles in the particle filter
 n = 4 # Dinemsion of state: we have speed and angle, so two
@@ -28,15 +28,15 @@ du = df # We set the driving noise to equal the state-drift noise for now, it wi
 
 nsteps = 300 # how many steps will we have to smooth
 
-pos(s) = s[1:2]
+pos(s) = s[SVector(1,2)]
 vel(s) = s[3]
 ϕ(s) = s[4]
 
-function dynamics(s,u) # stepping forward
-    [pos(s) + SVector(sincos(ϕ(s)))*vel(s); 0.999vel(s); ϕ(s)]
+@inline function dynamics(s,u) # stepping forward
+    SVector{4,Float64}((pos(s) + SVector(sincos(ϕ(s)))*vel(s))..., 0.999vel(s), ϕ(s))
 end
 
-measurement(s) = s[1:2] # We observer the position coordinates with the measurement
+measurement(s) = s[SVector(1,2)] # We observer the position coordinates with the measurement
 
 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 s,u,y = LowLevelParticleFilters.simulate(pf, nsteps, du)
@@ -57,16 +57,6 @@ plot(sbm[1,:],sbm[2,:], lab="Smoothed trjectories")
 
 
 
-# Parameter estimation
-svec = exp10.(LinRange(-1.5,1,60))
-llspf = map(svec) do s
-    df = MvNormal(@SVector(zeros(n)), [1e-4, 1e-4, s, s])
-    pfs = ParticleFilter(2000, dynamics, measurement, df, dg, d0)
-    loglik(pfs,u,y) # Assuming we enter the measured data y here, u can be set to zero then
-end
-plot(svec, llspf, xscale=:log10, title="Log-likelihood", xlabel="Dynamics noise standard deviation", lab="")
-vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue), lab="maximum")
-
 
 
 using DataDeps, DelimitedFiles
@@ -74,7 +64,7 @@ register(DataDep("track", "one example track of a dung beetle", "https://s3.eu-c
 xyt = readdlm(datadep"track/track.csv")
 
 using Makie, AbstractPlotting
-
+##
 get_track(I) = [(xyt[i,1], xyt[i,2]) for i in 1:I]
 m, M = extrema(xyt[:,1:2])
 m -= 10
@@ -83,10 +73,57 @@ limits = FRect(m, m, M - m, M - m)
 sc = Scene(limits = limits, scale_plot = false)
 i = Node(2)
 lines!(sc, lift(get_track, i))
-n = size(xyt,1)
-for j in 2:n
+T = size(xyt,1)
+for j in 2:T
     sleep((xyt[j,3] - xyt[j-1,3])/100) # speed up the walk by 100
     push!(i, j)
 end
 
+##
+dgσ = 1 # the deviation of the measurement noise distribution
+dfσ = 1 # the deviation of the dynamics noise distribution
 
+N = 2000 # Number of particles in the particle filter
+n = 4 # Dinemsion of state: we have speed and angle, so two
+p = 2 # Dinemsion of measurements, we can measure the x and the y, so also two
+
+dg = MvNormal(@SVector(zeros(p)), dgσ^2) # Measurement noise Distribution
+df = MvNormal(@SVector(zeros(n)), [1e-4, 1e-4, dfσ, dfσ]) # Dynamics noise Distribution NOTE: MvNormal wants a variance, not std
+d0 = MvNormal(SVector(y[1]..., 0.6, 0.7), 0.2^2)
+
+y = tosvec(collect(eachrow(xyt[:,1:2])))
+u = zeros(length(y))
+pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
+x,w,we,ll=forward_trajectory(pf,u,y)
+xh,ll = mean_trajectory(pf,u,y)
+xh = vecvec_to_mat(xh)
+##
+plot(xh[:,1],xh[:,2], layout=@layout([c [a;b]]), c=:blue, lab="xh", legend=:bottomleft)
+Plots.plot!(xyt[:,1],xyt[:,2], subplot=1, c=:red, lab="y")
+Plots.plot!(xh[:,1:2], subplot=2, lab=["xh" ""], c=:blue, legend=:bottomleft)
+Plots.plot!(xyt[:,1:2], subplot=2, lab=["y" ""], c=:red)
+Plots.plot!(xh[:,3:4], subplot=3, lab=["vel" "angle"], legend=:topleft)
+##
+
+
+# Parameter estimation
+svec = exp10.(LinRange(-0.7,1.5,20))
+llspf = map(svec) do s
+    df = MvNormal(@SVector(zeros(n)), [1e-4, 1e-4, s, s])
+    pfs = ParticleFilter(1000, dynamics, measurement, df, dg, d0)
+    loglik(pfs,u,y) # Assuming we enter the measured data y here, u can be set to zero then
+end
+
+plot(svec, llspf, xscale=:log10, title="Log-likelihood", xlabel="Dynamics noise standard deviation", lab="")
+vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue), lab="maximum")
+
+
+
+M = 500 # Number of smoothing trajectories, NOTE: if this is set higher, the result will be better at the expense of linear scaling of the computational cost.
+sb,ll = smooth(pf, M, u, y) # Sample smooting particles (b for backward-trajectory)
+sbm = smoothed_mean(sb)     # Calculate the mean of smoothing trajectories
+sbc = smoothed_cov(sb)      # And covariance
+sbt = smoothed_trajs(sb)    # Get smoothing trajectories
+sbs = [diag(sbc) for sbc in sbc] |> vecvec_to_mat .|> sqrt
+Plots.plot!(sbm[1,:],sbm[2,:], subplot=1, lab="xs")
+Plots.plot!(sbm'[:,3:4], subplot=3, lab=["vs" "as"])
