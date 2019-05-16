@@ -16,9 +16,9 @@ function shouldresample(pf::AbstractParticleFilter)
     return false
 end
 
-resample(pf::AbstractParticleFilter, M=num_particles(pf)) = resample(pf.resampling_strategy, pf.state.we, pf.state.j, pf.state.bins, M)
-resample(T::Type{<:ResamplingStrategy}, s::PFstate, M=num_particles(s)) = resample(T, s.we, s.j, s.bins, M)
-resample(T::Type{<:ResamplingStrategy}, we, M=length(we)) = resample(T, we, zeros(Int,length(we)), zeros(length(we)), M)
+resample(pf::AbstractParticleFilter, M::Int=num_particles(pf)) = resample(pf.resampling_strategy, pf.state.we, pf.state.j, pf.state.bins, M)
+resample(T::Type{<:ResamplingStrategy}, s::PFstate, M::Int=num_particles(s)) = resample(T, s.we, s.j, s.bins, M)
+resample(T::Type{<:ResamplingStrategy}, we::AbstractVector, M::Int=length(we)) = resample(T, we, zeros(Int,M), zeros(length(we)), M)
 resample(we::AbstractArray) = resample(ResampleSystematic,we)
 
 function resample(::Type{ResampleSystematic}, we, j, bins, M = length(we))
@@ -28,7 +28,7 @@ function resample(::Type{ResampleSystematic}, we, j, bins, M = length(we))
         bins[i] = bins[i-1] + we[i]
     end
     r = rand()/N
-    s = r:(1/N):(bins[N]+r) # Added r in the end to ensure correct length (r < 1/N)
+    s = r:(1/M):(bins[N]+r) # Added r in the end to ensure correct length (r < 1/N)
     bo = 1
     for i = 1:M
         @inbounds for b = bo:N
@@ -43,14 +43,14 @@ function resample(::Type{ResampleSystematic}, we, j, bins, M = length(we))
 end
 
 
-function resample(::Type{ResampleSystematicExp}, we, j, bins, M = length(we))
-    N = length(we)
-    bins[1] = we[1]
+function resample(::Type{ResampleSystematicExp}, w, j, bins, M = length(w))
+    N = length(exp(w))
+    bins[1] = exp(w[1])
     for i = 2:N
-        bins[i] = bins[i-1] + we[i]
+        bins[i] = bins[i-1] + exp(w[i])
     end
     r = rand()/N
-    s = r:(1/N):(bins[N]+r) # Added r in the end to ensure correct length (r < 1/N)
+    s = r:(1/M):(bins[N]+r) # Added r in the end to ensure correct length (r < 1/N)
     bo = 1
     for i = 1:M
         @inbounds for b = bo:N
@@ -71,12 +71,12 @@ end
 # One only has to keep 1 values, the current upper limit, no array needed.
 # """
 """
-draw_one_categorical(pf,w)
+    draw_one_categorical(pf,w)
 Obs! This function expects log-weights
 """
 function draw_one_categorical(pf,w)
     bins = pf.state.bins
-    bins .= exp.(w)
+    Yeppp.exp!(bins,w)
     for i = 2:length(w)
         bins[i] += bins[i-1]
     end
