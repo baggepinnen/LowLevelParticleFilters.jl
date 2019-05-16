@@ -159,6 +159,10 @@ function smooth(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector)
 end
 
 
+"""
+    x,w,we,ll = forward_trajectory(pf, u::AbstractVector, y::AbstractVector)
+Run the particle filter for a sequence of inputs and measurements. Return particles, weights, expweights and loglikelihood
+"""
 function forward_trajectory(pf, u::AbstractVector, y::AbstractVector)
     reset!(pf)
     T = length(y)
@@ -209,7 +213,10 @@ Base.:(\)(a::PDMats.PDMat, x::StaticVector) = a.chol \ x
 PDMats.invquad(a::PDMats.PDiagMat, x::StaticVector) = PDMats.wsumsq(a.inv_diag, x)
 
 """
-xb,ll = smooth(pf, M, u, y)
+    xb,ll = smooth(pf, M, u, y)
+
+Perform particle smoothing using forward-filtering, backward simulation. Return smoothed particles and loglikelihood.
+See also `smoothed_trajs`, `smoothed_mean`, `smoothed_cov`
 """
 function smooth(pf::AbstractParticleFilter, M, u, y)
     T = length(y)
@@ -234,6 +241,10 @@ function smooth(pf::AbstractParticleFilter, M, u, y)
     return xb,ll
 end
 
+"""
+    ll = loglik(filter,u,y)
+Calculate loglikelihood for entire sequences `u,y`
+"""
 function loglik(f,u,y)
     reset!(f)
     ll = sum(x->f(x[1],x[2]), zip(u, y))
@@ -315,7 +326,7 @@ function metropolis_threaded(burnin, args...)
 end
 
 """
-x,u,y = simulate(f::AbstractFilter,T::Int,du::Distribution)
+    x,u,y = simulate(f::AbstractFilter,T::Int,du::Distribution)
 Simulate dynamical system forward in time, returns state sequence, inputs and measurements
 `du` is a distribution of random inputs
 """

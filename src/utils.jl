@@ -46,6 +46,10 @@ function reset_weights!(s)
 end
 reset_weights!(pf::AbstractParticleFilter) = reset_weights!(state(pf))
 
+"""
+    x̂ = weigthed_mean(x,we)
+Calculated weighted mean of particle trajectories. `we` are expweights.
+"""
 function weigthed_mean(x,we::AbstractVector)
     @assert sum(we) ≈ 1
     xh = zeros(size(x[1]))
@@ -65,15 +69,26 @@ function weigthed_mean(x,we::AbstractMatrix)
     end
     return xh
 end
+
+"""
+    x̂ = weigthed_mean(pf)
+    x̂ = weigthed_mean(s::PFstate)
+"""
 weigthed_mean(s) = weigthed_mean(s.x,s.we)
 weigthed_mean(pf::AbstractParticleFilter) = weigthed_mean(pf.state)
-
+"""
+    Similar to `weigthed_mean`, but returns covariances
+"""
 function weigthed_cov(x,we)
     N,T = size(x)
     n = length(x[1])
     [cov(copy(reshape(reinterpret(Float64, x[:,t]),n,N)),ProbabilityWeights(we[:,t]), dims=2, corrected=true) for t = 1:T]
 end
 
+"""
+    smoothed_mean(xb)
+Helper function to calculate the mean of smoothed particle trajectories
+"""
 function smoothed_mean(xb)
     M,T = size(xb)
     n = length(xb[1])
@@ -81,12 +96,20 @@ function smoothed_mean(xb)
     copy(reshape(reinterpret(Float64, xbm), n,T))
 end
 
+"""
+    smoothed_cov(xb)
+Helper function to calculate the covariance of smoothed particle trajectories
+"""
 function smoothed_cov(xb)
     M,T = size(xb)
     n = length(xb[1])
     xbc = [cov(copy(reshape(reinterpret(Float64, xb[:,t]),n,M)),dims=2) for t = 1:T]
 end
 
+"""
+    smoothed_trajs(xb)
+Helper function to get particle trajectories as a 3-dimensions array (N,M,T) instead of matrix of vectors.
+"""
 function smoothed_trajs(xb)
     M,T = size(xb)
     n = length(xb[1])
@@ -123,7 +146,7 @@ function plot_priors(priors; kwargs...)
 end
 
 """
-`numparameters(f)`
+    numparameters(f)
 Returns the number of parameters of `f` for the method which has the most parameters. This function is shamefully borrowed from [DiffEqBase.jl](https://github.com/JuliaDiffEq/DiffEqBase.jl/blob/master/src/utils.jl#L6)
 """
 function numargs(f)
