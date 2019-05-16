@@ -92,8 +92,8 @@ Helper function to calculate the mean of smoothed particle trajectories
 function smoothed_mean(xb)
     M,T = size(xb)
     n = length(xb[1])
-    xbm = sum(xb,dims=1)[:] ./ M
-    copy(reshape(reinterpret(Float64, xbm), n,T))
+    xbm = vec(mean(xb,dims=1))
+    reduce(hcat, xbm)
 end
 
 """
