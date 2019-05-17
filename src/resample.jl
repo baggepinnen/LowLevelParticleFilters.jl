@@ -1,4 +1,5 @@
 function shouldresample(pf::AbstractParticleFilter)
+    pf.resample_threshold == 1 && (return true)
     we      = expweights(pf)
     N       = num_particles(pf)
     th      = 1/(N*pf.resample_threshold)
@@ -76,11 +77,13 @@ Obs! This function expects log-weights
 """
 function draw_one_categorical(pf,w)
     bins = pf.state.bins
-    Yeppp.exp!(bins,w)
+    logsumexp!(w,bins)
     for i = 2:length(w)
         bins[i] += bins[i-1]
     end
+    # @assert bins[end] > 0 "All expweigths 0"
     s = rand()*bins[end]
+    # ind = findfirst(x->bins[x]>=s, 1:length(bins))
     midpoint = length(bins)÷2
     if s < bins[midpoint]
         for b = 1:midpoint
