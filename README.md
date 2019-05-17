@@ -267,7 +267,7 @@ This is pretty cool. We procede like we did for MAP above, but when calling the 
 
 ```julia
 N = 1000
-filter_from_parameters(θ) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
+filter_from_parameters(θ,pf=nothing) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
 ```
 
 The call to `exp` on the parameters is so that we can define log-normal priors

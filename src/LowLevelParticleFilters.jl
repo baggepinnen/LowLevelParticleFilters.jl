@@ -200,6 +200,9 @@ function mean_trajectory(pf, u::Vector, y::Vector)
     x,ll
 end
 
+function mean_trajectory(x::AbstractMatrix, we::AbstractMatrix)
+    copy(reduce(hcat,vec(sum(x.*we,dims=1)))')
+end
 
 
 # Some methods to speed up distributions using static arrays
@@ -261,11 +264,14 @@ ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors
 returns function θ -> p(y|θ)p(θ)
 """
 function log_likelihood_fun(filter_from_parameters,priors::Vector{<:Distribution},u,y)
+    n = numargs(filter_from_parameters)
+    pf = nothing
     function (θ)
+        pf === nothing && (pf = filter_from_parameters(θ))
         length(θ) == length(priors) || throw(ArgumentError("Input must have same length as priors"))
         ll = sum(i->logpdf(priors[i], θ[i]), eachindex(priors))
         isfinite(ll) || return Inf
-        pf = filter_from_parameters(θ)
+        pf = filter_from_parameters(θ,pf)
         ll += loglik(pf,u,y)
     end
 end
