@@ -17,7 +17,7 @@ function shouldresample(pf::AbstractParticleFilter)
     return false
 end
 
-resample(pf::AbstractParticleFilter, M::Int=num_particles(pf)) = resample(pf.resampling_strategy, pf.state.we, pf.state.j, pf.state.bins, M)
+resample(pf::AbstractParticleFilter, M::Int=num_particles(pf)) = resample(resampling_strategy(pf), expweights(pf), state(pf).j, state(pf).bins, M)
 resample(T::Type{<:ResamplingStrategy}, s::PFstate, M::Int=num_particles(s)) = resample(T, s.we, s.j, s.bins, M)
 resample(T::Type{<:ResamplingStrategy}, we::AbstractVector, M::Int=length(we)) = resample(T, we, zeros(Int,M), zeros(length(we)), M)
 resample(we::AbstractArray) = resample(ResampleSystematic,we)
@@ -28,7 +28,7 @@ function resample(::Type{ResampleSystematic}, we, j, bins, M = length(we))
     for i = 2:N
         bins[i] = bins[i-1] + we[i]
     end
-    r = rand()/N
+    r = rand()*bins[end]/N
     s = r:(1/M):(bins[N]+r) # Added r in the end to ensure correct length (r < 1/N)
     bo = 1
     for i = 1:M
@@ -45,11 +45,12 @@ end
 
 
 function resample(::Type{ResampleSystematicExp}, w, j, bins, M = length(w))
-    N = length(exp(w))
+    N = length(w)
     bins[1] = exp(w[1])
     for i = 2:N
         bins[i] = bins[i-1] + exp(w[i])
     end
+    bins ./= bins[end]
     r = rand()/N
     s = r:(1/M):(bins[N]+r) # Added r in the end to ensure correct length (r < 1/N)
     bo = 1
@@ -76,7 +77,7 @@ end
 Obs! This function expects log-weights
 """
 function draw_one_categorical(pf,w)
-    bins = pf.state.bins
+    bins = state(pf).bins
     logsumexp!(w,bins)
     for i = 2:length(w)
         bins[i] += bins[i-1]

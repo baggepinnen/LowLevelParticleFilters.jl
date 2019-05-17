@@ -68,8 +68,9 @@ Random.seed!(0)
         T     = 200 # Number of time steps
         M     = 100 # Number of smoothed backwards trajectories
         pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
+        pfa   = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
         du    = MvNormal(2,1) # Control input distribution
-        x,u,y = simulate(pf,T,du) # Simuate trajectory using the model in the filter
+        x,u,y = LowLevelParticleFilters.simulate(pf,T,du) # Simuate trajectory using the model in the filter
         xm = reduce(hcat,x)
         tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
         x,u,y = tosvec.((x,u,y))
