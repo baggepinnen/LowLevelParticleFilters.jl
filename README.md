@@ -31,6 +31,7 @@ Define problem
 n = 2 # Dinemsion of state
 m = 2 # Dinemsion of input
 p = 2 # Dinemsion of measurements
+N = 500 # Number of particles
 
 const dg = MvNormal(p,1.0)          # Measurement noise Distribution
 const df = MvNormal(n,1.0)          # Dynamics noise Distribution
@@ -126,9 +127,10 @@ T     = 200 # Number of time steps
 M     = 100 # Number of smoothed backwards trajectories
 pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 du    = MvNormal(2,1) # Control input distribution
-x,u,y = simulate(pf,T,du) # Simulate trajectory using the model in the filter
+x,u,y = LowLevelParticleFilters.simulate(pf,T,du) # Simulate trajectory using the model in the filter
 tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
 x,u,y = tosvec.((x,u,y))
+vecvec_to_mat(x) = reduce(hcat, x)'
 
 xb,ll = smooth(pf, M, u, y) # Sample smooting particles
 xbm = smoothed_mean(xb)     # Calculate the mean of smoothing trajectories

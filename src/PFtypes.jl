@@ -80,6 +80,26 @@ function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, d
     initial_density=initial_density, )
 end
 
+function ParticleFilter(s::PFstate, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density)
+    nf = numargs(dynamics)
+    if nf < 3
+        f = @inline function (x,u,t) dynamics(x,u) end
+    else
+        f = dynamics
+    end
+
+    ng = numargs(measurement)
+    if ng < 2
+        g = (x,t) -> measurement(x)
+    else
+        g = measurement
+    end
+
+    ParticleFilter(state = s, dynamics = f, measurement = g,
+    dynamics_density=dynamics_density, measurement_density=measurement_density,
+    initial_density=initial_density, )
+end
+
 
 Base.@propagate_inbounds function measurement_equation!(pf, y, t, d=pf.measurement_density)
     x,w,g = pf.state.x, pf.state.w, pf.measurement
@@ -87,12 +107,10 @@ Base.@propagate_inbounds function measurement_equation!(pf, y, t, d=pf.measureme
     if length(y) == 1
         for i = 1:num_particles(pf)
             w[i] += logpdf(d, (y-g(x[i],t))[1])
-            # w[i] = ifelse(w[i] < -10000000, -10000000, w[i])
         end
     else
         for i = 1:num_particles(pf)
             w[i] += logpdf(d, y-g(x[i],t))
-            # w[i] = ifelse(w[i] < -10000000, -10000000, w[i])
         end
     end
     w
