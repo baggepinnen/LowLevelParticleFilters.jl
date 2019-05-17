@@ -103,10 +103,12 @@ function update!(pf::AuxiliaryParticleFilter,u, y, t = index(pf))
     propagate_particles!(pf.pf, u, t, nothing)# Propagate without noise
     λ  = s.we
     λ .= 0
-    measurement_equation!(pf.pf,y,t, pf.pf.measurement_density, λ) # WARNING: the use of bins here is slightly dangerous. If the user manually resamples between a predict! and update! the weights will get corrupt.
+    measurement_equation!(pf.pf,y,t, pf.pf.measurement_density, λ) 
     s.w .+= λ
     j = resample(ResampleSystematicExp, s.w , s.j, s.bins) # Here we use we as a buffer, the resample method expects logweigts
     propagate_particles!(pf.pf, u, j, t)
+    s.w .= s.w[j]
+    λ .= λ[j]
     copyto!(s.xprev, s.x)
     s.t[] += 1
 

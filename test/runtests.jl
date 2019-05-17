@@ -79,6 +79,13 @@ Random.seed!(0)
         @test size(xb) == (M,T)
         xbm = smoothed_mean(xb)     # Calculate the mean of smoothing trajectories
         @test mean(abs2, xm - xbm) < 10
+
+        xb,ll = smooth(pfa, M, u, y)
+        xbma = smoothed_mean(xb)
+        @show mean(abs2, xm - xbm)
+        @show mean(abs2, xm - xbma)
+
+
         xbc = smoothed_cov(xb)      # And covariance
         @test all(tr(C) < 2 for C in xbc)
         maximum(tr(C) for C in xbc)
