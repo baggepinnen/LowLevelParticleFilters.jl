@@ -81,7 +81,7 @@ function draw_one_categorical(pf,w)
     for i = 2:length(w)
         bins[i] += bins[i-1]
     end
-    # @assert bins[end] > 0 "All expweigths 0"
+    @assert bins[end] ≈ 1 "All expweigths 0"
     s = rand()*bins[end]
     # ind = findfirst(x->bins[x]>=s, 1:length(bins))
     midpoint = length(bins)÷2

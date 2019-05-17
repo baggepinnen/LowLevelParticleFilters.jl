@@ -32,7 +32,7 @@ function reset!(pf)
         s.xprev[i] = rand(pf.rng, pf.initial_density)
         s.x[i] = copy(s.xprev[i])
     end
-    fill!(s.w, log(1/num_particles(pf)))
+    fill!(s.w, -log(num_particles(pf)))
     fill!(s.we, 1/num_particles(pf))
     s.t[] = 1
 end
@@ -221,22 +221,27 @@ See also `smoothed_trajs`, `smoothed_mean`, `smoothed_cov`
 function smooth(pf::AbstractParticleFilter, M, u, y)
     T = length(y)
     N = num_particles(pf)
+    dynamics = pf.dynamics
     xf,wf,wef,ll = forward_trajectory(pf, u, y)
     @assert M <= N "Must extend cache size of bins and j to allow this"
     xb = Array{particletype(pf)}(undef,M,T)
     j = resample(ResampleSystematic, wef[:,T], M)
+    # @show Set(j)
     for i = 1:M
         xb[i,T] = xf[j[i], T]
     end
     wb = Vector{Float64}(undef,N)
-    for t = T-1:-1:1
+    @inbounds for t = T-1:-1:1
+        # tset = Set{Int}()
         for m = 1:M
             for n = 1:N
-                wb[n] = wf[n,t] + logpdf(pf.dynamics_density, xb[m,t+1], xf[n,t], t)
+                wb[n] = wf[n,t] + logpdf(pf.dynamics_density, xb[m,t+1], dynamics(xf[n,t],u[t],t), t)
             end
             i = draw_one_categorical(pf,wb)
+            # push!(tset, i)
             xb[m,t] = xf[i, t]
         end
+        # @show tset
     end
     return xb,ll
 end

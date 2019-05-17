@@ -63,7 +63,7 @@ function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, d
     s = PFstate(x,xprev,w,we,Ref(0.), Vector{Int}(undef,N), Vector{Float64}(undef,N),Ref(1))
     nf = numargs(dynamics)
     if nf < 3
-        f = (x,u,t) -> dynamics(x,u)
+        f = @inline function (x,u,t) dynamics(x,u) end
     else
         f = dynamics
     end
