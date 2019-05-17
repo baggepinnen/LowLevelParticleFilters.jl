@@ -83,7 +83,7 @@ end
 
 
 Base.@propagate_inbounds function measurement_equation!(pf, y, t, d=pf.measurement_density, w = pf.state.w)
-    x,g = pf.state.x, pf.measurement
+    x,g = particles(pf), measurement(pf)
     any(ismissing.(y)) && return w
     if length(y) == 1
         for i = 1:num_particles(pf)
@@ -98,9 +98,10 @@ Base.@propagate_inbounds function measurement_equation!(pf, y, t, d=pf.measureme
 end
 
 Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilter,u,j::Vector{Int}, t, d=pf.dynamics_density)
-    f = pf.dynamics
-    x,xp = pf.state.x, pf.state.xprev
-    VecT = eltype(pf.state.x)
+    f = dynamics(pf)
+    s = state(pf)
+    x,xp = s.x, s.xprev
+    VecT = eltype(s.x)
     D = length(VecT)
     noise = zeros(D)
     if d === nothing
@@ -133,9 +134,22 @@ Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilte
     x
 end
 
+
 # AUX =================================================================================
 @inline Random.rand!(_, d::Bool, args...) = 0 # To turn off noise in the dynamics update for pf aux
 
+Base.@propagate_inbounds function add_noise!(pf::AbstractParticleFilter, d=pf.dynamics_density)
+    x,xp = pf.state.x, pf.state.xprev
+    VecT = eltype(pf.state.x)
+    D = length(VecT)
+    noise = zeros(D)
+
+    for i = eachindex(x)
+        x[i] += VecT(rand!(pf.rng, d, noise))
+    end
+
+    x
+end
 # Advanced =================================================================================
 
 
