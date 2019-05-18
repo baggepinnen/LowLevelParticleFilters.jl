@@ -73,6 +73,7 @@ end
     densityplot(x,[w])
 Plot (weighted) particles densities
 """
+densityplot
 
 @userplot HeatboxPlot
 @recipe function f(p::HeatboxPlot; nbinsy=30)
@@ -152,8 +153,8 @@ function pplot(x, w, y, yhat, a, t, pdata; xreal=nothing, xprev=nothing,  densit
             end
         else
             #Plot the line on the left plot
-            plot!(repeat([t-1.5 t-1], N)', [plotvalsOld[pind,:] plotvalsOld[pind,:]]', legend=false, subplot=grd(i,1))
-            plot!(repeat([t-1 t-0.5], N)', [plotvalsOld[pind,a] plotvals[pind,:]]', legend=false, subplot=grd(i,1))
+            plot!(repeat([t-0.5 t+0.5], N)', [plotvalsOld[pind,:] plotvalsOld[pind,:]]', legend=false, subplot=grd(i,1), l=(:black, 0.1))
+            # plot!(repeat([t-1 t-0.5], N)', [plotvalsOld[pind,a] plotvals[pind,:]]', legend=false, subplot=grd(i,1), l=(:black, 0.1))
         end
         #Plot Real State Here
         scatter!( [t+0.5], [realVals[pind,t]], subplot=grd(i,1), legend=false, m=(:cyan,))

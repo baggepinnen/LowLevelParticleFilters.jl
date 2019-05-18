@@ -192,17 +192,12 @@ Base.@propagate_inbounds function measurement_equation!(pf::AdvancedParticleFilt
     w
 end
 
-function permutesorted!(x,j)
-    for i = eachindex(j)
-        x[i] = x[j[i]]
-    end
-end
 
 Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilter, u, j, t::Int, noise::Bool=true)
     f = pf.dynamics
     x,xp = pf.state.x, pf.state.xprev
     @inbounds for i = eachindex(x)
-        x[i] =  f(permutesorted!(xp,j), u, t, noise)
+        x[i] =  f(xp[j], u, t, noise) # TODO: lots of allocations here
     end
     x
 end

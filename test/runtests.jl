@@ -132,7 +132,10 @@ Random.seed!(0)
 
         @testset "Metropolis" begin
             N = 1000
-            filter_from_parameters(θ,pf=nothing) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
+            function filter_from_parameters(θ,pf=nothing)
+                pf === nothing && (return ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0))
+                ParticleFilter(pf.state, dynamics, measurement, df,dg, d0)
+            end
             # The call to `exp` on the parameters is so that we can define log-normal priors
             priors = [Normal(1,2),Normal(1,2)]
             ll     = log_likelihood_fun(filter_from_parameters,priors,u,y)
@@ -151,43 +154,47 @@ Random.seed!(0)
     end
 
 
-end
 
-@testset "debugplot" begin
-    eye(n) = Matrix{Float64}(I,n,n)
-    n = 2 # Dinemsion of state
-    m = 1 # Dinemsion of input
-    p = 1 # Dinemsion of measurements
+    @testset "debugplot" begin
+        eye(n) = Matrix{Float64}(I,n,n)
+        n = 2 # Dinemsion of state
+        m = 1 # Dinemsion of input
+        p = 1 # Dinemsion of measurements
 
-    dg = MvNormal(p,1.0)          # Dynamics noise Distribution
-    df = MvNormal(n,0.1)          # Measurement noise Distribution
-    d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
+        dg = MvNormal(p,1.0)          # Dynamics noise Distribution
+        df = MvNormal(n,0.1)          # Measurement noise Distribution
+        d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
 
-    # Define random linenar state-space system
-    Tr = randn(n,n)
-    A = SMatrix{n,n}([0.99 0.1; 0 0.2])
-    B = @SMatrix [0;1]
-    C = @SMatrix [1 0]
-    # C = SMatrix{p,n}([1 1])
+        # Define random linenar state-space system
+        Tr = randn(n,n)
+        A = SMatrix{n,n}([0.99 0.1; 0 0.2])
+        B = @SMatrix [0;1]
+        C = @SMatrix [1 0]
+        # C = SMatrix{p,n}([1 1])
 
-    dynamics(x,u) = A*x .+ B*u
-    measurement(x) = C*x
-
-
-    N     = 1000 # Number of particles
-    T     = 50 # Number of time steps
-    M     = 100 # Number of smoothed backwards trajectories
-    pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
-    pfa   = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
-    du    = MvNormal(1,1) # Control input distribution
-    x,u,y = LowLevelParticleFilters.simulate(pf,T,du)
-
-    ##
+        dynamics(x,u) = A*x .+ B*u
+        measurement(x) = C*x
 
 
-    debugplot(pf,u,y, runall=true, xreal=x)
-    # debugplot(pfa,x,u,y, runall=true)
+        N     = 500 # Number of particles
+        T     = 10 # Number of time steps
+        M     = 100 # Number of smoothed backwards trajectories
+        pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
+        pfa   = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
+        du    = MvNormal(1,1) # Control input distribution
+        x,u,y = LowLevelParticleFilters.simulate(pf,T,du)
 
-    # commandplot(pf,x,u,y)
-    # commandplot(pfa,x,u,y)
+        ##
+
+
+        debugplot(pf,u,y, runall=true, xreal=x, density=true)
+        debugplot(pf,u,y, runall=true, xreal=x, density=false)
+        debugplot(pf,u,y, runall=true, xreal=x, leftonly=false)
+        debugplot(pf,u,y, runall=true, xreal=x, leftonly=false, density=false)
+        # debugplot(pfa,x,u,y, runall=true)
+
+        # commandplot(pf,x,u,y)
+        # commandplot(pfa,x,u,y)
+    end
+
 end

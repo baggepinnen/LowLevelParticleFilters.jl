@@ -77,10 +77,6 @@ function correct!(pf, y, t = index(pf))
     loklik = logsumexp!(pf.state)
 end
 
-function correct!(pf::AuxiliaryParticleFilter, y, t = index(pf))
-
-end
-
 """
 ll = update!(f::AbstractFilter, u, y, t = index(f))
 Perform one step of `predict!` and `correct!`, returns loglikelihood.
