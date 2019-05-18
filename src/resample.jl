@@ -1,20 +1,12 @@
+effective_particles(pf) = effective_particles(expweights(pf))
+effective_particles(we::AbstractVector) = 1/sum(abs2, we)
+
+
 function shouldresample(pf::AbstractParticleFilter)
-    pf.resample_threshold == 1 && (return true)
-    we      = expweights(pf)
-    N       = num_particles(pf)
-    th      = 1/(N*pf.resample_threshold)
-    initial = round(Int, 1/th)
-    s       = zero(eltype(we))
-    @inbounds @simd for i = 1:initial
-        s += we[i]^2
-    end
-    for i = initial+1:N
-        s += we[i]^2
-        if s > th
-            return true
-        end
-    end
-    return false
+    resample_threshold(pf) == 1 && (return true)
+    th      = num_particles(pf)*resample_threshold(pf)
+    ne = effective_particles(pf)
+    return ne < th
 end
 
 resample(pf::AbstractParticleFilter, M::Int=num_particles(pf)) = resample(resampling_strategy(pf), expweights(pf), state(pf).j, state(pf).bins, M)

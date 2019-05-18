@@ -26,6 +26,7 @@ Random.seed!(0)
 
     @testset "resample" begin
         s = PFstate(10)
+        @test effective_particles(s.we) ≈ 10
         logsumexp!(s.w, s.we)
         @test resample(s.we) ≈ 1:10
 
@@ -69,6 +70,8 @@ Random.seed!(0)
         M     = 100 # Number of smoothed backwards trajectories
         pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
         pfa   = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
+        @test !shouldresample(pf)
+        @test !shouldresample(pfa)
         du    = MvNormal(2,1) # Control input distribution
         x,u,y = LowLevelParticleFilters.simulate(pf,T,du) # Simuate trajectory using the model in the filter
         xm = reduce(hcat,x)
@@ -78,10 +81,12 @@ Random.seed!(0)
         xb,ll = smooth(pf, M, u, y) # Sample smooting trajectories
         @test size(xb) == (M,T)
         xbm = smoothed_mean(xb)     # Calculate the mean of smoothing trajectories
-        @test mean(abs2, xm - xbm) < 10
+        @test mean(abs2, xm - xbm) < 5
 
         xb,ll = smooth(pfa, M, u, y)
         xbma = smoothed_mean(xb)
+        @test mean(abs2, xm - xbma) < 5
+
         @show mean(abs2, xm - xbm)
         @show mean(abs2, xm - xbma)
 
@@ -96,7 +101,7 @@ Random.seed!(0)
         xf,xt,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
         xT,R,lls = smooth(kf, u, y)
 
-        @test 300 > mean(abs2,  - reduce(hcat,xf)) > mean(abs2, xm - reduce(hcat,xt)) > mean(abs2, xm - reduce(hcat,xT))
+        @test 50 > mean(abs2,  - reduce(hcat,xf)) > mean(abs2, xm - reduce(hcat,xt)) > mean(abs2, xm - reduce(hcat,xT))
         # plot(xm', layout=2)
         # plot!(reduce(hcat,xf)')
         # plot!(reduce(hcat,xt)')
@@ -104,13 +109,19 @@ Random.seed!(0)
 
 
 
-        svec = exp10.(LinRange(-2,2,20))
+        svec = exp10.(LinRange(-1,2,22))
         llspf = map(svec) do s
             df = MvNormal(n,s)
             pfs = ParticleFilter(N, dynamics, measurement, df, dg, d0)
             loglik(pfs,u,y)
         end
         @test all(s < 0 for s in llspf)
+
+        llspfa = map(svec) do s
+            df = MvNormal(n,s)
+            pfs = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
+            loglik(pfs,u,y)
+        end
 
         llskf = map(svec) do s
             kfs = KalmanFilter(A, B, C, 0, s^2*eye(n), eye(p), d0)
@@ -121,7 +132,7 @@ Random.seed!(0)
 
         @testset "Metropolis" begin
             N = 1000
-            filter_from_parameters(θ) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
+            filter_from_parameters(θ,pf=nothing) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
             # The call to `exp` on the parameters is so that we can define log-normal priors
             priors = [Normal(1,2),Normal(1,2)]
             ll     = log_likelihood_fun(filter_from_parameters,priors,u,y)
@@ -140,4 +151,43 @@ Random.seed!(0)
     end
 
 
+end
+
+@testset "debugplot" begin
+    eye(n) = Matrix{Float64}(I,n,n)
+    n = 2 # Dinemsion of state
+    m = 1 # Dinemsion of input
+    p = 1 # Dinemsion of measurements
+
+    dg = MvNormal(p,1.0)          # Dynamics noise Distribution
+    df = MvNormal(n,0.1)          # Measurement noise Distribution
+    d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
+
+    # Define random linenar state-space system
+    Tr = randn(n,n)
+    A = SMatrix{n,n}([0.99 0.1; 0 0.2])
+    B = @SMatrix [0;1]
+    C = @SMatrix [1 0]
+    # C = SMatrix{p,n}([1 1])
+
+    dynamics(x,u) = A*x .+ B*u
+    measurement(x) = C*x
+
+
+    N     = 1000 # Number of particles
+    T     = 50 # Number of time steps
+    M     = 100 # Number of smoothed backwards trajectories
+    pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
+    pfa   = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
+    du    = MvNormal(1,1) # Control input distribution
+    x,u,y = LowLevelParticleFilters.simulate(pf,T,du)
+
+    ##
+
+
+    debugplot(pf,u,y, runall=true, xreal=x)
+    # debugplot(pfa,x,u,y, runall=true)
+
+    # commandplot(pf,x,u,y)
+    # commandplot(pfa,x,u,y)
 end

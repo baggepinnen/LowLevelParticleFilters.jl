@@ -1,8 +1,10 @@
 module LowLevelParticleFilters
 
-export KalmanFilter, ParticleFilter, AuxiliaryParticleFilter, AdvancedParticleFilter, PFstate, index, state, covariance, num_particles, weights, expweights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, reset!, metropolis
+export KalmanFilter, ParticleFilter, AuxiliaryParticleFilter, AdvancedParticleFilter, PFstate, index, state, covariance, num_particles, effective_particles, weights, expweights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, update!, predict!, correct!, reset!, metropolis, shouldresample
 
-using StatsBase, Parameters, Lazy, Yeppp, Random, LinearAlgebra
+export densityplot, debugplot, commandplot
+
+using StatsBase, Parameters, Lazy, Yeppp, Random, LinearAlgebra, Printf
 import PDMats # To extend some methods on static arrays
 using StaticArrays
 using Distributions
@@ -20,6 +22,7 @@ include("filtering.jl")
 include("resample.jl")
 include("utils.jl")
 include("smoothing.jl")
+include("plotting.jl")
 
 index(f::AbstractFilter)               = f.t[]
 

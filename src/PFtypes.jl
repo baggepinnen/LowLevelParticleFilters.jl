@@ -13,7 +13,7 @@ struct PFstate{PT<:AbstractArray, FT<:AbstractFloat}
     t::Ref{Int}
 end
 
-PFstate(N::Integer) = PFstate([zeros(N)],[zeros(N)],ones(N),ones(N),Ref(0.),zeros(Int,N),zeros(N), Ref(1))
+PFstate(N::Integer) = PFstate([zeros(N)],[zeros(N)],fill(-log(N), N),fill(1/N, N),Ref(0.),collect(1:N),zeros(N), Ref(1))
 
 @with_kw struct ParticleFilter{ST,FT,GT,FDT,GDT,IDT,RST<:DataType,RNGT} <: AbstractParticleFilter
     state::ST
@@ -41,7 +41,7 @@ function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, d
     x = deepcopy(xprev)
     w = fill(log(1/N), N)
     we = fill(1/N, N)
-    s = PFstate(x,xprev,w,we,Ref(0.), Vector{Int}(undef,N), Vector{Float64}(undef,N),Ref(1))
+    s = PFstate(x,xprev,w,we,Ref(0.), collect(1:N), zeros(N),Ref(1))
     nf = numargs(dynamics)
     if nf < 3
         f = @inline function (x,u,t) dynamics(x,u) end
@@ -85,7 +85,7 @@ end
 Base.@propagate_inbounds function measurement_equation!(pf, y, t, d=pf.measurement_density, w = pf.state.w)
     x,g = particles(pf), measurement(pf)
     any(ismissing.(y)) && return w
-    if length(y) == 1
+    if d isa UnivariateDistribution && length(y) == 1
         for i = 1:num_particles(pf)
             w[i] += logpdf(d, (y-g(x[i],t))[1])
         end

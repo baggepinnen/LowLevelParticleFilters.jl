@@ -5,8 +5,9 @@
 This readme is auto generated from the file [src/example_lineargaussian.jl](https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/src/example_lineargaussian.jl) using [Literate.jl](https://github.com/fredrikekre/Literate.jl)
 
 # Types
-We provide three filter types
+We provide a number of filter types
 - `ParticleFilter`: This filter is simple to use and assumes that both dynamics noise and measurement noise are additive.
+- `AuxiliaryParticleFilter`: This filter is identical to `ParticleFilter`, but uses a slightly different proposal mechanism for new particles.
 - `AdvancedParticleFilter`: This filter gives you more flexibility, at the expense of having to define a few more functions.
 - `KalmanFilter`. Is what you would expect. Has the same features as the particle filters, but is restricted to linear dynamics and gaussian noise.
 
@@ -22,7 +23,7 @@ This example demostrates how we set up the filters, both PF and KF, for a simple
 Defining a particle filter is straightforward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u)` and the noise distribution `dg` in the measurement function `measurement(x)`. The distribution of the initial state `d0` must also be provided. An example for a linear Gaussian system is given below.
 
 ```julia
-using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions, RecursiveArrayTools, BenchmarkTools, StatsPlots
+using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions,  StatsPlots
 ```
 
 Define problem
@@ -45,12 +46,18 @@ Tr = randn(n,n)
 const A = SMatrix{n,n}(Tr*diagm(0=>LinRange(0.5,0.95,n))/Tr)
 const B = @SMatrix randn(n,m)
 const C = @SMatrix randn(p,n)
+```
 
-# The following two functions are required by the filter
+The following two functions are required by the filter
+
+```julia
 dynamics(x,u) = A*x .+ B*u
 measurement(x) = C*x
+vecvec_to_mat(x) = copy(reduce(hcat, x)') # Helper function
 ```
+
 We are now ready to define and use a filter
+
 ```julia
 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 pf(u, y) # Perform one filtering step using input u and measurement y
@@ -127,10 +134,9 @@ T     = 200 # Number of time steps
 M     = 100 # Number of smoothed backwards trajectories
 pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 du    = MvNormal(2,1) # Control input distribution
-x,u,y = LowLevelParticleFilters.simulate(pf,T,du) # Simulate trajectory using the model in the filter
+x,u,y = simulate(pf,T,du) # Simulate trajectory using the model in the filter
 tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
 x,u,y = tosvec.((x,u,y))
-vecvec_to_mat(x) = reduce(hcat, x)'
 
 xb,ll = smooth(pf, M, u, y) # Sample smooting particles
 xbm = smoothed_mean(xb)     # Calculate the mean of smoothing trajectories
@@ -175,6 +181,33 @@ for t = 1:T
     ll += correct!(kf, y, t) # Returns loglik
 end
 ```
+
+# Troubleshooting
+Tuning a particle filter can be quite the challenge. To assist with this, we provide som visualization tools
+
+```julia
+debugplot(pf,u,y, runall=true, xreal=x)
+```
+
+![window](figs/debugplot.png)
+
+```julia
+Time     Surviving    Effective nbr of particles
+--------------------------------------------------------------
+t:     1   1.000    1000.0
+t:     2   1.000     551.0
+t:     3   1.000     453.0
+t:     4   1.000     384.3
+t:     5   1.000     340.9
+t:     6   1.000     310.5
+t:     7   1.000     280.0
+t:     8   1.000     265.9
+```
+
+The plot displays all states and all measurements. The heatmap in the background represents the weighted particle distributions per time step. For the measurement sequences, the heatmap represent the distibutions of predicted measurements. The blue dots corresponds to measured values. In this case, we simulated the data and we had access to states as well, if we do not have that, just omit `xreal`.
+You can also manually step through the time-series using
+- `commandplot(pf,u,y; kwargs...)
+For options to the debug plots, see `?pplot`.
 
 # Parameter estimation
 We provide som basic functionality for maximum likelihood estimation and MAP estimation
@@ -248,6 +281,11 @@ ll = log_likelihood_fun(filter_from_parameters,priors,u,y)
 Since this is a low-dimensional problem, we can plot the LL on a 2d-grid
 
 ```julia
+function meshgrid(a,b)
+    grid_a = [i for i in a, j in b]
+    grid_b = [j for i in a, j in b]
+    grid_a, grid_b
+end
 Nv = 20
 v = LinRange(-0.7,1,Nv)
 llxy = (x,y) -> ll([x;y])
@@ -283,6 +321,7 @@ We also need to define a function that suggests a new point from the "proposal d
 ```julia
 draw = θ -> θ .+ rand(MvNormal(0.1ones(2)))
 burnin = 200
+@info "Starting Metropolis algorithm"
 @time theta, lls = metropolis(ll, 2000, θ₀, draw) # Run PMMH for 2000  iterations, takes about half a minute on my laptop
 thetam = reduce(hcat, theta)'[burnin+1:end,:] # Build a matrix of the output (was vecofvec)
 histogram(exp.(thetam), layout=(3,1)); plot!(lls, subplot=3) # Visualize

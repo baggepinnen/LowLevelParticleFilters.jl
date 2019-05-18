@@ -20,15 +20,19 @@ end
 
 logsumexp!(s) = logsumexp!(s.w,s.we,s.maxw)
 logsumexp!(pf::AbstractParticleFilter) = logsumexp!(pf.state)
-# function logsumexp!(w,we)
-#     offset = maximum(w)
-#     # w  .-= offset
-#     we  .= exp.(w .- offset)
-#     s    = sum(we)
-#     we .*= 1/s
-#     w  .-= (log(s) + offset)
-#     s/exp(-offset) - log(length(w))
-# end
+
+"""
+    expnormalize!(out,w)
+`out .= exp.(w)/sum(exp,w)`. Does not modify `w`
+"""
+function expnormalize!(we,w)
+    offset,maxind = findmax(w)
+    w .-= offset
+    Yeppp.exp!(we,w)
+    w .+= offset
+    s    = sum_all_but(we,maxind) # s = ∑wₑ-1
+    we .*= 1/(s+1)
+end
 
 
 function sum_all_but(w,i)

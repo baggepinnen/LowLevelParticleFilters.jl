@@ -1,8 +1,5 @@
-# module ParticlePlot
-#
-# export kde, heatboxplot, densityplot, pplot, pploti
-# using RecipesBase, StatsBase
 """
+    kde(x,w)
 Weighted kernel density estimate of the data `x` ∈ ℜN with weights `w` ∈ ℜN
 `xi, densityw, density = kde(x,w)`
 The number of grid points is chosen automatically and will approximately be equal to N/3
@@ -57,10 +54,12 @@ end
     if maximum(x)-minimum(x) > 0
         title --> "Kernel density estimate"
         seriestype := :path
-        @series begin
-            label --> "Weighted density"
-            linecolor --> :blue
-            xi,densityw
+        if length(dp.args) > 1
+            @series begin
+                label --> "Weighted density"
+                linecolor --> :blue
+                xi,densityw
+            end
         end
         @series begin
             label --> "Non-weighted density"
@@ -69,6 +68,11 @@ end
         end
     end
 end
+
+"""
+    densityplot(x,[w])
+Plot (weighted) particles densities
+"""
 
 @userplot HeatboxPlot
 @recipe function f(p::HeatboxPlot; nbinsy=30)
@@ -83,33 +87,36 @@ end
 
 
 """
-    pplot(x, w, y, yhat, N, a, t, pdata)
-    pplot(pf, y, pdata)
+    pdata = pplot(x, w, y, yhat, a, t, pdata; kwargs...)
+    pdata = pplot(pf, y, pdata; kwargs...)
+
 To be called inside a particle filter, plots either particle density (`density=true`) or individual particles (`density=false`) \n
-Will plot all the real states in `xIndices` as well as the expected vs real measurements of `yIndices`.
-Arguments: \n
-* `x`: `Array(N)`. The states for each particle where `M` number of states, `N` number of Particles
-* `w`: `Array(N)`. weight of each particle
-* `y`: `Array(T)`. All true outputs. `R` is number of outputs, `T` is total number of time steps (will only use index `t`)
-* `yhat`: `Array(N)` The expected output per particle. `R` is number of outputs, `N` number of Particles
-* `N`, Number of particles
-* `a`, `Array(N)`, reorderng of particles (e.g. `1:N`)
-* `t`, Current time step
-* `xreal`: `Array(T)`. All true states. `R` is number of states, `T` is total number of time steps (will only use index `t`)
-* `xhat`: Not used
-* `xOld`: Same as `x`, but for previous time step, only used when `!density` to show states origins
-* `pdata`: Persistant data for plotting. Set to `nothing` in first call and pdataOut on remaining \n
-* `density = true` To only plot the particle trajectories, set (`leftonly=false`)\n
-* `leftonly = false`\n
-* `xIndices = 1:size(x,1)`\n
-* `yIndices = 1:size(y,1)`\n
-Returns: `pdataOut`
+Will plot all the real states in `xindices` as well as the expected vs real measurements of `yindices`.
+# Arguments:
+- `x`: `Vector{Vector}(N)`. The states for each particle where `N` number of Particles
+- `w`: `Vector(N)`. weight of each particle
+- `y`: `Vector{Vector}(T)`. All true outputs. `T` is total number of time steps (will only use index `t`)
+- `yhat`: `Vector{Vector}(N)` The expected output per particle. `N` number of Particles
+- `a`, `Vector(N)`, reorderng of particles (e.g. `1:N`)
+- `t`, Current time step
+- `xreal`: `Vector{Vector}(T)`. All true states if available. `T` is total number of time steps (will only use index `t`)
+- `xprev`: Same as `x`, but for previous time step, only used when `!density` to show states origins
+- `pdata`: Persistant data for plotting. Set to `nothing` in first call and pdata on remaining \n
+- `density = true` To only plot the particle trajectories, set (`leftonly=false`)\n
+- `leftonly = true`: only plot the left column\n
+- `xindices = 1:n_states`\n
+- `yindices = 1:n_measurements`\n
+Returns: `pdata`
 """
 function pplot(pf, y, args...; kwargs...)
     s = state(pf)
-    pplot(s.x, s.we, y, LowLevelParticleFilters.measurement(pf).(s.x, s.t[]), s.j, s.t[], args...; kwargs...)
+    pplot(s.x, s.we, y, LowLevelParticleFilters.measurement(pf).(s.x, s.t[]), s.j, s.t[], args...; xprev=s.xprev, kwargs...)
 end
-function pplot(x, w, y, yhat, a, t, pdata; xreal=nothing, xhat=nothing, xOld=nothing,  density = true, leftonly = false, xIndices = 1:length(x[1]), yIndices = 1:length(y[1]), slidef=0.9)
+
+function pplot(x, w, y, yhat, a, t, pdata; xreal=nothing, xprev=nothing,  density = true, leftonly = true, xindices = 1:length(x[1]), yindices = 1:length(y[1]), lowpass=0.9)
+
+
+    (t == 1 || t % 35 == 0) &&  @printf "Time     Surviving    Effective nbr of particles\n--------------------------------------------------------------\n"
 
     T = length(y)
     N = length(x)
@@ -120,21 +127,21 @@ function pplot(x, w, y, yhat, a, t, pdata; xreal=nothing, xhat=nothing, xOld=not
 
     cols = leftonly ? 1 : 2
     grd = (r,c) -> (r-1)*cols+c
-    println("Surviving: "*string((N-length(setdiff(Set(1:N),Set(a))))/N))
+    @printf("t: %5d %7.3f %9.1f\n", t, (N-length(setdiff(Set(1:N),Set(a))))/N, effective_particles(w))
     plotvals = [x;yhat]
     realVals = xreal === nothing ? [fill(Inf,D,T);y] : [reduce(hcat,xreal);y] # Inf turns plotting off
     if !density
-        plotvalsOld = xOld === nothing ? [Inf*x;yhat] : [reduce(hcat, xOld);yhat]
+        plotvalsOld = xprev === nothing ? [Inf*x;yhat] : [reduce(hcat, xprev);yhat]
     end
 
-    plotindices = [xIndices; size(x,1) .+ yIndices]
+    plotindices = [xindices; size(x,1) .+ yindices]
     if pdata === nothing
         pdata = plot(layout=(length(plotindices),cols)), zeros(length(plotindices),2)
     end
     p, minmax = pdata
     dataMin = minimum(plotvals[plotindices,:])
     dataMax = maximum(plotvals[plotindices,:])
-    minmax = [min.(minmax[:,1], dataMin)*slidef .+ (1-slidef)*dataMin max.(minmax[:,2], dataMax)*slidef .+ (1-slidef)*dataMax]
+    minmax = [min.(minmax[:,1], dataMin)*lowpass .+ (1-lowpass)*dataMin max.(minmax[:,2], dataMax)*lowpass .+ (1-lowpass)*dataMax]
 
     for (i, pind) in enumerate(plotindices)
         #Plot the heatmap on the left plot
@@ -158,18 +165,63 @@ end
 
 function commandplot(f)
     res = f(nothing)
+    display(res[1])
     while true
-        print("Waiting for command. q to Quit, ^D to run all, s NN to skip NN steps:\n")
-        line = readline(STDIN)
-        if line == "q\n"
+        print("Waiting for command. q to Quit, s NN to skip NN steps:\n")
+        line = readline()
+        skip = 1
+        if line[1] == 'q'
             return
-        elseif contains(line, "s")
+        elseif occursin("s", line)
             ss = split(strip(line,'\n'))
             skip = parse(Int,ss[2])
-            foreach(1:skip) do i
-                res = f(res)
-            end
         end
+        foreach(1:skip) do i
+            res = f(res)
+        end
+        display(res[1])
     end
 end
-# end # module
+
+
+"""
+    commandplot(pf, u, y; kwargs...)
+
+Produce a helpful plot. For customization options (`kwargs...`), see `?pplot`.
+After each time step, a command from the user is requested.
+- q: quit
+- s n: step `n` steps
+"""
+function commandplot(pf, u, y; kwargs...)
+    # pdata = nothing
+    reset!(pf)
+    pfp = pf isa AuxiliaryParticleFilter ? pf.pf : pf
+    commandplot() do pdata
+        pdata = pplot(pfp, y, pdata; kwargs...)
+        t = index(pf)
+        LowLevelParticleFilters.update!(pf,u[t],y[t])
+        pdata
+    end
+end
+
+
+"""
+    debugplot(pf, u, y; runall=false, kwargs...)
+
+Produce a helpful plot. For customization options (`kwargs...`), see `?pplot`.
+- ` runall=false:` if true, runs all time steps befor displaying (faster), if false, displays the plot after each time step.
+
+The generated plot becomes quite heavy. Initially, try limiting your input to 100 time steps to verify that it doesn't crash.
+"""
+function debugplot(pf, u, y; runall=false, kwargs...)
+    pdata = nothing
+    reset!(pf)
+    pfp = pf isa AuxiliaryParticleFilter ? pf.pf : pf
+    for i = 1:length(y)
+        pdata = pplot(pfp, y, pdata; kwargs...)
+        t = index(pf)
+        LowLevelParticleFilters.update!(pf,u[t],y[t])
+        runall || display(pdata[1])
+    end
+    display(pdata[1])
+end

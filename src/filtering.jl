@@ -60,19 +60,12 @@ function predict!(pf,u, t = index(pf))
         propagate_particles!(pf, u, j, t)
         reset_weights!(s)
     else # Resample not needed
+        s.j .= 1:N
         propagate_particles!(pf, u, t)
     end
     copyto!(s.xprev, s.x)
     pf.state.t[] += 1
 end
-
-# Propagate without noise
-# weigh propagated particles with measurement, store weigts in lambda
-# add lambda to weights as well
-# if resample, permute the lambda weights as well
-# do measurement update
-# subtract lambda
-# logsumexp
 
 
 """
@@ -103,19 +96,25 @@ function update!(pf::AuxiliaryParticleFilter,u, y, t = index(pf))
     propagate_particles!(pf.pf, u, t, nothing)# Propagate without noise
     λ  = s.we
     λ .= 0
-    measurement_equation!(pf.pf, y, t, pf.pf.measurement_density, λ)
+    measurement_equation!(pf.pf, y, t, measurement_density(pf), λ)
     s.w .+= λ
-    j = resample(ResampleSystematicExp, s.w , s.j, s.bins) # Here we use we as a buffer, the resample method expects logweigts
-    s.x .= s.x[j] # TODO: these lines allocate
+    expnormalize!(s.bins,s.w)
+    if effective_particles(s.bins) < resample_threshold(pf)*N
+        j = resample(ResampleSystematicExp, s.w , s.j, s.bins)
+        fill!(s.w, -log(N))
+        s.w .-= λ[j]
+        s.x .= s.x[j] # TODO: these lines allocate
+    else
+        s.j .= 1:N
+        s.w .-= λ
+    end
     add_noise!(pf.pf)
-    s.w .= s.w[j] # TODO: these lines allocate
-    λ .= λ[j] # TODO: these lines allocate
+    # s.w .= s.w[j] # TODO: these lines allocate
     copyto!(s.xprev, s.x)
     s.t[] += 1
 
     # Correct step
     measurement_equation!(pf.pf, y, t)
-    s.w .-= λ
     loklik = logsumexp!(s)
 end
 
