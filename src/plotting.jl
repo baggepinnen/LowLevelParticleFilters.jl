@@ -7,7 +7,7 @@ The bandwidth of the Gaussian kernel is chosen based on Silverman's rule of thum
 returns both weighted and non-weighted densities `densityw, density`
 """
 function kde(x,w::AbstractVector)
-    @assert all(>=(0), w) "All weights must be non-negative"
+    @assert all(x->x>0, w) "All weights must be non-negative"
     e   = StatsBase.histrange(x,ceil(Int,length(x)/3))
     nb  = length(e)-1
     np  = length(x)
