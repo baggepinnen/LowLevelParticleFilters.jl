@@ -5,8 +5,9 @@
 # This readme is auto generated from the file [src/example_lineargaussian.jl](https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/src/example_lineargaussian.jl) using [Literate.jl](https://github.com/fredrikekre/Literate.jl)
 
 # # Types
-# We provide three filter types
+# We provide a number of filter types
 # - `ParticleFilter`: This filter is simple to use and assumes that both dynamics noise and measurement noise are additive.
+# - `AuxiliaryParticleFilter`: This filter is identical to `ParticleFilter`, but uses a slightly different proposal mechanism for new particles.
 # - `AdvancedParticleFilter`: This filter gives you more flexibility, at the expense of having to define a few more functions.
 # - `KalmanFilter`. Is what you would expect. Has the same features as the particle filters, but is restricted to linear dynamics and gaussian noise.
 
@@ -24,24 +25,37 @@ using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions,  Stat
 
 # Define problem
 
-n = 2 # Dinemsion of state
-m = 2 # Dinemsion of input
-p = 2 # Dinemsion of measurements
+n = 2   # Dinemsion of state
+m = 2   # Dinemsion of input
+p = 2   # Dinemsion of measurements
+N = 500 # Number of particles
 
 const dg = MvNormal(p,1.0)          # Measurement noise Distribution
 const df = MvNormal(n,1.0)          # Dynamics noise Distribution
 const d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
 
-# Define random linenar state-space system
+# Define random linear state-space system
 Tr = randn(n,n)
 const A = SMatrix{n,n}(Tr*diagm(0=>LinRange(0.5,0.95,n))/Tr)
 const B = @SMatrix randn(n,m)
 const C = @SMatrix randn(p,n)
 
+# The following two functions are required by the filter
 dynamics(x,u) = A*x .+ B*u
 measurement(x) = C*x
-vecvec_to_mat(x) = copy(reduce(hcat, x)')
-# To see how the performance varies with the number of particles, we simulate several times
+vecvec_to_mat(x) = copy(reduce(hcat, x)') # Helper function
+
+# We are now ready to define and use a filter
+pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
+x,u,y = simulate(pf,100,df) # We can simulate the model that the pf represents
+pf(u[1], y[1]) # Perform one filtering step using input u and measurement y
+particles(pf) # Query the filter for particles, try weights(pf) or expweights(pf) as well
+x̂ = weigthed_mean(pf) # using the current state
+# If you want to perform filtering using vectors of inputs and measurements, try any of the functions
+x,w,we,ll = forward_trajectory(pf, u, y) # Filter whole vectors of signals
+x̂,ll = mean_trajectory(pf, u, y)
+
+# To see how the performance varies with the number of particles, we simulate several times. The following code simulates the system and performs filtering using the simulated measuerments. We do this for varying number of time steps and varying number of particles.
 
 function run_test()
     particle_count = [10, 20, 50, 100, 200, 500, 1000]
@@ -52,16 +66,16 @@ function run_test()
         for (Ni,N) = enumerate(particle_count)
             montecarlo_runs = 2*maximum(particle_count)*maximum(time_steps) ÷ T ÷ N
             E = sum(1:montecarlo_runs) do mc_run
-                pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
+                pf = ParticleFilter(N, dynamics, measurement, df, dg, d0) # Create filter
                 u = SVector{2,Float64}(randn(2))
                 x = SVector{2,Float64}(rand(d0))
                 y = SVector{2,Float64}(sample_measurement(pf,x,1))
                 error = 0.0
                 @inbounds for t = 1:T-1
                     pf(u, y) # Update the particle filter
-                    x = dynamics(x,u) + SVector{2,Float64}(rand(df))
-                    y = SVector{2,Float64}(sample_measurement(pf,x,t))
-                    u = @SVector randn(2)
+                    x = dynamics(x,u) + SVector{2,Float64}(rand(df)) # Simulate the true dynamics and add some noise
+                    y = SVector{2,Float64}(sample_measurement(pf,x,t)) # Simulate a measuerment
+                    u = @SVector randn(2) # draw a random control input
                     error += sum(abs2,x-weigthed_mean(pf))
                 end # t
                 √(error/T)
@@ -98,7 +112,7 @@ T     = 200 # Number of time steps
 M     = 100 # Number of smoothed backwards trajectories
 pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 du    = MvNormal(2,1) # Control input distribution
-x,u,y = simulate(pf,T,du) # Simuate trajectory using the model in the filter
+x,u,y = simulate(pf,T,du) # Simulate trajectory using the model in the filter
 tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
 x,u,y = tosvec.((x,u,y))
 
@@ -134,7 +148,26 @@ xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 #md     R   = covariance(kf)
 #md     ll += correct!(kf, y, t) # Returns loglik
 #md end
-#
+
+# # Troubleshooting
+# Tuning a particle filter can be quite the challenge. To assist with this, we provide som visualization tools
+debugplot(pf,u,y, runall=true, xreal=x) # does not work well with gr() as backend, try pyplot()
+# ![window](figs/debugplot.png)
+#md Time     Surviving    Effective nbr of particles
+#md --------------------------------------------------------------
+#md t:     1   1.000    1000.0
+#md t:     2   1.000     551.0
+#md t:     3   1.000     453.0
+#md t:     4   1.000     384.3
+#md t:     5   1.000     340.9
+#md t:     6   1.000     310.5
+#md t:     7   1.000     280.0
+#md t:     8   1.000     265.9
+# The plot displays all states and all measurements. The heatmap in the background represents the weighted particle distributions per time step. For the measurement sequences, the heatmap represent the distibutions of predicted measurements. The blue dots corresponds to measured values. In this case, we simulated the data and we had access to states as well, if we do not have that, just omit `xreal`.
+# You can also manually step through the time-series using
+# - `commandplot(pf,u,y; kwargs...)
+# For options to the debug plots, see `?pplot`.
+
 # # Parameter estimation
 # We provide som basic functionality for maximum likelihood estimation and MAP estimation
 # ## ML estimation
@@ -172,7 +205,7 @@ plot!(vecvec_to_mat(x), lab="true")
 # ## MAP estiamtion
 # To solve a MAP estimation problem, we need to define a function that takes a parameter vector and returns a particle filter
 
-filter_from_parameters(θ) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
+filter_from_parameters(θ,pf=nothing) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
 # The call to `exp` on the parameters is so that we can define log-normal priors
 priors = [Normal(1,2),Normal(1,2)]
 plot_priors(priors)
@@ -201,18 +234,18 @@ heatmap(VGz, xticks=(1:Nv,round.(v,digits=2)),yticks=(1:Nv,round.(v,digits=2)), 
 # ## Bayesian inference using PMMH
 # This is pretty cool. We procede like we did for MAP above, but when calling the function `metropolis`, we will get the entire posterior distribution of the parameter vector, for the small cost of a massive increase in computational cost.
 N = 1000
-filter_from_parameters(θ) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
+filter_from_parameters(θ,pf=nothing) = AuxiliaryParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
 # The call to `exp` on the parameters is so that we can define log-normal priors
-priors = [Normal(1,2),Normal(1,2)]
+priors = [Normal(0,2),Normal(0,2)]
 ll     = log_likelihood_fun(filter_from_parameters,priors,u,y)
 θ₀ = log.([1.,1.]) # Starting point
 # We also need to define a function that suggests a new point from the "proposal distribution". This can be pretty much anything, but it has to be symmetric since I was lazy and simplified an equation.
-draw = θ -> θ .+ rand(MvNormal(0.1ones(2)))
+draw = θ -> θ .+ rand(MvNormal(0.05ones(2)))
 burnin = 200
 @info "Starting Metropolis algorithm"
 @time theta, lls = metropolis(ll, 2000, θ₀, draw) # Run PMMH for 2000  iterations, takes about half a minute on my laptop
 thetam = reduce(hcat, theta)'[burnin+1:end,:] # Build a matrix of the output (was vecofvec)
-histogram(exp.(thetam), layout=(3,1)); plot!(lls, subplot=3) # Visualize
+histogram(exp.(thetam), layout=(3,1)); plot!(lls[burnin+1:end], subplot=3) # Visualize
 # ![window](figs/histogram.svg)
 
 # If you are lucky, you can run the above threaded as well. I tried my best to make particle fitlers thread safe with their own rngs etc., but your milage may vary.
