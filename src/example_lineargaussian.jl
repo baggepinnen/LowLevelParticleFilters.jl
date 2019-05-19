@@ -47,13 +47,15 @@ vecvec_to_mat(x) = copy(reduce(hcat, x)') # Helper function
 
 # We are now ready to define and use a filter
 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
-x,u,y = simulate(pf,100,df) # We can simulate the model that the pf represents
+xs,u,y = simulate(pf,100,df) # We can simulate the model that the pf represents
 pf(u[1], y[1]) # Perform one filtering step using input u and measurement y
 particles(pf) # Query the filter for particles, try weights(pf) or expweights(pf) as well
 x̂ = weigthed_mean(pf) # using the current state
 # If you want to perform filtering using vectors of inputs and measurements, try any of the functions
 x,w,we,ll = forward_trajectory(pf, u, y) # Filter whole vectors of signals
 x̂,ll = mean_trajectory(pf, u, y)
+trajectorydensity(pf,x,we,y, xreal=xs)
+# ![window](figs/trajdens.png)
 
 # To see how the performance varies with the number of particles, we simulate several times. The following code simulates the system and performs filtering using the simulated measuerments. We do this for varying number of time steps and varying number of particles.
 
