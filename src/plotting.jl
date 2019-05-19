@@ -226,3 +226,48 @@ function debugplot(pf, u, y; runall=false, kwargs...)
     end
     display(pdata[1])
 end
+
+
+
+@userplot TrajectoryDensity
+@recipe function f(p::TrajectoryDensity; nbinsy=30, xreal=nothing)
+    pf,x,w,y = p.args[1:4]
+    N,T = size(x)
+    D = length(x[1])
+    P = length(y[1])
+    if sum(w) ≉ T
+        w = exp.(w)
+        w ./= sum(w, dims=1)
+    end
+    layout := D+P
+    label := ""
+    markercolor --> :cyan
+    title --> reshape([["State $d" for d = 1:D];["Measurement $d" for d = 1:P]], 1, :)
+    for d = 1:D
+        subplot := d
+        @series begin
+            seriestype := :histogram2d
+            bins --> (0.5:1:T+0.5,nbinsy)
+            weights --> vec(w)
+            repeat((1:T)' .-0.5,N)[:], vec(getindex.(x,d))
+        end
+        xreal === nothing || @series begin
+            seriestype := :scatter
+            1:T, getindex.(xreal,d)
+        end
+    end
+    yhat = measurement(pf).(x,0)
+    for d = 1:P
+        subplot := d+D
+        @series begin
+            seriestype := :histogram2d
+            bins --> (0.5:1:T+0.5,nbinsy)
+            weights --> vec(w)
+            repeat((1:T)' .-0.5,N)[:], vec(getindex.(yhat,d))
+        end
+        @series begin
+            seriestype := :scatter
+            1:T, getindex.(y,d)
+        end
+    end
+end

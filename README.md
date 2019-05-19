@@ -29,9 +29,9 @@ using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions,  Stat
 Define problem
 
 ```julia
-n = 2 # Dinemsion of state
-m = 2 # Dinemsion of input
-p = 2 # Dinemsion of measurements
+n = 2   # Dinemsion of state
+m = 2   # Dinemsion of input
+p = 2   # Dinemsion of measurements
 N = 500 # Number of particles
 
 const dg = MvNormal(p,1.0)          # Measurement noise Distribution
@@ -60,16 +60,21 @@ We are now ready to define and use a filter
 
 ```julia
 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
-pf(u, y) # Perform one filtering step using input u and measurement y
+xs,u,y = simulate(pf,100,df) # We can simulate the model that the pf represents
+pf(u[1], y[1]) # Perform one filtering step using input u and measurement y
 particles(pf) # Query the filter for particles, try weights(pf) or expweights(pf) as well
-x̂ = weigthed_mean(pf)
+x̂ = weigthed_mean(pf) # using the current state
 ```
 
 If you want to perform filtering using vectors of inputs and measurements, try any of the functions
+
 ```julia
-x,w,we,ll = forward_trajectory(pf, u, y)
+x,w,we,ll = forward_trajectory(pf, u, y) # Filter whole vectors of signals
 x̂,ll = mean_trajectory(pf, u, y)
+trajectorydensity(pf,x,we,y, xreal=xs)
 ```
+
+![window](figs/trajdens.png)
 
 To see how the performance varies with the number of particles, we simulate several times. The following code simulates the system and performs filtering using the simulated measuerments. We do this for varying number of time steps and varying number of particles.
 
@@ -186,7 +191,7 @@ end
 Tuning a particle filter can be quite the challenge. To assist with this, we provide som visualization tools
 
 ```julia
-debugplot(pf,u,y, runall=true, xreal=x)
+debugplot(pf,u,y, runall=true, xreal=x) # does not work well with gr() as backend, try pyplot()
 ```
 
 ![window](figs/debugplot.png)
@@ -262,7 +267,7 @@ plot!(vecvec_to_mat(x), lab="true")
 To solve a MAP estimation problem, we need to define a function that takes a parameter vector and returns a particle filter
 
 ```julia
-filter_from_parameters(θ) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
+filter_from_parameters(θ,pf=nothing) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
 ```
 
 The call to `exp` on the parameters is so that we can define log-normal priors
@@ -305,13 +310,13 @@ This is pretty cool. We procede like we did for MAP above, but when calling the 
 
 ```julia
 N = 1000
-filter_from_parameters(θ,pf=nothing) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
+filter_from_parameters(θ,pf=nothing) = AuxiliaryParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
 ```
 
 The call to `exp` on the parameters is so that we can define log-normal priors
 
 ```julia
-priors = [Normal(1,2),Normal(1,2)]
+priors = [Normal(0,2),Normal(0,2)]
 ll     = log_likelihood_fun(filter_from_parameters,priors,u,y)
 θ₀ = log.([1.,1.]) # Starting point
 ```
@@ -319,12 +324,12 @@ ll     = log_likelihood_fun(filter_from_parameters,priors,u,y)
 We also need to define a function that suggests a new point from the "proposal distribution". This can be pretty much anything, but it has to be symmetric since I was lazy and simplified an equation.
 
 ```julia
-draw = θ -> θ .+ rand(MvNormal(0.1ones(2)))
+draw = θ -> θ .+ rand(MvNormal(0.05ones(2)))
 burnin = 200
 @info "Starting Metropolis algorithm"
 @time theta, lls = metropolis(ll, 2000, θ₀, draw) # Run PMMH for 2000  iterations, takes about half a minute on my laptop
 thetam = reduce(hcat, theta)'[burnin+1:end,:] # Build a matrix of the output (was vecofvec)
-histogram(exp.(thetam), layout=(3,1)); plot!(lls, subplot=3) # Visualize
+histogram(exp.(thetam), layout=(3,1)); plot!(lls[burnin+1:end], subplot=3) # Visualize
 ```
 
 ![window](figs/histogram.svg)
@@ -338,3 +343,4 @@ plot!(thetalls[:,3], subplot=3)
 ```
 
 *This page was generated using [Literate.jl](https://github.com/fredrikekre/Literate.jl).*
+
