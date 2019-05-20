@@ -119,10 +119,10 @@ tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> cop
 x,u,y = tosvec.((x,u,y))
 
 xb,ll = smooth(pf, M, u, y) # Sample smooting particles
-xbm = smoothed_mean(xb)     # Calculate the mean of smoothing trajectories
-xbc = smoothed_cov(xb)      # And covariance
-xbt = smoothed_trajs(xb)    # Get smoothing trajectories
-xbs = [diag(xbc) for xbc in xbc] |> vecvec_to_mat .|> sqrt
+xbm   = smoothed_mean(xb)   # Calculate the mean of smoothing trajectories
+xbc   = smoothed_cov(xb)    # And covariance
+xbt   = smoothed_trajs(xb)  # Get smoothing trajectories
+xbs   = [diag(xbc) for xbc in xbc] |> vecvec_to_mat .|> sqrt
 plot(xbm', ribbon=2xbs, lab="PF smooth")
 plot!(vecvec_to_mat(x), l=:dash, lab="True")
 # ![window](figs/smooth.svg)
@@ -219,11 +219,11 @@ function meshgrid(a,b)
     grid_b = [j for i in a, j in b]
     grid_a, grid_b
 end
-Nv = 20
-v = LinRange(-0.7,1,Nv)
-llxy = (x,y) -> ll([x;y])
+Nv       = 20
+v        = LinRange(-0.7,1,Nv)
+llxy     = (x,y) -> ll([x;y])
 VGx, VGy = meshgrid(v,v)
-VGz = llxy.(VGx, VGy)
+VGz      = llxy.(VGx, VGy)
 heatmap(VGz, xticks=(1:Nv,round.(v,digits=2)),yticks=(1:Nv,round.(v,digits=2)), xlabel="sigma v", ylabel="sigma w") # Yes, labels are reversed
 
 # ![window](figs/heatmap.svg)
@@ -240,9 +240,9 @@ filter_from_parameters(θ,pf=nothing) = AuxiliaryParticleFilter(N, dynamics, mea
 # The call to `exp` on the parameters is so that we can define log-normal priors
 priors = [Normal(0,2),Normal(0,2)]
 ll     = log_likelihood_fun(filter_from_parameters,priors,u,y)
-θ₀ = log.([1.,1.]) # Starting point
+θ₀     = log.([1.,1.]) # Starting point
 # We also need to define a function that suggests a new point from the "proposal distribution". This can be pretty much anything, but it has to be symmetric since I was lazy and simplified an equation.
-draw = θ -> θ .+ rand(MvNormal(0.05ones(2)))
+draw   = θ -> θ .+ rand(MvNormal(0.05ones(2)))
 burnin = 200
 @info "Starting Metropolis algorithm"
 @time theta, lls = metropolis(ll, 2000, θ₀, draw) # Run PMMH for 2000  iterations, takes about half a minute on my laptop
@@ -257,7 +257,6 @@ histogram(exp.(thetam), layout=(3,1)); plot!(lls[burnin+1:end], subplot=3) # Vis
 
 
 
-
 # # AdvancedParticleFilter
 # The `AdvancedParticleFilter` type requires you to implement the same functions as the regular `ParticleFilter`, but in this case you also need to handle sampling from the noise distributions yourself.
 # The function `dynamics` must have a method signature like below. It must provide one method that accepts state vector, control vector, time and `noise::Bool` that indicates whether or not to add noise to the state. If noise should be added, this should be done inside `dynamics` An example is given below
@@ -268,15 +267,21 @@ function dynamics(x,u,t,noise=true)
     end
     x
 end
-# The `measurement` function must have a method accepting state, measurement and time, and returning the log-likelihood of the measurement given the state, a simple example below:
-function measurement(x,y,t)
+# The `measurement_likelihood` function must have a method accepting state, measurement and time, and returning the log-likelihood of the measurement given the state, a simple example below:
+function measurement_likelihood(x,y,t)
     logpdf(dg, C*x-y) # A simple linear measurement model with normal additive noise
 end
 # This gives you very high flexibility. The noise model in either function can, for instance, be a function of the state, something that is not possible for the simple `ParticleFilter`
+# To be able to simulate the `AdvancedParticleFilter` like we did with the simple filter above, the `measurement` method with the signature `measurement(x,t,noise=false)` must be available and return a sample measurement given state (and possibly time). For our example measurement model above, this would look like this
+measurement(x,t,noise=false) = C*x + noise*rand(dg)
 # We now create the `AdvancedParticleFilter` and use it in the same way as the other filters:
-apf = AdvancedParticleFilter(N, dynamics, measurement, df, d0)
+apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0)
 x,w,we,ll = forward_trajectory(apf, u, y)
-trajectorydensity(pf,x,we,y,xreal=xs)
+trajectorydensity(apf, x, we, y, xreal=xs)
 
+# We can even use this type as an AuxiliaryParticleFilter
+apfa = AuxiliaryParticleFilter(apf)
+x,w,we,ll = forward_trajectory(apfa, u, y)
+trajectorydensity(apfa, x, we, y, xreal=xs)
 
 #jl # Compile using Literate.markdown("example_lineargaussian.jl", "..", name="README", documenter=false)
