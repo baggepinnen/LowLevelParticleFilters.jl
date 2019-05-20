@@ -23,7 +23,9 @@ logsumexp!(pf::AbstractParticleFilter) = logsumexp!(pf.state)
 
 """
     expnormalize!(out,w)
-`out .= exp.(w)/sum(exp,w)`. Does not modify `w`
+    expnormalize!(w)
+- `out .= exp.(w)/sum(exp,w)`. Does not modify `w`
+- If called with only one argument, `w` is modified in place
 """
 function expnormalize!(we,w)
     offset,maxind = findmax(w)
@@ -32,6 +34,14 @@ function expnormalize!(we,w)
     w .+= offset
     s    = sum_all_but(we,maxind) # s = ∑wₑ-1
     we .*= 1/(s+1)
+end
+
+function expnormalize!(w)
+    offset,maxind = findmax(w)
+    w .-= offset
+    Yeppp.exp!(w,w)
+    s    = sum_all_but(w,maxind) # s = ∑wₑ-1
+    w .*= 1/(s+1)
 end
 
 
@@ -49,6 +59,13 @@ function reset_weights!(s)
     s.maxw[] = 0
 end
 reset_weights!(pf::AbstractParticleFilter) = reset_weights!(state(pf))
+
+function permute_with_buffer!(x, buf, j)
+    for i in eachindex(x)
+        buf[i] = x[j[i]]
+    end
+    copyto!(x,buf)
+end
 
 
 

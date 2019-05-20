@@ -89,24 +89,18 @@ end
 function update!(pf::AuxiliaryParticleFilter,u, y, t = index(pf))
     s = state(pf)
     N = num_particles(s)
-    if shouldresample(pf)
-        j = resample(pf.pf)
-        propagate_particles!(pf.pf, u, j, t)
-        reset_weights!(s)
-    else # Resample not needed
 
-        propagate_particles!(pf.pf, u, t, nothing)# Propagate without noise
-        λ  = s.we
-        λ .= 0
-        measurement_equation!(pf.pf, y, t, measurement_density(pf), λ)
-        s.w .+= λ
-        ws = similar(s.we) # TODO: allocation of new vector
-        expnormalize!(ws,s.w)
-        j = resample(ResampleSystematic, ws , s.j, s.bins)
-        s.w .-= λ[j]
-        s.x .= s.x[j] # TODO: these lines allocate
-        add_noise!(pf.pf)
-    end
+    propagate_particles!(pf.pf, u, t, nothing)# Propagate without noise
+    λ  = s.we
+    λ .= 0
+    measurement_equation!(pf.pf, y, t, measurement_density(pf), λ)
+    s.w .+= λ
+    expnormalize!(s.w) # w used as buffer
+    j = resample(ResampleSystematic, s.w , s.j, s.bins)
+    reset_weights!(s)
+    permute_with_buffer!(s.x, s.xprev, j) # TODO: these lines allocate
+    add_noise!(pf.pf)
+
     # s.w .= s.w[j] # TODO: these lines allocate
     s.t[] += 1
     copyto!(s.xprev, s.x)
