@@ -167,7 +167,7 @@ debugplot(pf,u,y, runall=true, xreal=x) # does not work well with gr() as backen
 #md t:     8   1.000     265.9
 # The plot displays all states and all measurements. The heatmap in the background represents the weighted particle distributions per time step. For the measurement sequences, the heatmap represent the distibutions of predicted measurements. The blue dots corresponds to measured values. In this case, we simulated the data and we had access to states as well, if we do not have that, just omit `xreal`.
 # You can also manually step through the time-series using
-# - `commandplot(pf,u,y; kwargs...)
+# - `commandplot(pf,u,y; kwargs...)`
 # For options to the debug plots, see `?pplot`.
 
 # # Parameter estimation
