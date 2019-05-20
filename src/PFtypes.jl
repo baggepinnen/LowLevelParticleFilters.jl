@@ -82,7 +82,7 @@ function ParticleFilter(s::PFstate, dynamics::Function, measurement::Function, d
 end
 
 
-Base.@propagate_inbounds function measurement_equation!(pf, y, t, d=pf.measurement_density, w = pf.state.w)
+Base.@propagate_inbounds function measurement_equation!(pf, y, t, w = pf.state.w, d=measurement_density(pf))
     x,g = particles(pf), measurement(pf)
     any(ismissing.(y)) && return w
     if d isa UnivariateDistribution && length(y) == 1
@@ -154,10 +154,11 @@ end
 
 
 
-@with_kw struct AdvancedParticleFilter{ST,FT,GT,FDT,IDT,RST<:DataType,RNGT} <: AbstractParticleFilter
+@with_kw struct AdvancedParticleFilter{ST,FT,GT,GLT,FDT,IDT,RST<:DataType,RNGT} <: AbstractParticleFilter
     state::ST
     dynamics::FT
     measurement::GT
+    measurement_likelihood::GLT
     dynamics_density::FDT = Normal()
     initial_density::IDT
     resample_threshold::Float64 = 0.5
@@ -169,21 +170,20 @@ end
 """
 ParticleFilter(num_particles, dynamics::Function, measurement::Function, initial_density)
 """
-function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, dynamics_density, initial_density)
+function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, measurement_likelihood, dynamics_density, initial_density)
     xprev = Vector{SVector{length(initial_density),eltype(initial_density)}}([rand(initial_density) for n=1:N])
     x  = deepcopy(xprev)
     w  = fill(log(1/N), N)
     we = fill(1/N, N)
     s = PFstate(x,xprev,w,we,Ref(0.), collect(1:N), zeros(N),Ref(1))
 
-    AdvancedParticleFilter(state = s, dynamics = dynamics, measurement = measurement, dynamics_density=dynamics_density,
+    AdvancedParticleFilter(state = s, dynamics = dynamics, measurement = measurement, measurement_likelihood=measurement_likelihood, dynamics_density=dynamics_density,
     initial_density=initial_density)
 end
 
 
-Base.@propagate_inbounds function measurement_equation!(pf::AdvancedParticleFilter, y, t)
-    g = pf.measurement
-    w = weights(pf)
+Base.@propagate_inbounds function measurement_equation!(pf::AdvancedParticleFilter, y, t, w = weights(pf))
+    g = measurement_likelihood(pf)
     any(ismissing.(y)) && return w
     x = particles(pf)
     @inbounds for i = 1:num_particles(pf)
@@ -232,7 +232,6 @@ expweights(pf::AbstractParticleFilter) = pf.state.we
 weights(s::PFstate)                    = s.w
 expweights(s::PFstate)                 = s.we
 index(pf::AbstractParticleFilter)      = pf.state.t[]
-dynamics(pf::AbstractParticleFilter)   = pf.dynamics
 
 num_particles(s::PFstate)              = num_particles(s.x)
 num_particles(s::AbstractArray)        = length(s)
@@ -245,6 +244,7 @@ particletype(s::PFstate)               = eltype(s.x)
 @inline state(pf::AbstractParticleFilter) = pf.state
 @inline dynamics(pf::AbstractParticleFilter) = pf.dynamics
 @inline measurement(pf::AbstractParticleFilter) = pf.measurement
+@inline measurement_likelihood(pf::AdvancedParticleFilter) = pf.measurement_likelihood
 @inline dynamics_density(pf::AbstractParticleFilter) = pf.dynamics_density
 @inline measurement_density(pf::AbstractParticleFilter) = pf.measurement_density
 @inline initial_density(pf::AbstractParticleFilter) = pf.initial_density
