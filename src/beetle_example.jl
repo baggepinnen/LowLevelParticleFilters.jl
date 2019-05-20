@@ -71,8 +71,8 @@ xyt = readdlm(datadep"track/track.csv")
 # end
 
 ##
-dgσ = 0.72 # the deviation of the measurement noise distribution
-dvσ = 0.1#0.8 # the deviation of the dynamics noise distribution
+dgσ = 1 # the deviation of the measurement noise distribution
+dvσ = 0.3#0.8 # the deviation of the dynamics noise distribution
 ϕσ = 1
 
 N = 1000 # Number of particles in the particle filter
@@ -86,8 +86,11 @@ d0 = MvNormal(SVector(y[1]..., log(0.5), atan((y[2]-y[1])...)), [3.,3,2,2])
 
 u = zeros(length(y))
 pf = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
-x,w,we,ll=forward_trajectory(pf,u,y)
+T = length(y)
+x,w,we,ll=forward_trajectory(pf,u[1:T],y[1:T])
 @show ll
+trajectorydensity(pf,x,we,y[1:T], markerstrokecolor=:auto, m=(2,0.5))
+##
 # xh,ll = mean_trajectory(pf,u,y)
 # xh = vecvec_to_mat(xh)
 xh = mean_trajectory(x,we)
@@ -156,4 +159,5 @@ histogram(exp.(thetam), layout=4); plot!(lls, subplot=4) # Visualize
 
 
 ##
-debugplot(pf,u,y,runall=true)
+# debugplot(pf,u,y,runall=false)
+commandplot(pf,u,y)
