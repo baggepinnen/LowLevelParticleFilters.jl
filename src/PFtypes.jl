@@ -226,7 +226,7 @@ end
 sample_state(pf::AbstractParticleFilter) = rand(pf.rng, pf.initial_density)
 sample_state(pf::ParticleFilter, x, u, t) = dynamics(pf)(x,u,t) + rand(pf.rng, pf.dynamics_density)
 sample_state(pf::AdvancedParticleFilter, x, u, t) = dynamics(pf)(x,u,t,true)
-sample_measurement(pf::AdvancedParticleFilter, x, t) = measurement(pf)(x, t)
+sample_measurement(pf::AdvancedParticleFilter, x, t) = measurement(pf)(x, t, true)
 sample_measurement(pf::AbstractParticleFilter, x, t) = measurement(pf)(x, t) .+ rand(pf.rng, pf.measurement_density)
 expweights(pf::AbstractParticleFilter) = pf.state.we
 weights(s::PFstate)                    = s.w
