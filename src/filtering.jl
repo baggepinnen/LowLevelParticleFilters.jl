@@ -89,29 +89,25 @@ end
 function update!(pf::AuxiliaryParticleFilter,u, y, t = index(pf))
     s = state(pf)
     N = num_particles(s)
+
     propagate_particles!(pf.pf, u, t, nothing)# Propagate without noise
     λ  = s.we
     λ .= 0
     measurement_equation!(pf.pf, y, t, measurement_density(pf), λ)
     s.w .+= λ
-    expnormalize!(s.bins,s.w)
-    if effective_particles(s.bins) < resample_threshold(pf)*N
-        j = resample(ResampleSystematicExp, s.w , s.j, s.bins)
-        fill!(s.w, -log(N))
-        s.w .-= λ[j]
-        s.x .= s.x[j] # TODO: these lines allocate
-    else
-        s.j .= 1:N
-        s.w .-= λ
-    end
+    expnormalize!(s.w) # w used as buffer
+    j = resample(ResampleSystematic, s.w , s.j, s.bins)
+    reset_weights!(s)
+    permute_with_buffer!(s.x, s.xprev, j) # TODO: these lines allocate
     add_noise!(pf.pf)
+
     # s.w .= s.w[j] # TODO: these lines allocate
-    copyto!(s.xprev, s.x)
     s.t[] += 1
+    copyto!(s.xprev, s.x)
 
     # Correct step
     measurement_equation!(pf.pf, y, t)
-    loklik = logsumexp!(s)
+    loklik = logsumexp!(s) # TODO: när man resamplar så blir alla vikterna lika, men vi drar bort lambda 'ndå. Det är nog dörför ll blir mkt s'sämre för aux.
 end
 
 
@@ -230,8 +226,8 @@ function weigthed_mean(x,we::AbstractVector)
     return xh
 end
 function weigthed_mean(x,we::AbstractMatrix)
-    @assert sum(we) ≈ 1
     N,T = size(x)
+    @assert sum(we) ≈ T
     xh = zeros(eltype(x), T)
     for t = 1:T
         @inbounds @simd for i = 1:N
