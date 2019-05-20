@@ -43,14 +43,14 @@ function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, d
     we = fill(1/N, N)
     s = PFstate(x,xprev,w,we,Ref(0.), collect(1:N), zeros(N),Ref(1))
     nf = numargs(dynamics)
-    if nf < 3
+    if 3 ∉ nf
         f = @inline function (x,u,t) dynamics(x,u) end
     else
         f = dynamics
     end
 
     ng = numargs(measurement)
-    if ng < 2
+    if 2 ∉ ng
         g = (x,t) -> measurement(x)
     else
         g = measurement
@@ -63,14 +63,14 @@ end
 
 function ParticleFilter(s::PFstate, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density)
     nf = numargs(dynamics)
-    if nf < 3
+    if 3 ∉ nf
         f = @inline function (x,u,t) dynamics(x,u) end
     else
         f = dynamics
     end
 
     ng = numargs(measurement)
-    if ng < 2
+    if 2 ∉ ng
         g = (x,t) -> measurement(x)
     else
         g = measurement
@@ -154,7 +154,7 @@ end
 
 
 
-@with_kw struct AdvancedParticleFilter{ST,FT,GT,FDT,IDT,RST<:DataType} <: AbstractParticleFilter
+@with_kw struct AdvancedParticleFilter{ST,FT,GT,FDT,IDT,RST<:DataType,RNGT} <: AbstractParticleFilter
     state::ST
     dynamics::FT
     measurement::GT
@@ -162,6 +162,7 @@ end
     initial_density::IDT
     resample_threshold::Float64 = 0.5
     resampling_strategy::RST = ResampleSystematic
+    rng::RNGT = MersenneTwister()
 end
 
 
@@ -173,7 +174,7 @@ function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Fun
     x  = deepcopy(xprev)
     w  = fill(log(1/N), N)
     we = fill(1/N, N)
-    s  = PFstate(x,xprev,w, we, Ref(0.), Vector{Int}(N), Vector{Float64}(N),Ref(1))
+    s = PFstate(x,xprev,w,we,Ref(0.), collect(1:N), zeros(N),Ref(1))
 
     AdvancedParticleFilter(state = s, dynamics = dynamics, measurement = measurement, dynamics_density=dynamics_density,
     initial_density=initial_density)
@@ -187,17 +188,17 @@ Base.@propagate_inbounds function measurement_equation!(pf::AdvancedParticleFilt
     x = particles(pf)
     @inbounds for i = 1:num_particles(pf)
         w[i] += g(x[i],y,t)
-        # w[i] = ifelse(w[i] < -10000, -10000, w[i])
     end
     w
 end
 
 
-Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilter, u, j, t::Int, noise::Bool=true)
-    f = pf.dynamics
-    x,xp = pf.state.x, pf.state.xprev
+Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilter, u, j::Vector{Int}, t::Int, noise::Bool=true)
+    f = dynamics(pf)
+    s = state(pf)
+    x,xp = s.x, s.xprev
     @inbounds for i = eachindex(x)
-        x[i] =  f(xp[j], u, t, noise) # TODO: lots of allocations here
+        x[i] = f(xp[j[i]], u, t, noise) # TODO: lots of allocations here
     end
     x
 end
@@ -223,10 +224,10 @@ end
 
 
 sample_state(pf::AbstractParticleFilter) = rand(pf.rng, pf.initial_density)
-sample_state(pf::ParticleFilter, x, u, t) = pf.dynamics(x,u,t) + rand(pf.rng, pf.dynamics_density)
-sample_state(pf::AdvancedParticleFilter, x, u, t) = pf.dynamics(x,u,t,true)
-sample_measurement(pf::AdvancedParticleFilter, x, t) = pf.measurement(x, t)
-sample_measurement(pf::AbstractParticleFilter, x, t) = pf.measurement(x, t) .+ rand(pf.rng, pf.measurement_density)
+sample_state(pf::ParticleFilter, x, u, t) = dynamics(pf)(x,u,t) + rand(pf.rng, pf.dynamics_density)
+sample_state(pf::AdvancedParticleFilter, x, u, t) = dynamics(pf)(x,u,t,true)
+sample_measurement(pf::AdvancedParticleFilter, x, t) = measurement(pf)(x, t)
+sample_measurement(pf::AbstractParticleFilter, x, t) = measurement(pf)(x, t) .+ rand(pf.rng, pf.measurement_density)
 expweights(pf::AbstractParticleFilter) = pf.state.we
 weights(s::PFstate)                    = s.w
 expweights(s::PFstate)                 = s.we

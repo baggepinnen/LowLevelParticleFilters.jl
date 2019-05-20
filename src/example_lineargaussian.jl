@@ -8,7 +8,7 @@
 # We provide a number of filter types
 # - `ParticleFilter`: This filter is simple to use and assumes that both dynamics noise and measurement noise are additive.
 # - `AuxiliaryParticleFilter`: This filter is identical to `ParticleFilter`, but uses a slightly different proposal mechanism for new particles.
-# - `AdvancedParticleFilter`: This filter gives you more flexibility, at the expense of having to define a few more functions.
+# - `AdvancedParticleFilter`: This filter gives you more flexibility, at the expense of having to define a few more functions. More instructions on this type below.
 # - `KalmanFilter`. Is what you would expect. Has the same features as the particle filters, but is restricted to linear dynamics and gaussian noise.
 
 # # Functionality
@@ -54,7 +54,7 @@ x̂ = weigthed_mean(pf) # using the current state
 # If you want to perform filtering using vectors of inputs and measurements, try any of the functions
 x,w,we,ll = forward_trajectory(pf, u, y) # Filter whole vectors of signals
 x̂,ll = mean_trajectory(pf, u, y)
-trajectorydensity(pf,x,we,y, xreal=xs)
+trajectorydensity(pf,x,w,y,xreal=xs)
 # ![window](figs/trajdens.png)
 
 # To see how the performance varies with the number of particles, we simulate several times. The following code simulates the system and performs filtering using the simulated measuerments. We do this for varying number of time steps and varying number of particles.
@@ -254,6 +254,29 @@ histogram(exp.(thetam), layout=(3,1)); plot!(lls[burnin+1:end], subplot=3) # Vis
 #md @time thetalls = LowLevelParticleFilters.metropolis_threaded(burnin, ll, 500, θ₀, draw)
 #md histogram(exp.(thetalls[:,1:2]), layout=3)
 #md plot!(thetalls[:,3], subplot=3)
+
+
+
+
+# # AdvancedParticleFilter
+# The `AdvancedParticleFilter` type requires you to implement the same functions as the regular `ParticleFilter`, but in this case you also need to handle sampling from the noise distributions yourself.
+# The function `dynamics` must have a method signature like below. It must provide one method that accepts state vector, control vector, time and `noise::Bool` that indicates whether or not to add noise to the state. If noise should be added, this should be done inside `dynamics` An example is given below
+function dynamics(x,u,t,noise=true)
+    x = A*x .+ B*u # A simple dynamics model
+    if noise
+        x += rand(df)
+    end
+    x
+end
+# The `measurement` function must have a method accepting state, measurement and time, and returning the log-likelihood of the measurement given the state, a simple example below:
+function measurement(x,y,t)
+    logpdf(dg, C*x-y) # A simple linear measurement model with normal additive noise
+end
+# This gives you very high flexibility. The noise model in either function can, for instance, be a function of the state, something that is not possible for the simple `ParticleFilter`
+# We now create the `AdvancedParticleFilter` and use it in the same way as the other filters:
+apf = AdvancedParticleFilter(N, dynamics, measurement, df, d0)
+x,w,we,ll = forward_trajectory(apf, u, y)
+trajectorydensity(pf,x,we,y,xreal=xs)
 
 
 #jl # Compile using Literate.markdown("example_lineargaussian.jl", "..", name="README", documenter=false)
