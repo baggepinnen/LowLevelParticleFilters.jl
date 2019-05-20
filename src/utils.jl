@@ -7,7 +7,7 @@ Normalizes the weight vector `w` and returns the weighted log-likelihood
 https://arxiv.org/pdf/1412.8695.pdf eq 3.8 for p(y)
 https://discourse.julialang.org/t/fast-logsumexp/22827/7?u=baggepinnen for stable logsumexp
 """
-function logsumexp!(w,we,maxw=Ref(zero(eltype(w))))
+function logsumexp!(w,we,maxw=Ref(zero(eltype(w))))::eltype(w)
     offset,maxind = findmax(w)
     w  .-= offset
     Yeppp.exp!(we,w)
@@ -18,8 +18,8 @@ function logsumexp!(w,we,maxw=Ref(zero(eltype(w))))
     log1p(s) + maxw[] - log(length(w))
 end
 
-logsumexp!(s) = logsumexp!(s.w,s.we,s.maxw)
-logsumexp!(pf::AbstractParticleFilter) = logsumexp!(pf.state)
+@inline logsumexp!(s) = logsumexp!(s.w,s.we,s.maxw)
+@inline logsumexp!(pf::AbstractParticleFilter) = logsumexp!(pf.state)
 
 """
     expnormalize!(out,w)
