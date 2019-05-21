@@ -98,16 +98,37 @@ function update!(pf::AuxiliaryParticleFilter,u, y, t = index(pf))
     expnormalize!(s.w) # w used as buffer
     j = resample(ResampleSystematic, s.w , s.j, s.bins)
     reset_weights!(s)
-    permute_with_buffer!(s.x, s.xprev, j) # TODO: these lines allocate
+    permute_with_buffer!(s.x, s.xprev, j)
     add_noise!(pf.pf)
 
-    # s.w .= s.w[j] # TODO: these lines allocate
     s.t[] += 1
     copyto!(s.xprev, s.x)
 
     # Correct step
     measurement_equation!(pf.pf, y, t)
-    loklik = logsumexp!(s) # TODO: när man resamplar så blir alla vikterna lika, men vi drar bort lambda 'ndå. Det är nog dörför ll blir mkt s'sämre för aux.
+    loklik = logsumexp!(s)
+end
+
+function update!(pf::AuxiliaryParticleFilter{<:AdvancedParticleFilter},u, y, t = index(pf)) # we need to special case this as it's hard to make the above more general without sacrifying performance
+    s = state(pf)
+    N = num_particles(s)
+
+    propagate_particles!(pf.pf, u, t, nothing)# Propagate without noise
+    λ  = s.we
+    λ .= 0
+    measurement_equation!(pf.pf, y, t, measurement_density(pf), λ)
+    s.w .+= λ
+    expnormalize!(s.w) # w used as buffer
+    j = resample(ResampleSystematic, s.w , s.j, s.bins)
+    reset_weights!(s)
+    propagate_particles!(pf.pf, u, j, t)# Propagate with noise and permutation
+
+    s.t[] += 1
+    copyto!(s.xprev, s.x)
+
+    # Correct step
+    measurement_equation!(pf.pf, y, t)
+    loklik = logsumexp!(s)
 end
 
 

@@ -193,7 +193,8 @@ Base.@propagate_inbounds function measurement_equation!(pf::AdvancedParticleFilt
 end
 
 
-Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilter, u, j, t::Int, noise::Bool=true)
+Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilter, u, j, t::Int, noise=true)
+    noise === nothing && (noise = false)
     f = pf.dynamics
     x,xp = pf.state.x, pf.state.xprev
     @inbounds for i = eachindex(x)
@@ -202,7 +203,8 @@ Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilte
     x
 end
 
-Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilter, u, t::Int, noise::Bool=true)
+Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilter, u, t::Int, noise=true)
+    noise === nothing && (noise = false)
     f = pf.dynamics
     x,xp = pf.state.x, pf.state.xprev
     @inbounds for i = eachindex(x)
