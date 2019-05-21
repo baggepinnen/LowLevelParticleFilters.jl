@@ -193,7 +193,7 @@ Base.@propagate_inbounds function measurement_equation!(pf::AdvancedParticleFilt
 end
 
 
-Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilter, u, j, t::Int, noise=true)
+Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilter, u, j::Vector{Int}, t::Int, noise=true)
     noise === nothing && (noise = false)
     f = dynamics(pf)
     s = state(pf)

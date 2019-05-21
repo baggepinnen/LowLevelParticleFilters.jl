@@ -116,7 +116,7 @@ function update!(pf::AuxiliaryParticleFilter{<:AdvancedParticleFilter},u, y, t =
     propagate_particles!(pf.pf, u, t, nothing)# Propagate without noise
     λ  = s.we
     λ .= 0
-    measurement_equation!(pf.pf, y, t, measurement_density(pf), λ)
+    measurement_equation!(pf.pf, y, t, λ)
     s.w .+= λ
     expnormalize!(s.w) # w used as buffer
     j = resample(ResampleSystematic, s.w , s.j, s.bins)
