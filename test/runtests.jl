@@ -49,6 +49,14 @@ Random.seed!(0)
         @test logpdf(d,x) == logpdf(d,Vector(x))
         d = Product([Normal(0,2), Normal(0,2)])
         @test logpdf(d,x) == logpdf(d,Vector(x))
+
+        dt = LowLevelParticleFilters.TupleProduct((Normal(0,2), Normal(0,2)))
+        @test logpdf(dt,x) == logpdf(dt,Vector(x)) == logpdf(d,x)
+        @test var(dt) == var(d)
+        @test cov(dt) == cov(d)
+        @test entropy(dt) == entropy(d)
+        @test rand(dt) isa Vector{Float64}
+
     end
 
 
