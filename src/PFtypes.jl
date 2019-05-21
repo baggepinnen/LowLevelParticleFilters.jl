@@ -42,43 +42,21 @@ function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, d
     w = fill(log(1/N), N)
     we = fill(1/N, N)
     s = PFstate(x,xprev,w,we,Ref(0.), collect(1:N), zeros(N),Ref(1))
-    nf = numargs(dynamics)
-    if 3 ∉ nf
-        f = @inline function (x,u,t) dynamics(x,u) end
-    else
-        f = dynamics
-    end
-
-    ng = numargs(measurement)
-    if 2 ∉ ng
-        g = (x,t) -> measurement(x)
-    else
-        g = measurement
-    end
+    f = 3 ∉ numargs(dynamics) ? @inline(function (x,u,t) dynamics(x,u) end) : dynamics
+    g = 2 ∉ numargs(measurement) ? (x,t) -> measurement(x) : measurement
 
     ParticleFilter(state = s, dynamics = f, measurement = g,
     dynamics_density=dynamics_density, measurement_density=measurement_density,
-    initial_density=initial_density, )
+    initial_density=initial_density)
 end
 
 function ParticleFilter(s::PFstate, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density)
-    nf = numargs(dynamics)
-    if 3 ∉ nf
-        f = @inline function (x,u,t) dynamics(x,u) end
-    else
-        f = dynamics
-    end
-
-    ng = numargs(measurement)
-    if 2 ∉ ng
-        g = (x,t) -> measurement(x)
-    else
-        g = measurement
-    end
+    f = 3 ∉ numargs(dynamics) ? @inline(function (x,u,t) dynamics(x,u) end) : dynamics
+    g = 2 ∉ numargs(measurement) ? (x,t) -> measurement(x) : measurement
 
     ParticleFilter(state = s, dynamics = f, measurement = g,
     dynamics_density=dynamics_density, measurement_density=measurement_density,
-    initial_density=initial_density, )
+    initial_density=initial_density)
 end
 
 
