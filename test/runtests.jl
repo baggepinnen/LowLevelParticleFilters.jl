@@ -47,10 +47,8 @@ Random.seed!(0)
         x = @SVector ones(2)
         d = MvNormal(2,2)
         @test logpdf(d,x) == logpdf(d,Vector(x))
-        d = Product(Normal(0,2), Normal(0,2))
+        d = Product([Normal(0,2), Normal(0,2)])
         @test logpdf(d,x) == logpdf(d,Vector(x))
-
-
     end
 
 
