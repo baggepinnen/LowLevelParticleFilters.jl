@@ -43,6 +43,16 @@ Random.seed!(0)
         end
     end
 
+    @testset "static distributions" begin
+        x = @SVector ones(2)
+        d = MvNormal(2,2)
+        @test logpdf(d,x) == logpdf(d,Vector(x))
+        d = Product(Normal(0,2), Normal(0,2))
+        @test logpdf(d,x) == logpdf(d,Vector(x))
+
+
+    end
+
 
     @testset "End to end" begin
         eye(n) = Matrix{Float64}(I,n,n)

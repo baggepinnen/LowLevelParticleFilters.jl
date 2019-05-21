@@ -116,11 +116,19 @@ function num_types_in_tuple(sig::UnionAll)
 end
 
 
+# Make distributions faster for static arrays
 
 @inline Base.:(-)(x::StaticArray, ::Distributions.ZeroVector) = x
+@inline Base.:(-)(::Distributions.ZeroVector, x::StaticArray) = x
 Distributions.logpdf(d::Distribution,x,xp,t) = logpdf(d,x-xp)
 Distributions.sqmahal(d::MvNormal, x::StaticArray) = Distributions.invquad(d.Σ, x - d.μ)
 @inline PDMats.invquad(a::PDMats.ScalMat, x::StaticVector) = dot(x,x) * a.inv_value
 PDMats.invquad(a::PDMats.PDMat, x::StaticVector) = dot(x, a \ x) # \ not implemented
 Base.:(\)(a::PDMats.PDMat, x::StaticVector) = a.chol \ x
 PDMats.invquad(a::PDMats.PDiagMat, x::StaticVector) = PDMats.wsumsq(a.inv_diag, x)
+
+
+# product distributions
+@generated function Distributions._logpdf(d::Product, x::StaticVector{N}{<:Real}) where N
+    :(Base.Cartesian.@ncall $N Base.:+ i->logpdf(d.v[i], x[i]))
+end
