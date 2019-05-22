@@ -46,21 +46,24 @@ const d0 = MvNormal(SVector(y[1]..., 0.5, atan((y[2]-y[1])...), 0), [3.,3,2,2,0]
 
 const noisevec = zeros(5)
 
-@inline function dynamics(s,u,t,noise=false) # stepping forward
+@inline function dynamics(s,u,t,noise=false)
+    # current states
     m = mode(s)
-    m == 0 && rand() < switch_prob && (m = 1.)
-
     v = vel(s)
+    a = ϕ(s)
+    p = pos(s)
+    # get noise
     if noise
         y_noise, x_noise, v_noise, ϕ_noise,_ = rand!(df, noisevec)
     else
         y_noise, x_noise, v_noise, ϕ_noise = 0.,0.,0.,0.
     end
-    v = max(0.999v + v_noise, 0)
-    ϕt = ϕ(s) + (ϕ_noise*(1 + m*10))/(1 + v)
-    p = pos(s) + SVector(y_noise, x_noise) + SVector(sincos(ϕ(s)))*v
-    SVector{5,Float64}(p[1], p[2], v, ϕt, m)
-    # SVector{5,Float64}((pos(s) + SVector(y_noise, x_noise) + SVector(sincos(ϕ(s)))*v)..., v, ϕt, m)
+    # next states
+    v⁺ = max(0.999v + v_noise, 0.0)
+    m⁺ = Float64(m == 0 ? rand() < switch_prob : true)
+    a⁺ = a + (ϕ_noise*(1 + m*10))/(1 + v) # next state velocity is used here
+    p⁺ = p + SVector(y_noise, x_noise) + SVector(sincos(a))*v # current angle but next velocity
+    SVector{5,Float64}(p⁺[1], p⁺[2], v⁺, a⁺, m⁺) # all next states
 end
 function measurement_likelihood(s,y,t)
     logpdf(dg, pos(s)-y) # A simple linear measurement model with normal additive noise
