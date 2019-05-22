@@ -154,7 +154,15 @@ struct TupleProduct{N,S,V<:NTuple{N,UnivariateDistribution}} <: MultivariateDist
     end
 end
 Base.length(d::TupleProduct{N}) where N = N
-Distributions._rand!(rng::AbstractRNG, d::TupleProduct, x::AbstractVector{<:Real}) =     broadcast!(dn->rand(rng, dn), x, d.v)
+# Distributions._rand!(rng::AbstractRNG, d::TupleProduct, x::AbstractVector{<:Real}) =     broadcast!(dn->rand(rng, dn), x, d.v)
+
+@generated function Distributions._rand!(rng::AbstractRNG, d::TupleProduct{N}, x::AbstractVector{<:Real}) where N
+    quote
+        Base.Cartesian.@nexprs $N i->(x[i] = rand(rng, d.v[i]))
+        x
+    end
+end
+
 @generated function Distributions._logpdf(d::TupleProduct{N}, x::AbstractVector{<:Real}) where N
     :(Base.Cartesian.@ncall $N Base.:+ i->logpdf(d.v[i], x[i]))
 end
