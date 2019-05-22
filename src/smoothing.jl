@@ -19,7 +19,10 @@ function smooth(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector)
     xT,RT,ll
 end
 
-
+function smooth(pf::AbstractParticleFilter, M, u, y)
+    xf,wf,wef,ll = forward_trajectory(pf, u, y)
+    smooth(pf::AbstractParticleFilter, xf, wf, wef, ll, M, u, y)
+end
 
 """
     xb,ll = smooth(pf, M, u, y)
@@ -27,12 +30,11 @@ end
 Perform particle smoothing using forward-filtering, backward simulation. Return smoothed particles and loglikelihood.
 See also `smoothed_trajs`, `smoothed_mean`, `smoothed_cov`
 """
-function smooth(pf::AbstractParticleFilter, M, u, y)
+function smooth(pf::AbstractParticleFilter, xf, wf, wef, ll, M, u, y)
     T = length(y)
     N = num_particles(pf)
     f = dynamics(pf)
     df = dynamics_density(pf)
-    xf,wf,wef,ll = forward_trajectory(pf, u, y)
     @assert M <= N "Must extend cache size of bins and j to allow this"
     xb = Array{particletype(pf)}(undef,M,T)
     j = resample(ResampleSystematic, wef[:,T], M)
@@ -80,7 +82,7 @@ function log_likelihood_fun(filter_from_parameters,priors::Vector{<:Distribution
         pf === nothing && (pf = filter_from_parameters(θ))
         length(θ) == length(priors) || throw(ArgumentError("Input must have same length as priors"))
         ll = sum(i->logpdf(priors[i], θ[i]), eachindex(priors))
-        isfinite(ll) || return Inf
+        isfinite(ll) || return -Inf
         pf = filter_from_parameters(θ,pf)
         ll += loglik(pf,u,y)
     end

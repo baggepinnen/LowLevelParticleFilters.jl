@@ -183,7 +183,7 @@ function forward_trajectory(pf, u::AbstractVector, y::AbstractVector)
     ll = 0.0
     @inbounds for t = 1:T
         ll += pf(u[t], y[t], t)
-        x[:,t] .= particles(pf)
+        x[:,t] .= state(pf).xprev # TODO: verify this
         w[:,t] .= weights(pf)
         we[:,t] .= expweights(pf)
     end
@@ -197,7 +197,10 @@ x,ll = mean_trajectory(pf, u::Vector{Vector}, y::Vector{Vector})
 
 This Function resets the particle filter to the initial state distribution upon start
 """
-function mean_trajectory(pf, u::Vector, y::Vector)
+mean_trajectory(pf, u::Vector, y::Vector) = reduce_trajectory(pf, u::Vector, y::Vector, weigthed_mean)
+mode_trajectory(pf, u::Vector, y::Vector) = reduce_trajectory(pf, u::Vector, y::Vector, mode)
+
+function reduce_trajectory(pf, u::Vector, y::Vector, f::F) where F
     reset!(pf)
     T = length(y)
     N = num_particles(pf)
@@ -205,10 +208,14 @@ function mean_trajectory(pf, u::Vector, y::Vector)
     ll = 0.0
     for t = 1:T
         ll += pf(u[t], y[t], t)
-        x[t] = weigthed_mean(pf)
+        x[t] = f(pf)
     end
     x,ll
 end
+
+StatsBase.mode(pf::AbstractParticleFilter) = particles(pf)[findmax(expparticles(pf))[2]]
+
+mode_trajectory(x::AbstractMatrix, we::AbstractMatrix) =  reduce(hcat,vec(x[findmax(we, dims=1)[2]]))'
 
 function mean_trajectory(x::AbstractMatrix, we::AbstractMatrix)
     copy(reduce(hcat,vec(sum(x.*we,dims=1)))')

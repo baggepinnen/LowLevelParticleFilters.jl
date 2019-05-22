@@ -200,7 +200,7 @@ end
 @forward ParticleFilter.state num_particles, weights, particles, particletype
 @forward AdvancedParticleFilter.state num_particles, weights, particles, particletype
 
-@forward AuxiliaryParticleFilter.pf state, particles, weights, expweights, reset!, simulate, weigthed_mean, measurement_equation!, sample_state, sample_measurement, index, num_particles, particletype, dynamics, measurement, dynamics_density, measurement_density, initial_density, resample_threshold, resampling_strategy, rng
+@forward AuxiliaryParticleFilter.pf state, particles, weights, expweights, reset!, simulate, weigthed_mean, measurement_equation!, sample_state, sample_measurement, index, num_particles, particletype, dynamics, measurement, dynamics_density, measurement_density, initial_density, resample_threshold, resampling_strategy, rng, mode_trajectory, mean_trajectory
 
 
 sample_state(pf::AbstractParticleFilter) = rand(pf.rng, pf.initial_density)
