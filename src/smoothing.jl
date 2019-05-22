@@ -31,6 +31,7 @@ function smooth(pf::AbstractParticleFilter, M, u, y)
     T = length(y)
     N = num_particles(pf)
     f = dynamics(pf)
+    df = dynamics_density(pf)
     xf,wf,wef,ll = forward_trajectory(pf, u, y)
     @assert M <= N "Must extend cache size of bins and j to allow this"
     xb = Array{particletype(pf)}(undef,M,T)
@@ -44,7 +45,7 @@ function smooth(pf::AbstractParticleFilter, M, u, y)
         # tset = Set{Int}()
         for m = 1:M
             for n = 1:N
-                wb[n] = wf[n,t] + logpdf(dynamics_density(pf), xb[m,t+1], f(xf[n,t],u[t],t), t)
+                wb[n] = wf[n,t] + logpdf(df, xb[m,t+1], f(xf[n,t],u[t],t), t)
             end
             i = draw_one_categorical(pf,wb)
             # push!(tset, i)

@@ -260,7 +260,7 @@ histogram(exp.(thetam), layout=(3,1)); plot!(lls[burnin+1:end], subplot=3) # Vis
 # # AdvancedParticleFilter
 # The `AdvancedParticleFilter` type requires you to implement the same functions as the regular `ParticleFilter`, but in this case you also need to handle sampling from the noise distributions yourself.
 # The function `dynamics` must have a method signature like below. It must provide one method that accepts state vector, control vector, time and `noise::Bool` that indicates whether or not to add noise to the state. If noise should be added, this should be done inside `dynamics` An example is given below
-function dynamics(x,u,t,noise=true)
+function dynamics(x,u,t,noise=false) # It's important that this defaults to false
     x = A*x .+ B*u # A simple dynamics model
     if noise
         x += rand(df)
