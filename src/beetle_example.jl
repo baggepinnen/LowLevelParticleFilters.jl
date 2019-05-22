@@ -21,6 +21,9 @@ xyt = readdlm(datadep"track/track.csv")
 ##
 
 using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions,  StatsPlots
+tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
+vecvec_to_mat(x) = reduce(hcat, x)'
+
 N = 1000 # Number of particles in the particle filter
 n = 4 # Dinemsion of state: we have speed and angle, so two
 p = 2 # Dinemsion of measurements, we can measure the x and the y, so also two
@@ -32,21 +35,32 @@ p = 2 # Dinemsion of measurements, we can measure the x and the y, so also two
 dgσ = 1 # the deviation of the measurement noise distribution
 dvσ = 0.3#0.8 # the deviation of the dynamics noise distribution
 ϕσ = 0.5
+const switch_prob = 0.03
 const dg = MvNormal(@SVector(zeros(p)), dgσ^2) # Measurement noise Distribution
-const df = MvNormal(@SVector(zeros(n)), [1e-1, 1e-1, dvσ^2, ϕσ^2]) # Dynamics noise Distribution NOTE: MvNormal wants a variance, not std
+# const df = MvNormal(@SVector(zeros(n)), [1e-1, 1e-1, dvσ^2, ϕσ^2]) # Dynamics noise Distribution NOTE: MvNormal wants a variance, not std
+const df = LowLevelParticleFilters.TupleProduct((Normal.(0,[1e-1, 1e-1, dvσ, ϕσ])...,Binomial(1,switch_prob)))
+const df2 = LowLevelParticleFilters.TupleProduct((Normal.(0,[1e-1, 1e-1, dvσ, ϕσ])...,))#Binomial(1,switch_prob)))
+# const df = Product(Normal.(0,[1e-1, 1e-1, dvσ, ϕσ]))#;Binomial(1,switch_prob)])
 y = tosvec(collect(eachrow(xyt[:,1:2])))
 const d0 = MvNormal(SVector(y[1]..., 0.5, atan((y[2]-y[1])...), 0), [3.,3,2,2,0])
-const switch_prob = 0.05
 
-@inline function dynamics(s,u,t,noise=true) # stepping forward
+const noisevec = zeros(5)
+
+@inline function dynamics(s,u,t,noise=false) # stepping forward
     m = mode(s)
-    m == 0 && rand() < switch_prob && (m = 1)
+    m == 0 && rand() < switch_prob && (m = 1.)
 
     v = vel(s)
-    y_noise, x_noise, v_noise, ϕ_noise = noise*rand(df)
+    if noise
+        y_noise, x_noise, v_noise, ϕ_noise,_ = rand!(df, noisevec)
+    else
+        y_noise, x_noise, v_noise, ϕ_noise = 0.,0.,0.,0.
+    end
     v = max(0.999v + v_noise, 0)
     ϕt = ϕ(s) + (ϕ_noise*(1 + m*10))/(1 + v)
-    SVector{5,Float64}((pos(s) + SVector(y_noise, x_noise) + SVector(sincos(ϕ(s)))*v)..., v, ϕt, m)
+    p = pos(s) + SVector(y_noise, x_noise) + SVector(sincos(ϕ(s)))*v
+    SVector{5,Float64}(p[1], p[2], v, ϕt, m)
+    # SVector{5,Float64}((pos(s) + SVector(y_noise, x_noise) + SVector(sincos(ϕ(s)))*v)..., v, ϕt, m)
 end
 function measurement_likelihood(s,y,t)
     logpdf(dg, pos(s)-y) # A simple linear measurement model with normal additive noise
@@ -54,9 +68,6 @@ end
 @inline measurement(s,t=1) = s[SVector(1,2)]
 @inline measurement(s,t,noise) = measurement(s) + noise*rand(dg) # We observer the position coordinates with the measurement
 
-
-tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
-vecvec_to_mat(x) = reduce(hcat, x)'
 
 
 N = 1000 # Number of particles in the particle filter
@@ -89,35 +100,7 @@ vline!([findfirst(x->x>0.5, xh[:,5])], l=(:red, :dash, 3), subplot=4, lab="Switc
 vline!([findfirst(x->x>0.7, xh[:,5])], l=(:blue, :dash, 2), subplot=4, lab="")
 vline!([findfirst(x->x>0.9, xh[:,5])], l=(:green, :dash, 2), subplot=4, lab="")
 ##
-function LowLevelParticleFilters.smooth(pf::AdvancedParticleFilter, M, u, y)
-    T = length(y)
-    N = num_particles(pf)
-    f = pf.dynamics
-    xf,wf,wef,ll = forward_trajectory(pf, u, y)
-    @assert M <= N "Must extend cache size of bins and j to allow this"
-    xb = Array{particletype(pf)}(undef,M,T)
-    j = LowLevelParticleFilters.resample(LowLevelParticleFilters.ResampleSystematic, wef[:,T], M)
-    for i = 1:M
-        xb[i,T] = xf[j[i], T]
-    end
-    wb = Vector{Float64}(undef,N)
-    df = pf.dynamics_density
-    bin = Binomial(1,switch_prob)
-    inds = SVector(1,2,3,4)
-    @inbounds for t = T-1:-1:1
-        for m = 1:M
-            for n = 1:N
-                x1 = f(xf[n,t],u[t],t)
-                switch = mode(x1) != mode(xb[m,t+1])
-                wb[n] = wf[n,t] + logpdf(df, x1[inds], xb[m,t+1][inds],t) + logpdf(bin, switch)
-            end
-            i = LowLevelParticleFilters.draw_one_categorical(pf,wb)
-            xb[m,t] = xf[i, t]
-        end
-        # @show tset
-    end
-    return xb,ll
-end
+
 M = 10 # Number of smoothing trajectories, NOTE: if this is set higher, the result will be better at the expense of linear scaling of the computational cost.
 sb,ll = smooth(pf, M, u, y) # Sample smooting particles (b for backward-trajectory)
 sbm = smoothed_mean(sb)     # Calculate the mean of smoothing trajectories
@@ -136,17 +119,6 @@ Plots.plot!(sbt[3,:,:]', subplot=3, lab="", l=(:blue,0.2))
 Plots.plot!(identity.(sbt[4,:,:]'), subplot=4, lab="", l=(:orange,0.2))
 ##
 Plots.plot(sbt[5,:,:]', lab="", title="Mode trajectories", l=(:black,0.2))
-## Parameter estimation
-svec = exp10.(LinRange(-0.7,1.5,20))
-llspf = map(svec) do s
-    df = MvNormal(@SVector(zeros(n)), [1e-4, 1e-4, s, s])
-    pfs = ParticleFilter(1000, dynamics, measurement, df, dg, d0)
-    loglik(pfs,u,y) # Assuming we enter the measured data y here, u can be set to zero then
-end
-plot(svec, llspf, xscale=:log10, title="Log-likelihood", xlabel="Dynamics noise standard deviation", lab="")
-vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue), lab="maximum")
-
-
 
 
 ## PMMH
@@ -176,3 +148,34 @@ histogram(exp.(thetam), layout=4); plot!(lls, subplot=4) # Visualize
 ##
 # debugplot(pf,u,y,runall=false)
 commandplot(pf,u,y)
+
+
+# function LowLevelParticleFilters.smooth(pf::Union{AdvancedParticleFilter, AuxiliaryParticleFilter{<:AdvancedParticleFilter}}, M, u, y)
+#     T = length(y)
+#     N = num_particles(pf)
+#     f = LowLevelParticleFilters.dynamics(pf)
+#     xf,wf,wef,ll = forward_trajectory(pf, u, y)
+#     @assert M <= N "Must extend cache size of bins and j to allow this"
+#     xb = Array{particletype(pf)}(undef,M,T)
+#     j = LowLevelParticleFilters.resample(LowLevelParticleFilters.ResampleSystematic, wef[:,T], M)
+#     for i = 1:M
+#         xb[i,T] = xf[j[i], T]
+#     end
+#     wb = Vector{Float64}(undef,N)
+#     df = dynamics_density(pf)
+#     bin = Binomial(1,switch_prob)
+#     inds = SVector(1,2,3,4)
+#     @inbounds for t = T-1:-1:1
+#         for m = 1:M
+#             for n = 1:N
+#                 x1 = f(xf[n,t],u[t],t)
+#                 switch = mode(x1) != mode(xb[m,t+1])
+#                 wb[n] = wf[n,t] + logpdf(df, x1[inds], xb[m,t+1][inds],t) + logpdf(bin, switch)*(1-mode(xb[m,t+1])) # only add switch pdf if previous mode was 0
+#             end
+#             i = LowLevelParticleFilters.draw_one_categorical(pf,wb)
+#             xb[m,t] = xf[i, t]
+#         end
+#         # @show tset
+#     end
+#     return xb,ll
+# end
