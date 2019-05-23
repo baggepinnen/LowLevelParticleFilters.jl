@@ -271,3 +271,59 @@ end
         end
     end
 end
+
+@userplot DimensionDensity
+@recipe function f(p::DimensionDensity; nbinsy=30, xreal=nothing)
+    length(p.args) >=5 || throw(ArgumentError("Supply arguments: pf,x,w,y,dimension::Int"))
+    pf,x,w,y,d = p.args[1:5]
+    N,T = size(x)
+    D = length(x[1])
+    P = length(y[1])
+
+    if sum(w) ≉ T
+        w = exp.(w)
+        w ./= sum(w, dims=1)
+    end
+
+    label := ""
+    markercolor --> :cyan
+    if d <= D
+        @series begin
+            seriestype := :histogram2d
+            bins --> (0.5:1:T+0.5,nbinsy)
+            weights --> vec(w)
+            repeat((1:T)' .-0.5,N)[:], vec(getindex.(x,d))
+        end
+        xreal === nothing || @series begin
+            seriestype := :scatter
+            1:T, getindex.(xreal,d)
+        end
+    else
+        d -= D
+        yhat = measurement(pf).(x,0)
+        @series begin
+            seriestype := :histogram2d
+            bins --> (0.5:1:T+0.5,nbinsy)
+            weights --> vec(w)
+            repeat((1:T)' .-0.5,N)[:], vec(getindex.(yhat,d))
+        end
+        @series begin
+            seriestype := :scatter
+            1:T, getindex.(y,d)
+        end
+
+    end
+
+end
+
+"""
+    dimensiondensity(pf,x,we,y, dimension, nbinsy=30, xreal=nothing)
+Same as trajectorydensity but only plots subplot `dimension`.
+"""
+dimensiondensity
+
+"""
+    trajectorydensity(pf,x,we,y, nbinsy=30, xreal=nothing)
+Plots particle densities along trajectory. See the readme for an example.
+"""
+trajectorydensity
