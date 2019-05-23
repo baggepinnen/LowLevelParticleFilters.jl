@@ -21,7 +21,7 @@
 
 # ## Particle filter
 # Defining a particle filter is straightforward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u)` and the noise distribution `dg` in the measurement function `measurement(x)`. The distribution of the initial state `d0` must also be provided. An example for a linear Gaussian system is given below.
-using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions,  StatsPlots
+using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions, Plots
 
 # Define problem
 
@@ -210,7 +210,6 @@ plot!(vecvec_to_mat(x), lab="true")
 filter_from_parameters(θ,pf=nothing) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
 # The call to `exp` on the parameters is so that we can define log-normal priors
 priors = [Normal(1,2),Normal(1,2)]
-plot_priors(priors)
 # Now we call the function `log_likelihood_fun` that returns a function to be minimized
 ll = log_likelihood_fun(filter_from_parameters,priors,u,y)
 # Since this is a low-dimensional problem, we can plot the LL on a 2d-grid

@@ -23,7 +23,7 @@ This example demostrates how we set up the filters, both PF and KF, for a simple
 Defining a particle filter is straightforward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u)` and the noise distribution `dg` in the measurement function `measurement(x)`. The distribution of the initial state `d0` must also be provided. An example for a linear Gaussian system is given below.
 
 ```julia
-using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions,  StatsPlots
+using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions, Plots
 ```
 
 Define problem
@@ -274,7 +274,6 @@ The call to `exp` on the parameters is so that we can define log-normal priors
 
 ```julia
 priors = [Normal(1,2),Normal(1,2)]
-plot_priors(priors)
 ```
 
 Now we call the function `log_likelihood_fun` that returns a function to be minimized
@@ -385,6 +384,7 @@ We can even use this type as an AuxiliaryParticleFilter
 apfa = AuxiliaryParticleFilter(apf)
 x,w,we,ll = forward_trajectory(apfa, u, y)
 trajectorydensity(apfa, x, we, y, xreal=xs)
+dimensiondensity(apfa, x, we, y, 1, xreal=xs) # Same as above, but only plots a single dimension
 ```
 
 # High performance Distributions
@@ -405,14 +405,14 @@ dm = MvNormal(2, 2)
 @btime logpdf($d,$(Vector(sv))) # 32.449 ns (1 allocation: 32 bytes)
 @btime logpdf($dt,$(Vector(sv))) # 21.141 ns (0 allocations: 0 bytes)
 @btime logpdf($dm,$(Vector(sv))) # 48.745 ns (1 allocation: 96 bytes)
+```
 
 @btime logpdf($d,$sv) # 22.651 ns (0 allocations: 0 bytes)
 @btime logpdf($dt,$sv) # 0.021 ns (0 allocations: 0 bytes)
 @btime logpdf($dm,$sv) # 0.021 ns (0 allocations: 0 bytes)
-```
-
 Without loading `LowLevelParticleFilters`, the timing for the native distributions are the following
 `@btime logpdf($d,$sv) # 32.621 ns (1 allocation: 32 bytes)`
 `@btime logpdf($dm,$sv) # 46.415 ns (1 allocation: 96 bytes)`
 
 *This page was generated using [Literate.jl](https://github.com/fredrikekre/Literate.jl).*
+

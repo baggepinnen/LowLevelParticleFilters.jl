@@ -100,13 +100,6 @@ end
 #     sleep(0.2)
 # end
 
-function plot_priors(priors; kwargs...)
-    fig = plot(priors[1]; layout=length(priors), kwargs...)
-    for i = 2:length(priors)
-        plot!(priors[i], subplot=i)
-    end
-    fig
-end
 
 """
     numparameters(f)
