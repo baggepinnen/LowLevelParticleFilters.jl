@@ -8,7 +8,7 @@ using StatsBase, Parameters, Lazy, Yeppp, Random, LinearAlgebra, Printf
 import PDMats # To extend some methods on static arrays
 using StaticArrays
 using Distributions
-using StatsPlots
+using Plots
 
 abstract type ResamplingStrategy end
 struct ResampleSystematic <: ResamplingStrategy end
