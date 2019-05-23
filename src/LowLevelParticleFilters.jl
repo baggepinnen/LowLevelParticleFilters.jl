@@ -12,7 +12,6 @@ using Plots
 
 abstract type ResamplingStrategy end
 struct ResampleSystematic <: ResamplingStrategy end
-struct ResampleSystematicExp <: ResamplingStrategy end
 
 abstract type AbstractFilter end
 

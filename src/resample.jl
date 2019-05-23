@@ -36,30 +36,6 @@ function resample(::Type{ResampleSystematic}, we, j, bins, M = length(we))
 end
 
 
-function resample(::Type{ResampleSystematicExp}, w, j, bins, M = length(w))
-    N = length(w)
-    bins[1] = exp(w[1])
-    for i = 2:N
-        bins[i] = bins[i-1] + exp(w[i])
-    end
-    bins ./= bins[end]
-    r = rand()/N
-    s = r:(1/M):(bins[N]+r) # Added r in the end to ensure correct length (r < 1/N)
-    bo = 1
-    for i = 1:M
-        @inbounds for b = bo:N
-            if s[i] < bins[b]
-                j[i] = b
-                bo = b
-                break
-            end
-        end
-    end
-    return j
-end
-
-
-
 # """
 # There is probably lots of room for improvement here. All bins need not be formed in the beginning.
 # One only has to keep 1 values, the current upper limit, no array needed.
