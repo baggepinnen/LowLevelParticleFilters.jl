@@ -14,6 +14,13 @@ Random.seed!(0)
         logsumexp!(I,we)
         @test w ≈ wc.-log(sum(exp, wc))
         @test I ≈ fill(log(1/10),10)
+        w = randn(10); we = similar(w)
+        wc = copy(w)
+        LowLevelParticleFilters.expnormalize!(we,w)
+        @test sum(we) ≈ 1
+        @test w ≈ wc atol=1e-15
+        LowLevelParticleFilters.expnormalize!(w)
+        @test sum(w) ≈ 1
     end
 
     @testset "weigthed_mean" begin
@@ -52,6 +59,7 @@ Random.seed!(0)
 
         dt = LowLevelParticleFilters.TupleProduct((Normal(0,2), Normal(0,2)))
         @test logpdf(dt,x) == logpdf(dt,Vector(x)) == logpdf(d,x)
+        @test_nowarn rand(dt)
         @test var(dt) == var(d)
         @test cov(dt) == cov(d)
         @test entropy(dt) == entropy(d)
@@ -192,16 +200,13 @@ Random.seed!(0)
         measurement(x) = C*x
 
 
-        N     = 500 # Number of particles
-        T     = 10 # Number of time steps
-        M     = 100 # Number of smoothed backwards trajectories
+        N     = 100 # Number of particles
+        T     = 5   # Number of time steps
         pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
         pfa   = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
         du    = MvNormal(1,1) # Control input distribution
         x,u,y = LowLevelParticleFilters.simulate(pf,T,du)
-
         ##
-
 
         debugplot(pf,u,y, runall=true, xreal=x, density=true)
         debugplot(pf,u,y, runall=true, xreal=x, density=false)

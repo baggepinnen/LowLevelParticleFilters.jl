@@ -283,6 +283,7 @@ trajectorydensity(apf, x, we, y, xreal=xs)
 apfa = AuxiliaryParticleFilter(apf)
 x,w,we,ll = forward_trajectory(apfa, u, y)
 trajectorydensity(apfa, x, we, y, xreal=xs)
+dimensiondensity(apfa, x, we, y, 1, xreal=xs) # Same as above, but only plots a single dimension
 
 # # High performance Distributions
 # When `using LowLevelParticleFilters`, a number of methods related to distributions are defined for static arrays, making `logpdf` etc. faster. We also provide a new kind of distribution: `TupleProduct <: MultivariateDistribution` that behaves similarly to the `Product` distribution. The `TupleProduct` however stores the individual distributions in a tuple, has compile-time known length and supports `Mixed <: ValueSupport`, meaning that it can be a product of both `Continuous` and `Discrete` dimensions, somthing not supported by the standard `Product`. Example
