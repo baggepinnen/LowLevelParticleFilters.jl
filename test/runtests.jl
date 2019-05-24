@@ -152,7 +152,7 @@ Random.seed!(0)
             loglik(kfs,u,y)
         end
         @test all(s < 0 for s in llskf)
-
+        # plot(svec, [llspf llspfa llskf], xscale=:log10, lab=["PF" "APF" "KF"])
 
         @testset "Metropolis" begin
             N = 1000
