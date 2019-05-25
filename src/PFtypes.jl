@@ -60,7 +60,7 @@ function ParticleFilter(s::PFstate, dynamics::Function, measurement::Function, d
 end
 
 
-Base.@propagate_inbounds function measurement_equation!(pf, y, t, w = pf.state.w, d=measurement_density(pf))
+Base.@propagate_inbounds function measurement_equation!(pf::ParticleFilter, y, t, w = pf.state.w, d=measurement_density(pf))
     x,g = particles(pf), measurement(pf)
     any(ismissing.(y)) && return w
     if d isa UnivariateDistribution && length(y) == 1
@@ -75,7 +75,7 @@ Base.@propagate_inbounds function measurement_equation!(pf, y, t, w = pf.state.w
     w
 end
 
-Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilter,u,j::Vector{Int}, t, d=pf.dynamics_density)
+Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u,j::Vector{Int}, t, d=pf.dynamics_density)
     f = dynamics(pf)
     s = state(pf)
     x,xp = s.x, s.xprev
@@ -94,7 +94,7 @@ Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilte
     x
 end
 
-Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilter,u, t, d=pf.dynamics_density)
+Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u, t, d=pf.dynamics_density)
     f = pf.dynamics
     x,xp = pf.state.x, pf.state.xprev
     VecT = eltype(pf.state.x)
@@ -160,7 +160,7 @@ function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Fun
 end
 
 
-Base.@propagate_inbounds function measurement_equation!(pf::AdvancedParticleFilter, y, t, w = weights(pf))
+Base.@propagate_inbounds function measurement_equation!(pf::AbstractParticleFilter, y, t, w = weights(pf))
     g = measurement_likelihood(pf)
     any(ismissing.(y)) && return w
     x = particles(pf)
@@ -182,10 +182,10 @@ Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilte
     x
 end
 
-Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilter, u, t::Int, noise=true)
+Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilter, u, t::Int, noise=true)
     noise === nothing && (noise = false)
     f = pf.dynamics
-    x,xp = pf.state.x, pf.state.xprev
+    x,xp = particles(pf), state(pf).xprev
     @inbounds for i = eachindex(x)
         x[i] = f(xp[i], u, t, noise)
     end
@@ -217,6 +217,7 @@ num_particles(s::PFstate)              = num_particles(s.x)
 num_particles(s::AbstractArray)        = length(s)
 particles(s::PFstate)                  = s.x
 particletype(s::PFstate)               = eltype(s.x)
+particletype(pf::AbstractFilter)        = eltype(state(pf).x)
 
 
 
@@ -224,7 +225,7 @@ particletype(s::PFstate)               = eltype(s.x)
 @inline state(pf::AbstractParticleFilter) = pf.state
 @inline dynamics(pf::AbstractParticleFilter) = pf.dynamics
 @inline measurement(pf::AbstractParticleFilter) = pf.measurement
-@inline measurement_likelihood(pf::AdvancedParticleFilter) = pf.measurement_likelihood
+@inline measurement_likelihood(pf::AbstractParticleFilter) = pf.measurement_likelihood
 @inline dynamics_density(pf::AbstractParticleFilter) = pf.dynamics_density
 @inline measurement_density(pf::AbstractParticleFilter) = pf.measurement_density
 @inline initial_density(pf::AbstractParticleFilter) = pf.initial_density

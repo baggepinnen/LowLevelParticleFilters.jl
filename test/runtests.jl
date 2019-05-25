@@ -267,4 +267,52 @@ Random.seed!(0)
     @test norm(mean(x .- reskf[2])) < 0.2
 end
 
+
+
+
+@testset "Advanced filters" begin
+
+    eye(n) = Matrix{Float64}(I,n,n)
+    n = 2 # Dinemsion of state
+    m = 2 # Dinemsion of input
+    p = 2 # Dinemsion of measurements
+
+    dg = MvNormal(p,1.0)          # Dynamics noise Distribution
+    df = MvNormal(n,0.1)          # Measurement noise Distribution
+    d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
+    du    = MvNormal(2,1) # Control input distribution
+
+    # Define random linenar state-space system
+    Tr = randn(n,n)
+    A = SMatrix{n,n}([0.99 0.1; 0 0.2])
+    B = @SMatrix randn(n,m)
+    C = SMatrix{p,p}(eye(p))
+    # C = SMatrix{p,n}([1 1])
+
+    dynamics(x,u,t,noise=false) = A*x .+ B*u + noise*rand(df)
+    measurement(x,t,noise=false) = C*x .+ noise*rand(dg)
+    measurement_likelihood(x,y,t) = logpdf(dg, measurement(x,t)-y)
+
+    T     = 2000 # Number of time steps
+    N     = 500
+    apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0)
+    sf = SigmaFilter(N,dynamics, measurement, measurement_likelihood, df, d0)
+    x,u,y = LowLevelParticleFilters.simulate(apf,T,du) # Simuate trajectory using the model in the filter
+    @test_nowarn LowLevelParticleFilters.simulate(sf,T,du)
+    tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
+    x,u,y = tosvec.((x,u,y))
+
+
+    @time resapf,ll = mean_trajectory(apf, u, y)
+    @time ressf,ll = mean_trajectory(sf, u, y)
+    norm(mean(x))
+    norm(mean(x .- resapf))
+    norm(mean(x .- ressf))
+
+
+    @test norm(mean(x .- ressf)) ≈ norm(mean(x .- resapf)) atol=2e-1
+    # @test norm(mean(x .- ressf)) < norm(mean(x .- resapf))  # SF should be better than PF since we now covs are Gaussian
+end
+
+
 end

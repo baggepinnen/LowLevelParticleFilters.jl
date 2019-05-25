@@ -2,9 +2,10 @@
     Reset the filter to initial state and covariance/distribution
 """
 function reset!(pf::AbstractParticleFilter)
-    s = pf.state
+    s = state(pf)
+    rn = rng(pf)
     for i = eachindex(s.xprev)
-        s.xprev[i] = rand(pf.rng, pf.initial_density)
+        s.xprev[i] = rand(rn, initial_density(pf))
         s.x[i] = copy(s.xprev[i])
     end
     fill!(s.w, -log(num_particles(pf)))
@@ -130,6 +131,7 @@ end
 (pf::ParticleFilter)(u, y, t = index(pf)) =  update!(pf, u, y, t)
 (pf::AuxiliaryParticleFilter)(u, y, t = index(pf)) =  update!(pf, u, y, t)
 (pf::AdvancedParticleFilter)(u, y, t = index(pf)) =  update!(pf, u, y, t)
+(pf::SigmaFilter)(u, y, t = index(pf)) =  update!(pf, u, y, t)
 
 
 """
@@ -207,9 +209,9 @@ function reduce_trajectory(pf, u::Vector, y::Vector, f::F) where F
     T = length(y)
     N = num_particles(pf)
     x = Array{particletype(pf)}(undef,T)
-    ll = 0.0
-    for t = 1:T
-        ll += pf(u[t], y[t], t)
+    ll = correct!(pf,y[1],1)
+    for t = 2:T
+        ll += pf(u[t-1], y[t], t)
         x[t] = f(pf)
     end
     x,ll
@@ -272,7 +274,8 @@ end
     x̂ = weigthed_mean(s::PFstate)
 """
 weigthed_mean(s) = weigthed_mean(s.x,s.we)
-weigthed_mean(pf::AbstractParticleFilter) = weigthed_mean(pf.state)
+weigthed_mean(pf::AbstractParticleFilter) = weigthed_mean(state(pf))
+weigthed_mean(s::SigmaFilter) = weigthed_mean(s.x,s.we)
 """
     Similar to `weigthed_mean`, but returns covariances
 """
