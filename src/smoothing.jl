@@ -1,9 +1,9 @@
 
 """
-xT,RT,ll = smooth(kf::AbstractKalmanFilter, u::Vector, y::Vector)
+xT,RT,ll = smooth(kf::KalmanFilter, u::Vector, y::Vector)
 Returns smoothed estimates of state `x` and covariance `R` given all input output data `u,y`
 """
-function smooth(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector)
+function smooth(kf::KalmanFilter, u::AbstractVector, y::AbstractVector)
     reset!(kf)
     T            = length(y)
     x,xt,R,Rt,ll = forward_trajectory(kf, u, y)

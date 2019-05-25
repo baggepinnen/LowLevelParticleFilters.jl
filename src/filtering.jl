@@ -1,9 +1,3 @@
-function reset!(kf::AbstractKalmanFilter)
-    kf.x .= Vector(kf.d0.μ)
-    kf.R .= copy(Matrix(kf.d0.Σ))
-    kf.t[] = 1
-end
-
 """
     Reset the filter to initial state and covariance/distribution
 """
@@ -138,12 +132,17 @@ end
 (pf::AdvancedParticleFilter)(u, y, t = index(pf)) =  update!(pf, u, y, t)
 
 
-
 """
-x,xt,R,Rt,ll = forward_trajectory(kf, u::Vector{Vector}, y::Vector{Vector})
-x,w,ll       = forward_trajectory(pf, u::Vector{Vector}, y::Vector{Vector})
+    forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector)
 
-This Function resets the filter to the initial state distribution upon start
+Run a Kalman filter forward
+
+#Returns:
+- `x`: predictions
+- `xt`: filtered estimates
+- `R`: predicted covariance matrices
+- `Rt`: filter covariances
+- `ll`: loglik
 """
 function forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector)
     reset!(kf)

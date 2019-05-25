@@ -10,6 +10,7 @@ We provide a number of filter types
 - `AuxiliaryParticleFilter`: This filter is identical to `ParticleFilter`, but uses a slightly different proposal mechanism for new particles.
 - `AdvancedParticleFilter`: This filter gives you more flexibility, at the expense of having to define a few more functions. More instructions on this type below.
 - `KalmanFilter`. Is what you would expect. Has the same features as the particle filters, but is restricted to linear dynamics and gaussian noise.
+- `UnscentedKalmanFilter`. Is also what you would expect. Has almost the same features as the kalman filters, but handle nonlinear dynamics and measurement model, still requires an additive Gaussian noise model.
 
 # Functionality
 - Filtering
@@ -170,6 +171,7 @@ A Kalman filter is easily created using the constructor. Many of the functions d
 ```julia
 eye(n) = Matrix{Float64}(I,n,n)
 kf     = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal([1.,1.]))
+ukf    = UnscentedKalmanFilter(dynamics, measurement, eye(n), eye(p), MvNormal([1.,1.]))
 xf,xt,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
 xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 ```
