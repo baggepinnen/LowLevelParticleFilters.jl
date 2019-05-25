@@ -75,7 +75,7 @@ Base.@propagate_inbounds function measurement_equation!(pf::ParticleFilter, y, t
     w
 end
 
-Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u,j::Vector{Int}, t, d=pf.dynamics_density)
+Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u,j::Vector{Int}, t::Int, d=pf.dynamics_density)
     f = dynamics(pf)
     s = state(pf)
     x,xp = s.x, s.xprev
@@ -94,7 +94,7 @@ Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u,j::V
     x
 end
 
-Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u, t, d=pf.dynamics_density)
+Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u, t::Int, d=pf.dynamics_density)
     f = pf.dynamics
     x,xp = pf.state.x, pf.state.xprev
     VecT = eltype(pf.state.x)
