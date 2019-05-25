@@ -70,6 +70,12 @@ function loglik(f,u,y)
     ll = sum(x->f(x[1],x[2]), zip(u, y))
 end
 
+function loglik(pf::AuxiliaryParticleFilter,u,y)
+    reset!(pf)
+    ll = sum(t->pf(u[t],y[t],y[t+1],t), 1:length(u)-1)
+    ll + pf.pf(u[end],y[end], length(u))
+end
+
 """
 ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors::Vector{Distribution}, u, y)
 
