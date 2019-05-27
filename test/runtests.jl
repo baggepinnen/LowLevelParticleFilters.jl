@@ -131,7 +131,7 @@ Random.seed!(0)
 
         @test mean(abs2, xm) > mean(abs2, xm - reduce(hcat,xpf))  > mean(abs2, xm - reduce(hcat,xt)) > mean(abs2, xm - reduce(hcat,xT))
 
-        @test_broken mean(abs2, xm) > mean(abs2, xm - reduce(hcat,xpf))  > mean(abs2, xm - xbm) > mean(abs2, xm - reduce(hcat,xT))
+        @test mean(abs2, xm) > mean(abs2, xm - reduce(hcat,xpf))  > mean(abs2, xm - xbm) > mean(abs2, xm - reduce(hcat,xT))
         # plot(xm', layout=2)
         # plot!(reduce(hcat,xf)')
         # plot!(reduce(hcat,xt)')

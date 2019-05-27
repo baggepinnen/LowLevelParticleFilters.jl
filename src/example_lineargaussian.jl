@@ -291,6 +291,7 @@ dimensiondensity(apfa, x, we, y, 1, xreal=xs) # Same as above, but only plots a 
 #md using BenchmarkTools, LowLevelParticleFilters, Distributions
 #md dt = TupleProduct((Normal(0,2), Normal(0,2), Binomial())) # Mixed value support
 #md # A small benchmark
+#md ```julia
 #md sv = @SVector randn(2)
 #md d = Product([Normal(0,2), Normal(0,2)])
 #md dt = TupleProduct((Normal(0,2), Normal(0,2)))
@@ -298,13 +299,14 @@ dimensiondensity(apfa, x, we, y, 1, xreal=xs) # Same as above, but only plots a 
 #md @btime logpdf($d,$(Vector(sv))) # 32.449 ns (1 allocation: 32 bytes)
 #md @btime logpdf($dt,$(Vector(sv))) # 21.141 ns (0 allocations: 0 bytes)
 #md @btime logpdf($dm,$(Vector(sv))) # 48.745 ns (1 allocation: 96 bytes)
-#
-# @btime logpdf($d,$sv) # 22.651 ns (0 allocations: 0 bytes)
-# @btime logpdf($dt,$sv) # 0.021 ns (0 allocations: 0 bytes)
-# @btime logpdf($dm,$sv) # 0.021 ns (0 allocations: 0 bytes)
-# Without loading `LowLevelParticleFilters`, the timing for the native distributions are the following
-# `@btime logpdf($d,$sv) # 32.621 ns (1 allocation: 32 bytes)`
-# `@btime logpdf($dm,$sv) # 46.415 ns (1 allocation: 96 bytes)`
+#md
+#md @btime logpdf($d,$sv) # 22.651 ns (0 allocations: 0 bytes)
+#md @btime logpdf($dt,$sv) # 0.021 ns (0 allocations: 0 bytes)
+#md @btime logpdf($dm,$sv) # 0.021 ns (0 allocations: 0 bytes)
+#md # Without loading `LowLevelParticleFilters`, the timing for the native distributions are the following
+#md @btime logpdf($d,$sv) # 32.621 ns (1 allocation: 32 bytes)
+#md @btime logpdf($dm,$sv) # 46.415 ns (1 allocation: 96 bytes)
+#md ```
 
 
 

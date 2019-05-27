@@ -28,19 +28,19 @@ function predict!(kf::AbstractKalmanFilter, u, t = index(kf))
 end
 
 function correct!(kf::AbstractKalmanFilter, y, t = index(kf))
-    @unpack C,x,R,R1,R2,R2d = kf
+    @unpack C,x,R,R2 = kf
     if ndims(C) == 3
         Ct = C[:,:,t]
     else
         Ct = C
     end
     e   = y .- Ct*x
-    F   = Ct*R*Ct'
-    F   = 0.5(F+F')
-    K   = (R*Ct')/(F + R2) # Do not use .+ if R2 is I
+    S   = Ct*R*Ct' + R2
+    S   = 0.5(S+S')
+    K   = (R*Ct')/S
     x .+= K*e
-    R  .= (I - K*Ct)*R # warning against I .- A
-    logpdf(MvNormal(F), e) - 1/2*logdet(F)
+    R  .= (I - K*Ct)*R # WARNING against I .- A
+    logpdf(MvNormal(S), e)# - 1/2*logdet(S) # logdet is included in logpdf
 end
 
 """
