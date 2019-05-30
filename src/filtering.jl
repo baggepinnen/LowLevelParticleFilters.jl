@@ -28,19 +28,19 @@ function predict!(kf::AbstractKalmanFilter, u, t = index(kf))
 end
 
 function correct!(kf::AbstractKalmanFilter, y, t = index(kf))
-    @unpack C,x,R,R1,R2,R2d = kf
+    @unpack C,x,R,R2 = kf
     if ndims(C) == 3
         Ct = C[:,:,t]
     else
         Ct = C
     end
     e   = y .- Ct*x
-    F   = Ct*R*Ct'
-    F   = 0.5(F+F')
-    K   = (R*Ct')/(F + R2) # Do not use .+ if R2 is I
+    S   = Ct*R*Ct' + R2
+    S   = 0.5(S+S')
+    K   = (R*Ct')/S
     x .+= K*e
-    R  .= (I - K*Ct)*R # warning against I .- A
-    logpdf(MvNormal(F), e) - 1/2*logdet(F)
+    R  .= (I - K*Ct)*R # WARNING against I .- A
+    logpdf(MvNormal(S), e)# - 1/2*logdet(S) # logdet is included in logpdf
 end
 
 """
@@ -64,7 +64,7 @@ end
 
 
 """
- ll = correct!(f, y, t = index(f))
+     ll = correct!(f, y, t = index(f))
 Update state/covariance/weights based on measurement `y`,  returns loglikelihood.
 """
 function correct!(pf, y, t = index(pf))
@@ -73,22 +73,29 @@ function correct!(pf, y, t = index(pf))
 end
 
 """
-ll = update!(f::AbstractFilter, u, y, t = index(f))
+    ll = update!(f::AbstractFilter, u, y, t = index(f))
 Perform one step of `predict!` and `correct!`, returns loglikelihood.
 """
 function update!(f::AbstractFilter, u, y, t = index(f))
-    predict!(f, u, t)
     loklik = correct!(f, y, t)
+    predict!(f, u, t)
+    loklik
 end
 
-function update!(pf::AuxiliaryParticleFilter,u, y, t = index(pf))
-    s = state(pf)
-    N = num_particles(s)
+function update!(pf::AuxiliaryParticleFilter, u, y, y1, t = index(pf))
+    loklik = correct!(pf, y, t)
+    predict!(pf, u, y1, t)
+    loklik
+end
 
+
+
+function predict!(pf::AuxiliaryParticleFilter, u, y1, t = index(pf))
+    s = state(pf)
     propagate_particles!(pf.pf, u, t, nothing)# Propagate without noise
     λ  = s.we
     λ .= 0
-    measurement_equation!(pf.pf, y, t, λ)
+    measurement_equation!(pf.pf, y1, t, λ)
     s.w .+= λ
     expnormalize!(s.w) # w used as buffer
     j = resample(ResampleSystematic, s.w , s.j, s.bins)
@@ -98,16 +105,11 @@ function update!(pf::AuxiliaryParticleFilter,u, y, t = index(pf))
 
     s.t[] += 1
     copyto!(s.xprev, s.x)
-
-    # Correct step
-    measurement_equation!(pf.pf, y, t)
-    loklik = logsumexp!(s)
 end
 
-function update!(pf::AuxiliaryParticleFilter{<:AdvancedParticleFilter},u, y, t = index(pf)) # we need to special case this as it's hard to make the above more general without sacrifying performance
-    s = state(pf)
-    N = num_particles(s)
 
+function predict!(pf::AuxiliaryParticleFilter{<:AdvancedParticleFilter},u, y, t = index(pf))
+    s = state(pf)
     propagate_particles!(pf.pf, u, t, nothing)# Propagate without noise
     λ  = s.we
     λ .= 0
@@ -120,16 +122,12 @@ function update!(pf::AuxiliaryParticleFilter{<:AdvancedParticleFilter},u, y, t =
 
     s.t[] += 1
     copyto!(s.xprev, s.x)
-
-    # Correct step
-    measurement_equation!(pf.pf, y, t)
-    loklik = logsumexp!(s)
 end
 
 
 (kf::KalmanFilter)(u, y, t = index(kf)) =  update!(kf, u, y, t)
 (pf::ParticleFilter)(u, y, t = index(pf)) =  update!(pf, u, y, t)
-(pf::AuxiliaryParticleFilter)(u, y, t = index(pf)) =  update!(pf, u, y, t)
+(pf::AuxiliaryParticleFilter)(u, y, y1, t = index(pf)) =  update!(pf, u, y, y1, t)
 (pf::AdvancedParticleFilter)(u, y, t = index(pf)) =  update!(pf, u, y, t)
 (pf::SigmaFilter)(u, y, t = index(pf)) =  update!(pf, u, y, t)
 
@@ -148,23 +146,19 @@ Run a Kalman filter forward
 """
 function forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector)
     reset!(kf)
-    T     = length(y)
-    x     = Array{particletype(kf)}(undef,T)
-    xt    = Array{particletype(kf)}(undef,T)
-    R     = Array{covtype(kf)}(undef,T)
-    Rt    = Array{covtype(kf)}(undef,T)
-    x[1]  = state(kf)       |> copy
-    R[1]  = covariance(kf)  |> copy
-    ll    = correct!(kf, y[1], 1)
-    xt[1] = state(kf)       |> copy
-    Rt[1] = covariance(kf)  |> copy
-    for t = 2:T
-        predict!(kf, u[t-1], t-1)
-        x[t]   = state(kf)              |> copy
-        R[t]   = covariance(kf)         |> copy
-        ll    += correct!(kf, y[t], t)
-        xt[t]  = state(kf)              |> copy
-        Rt[t]  = covariance(kf)         |> copy
+    T    = length(y)
+    x    = Array{particletype(kf)}(undef,T)
+    xt   = Array{particletype(kf)}(undef,T)
+    R    = Array{covtype(kf)}(undef,T)
+    Rt   = Array{covtype(kf)}(undef,T)
+    ll   = 0.
+    for t = 1:T
+        x[t]  = state(kf)      |> copy
+        R[t]  = covariance(kf) |> copy
+        ll   += correct!(kf, y[t], t)
+        xt[t] = state(kf)      |> copy
+        Rt[t] = covariance(kf) |> copy
+        predict!(kf, u[t], t)
     end
     x,xt,R,Rt,ll
 end
@@ -181,15 +175,31 @@ function forward_trajectory(pf, u::AbstractVector, y::AbstractVector)
     x = Array{particletype(pf)}(undef,N,T)
     w = Array{Float64}(undef,N,T)
     we = Array{Float64}(undef,N,T)
-    ll = correct!(pf, y[1], 1)
-    x[:,1] .= particles(pf)
-    w[:,1] .= weights(pf)
-    we[:,1] .= expweights(pf)
-    @inbounds for t = 2:T
-        ll += pf(u[t-1], y[t], t-1) # predicts with t-1 and corrects with t
+    ll = 0.
+    @inbounds for t = 1:T
+        ll += correct!(pf, y[t], t)
         x[:,t] .= particles(pf)
         w[:,t] .= weights(pf)
         we[:,t] .= expweights(pf)
+        predict!(pf, u[t], t)
+    end
+    x,w,we,ll
+end
+
+function forward_trajectory(pf::AuxiliaryParticleFilter, u::AbstractVector, y::AbstractVector)
+    reset!(pf)
+    T = length(y)
+    N = num_particles(pf)
+    x = Array{particletype(pf)}(undef,N,T)
+    w = Array{Float64}(undef,N,T)
+    we = Array{Float64}(undef,N,T)
+    ll = 0.
+    @inbounds for t = 1:T
+        ll += correct!(pf, y[t], t)
+        x[:,t] .= particles(pf)
+        w[:,t] .= weights(pf)
+        we[:,t] .= expweights(pf)
+        t < T && predict!(pf, u[t], y[t+1], t)
     end
     x,w,we,ll
 end

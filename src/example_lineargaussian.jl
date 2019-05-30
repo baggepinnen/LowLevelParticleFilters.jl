@@ -130,8 +130,8 @@ plot!(vecvec_to_mat(x), l=:dash, lab="True")
 
 # We can plot the particles themselves as well
 plot(vecvec_to_mat(x), l=(4,), layout=(2,1), show=false)
-scatter!(xbt[1,:,:]', subplot=1, show=false, m=(1,:black, 0.5), lab="Backwards trajectories")
-scatter!(xbt[2,:,:]', subplot=2, m=(1,:black, 0.5), lab="Backwards trajectories")
+scatter!(xbt[1,:,:]', subplot=1, show=false, m=(1,:black, 0.5), lab="")
+scatter!(xbt[2,:,:]', subplot=2, m=(1,:black, 0.5), lab="")
 
 # ![window](figs/smooth.png)
 
@@ -145,12 +145,12 @@ xf,xt,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, f
 xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 # It can also be called in a loop like the `pf` above
 #md for t = 1:T
-#md     kf(u,y) # Performs both predict! and correct!
+#md     kf(u,y) # Performs both correct and predict!!
 #md     ## alternatively
-#md     predict!(kf, u, t)
+#md     ll += correct!(kf, y, t) # Returns loglik
 #md     x   = state(kf)
 #md     R   = covariance(kf)
-#md     ll += correct!(kf, y, t) # Returns loglik
+#md     predict!(kf, u, t)
 #md end
 
 # # Troubleshooting
@@ -176,22 +176,22 @@ debugplot(pf,u,y, runall=true, xreal=x) # does not work well with gr() as backen
 # We provide som basic functionality for maximum likelihood estimation and MAP estimation
 # ## ML estimation
 # Plot likelihood as function of the variance of the dynamics noise
-svec = exp10.(LinRange(-1.5,3,60))
+svec = exp10.(LinRange(-1.5,1.5,60))
 llspf = map(svec) do s
     df = MvNormal(n,s)
     pfs = ParticleFilter(2000, dynamics, measurement, df, dg, d0)
     loglik(pfs,u,y)
 end
-plot(svec, llspf, xscale=:log10, title="Log-likelihood", xlabel="Dynamics noise standard deviation")
-vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue))
+plot(svec, llspf, xscale=:log10, title="Log-likelihood", xlabel="Dynamics noise standard deviation", lab="PF")
+vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue), primary=false)
 # We can do the same with a Kalman filter
 eye(n) = Matrix{Float64}(I,n,n)
 llskf = map(svec) do s
     kfs = KalmanFilter(A, B, C, 0, s^2*eye(n), eye(p), d0)
     loglik(kfs,u,y)
 end
-plot!(twinx(),svec, llskf, yscale=:identity, xscale=:log10, ylabel="Kalman (red)", c=:red)
-vline!([svec[findmax(llskf)[2]]], l=(:dash,:red))
+plot!(svec, llskf, yscale=:identity, xscale=:log10, lab="Kalman", c=:red)
+vline!([svec[findmax(llskf)[2]]], l=(:dash,:red), primary=false)
 # ![window](figs/svec.png)
 # as we can see, the result is quite noisy due to the stochastic nature of particle filtering.
 
@@ -211,7 +211,7 @@ plot!(vecvec_to_mat(x), lab="true")
 
 filter_from_parameters(θ,pf=nothing) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
 # The call to `exp` on the parameters is so that we can define log-normal priors
-priors = [Normal(1,2),Normal(1,2)]
+priors = [Normal(0,2),Normal(0,2)]
 # Now we call the function `log_likelihood_fun` that returns a function to be minimized
 ll = log_likelihood_fun(filter_from_parameters,priors,u,y)
 # Since this is a low-dimensional problem, we can plot the LL on a 2d-grid
@@ -291,6 +291,7 @@ dimensiondensity(apfa, x, we, y, 1, xreal=xs) # Same as above, but only plots a 
 #md using BenchmarkTools, LowLevelParticleFilters, Distributions
 #md dt = TupleProduct((Normal(0,2), Normal(0,2), Binomial())) # Mixed value support
 #md # A small benchmark
+#md ```julia
 #md sv = @SVector randn(2)
 #md d = Product([Normal(0,2), Normal(0,2)])
 #md dt = TupleProduct((Normal(0,2), Normal(0,2)))
@@ -298,13 +299,14 @@ dimensiondensity(apfa, x, we, y, 1, xreal=xs) # Same as above, but only plots a 
 #md @btime logpdf($d,$(Vector(sv))) # 32.449 ns (1 allocation: 32 bytes)
 #md @btime logpdf($dt,$(Vector(sv))) # 21.141 ns (0 allocations: 0 bytes)
 #md @btime logpdf($dm,$(Vector(sv))) # 48.745 ns (1 allocation: 96 bytes)
-#
-# @btime logpdf($d,$sv) # 22.651 ns (0 allocations: 0 bytes)
-# @btime logpdf($dt,$sv) # 0.021 ns (0 allocations: 0 bytes)
-# @btime logpdf($dm,$sv) # 0.021 ns (0 allocations: 0 bytes)
-# Without loading `LowLevelParticleFilters`, the timing for the native distributions are the following
-# `@btime logpdf($d,$sv) # 32.621 ns (1 allocation: 32 bytes)`
-# `@btime logpdf($dm,$sv) # 46.415 ns (1 allocation: 96 bytes)`
+#md
+#md @btime logpdf($d,$sv) # 22.651 ns (0 allocations: 0 bytes)
+#md @btime logpdf($dt,$sv) # 0.021 ns (0 allocations: 0 bytes)
+#md @btime logpdf($dm,$sv) # 0.021 ns (0 allocations: 0 bytes)
+#md # Without loading `LowLevelParticleFilters`, the timing for the native distributions are the following
+#md @btime logpdf($d,$sv) # 32.621 ns (1 allocation: 32 bytes)
+#md @btime logpdf($dm,$sv) # 46.415 ns (1 allocation: 96 bytes)
+#md ```
 
 
 

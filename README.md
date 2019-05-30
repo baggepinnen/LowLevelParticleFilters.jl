@@ -159,8 +159,8 @@ We can plot the particles themselves as well
 
 ```julia
 plot(vecvec_to_mat(x), l=(4,), layout=(2,1), show=false)
-scatter!(xbt[1,:,:]', subplot=1, show=false, m=(1,:black, 0.5), lab="Backwards trajectories")
-scatter!(xbt[2,:,:]', subplot=2, m=(1,:black, 0.5), lab="Backwards trajectories")
+scatter!(xbt[1,:,:]', subplot=1, show=false, m=(1,:black, 0.5), lab="")
+scatter!(xbt[2,:,:]', subplot=2, m=(1,:black, 0.5), lab="")
 ```
 
 ![window](figs/smooth.png)
@@ -180,12 +180,12 @@ It can also be called in a loop like the `pf` above
 
 ```julia
 for t = 1:T
-    kf(u,y) # Performs both predict! and correct!
+    kf(u,y) # Performs both correct and predict!!
     # alternatively
-    predict!(kf, u, t)
+    ll += correct!(kf, y, t) # Returns loglik
     x   = state(kf)
     R   = covariance(kf)
-    ll += correct!(kf, y, t) # Returns loglik
+    predict!(kf, u, t)
 end
 ```
 
@@ -222,14 +222,14 @@ We provide som basic functionality for maximum likelihood estimation and MAP est
 Plot likelihood as function of the variance of the dynamics noise
 
 ```julia
-svec = exp10.(LinRange(-1.5,3,60))
+svec = exp10.(LinRange(-1.5,1.5,60))
 llspf = map(svec) do s
     df = MvNormal(n,s)
     pfs = ParticleFilter(2000, dynamics, measurement, df, dg, d0)
     loglik(pfs,u,y)
 end
-plot(svec, llspf, xscale=:log10, title="Log-likelihood", xlabel="Dynamics noise standard deviation")
-vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue))
+plot(svec, llspf, xscale=:log10, title="Log-likelihood", xlabel="Dynamics noise standard deviation", lab="PF")
+vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue), primary=false)
 ```
 
 We can do the same with a Kalman filter
@@ -240,8 +240,8 @@ llskf = map(svec) do s
     kfs = KalmanFilter(A, B, C, 0, s^2*eye(n), eye(p), d0)
     loglik(kfs,u,y)
 end
-plot!(twinx(),svec, llskf, yscale=:identity, xscale=:log10, ylabel="Kalman (red)", c=:red)
-vline!([svec[findmax(llskf)[2]]], l=(:dash,:red))
+plot!(svec, llskf, yscale=:identity, xscale=:log10, lab="Kalman", c=:red)
+vline!([svec[findmax(llskf)[2]]], l=(:dash,:red), primary=false)
 ```
 
 ![window](figs/svec.png)
@@ -275,7 +275,7 @@ filter_from_parameters(θ,pf=nothing) = ParticleFilter(N, dynamics, measurement,
 The call to `exp` on the parameters is so that we can define log-normal priors
 
 ```julia
-priors = [Normal(1,2),Normal(1,2)]
+priors = [Normal(0,2),Normal(0,2)]
 ```
 
 Now we call the function `log_likelihood_fun` that returns a function to be minimized

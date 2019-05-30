@@ -1,7 +1,7 @@
 name = "LowLevelParticleFilters"
 uuid = "d9d29d28-c116-5dba-9239-57a5fe23875b"
 authors = ["baggepinnen <baggepinnen@gmail.com>"]
-version = "0.1.2"
+version = "0.2.0"
 
 [deps]
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"

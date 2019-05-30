@@ -12,7 +12,7 @@ function smooth(kf::KalmanFilter, u::AbstractVector, y::AbstractVector)
     xT[end]      = xt[end]      |> copy
     RT[end]      = Rt[end]      |> copy
     for t = T-1:-1:1
-        C     = Rt[t]/R[t+1]
+        C     = Rt[t]*kf.A/R[t+1]
         xT[t] = xt[t] .+ C*(xT[t+1] .- x[t+1])
         RT[t] = Rt[t] .+ C*(RT[t+1] .- R[t+1])*C'
     end
@@ -68,6 +68,12 @@ Calculate loglikelihood for entire sequences `u,y`
 function loglik(f,u,y)
     reset!(f)
     ll = sum(x->f(x[1],x[2]), zip(u, y))
+end
+
+function loglik(pf::AuxiliaryParticleFilter,u,y)
+    reset!(pf)
+    ll = sum(t->pf(u[t],y[t],y[t+1],t), 1:length(u)-1)
+    ll + pf.pf(u[end],y[end], length(u))
 end
 
 """
