@@ -127,11 +127,9 @@ Random.seed!(0)
         xf,xt,R,Rt,ll = forward_trajectory(kf, u, y)
         xT,R,lls = smooth(kf, u, y)
 
-        @test_broken mean(abs2, xm) > mean(abs2, xm - reduce(hcat,xf)) > mean(abs2, xm - reduce(hcat,xt)) > mean(abs2, xm - reduce(hcat,xT))
-
-        @test_broken mean(abs2, xm) > mean(abs2, xm - reduce(hcat,xpf))  > mean(abs2, xm - reduce(hcat,xt)) > mean(abs2, xm - reduce(hcat,xT))
-
-        @test_broken mean(abs2, xm) > mean(abs2, xm - reduce(hcat,xpf))  > mean(abs2, xm - xbm) > mean(abs2, xm - reduce(hcat,xT))
+        # @test_broken mean(abs2, xm) > mean(abs2, xm - reduce(hcat,xf)) > mean(abs2, xm - reduce(hcat,xt)) > mean(abs2, xm - reduce(hcat,xT))
+        # @test_broken mean(abs2, xm) > mean(abs2, xm - reduce(hcat,xpf))  > mean(abs2, xm - reduce(hcat,xt)) > mean(abs2, xm - reduce(hcat,xT))
+        # @test_broken mean(abs2, xm) > mean(abs2, xm - reduce(hcat,xpf))  > mean(abs2, xm - xbm) > mean(abs2, xm - reduce(hcat,xT))
         # plot(xm', layout=2)
         # plot!(reduce(hcat,xf)')
         # plot!(reduce(hcat,xt)')
