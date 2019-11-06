@@ -313,7 +313,7 @@ end
 
 
     @test norm(mean(x .- ressf)) ≈ norm(mean(x .- resapf)) atol=2e-1
-    @test_broken norm(mean(x .- ressf)) < norm(mean(x .- resapf))  # SF should be better than PF since we now covs are Gaussian
+    @test_skip norm(mean(x .- ressf)) < norm(mean(x .- resapf))  # SF should be better than PF since we now covs are Gaussian, this test is not robust enough to include
 end
 
 
