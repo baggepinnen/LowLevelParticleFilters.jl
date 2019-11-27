@@ -19,10 +19,10 @@ Yeppp = "6310b701-1812-5374-a82f-9f6f2d54a40a"
 
 [compat]
 Distributions = "<0.22"
-Parameters = "<0.13"
 Lazy = "<0.15"
 PDMats = "0.9"
-Plots = "0.27"
+Parameters = "<0.13"
+Plots = "0.27, 0.28"
 StaticArrays = "<0.13"
 StatsBase = "0.29,0.30,0.32"
 Yeppp = "<0.5"
