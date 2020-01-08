@@ -1,7 +1,7 @@
 name = "LowLevelParticleFilters"
 uuid = "d9d29d28-c116-5dba-9239-57a5fe23875b"
 authors = ["baggepinnen <baggepinnen@gmail.com>"]
-version = "0.2.1"
+version = "0.2.2"
 
 [deps]
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
@@ -18,7 +18,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 Yeppp = "6310b701-1812-5374-a82f-9f6f2d54a40a"
 
 [compat]
-Distributions = "<0.22"
+Distributions = "0.21.10, 0.22"
 Lazy = "<0.15"
 PDMats = "0.9"
 Parameters = "<0.13"

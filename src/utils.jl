@@ -99,8 +99,8 @@ end
 
 # Make distributions faster for static arrays
 
-@inline Base.:(-)(x::StaticArray, ::Distributions.ZeroVector) = x
-@inline Base.:(-)(::Distributions.ZeroVector, x::StaticArray) = x
+@inline Base.:(-)(x::StaticArray, ::Distributions.Zeros) = x
+@inline Base.:(-)(::Distributions.Zeros, x::StaticArray) = -x
 Distributions.logpdf(d::Distribution,x,xp,t) = logpdf(d,x-xp)
 Distributions.sqmahal(d::MvNormal, x::StaticArray) = Distributions.invquad(d.Σ, x - d.μ)
 @inline PDMats.invquad(a::PDMats.ScalMat, x::StaticVector) = dot(x,x) * a.inv_value
