@@ -18,15 +18,15 @@ function logsumexp!(w,we,maxw=Ref(zero(eltype(w))))::eltype(w)
     log1p(s) + maxw[] - log(length(w))
 end
 
-function logsumexp!(w,we)::eltype(w)
-    offset,maxind = findmax(w)
-    w  .-= offset
-    Yeppp.exp!(we,w)
-    s    = sum_all_but(we,maxind) # s = ∑wₑ-1
-    we .*= 1/(s+1)
-    w  .-= log1p(s)
-    log1p(s) + offset - log(length(w))
-end
+# function logsumexp!(w,we)::eltype(w)
+#     offset,maxind = findmax(w)
+#     w  .-= offset
+#     Yeppp.exp!(we,w)
+#     s    = sum_all_but(we,maxind) # s = ∑wₑ-1
+#     we .*= 1/(s+1)
+#     w  .-= log1p(s)
+#     log1p(s) + offset - log(length(w))
+# end
 
 @inline logsumexp!(s) = logsumexp!(s.w,s.we,s.maxw)
 @inline logsumexp!(pf::AbstractParticleFilter) = logsumexp!(pf.state)
