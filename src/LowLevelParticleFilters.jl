@@ -4,7 +4,7 @@ export KalmanFilter, UnscentedKalmanFilter, ParticleFilter, AuxiliaryParticleFil
 
 export densityplot, debugplot, commandplot, trajectorydensity, dimensiondensity
 
-using StatsBase, Parameters, Lazy, Yeppp, Random, LinearAlgebra, Printf
+using StatsBase, Parameters, Lazy, Random, LinearAlgebra, Printf, LoopVectorization
 import PDMats # To extend some methods on static arrays
 using StaticArrays
 using Distributions
