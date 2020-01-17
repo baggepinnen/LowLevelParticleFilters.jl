@@ -26,9 +26,9 @@ using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions, Plots
 
 # Define problem
 
-n = 2   # Dinemsion of state
-m = 2   # Dinemsion of input
-p = 2   # Dinemsion of measurements
+n = 2   # Dimension of state
+m = 2   # Dimension of input
+p = 2   # Dimension of measurements
 N = 500 # Number of particles
 
 const dg = MvNormal(p,1.0)          # Measurement noise Distribution
