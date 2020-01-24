@@ -1,5 +1,6 @@
 # LowLevelParticleFilters
 [![Build Status](https://travis-ci.org/baggepinnen/LowLevelParticleFilters.jl.svg?branch=master)](https://travis-ci.org/baggepinnen/LowLevelParticleFilters.jl)
+[![PkgEval](https://juliaci.github.io/NanosoldierReports/pkgeval_badges/L/LowLevelParticleFilters.svg)](https://juliaci.github.io/NanosoldierReports/pkgeval_badges/report.html)
 [![codecov](https://codecov.io/gh/baggepinnen/LowLevelParticleFilters.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/baggepinnen/LowLevelParticleFilters.jl)
 
 This readme is auto generated from the file [src/example_lineargaussian.jl](https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/src/example_lineargaussian.jl) using [Literate.jl](https://github.com/fredrikekre/Literate.jl)
@@ -417,4 +418,3 @@ Without loading `LowLevelParticleFilters`, the timing for the native distributio
 `@btime logpdf($dm,$sv) # 46.415 ns (1 allocation: 96 bytes)`
 
 *This page was generated using [Literate.jl](https://github.com/fredrikekre/Literate.jl).*
-
