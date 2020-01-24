@@ -10,7 +10,7 @@ https://discourse.julialang.org/t/fast-logsumexp/22827/7?u=baggepinnen for stabl
 function logsumexp!(w,we,maxw=Ref(zero(eltype(w))))::eltype(w)
     offset,maxind = findmax(w)
     w  .-= offset
-    Yeppp.exp!(we,w)
+    LoopVectorization.vmap!(exp,we,w)
     s    = sum_all_but(we,maxind) # s = ∑wₑ-1
     we .*= 1/(s+1)
     w  .-= log1p(s)
@@ -18,15 +18,15 @@ function logsumexp!(w,we,maxw=Ref(zero(eltype(w))))::eltype(w)
     log1p(s) + maxw[] - log(length(w))
 end
 
-function logsumexp!(w,we)::eltype(w)
-    offset,maxind = findmax(w)
-    w  .-= offset
-    Yeppp.exp!(we,w)
-    s    = sum_all_but(we,maxind) # s = ∑wₑ-1
-    we .*= 1/(s+1)
-    w  .-= log1p(s)
-    log1p(s) + offset - log(length(w))
-end
+# function logsumexp!(w,we)::eltype(w)
+#     offset,maxind = findmax(w)
+#     w  .-= offset
+#     LoopVectorization.vmap!(exp,we,w)
+#     s    = sum_all_but(we,maxind) # s = ∑wₑ-1
+#     we .*= 1/(s+1)
+#     w  .-= log1p(s)
+#     log1p(s) + offset - log(length(w))
+# end
 
 @inline logsumexp!(s) = logsumexp!(s.w,s.we,s.maxw)
 @inline logsumexp!(pf::AbstractParticleFilter) = logsumexp!(pf.state)
@@ -41,7 +41,7 @@ end
 function expnormalize!(we,w)
     offset,maxind = findmax(w)
     w .-= offset
-    Yeppp.exp!(we,w)
+    LoopVectorization.vmap!(exp,we,w)
     w .+= offset
     s    = sum_all_but(we,maxind) # s = ∑wₑ-1
     we .*= 1/(s+1)
@@ -50,7 +50,7 @@ end
 function expnormalize!(w)
     offset,maxind = findmax(w)
     w .-= offset
-    Yeppp.exp!(w,w)
+    LoopVectorization.vmap!(exp,w,w)
     s    = sum_all_but(w,maxind) # s = ∑wₑ-1
     w .*= 1/(s+1)
 end
