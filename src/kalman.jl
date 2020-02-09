@@ -131,7 +131,7 @@ function correct!(ukf::UnscentedKalmanFilter, y, t = index(ukf))
     # end
     # ym  = ym ./ ns
     ym = mean(ys)
-    for i in eachindex(ys)
+    @inbounds for i in eachindex(ys)
         d   = ys[i]-ym
         # S .+= Symmetric(d*d')
         C  += Symmetric((xs[i]-x)*d')
