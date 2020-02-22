@@ -8,6 +8,7 @@ using StatsBase, Parameters, Lazy, Random, LinearAlgebra, Printf, LoopVectorizat
 import PDMats # To extend some methods on static arrays
 using StaticArrays
 using Distributions
+using RecipesBase
 
 abstract type ResamplingStrategy end
 struct ResampleSystematic <: ResamplingStrategy end
