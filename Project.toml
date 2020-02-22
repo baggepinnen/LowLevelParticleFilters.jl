@@ -31,6 +31,7 @@ VectorizationBase = "0.2.5"
 julia = "1.2"
 
 [extras]
+VectorizationBase = "21efa798-c60a-11e8-04d3-e1a92915a26a"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
