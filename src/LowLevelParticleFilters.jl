@@ -28,7 +28,10 @@ index(f::AbstractFilter) = f.t[]
 
 using Requires
 function __init__()
-    @require Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80" include("plots.jl")
+    @require Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80" begin
+        @eval using Plots
+        include("plots.jl")
+    end
 end
 
 end # module
