@@ -20,7 +20,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 VectorizationBase = "3d5dd08c-fd9d-11e8-17fa-ed2836048c2f"
 
 [compat]
-Distributions = "0.21.10, 0.22"
+Distributions = "0.21.10, 0.22, 0.23"
 Lazy = "<0.15, 0.15"
 LoopVectorization = "0.6"
 PDMats = "0.9"
