@@ -1,3 +1,5 @@
+using .Plots
+
 """
     pdata = pplot(x, w, y, yhat, a, t, pdata; kwargs...)
     pdata = pplot(pf, y, pdata; kwargs...)
