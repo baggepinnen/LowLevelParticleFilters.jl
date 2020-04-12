@@ -1,6 +1,6 @@
 using LowLevelParticleFilters
 import LowLevelParticleFilters.resample
-using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions
+using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions, MonteCarloMeasurements
 Random.seed!(0)
 
 @testset "LowLevelParticleFilters" begin
@@ -97,7 +97,16 @@ Random.seed!(0)
         @test !shouldresample(pf)
         @test !shouldresample(pfa)
         du    = MvNormal(2,1) # Control input distribution
-        x,u,y = LowLevelParticleFilters.simulate(pf,T,du) # Simuate trajectory using the model in the filter
+        xp,up,yp = LowLevelParticleFilters.simulate(pf,T,du,100)
+        @test xp[1] isa MonteCarloMeasurements.Particles{Float64,100}
+        @test size(xp) == (T,n)
+        x,u,y = LowLevelParticleFilters.simulate(pf,T,du) 
+
+        xf, wf, wef, ll = forward_trajectory(pf, u, y)
+        parts = Particles(xf,wef)
+        @test size(parts) == (T,n)
+        @test length(parts[1]) == N
+
         xm = reduce(hcat,x)
         tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
         x,u,y = tosvec.((x,u,y))
