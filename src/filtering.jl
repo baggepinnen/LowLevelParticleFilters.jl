@@ -247,8 +247,8 @@ If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurem
 """
 function simulate(f::AbstractFilter,T::Int,du::Distribution)
     u = [rand(du) for t=1:T]
-    y = Vector{Vector{Float64}}(undef,T)
-    x = Vector{Vector{Float64}}(undef,T)
+    y = similar(u)
+    x = similar(u)
     x[1] = sample_state(f)
     for t = 1:T-1
         y[t] = sample_measurement(f,x[t], t)

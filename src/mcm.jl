@@ -1,20 +1,22 @@
 
+import .MonteCarloMeasurements: Particles
 # From simulation result to particles
+
+vv2m(x) = copy(reduce(hcat, x)')
 function simulate(pf, n, du, Npart)
-    sims = map(_->vecvec2mat.(simulate(pf, n, du)), 1:Npart)
-    ns = length(sims[1]) # number of time series, usually x,u,y
-    series = map(1:ns) do s
+    sims = map(_->vv2m.(simulate(pf, n, du)), 1:Npart)
+    @show ns = length(sims[1]) # number of time series, usually x,u,y
+    ntuple(ns) do s
         xes = getindex.(sims,s)
         M = reduce((x,y)->cat(x,y,dims=3), xes)
         M = permutedims(M, (3,2,1))
         copy(dropdims(mapslices(Particles, M, dims=(1,2)), dims=2)')
     end
-    (series...,)
 end
 
 # From filter result to particles
 function MonteCarloMeasurements.Particles(x::AbstractMatrix{<:AbstractVector},we=nothing) # Helper function
-    xp = copy(reduce(hcat,[Particles(vecvec2mat(c)) for c in eachcol(x)])')
+    xp = copy(vv2m([Particles(vv2m(c)) for c in eachcol(x)]))
     we === nothing && return xp
     ## Perform resampling so that all particles have the same weight
     choices = map(LowLevelParticleFilters.resample, eachcol(we))
