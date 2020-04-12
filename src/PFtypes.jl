@@ -149,7 +149,8 @@ end
 ParticleFilter(num_particles, dynamics::Function, measurement::Function, initial_density)
 """
 function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, measurement_likelihood, dynamics_density, initial_density)
-    xprev = Vector{SVector{length(initial_density),eltype(initial_density)}}([rand(initial_density) for n=1:N])
+    r1 = rand(initial_density)
+    xprev = Vector{SVector{length(initial_density),eltype(r1)}}([rand(initial_density) for n=1:N])
     x  = deepcopy(xprev)
     w  = fill(log(1/N), N)
     we = fill(1/N, N)
