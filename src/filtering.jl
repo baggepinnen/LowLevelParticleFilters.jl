@@ -167,6 +167,8 @@ end
 """
     x,w,we,ll = forward_trajectory(pf, u::AbstractVector, y::AbstractVector)
 Run the particle filter for a sequence of inputs and measurements. Return particles, weights, expweights and loglikelihood
+
+If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurements.jl) is loaded, you may transform the output particles to `Matrix{MonteCarloMeasurements.Particles}` using `Particles(x,we)`. Internally, the particles are then resampled such that they all have unit weight. This is conventient for making use of the [plotting facilities of MonteCarloMeasurements.jl](https://baggepinnen.github.io/MonteCarloMeasurements.jl/stable/#Plotting-1).
 """
 function forward_trajectory(pf, u::AbstractVector, y::AbstractVector)
     reset!(pf)
@@ -237,9 +239,11 @@ end
 
 
 """
-    x,u,y = simulate(f::AbstractFilter,T::Int,du::Distribution)
+    x,u,y = simulate(f::AbstractFilter,T::Int,du::Distribution, [N])
 Simulate dynamical system forward in time, returns state sequence, inputs and measurements
-`du` is a distribution of random inputs
+`du` is a distribution of random inputs.
+
+If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurements.jl) is loaded, the argument `N::Int` can be supplied, in which case `N` simulations are done and the result is returned in the form of `Vector{MonteCarloMeasurements.Particles}`.
 """
 function simulate(f::AbstractFilter,T::Int,du::Distribution)
     u = [rand(du) for t=1:T]

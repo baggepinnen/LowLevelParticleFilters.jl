@@ -58,53 +58,9 @@ x̂,ll = mean_trajectory(pf, u, y)
 trajectorydensity(pf,x,w,y,xreal=xs)
 # ![window](figs/trajdens.png)
 
-# To see how the performance varies with the number of particles, we simulate several times. The following code simulates the system and performs filtering using the simulated measuerments. We do this for varying number of time steps and varying number of particles.
+# If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurements.jl) is loaded, you may transform the output particles to `Matrix{MonteCarloMeasurements.Particles}` with the layout `T × n_states` using `Particles(x,we)`. Internally, the particles are then resampled such that they all have unit weight. This is conventient for making use of the [plotting facilities of MonteCarloMeasurements.jl](https://baggepinnen.github.io/MonteCarloMeasurements.jl/stable/#Plotting-1).
 
-function run_test()
-    particle_count = [10, 20, 50, 100, 200, 500, 1000]
-    time_steps = [20, 100, 200]
-    RMSE = zeros(length(particle_count),length(time_steps)) # Store the RMS errors
-    propagated_particles = 0
-    t = @elapsed for (Ti,T) = enumerate(time_steps)
-        for (Ni,N) = enumerate(particle_count)
-            montecarlo_runs = 2*maximum(particle_count)*maximum(time_steps) ÷ T ÷ N
-            E = sum(1:montecarlo_runs) do mc_run
-                pf = ParticleFilter(N, dynamics, measurement, df, dg, d0) # Create filter
-                u = SVector{2,Float64}(randn(2))
-                x = SVector{2,Float64}(rand(d0))
-                y = SVector{2,Float64}(sample_measurement(pf,x,1))
-                error = 0.0
-                @inbounds for t = 1:T-1
-                    pf(u, y) # Update the particle filter
-                    x = dynamics(x,u) + SVector{2,Float64}(rand(df)) # Simulate the true dynamics and add some noise
-                    y = SVector{2,Float64}(sample_measurement(pf,x,t)) # Simulate a measuerment
-                    u = @SVector randn(2) # draw a random control input
-                    error += sum(abs2,x-weigthed_mean(pf))
-                end # t
-                √(error/T)
-            end # MC
-            RMSE[Ni,Ti] = E/montecarlo_runs
-            propagated_particles += montecarlo_runs*N*T
-            @show N
-        end # N
-        @show T
-    end # T
-    println("Propagated $propagated_particles particles in $t seconds for an average of $(propagated_particles/t/1000) particles per millisecond")
-    return RMSE
-end
-
-@time RMSE = run_test()
-# Propagated 8400000 particles in 3.568745383 seconds for an average of 2353.7683691344473 particles per millisecond
-
-# We then plot the results
-time_steps     = [20, 100, 200]
-particle_count = [10, 20, 50, 100, 200, 500, 1000]
-nT             = length(time_steps)
-leg            = reshape(["$(time_steps[i]) time steps" for i = 1:nT], 1,:)
-plot(particle_count,RMSE,xscale=:log10, ylabel="RMS errors", xlabel=" Number of particles", lab=leg)
-gui()
-# ![window](figs/rmse.png)
-
+# For a full usage example, see the benchmark section below or [example_lineargaussian.jl](https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/src/example_lineargaussian.jl)
 
 
 # # Smoothing
@@ -299,7 +255,7 @@ dimensiondensity(apfa, x, we, y, 1, xreal=xs) # Same as above, but only plots a 
 #md @btime logpdf($d,$(Vector(sv))) # 32.449 ns (1 allocation: 32 bytes)
 #md @btime logpdf($dt,$(Vector(sv))) # 21.141 ns (0 allocations: 0 bytes)
 #md @btime logpdf($dm,$(Vector(sv))) # 48.745 ns (1 allocation: 96 bytes)
-#md
+#md #
 #md @btime logpdf($d,$sv) # 22.651 ns (0 allocations: 0 bytes)
 #md @btime logpdf($dt,$sv) # 0.021 ns (0 allocations: 0 bytes)
 #md @btime logpdf($dm,$sv) # 0.021 ns (0 allocations: 0 bytes)
@@ -308,6 +264,54 @@ dimensiondensity(apfa, x, we, y, 1, xreal=xs) # Same as above, but only plots a 
 #md @btime logpdf($dm,$sv) # 46.415 ns (1 allocation: 96 bytes)
 #md ```
 
+
+# # Benchmark test
+# To see how the performance varies with the number of particles, we simulate several times. The following code simulates the system and performs filtering using the simulated measuerments. We do this for varying number of time steps and varying number of particles.
+
+function run_test()
+    particle_count = [10, 20, 50, 100, 200, 500, 1000]
+    time_steps = [20, 100, 200]
+    RMSE = zeros(length(particle_count),length(time_steps)) # Store the RMS errors
+    propagated_particles = 0
+    t = @elapsed for (Ti,T) = enumerate(time_steps)
+        for (Ni,N) = enumerate(particle_count)
+            montecarlo_runs = 2*maximum(particle_count)*maximum(time_steps) ÷ T ÷ N
+            E = sum(1:montecarlo_runs) do mc_run
+                pf = ParticleFilter(N, dynamics, measurement, df, dg, d0) # Create filter
+                u = @SVector randn(2)
+                x = SVector{2,Float64}(rand(d0))
+                y = SVector{2,Float64}(sample_measurement(pf,x,1))
+                error = 0.0
+                @inbounds for t = 1:T-1
+                    pf(u, y) # Update the particle filter
+                    x = dynamics(x,u) + SVector{2,Float64}(rand(df)) # Simulate the true dynamics and add some noise
+                    y = SVector{2,Float64}(sample_measurement(pf,x,t)) # Simulate a measuerment
+                    u = @SVector randn(2) # draw a random control input
+                    error += sum(abs2,x-weigthed_mean(pf))
+                end # t
+                √(error/T)
+            end # MC
+            RMSE[Ni,Ti] = E/montecarlo_runs
+            propagated_particles += montecarlo_runs*N*T
+            @show N
+        end # N
+        @show T
+    end # T
+    println("Propagated $propagated_particles particles in $t seconds for an average of $(propagated_particles/t/1000) particles per millisecond")
+    return RMSE
+end
+
+@time RMSE = run_test()
+# Propagated 8400000 particles in 3.568745383 seconds for an average of 2353.7683691344473 particles per millisecond
+
+# We then plot the results
+time_steps     = [20, 100, 200]
+particle_count = [10, 20, 50, 100, 200, 500, 1000]
+nT             = length(time_steps)
+leg            = reshape(["$(time_steps[i]) time steps" for i = 1:nT], 1,:)
+plot(particle_count,RMSE,xscale=:log10, ylabel="RMS errors", xlabel=" Number of particles", lab=leg)
+gui()
+# ![window](figs/rmse.png)
 
 
 #jl # Compile using Literate.markdown("example_lineargaussian.jl", "..", name="README", documenter=false)
