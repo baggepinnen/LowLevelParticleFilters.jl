@@ -81,7 +81,10 @@ densityplot
     seriestype := :histogram2d
     nbins --> (1,nbinsy)
     if length(p.args) >= 3
-        weights --> p.args[3]
+        w = p.args[3]
+        valid = (w .!= -Inf) .& (w .!= 0)
+        weights --> w[valid]
+        x = x[valid]
     end
     fill(t, length(x)), x
 end
@@ -97,6 +100,11 @@ end
         w = exp.(w)
         w ./= sum(w, dims=1)
     end
+
+    w = vec(w)
+    x = vec(x)
+    bgcolor --> :black
+
     layout := D+P
     label := ""
     markercolor --> :cyan
@@ -106,7 +114,7 @@ end
         @series begin
             seriestype := :histogram2d
             bins --> (0.5:1:T+0.5,nbinsy)
-            weights --> vec(w)
+            weights --> w
             repeat((1:T)' .-0.5,N)[:], vec(getindex.(x,d))
         end
         xreal === nothing || @series begin
@@ -120,7 +128,7 @@ end
         @series begin
             seriestype := :histogram2d
             bins --> (0.5:1:T+0.5,nbinsy)
-            weights --> vec(w)
+            weights --> w
             repeat((1:T)' .-0.5,N)[:], vec(getindex.(yhat,d))
         end
         @series begin

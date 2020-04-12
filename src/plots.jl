@@ -53,16 +53,16 @@ function pplot(x, w, y, yhat, a, t, pdata; xreal=nothing, xprev=nothing,  densit
         pdata = plot(layout=(length(plotindices),cols)), zeros(length(plotindices),2)
     end
     p, minmax = pdata
-    dataMin = minimum(plotvals[plotindices,:])
-    dataMax = maximum(plotvals[plotindices,:])
-    minmax = [min.(minmax[:,1], dataMin)*lowpass .+ (1-lowpass)*dataMin max.(minmax[:,2], dataMax)*lowpass .+ (1-lowpass)*dataMax]
+    # dataMin = minimum(plotvals[plotindices,:])
+    # dataMax = maximum(plotvals[plotindices,:])
+    # minmax = [min.(minmax[:,1], dataMin)*lowpass .+ (1-lowpass)*dataMin max.(minmax[:,2], dataMax)*lowpass .+ (1-lowpass)*dataMax]
 
     for (i, pind) in enumerate(plotindices)
         #Plot the heatmap on the left plot
         if density
-            heatboxplot!(plotvals[pind,:], t, w, ylims=minmax[i,:], subplot=grd(i,1), reuse=false)
+            heatboxplot!(plotvals[pind,:], t, w, subplot=grd(i,1), reuse=false) #ylims=minmax[i,:],
             if !leftonly
-                densityplot!( plotvals[pind,:], w , ylims = tuple(minmax[i,:]...), c=:blue, subplot=grd(i,2), reuse=true, legend=false)
+                densityplot!( plotvals[pind,:], w , c=:blue, subplot=grd(i,2), reuse=true, legend=false) #ylims = tuple(minmax[i,:]...)
             end
         else
             #Plot the line on the left plot
@@ -87,8 +87,12 @@ function commandplot(f)
         if line[1] == 'q'
             return
         elseif occursin("s", line)
-            ss = split(strip(line,'\n'))
-            skip = parse(Int,ss[2])
+            if length(line) <= 2
+                skip = 1
+            else
+                ss = split(strip(line,'\n'))
+                skip = parse(Int,ss[2])
+            end
         end
         foreach(1:skip) do i
             res = f(res)
