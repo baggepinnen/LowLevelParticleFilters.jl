@@ -138,7 +138,12 @@ llspf = map(svec) do s
     pfs = ParticleFilter(2000, dynamics, measurement, df, dg, d0)
     loglik(pfs,u,y)
 end
-plot(svec, llspf, xscale=:log10, title="Log-likelihood", xlabel="Dynamics noise standard deviation", lab="PF")
+plot( svec, llspf,
+    xscale = :log10,
+    title = "Log-likelihood",
+    xlabel = "Dynamics noise standard deviation",
+    lab = "PF",
+)
 vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue), primary=false)
 # We can do the same with a Kalman filter
 eye(n) = Matrix{Float64}(I,n,n)
@@ -165,7 +170,14 @@ plot!(vecvec_to_mat(x), lab="true")
 # ## MAP estiamtion
 # To solve a MAP estimation problem, we need to define a function that takes a parameter vector and returns a particle filter
 
-filter_from_parameters(θ,pf=nothing) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
+filter_from_parameters(θ, pf = nothing) = ParticleFilter(
+    N,
+    dynamics,
+    measurement,
+    MvNormal(n, exp(θ[1])),
+    MvNormal(p, exp(θ[2])),
+    d0,
+)
 # The call to `exp` on the parameters is so that we can define log-normal priors
 priors = [Normal(0,2),Normal(0,2)]
 # Now we call the function `log_likelihood_fun` that returns a function to be minimized
@@ -181,7 +193,13 @@ v        = LinRange(-0.7,1,Nv)
 llxy     = (x,y) -> ll([x;y])
 VGx, VGy = meshgrid(v,v)
 VGz      = llxy.(VGx, VGy)
-heatmap(VGz, xticks=(1:Nv,round.(v,digits=2)),yticks=(1:Nv,round.(v,digits=2)), xlabel="sigma v", ylabel="sigma w") # Yes, labels are reversed
+heatmap(
+    VGz,
+    xticks = (1:Nv, round.(v, digits = 2)),
+    yticks = (1:Nv, round.(v, digits = 2)),
+    xlabel = "sigma v",
+    ylabel = "sigma w",
+) # Yes, labels are reversed
 
 # ![window](figs/heatmap.svg)
 
@@ -193,7 +211,14 @@ heatmap(VGz, xticks=(1:Nv,round.(v,digits=2)),yticks=(1:Nv,round.(v,digits=2)), 
 # ## Bayesian inference using PMMH
 # This is pretty cool. We procede like we did for MAP above, but when calling the function `metropolis`, we will get the entire posterior distribution of the parameter vector, for the small cost of a massive increase in computational cost.
 N = 1000
-filter_from_parameters(θ,pf=nothing) = AuxiliaryParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
+filter_from_parameters(θ, pf = nothing) = AuxiliaryParticleFilter(
+    N,
+    dynamics,
+    measurement,
+    MvNormal(n, exp(θ[1])),
+    MvNormal(p, exp(θ[2])),
+    d0,
+)
 # The call to `exp` on the parameters is so that we can define log-normal priors
 priors = [Normal(0,2),Normal(0,2)]
 ll     = log_likelihood_fun(filter_from_parameters,priors,u,y)
