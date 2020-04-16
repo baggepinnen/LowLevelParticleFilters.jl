@@ -100,7 +100,7 @@ Random.seed!(0)
         xp,up,yp = LowLevelParticleFilters.simulate(pf,T,du,100)
         @test xp[1] isa MonteCarloMeasurements.Particles{Float64,100}
         @test size(xp) == (T,n)
-        x,u,y = LowLevelParticleFilters.simulate(pf,T,du) 
+        x,u,y = LowLevelParticleFilters.simulate(pf,T,du)
 
         xf, wf, wef, ll = forward_trajectory(pf, u, y)
         parts = Particles(xf,wef)
@@ -212,7 +212,7 @@ Random.seed!(0)
 
 
         N     = 100 # Number of particles
-        T     = 5   # Number of time steps
+        T     = 3   # Number of time steps
         pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
         pfa   = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
         du    = MvNormal(1,1) # Control input distribution
@@ -291,7 +291,7 @@ end
     dg = MvNormal(p,1.0)          # Dynamics noise Distribution
     df = MvNormal(n,0.1)          # Measurement noise Distribution
     d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
-    du    = MvNormal(2,1) # Control input distribution
+    du = MvNormal(2,1)            # Control input distribution
 
     # Define random linenar state-space system
     Tr = randn(n,n)
@@ -304,8 +304,9 @@ end
     measurement(x,t,noise=false) = C*x .+ noise*rand(dg)
     measurement_likelihood(x,y,t) = logpdf(dg, measurement(x,t)-y)
 
-    T     = 2000 # Number of time steps
+    T     = 200 # Number of time steps
     N     = 500
+    Random.seed!(0)
     apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0)
     sf = SigmaFilter(N,dynamics, measurement, measurement_likelihood, df, d0)
     x,u,y = LowLevelParticleFilters.simulate(apf,T,du) # Simuate trajectory using the model in the filter
