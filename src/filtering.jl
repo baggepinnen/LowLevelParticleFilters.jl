@@ -222,6 +222,7 @@ function reduce_trajectory(pf, u::Vector, y::Vector, f::F) where F
     N = num_particles(pf)
     x = Array{particletype(pf)}(undef,T)
     ll = correct!(pf,y[1],1)
+    x[1] = f(state(pf))
     for t = 2:T
         ll += pf(u[t-1], y[t], t)
         x[t] = f(pf)

@@ -1,6 +1,7 @@
 using LowLevelParticleFilters
 import LowLevelParticleFilters.resample
-using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions, MonteCarloMeasurements
+using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions
+using MonteCarloMeasurements
 Random.seed!(0)
 
 @testset "LowLevelParticleFilters" begin
@@ -294,7 +295,6 @@ end
     du = MvNormal(2,1)            # Control input distribution
 
     # Define random linenar state-space system
-    Tr = randn(n,n)
     A = SMatrix{n,n}([0.99 0.1; 0 0.2])
     B = @SMatrix randn(n,m)
     C = SMatrix{p,p}(eye(p))
@@ -303,20 +303,20 @@ end
     dynamics(x,u,t,noise=false) = A*x .+ B*u + noise*rand(df)
     measurement(x,t,noise=false) = C*x .+ noise*rand(dg)
     measurement_likelihood(x,y,t) = logpdf(dg, measurement(x,t)-y)
+    tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
 
     T     = 200 # Number of time steps
     N     = 500
     Random.seed!(0)
     apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0)
-    sf = SigmaFilter(N,dynamics, measurement, measurement_likelihood, df, d0)
     x,u,y = LowLevelParticleFilters.simulate(apf,T,du) # Simuate trajectory using the model in the filter
-    @test_nowarn LowLevelParticleFilters.simulate(sf,T,du)
-    tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
     x,u,y = tosvec.((x,u,y))
-
-
     @time resapf,ll = mean_trajectory(apf, u, y)
+    sf = SigmaFilter(N,dynamics, measurement, measurement_likelihood, df, d0)
+    @test_nowarn LowLevelParticleFilters.simulate(sf,T,du)
     @time ressf,ll = mean_trajectory(sf, u, y)
+
+
     norm(mean(x))
     norm(mean(x .- resapf))
     norm(mean(x .- ressf))
