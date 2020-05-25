@@ -79,7 +79,7 @@ densityplot
 @recipe function f(p::HeatboxPlot; nbinsy=30)
     x,t = p.args[1:2]
     seriestype := :histogram2d
-    nbins --> (1,nbinsy)
+    bins --> (1,nbinsy)
     if length(p.args) >= 3
         w = p.args[3]
         valid = (w .!= -Inf) .& (w .!= 0)
@@ -103,7 +103,7 @@ end
 
     w = vec(w)
     x = vec(x)
-    bgcolor --> :black
+    background_color --> :black
 
     layout := D+P
     label := ""
