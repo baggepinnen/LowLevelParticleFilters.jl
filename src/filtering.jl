@@ -43,6 +43,24 @@ function correct!(kf::AbstractKalmanFilter, y, t = index(kf))
     logpdf(MvNormal(S), e)# - 1/2*logdet(S) # logdet is included in logpdf
 end
 
+function correct!(kf::AbstractKalmanFilter, y, u, t = index(kf))
+    @unpack C,D,x,R,R2 = kf
+    if ndims(C) == 3
+        Ct = C[:,:,t]
+        Dt = D[:,:,t]
+    else
+        Ct = C
+        Dt = D
+    end
+    e   = y .- Ct*x .- Dt*u
+    S   = Ct*R*Ct' + R2
+    S   = 0.5(S+S')
+    K   = (R*Ct')/S
+    x .+= K*e
+    R  .= (I - K*Ct)*R # WARNING against I .- A
+    logpdf(MvNormal(S), e)# - 1/2*logdet(S) # logdet is included in logpdf
+end
+
 """
     predict!(f,u, t = index(f))
 Move filter state forward in time using dynamics equation and input vector `u`.
@@ -155,7 +173,7 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
     for t = 1:T
         x[t]  = state(kf)      |> copy
         R[t]  = covariance(kf) |> copy
-        ll   += correct!(kf, y[t], t)
+        ll   += correct!(kf, y[t], u[t], t)
         xt[t] = state(kf)      |> copy
         Rt[t] = covariance(kf) |> copy
         predict!(kf, u[t], t)

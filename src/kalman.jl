@@ -115,7 +115,7 @@ function predict!(ukf::UnscentedKalmanFilter, u, t = index(ukf))
     ukf.t[] += 1
 end
 
-function correct!(ukf::UnscentedKalmanFilter, y, t = index(ukf))
+function correct!(ukf::UnscentedKalmanFilter, y, u, t = index(ukf))
     @unpack measurement,x,xs,R,R1,R2,R2d = ukf
     n = size(R1,1)
     p = size(R2,1)
