@@ -19,7 +19,6 @@ end
 KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
 """
 function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
-    all(iszero, D) || throw(ArgumentError("Nonzero D matrix not supported yet"))
     KalmanFilter(A,B,C,D,R1,R2,MvNormal(R2), d0, Vector(d0.μ), Matrix(d0.Σ), Ref(1))
 end
 
