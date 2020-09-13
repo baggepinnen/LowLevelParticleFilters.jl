@@ -13,7 +13,7 @@ function reset!(pf::AbstractParticleFilter)
     s.t[] = 1
 end
 
-function predict!(kf::AbstractKalmanFilter, u, t = index(kf))
+function predict!(kf::AbstractKalmanFilter, u, t::Integer = index(kf))
     @unpack A,B,x,R,R1 = kf
     if ndims(A) == 3
         At = A[:,:,t]
@@ -22,12 +22,12 @@ function predict!(kf::AbstractKalmanFilter, u, t = index(kf))
         At = A
         Bt = B
     end
-    x .= At*x .+ Bt*u
+    x .= At*x .+ Bt*u |> vec
     R .= At*R*At' + R1
     kf.t[] += 1
 end
 
-function correct!(kf::AbstractKalmanFilter, y, t = index(kf))
+function correct!(kf::AbstractKalmanFilter, y, t::Integer = index(kf))
     @unpack C,x,R,R2 = kf
     if ndims(C) == 3
         Ct = C[:,:,t]
@@ -43,7 +43,7 @@ function correct!(kf::AbstractKalmanFilter, y, t = index(kf))
     logpdf(MvNormal(S), e)# - 1/2*logdet(S) # logdet is included in logpdf
 end
 
-function correct!(kf::AbstractKalmanFilter, y, u, t = index(kf))
+function correct!(kf::AbstractKalmanFilter, y, u, t::Integer = index(kf))
     @unpack C,D,x,R,R2 = kf
     if ndims(C) == 3
         Ct = C[:,:,t]

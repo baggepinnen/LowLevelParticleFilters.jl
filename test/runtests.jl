@@ -246,7 +246,7 @@ Random.seed!(0)
 
     # Define random linenar state-space system
     Tr = randn(n,n)
-    A = SMatrix{n,n}([0.99 0.1; 0 0.2])
+    A = SA[0.99 0.1; 0 0.2]
     B = @SMatrix randn(n,m)
     C = SMatrix{p,p}(eye(p))
     # C = SMatrix{p,n}([1 1])

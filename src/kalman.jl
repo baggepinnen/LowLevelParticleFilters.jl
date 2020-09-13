@@ -96,7 +96,7 @@ function sigmapoints!(xs, m, Σ::AbstractMatrix)
 end
 
 
-function predict!(ukf::UnscentedKalmanFilter, u, t = index(ukf))
+function predict!(ukf::UnscentedKalmanFilter, u, t::Integer = index(ukf))
     @unpack dynamics,measurement,x,xs,R,R1 = ukf
     ns = length(xs)
     sigmapoints!(xs,x,R) # TODO: these are calculated in the update step
@@ -114,7 +114,7 @@ function predict!(ukf::UnscentedKalmanFilter, u, t = index(ukf))
     ukf.t[] += 1
 end
 
-function correct!(ukf::UnscentedKalmanFilter, y, u, t = index(ukf))
+function correct!(ukf::UnscentedKalmanFilter, y, u, t::Integer = index(ukf))
     @unpack measurement,x,xs,R,R1,R2,R2d = ukf
     n = size(R1,1)
     p = size(R2,1)
@@ -197,7 +197,7 @@ expweights(sf::SigmaFilter) = sf.we
 state(sf::SigmaFilter) = sf
 rng(sf::SigmaFilter) = Random.GLOBAL_RNG
 
-function predict!(sf::SigmaFilter, u, t = index(sf))
+function predict!(sf::SigmaFilter, u, t::Integer = index(sf))
     @unpack dynamics,measurement,x,xprev,xm,R,w,we = sf
     N = length(x)
     n = length(x[1])
