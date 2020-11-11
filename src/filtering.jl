@@ -151,7 +151,7 @@ end
 
 
 """
-    forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector)
+    x,xt,R,Rt,ll = forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector)
 
 Run a Kalman filter forward
 
