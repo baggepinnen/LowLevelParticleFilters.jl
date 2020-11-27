@@ -27,7 +27,7 @@ Parameters = "<0.13"
 Plots = "0.27, 0.28, 0.29, 1.0"
 RecipesBase = "0.8, 1.0"
 Requires = "0.5, 1.0"
-StaticArrays = "<0.13"
+StaticArrays = "<0.13, 1.0"
 StatsBase = "0.29,0.30,0.32, 0.33"
 julia = "1.2"
 
