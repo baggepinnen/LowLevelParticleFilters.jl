@@ -154,3 +154,17 @@ Distributions.mean(d::TupleProduct) = vcat(mean.(d.v)...)
 Distributions.var(d::TupleProduct) = vcat(var.(d.v)...)
 Distributions.cov(d::TupleProduct) = Diagonal(var(d))
 Distributions.entropy(d::TupleProduct) = sum(entropy, d.v)
+
+
+"""
+    C = double_integrator_covariance(h, σ=1)
+
+Returns the covariance matrix of a discrete-time integrator with force as input.
+Assumes the state [x; ẋ]. `h` is the sample time. `σ` scales the covariance matrix with the variance of the noise.
+
+This matrix is rank deficient and some applications might require a small increase in the diagonal to make it positive definite.
+"""
+function double_integrator_covariance(h, σ=1)
+    σ*[h^4/4 h^3/2
+    h^3/2  h^2]
+end
