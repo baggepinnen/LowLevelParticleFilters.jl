@@ -144,6 +144,7 @@ end
 
 
 (kf::KalmanFilter)(u, y, t = index(kf)) =  update!(kf, u, y, t)
+(kf::UnscentedKalmanFilter)(u, y, t = index(kf)) =  update!(kf, u, y, t)
 (pf::ParticleFilter)(u, y, t = index(pf)) =  update!(pf, u, y, t)
 (pf::AuxiliaryParticleFilter)(u, y, y1, t = index(pf)) =  update!(pf, u, y, y1, t)
 (pf::AdvancedParticleFilter)(u, y, t = index(pf)) =  update!(pf, u, y, t)
