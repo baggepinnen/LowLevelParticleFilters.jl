@@ -60,7 +60,7 @@ function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(R1))
     n = size(R1,1)
     p = size(R2,1)
     R1 = SMatrix{n,n}(R1)
-    R2 = SMatrix{n,n}(R2)
+    R2 = SMatrix{p,p}(R2)
     xs = sigmapoints(mean(d0), cov(d0))
     UnscentedKalmanFilter(dynamics,measurement,R1,R2,MvNormal(Matrix(R2)), d0, xs, Vector(d0.μ), Matrix(d0.Σ), Ref(1))
 end
@@ -114,34 +114,28 @@ function predict!(ukf::UnscentedKalmanFilter, u, t::Integer = index(ukf))
     ukf.t[] += 1
 end
 
+
+correct!(ukf::UnscentedKalmanFilter, y, t::Integer = index(ukf)) = correct!(ukf::UnscentedKalmanFilter, y, 0, t)
 function correct!(ukf::UnscentedKalmanFilter, y, u, t::Integer = index(ukf))
     @unpack measurement,x,xs,R,R1,R2,R2d = ukf
     n = size(R1,1)
     p = size(R2,1)
     ns = length(xs)
     sigmapoints!(xs,x,R) # Update sigmapoints here since untransformed points required
-    # S = @SMatrix zeros(p,p)
     C = @SMatrix zeros(n,p)
-    # ym = @SVector zeros(p) # y mean
     ys = map(measurement, xs)
-    # for i in eachindex(xs)
-    #     ys  = measurement(xs[i])
-    #     ym += ys
-    # end
-    # ym  = ym ./ ns
     ym = mean(ys)
-    @inbounds for i in eachindex(ys)
+    @inbounds for i in eachindex(ys) # Cross cov between x and y
         d   = ys[i]-ym
-        # S .+= Symmetric(d*d')
-        C  += Symmetric((xs[i]-x)*d')
+        ca = (xs[i]-x)*d'
+        C  += ca
     end
     e   = y .- ym
-    S = cov(ys) + R2
-    # S   = S./ns + R2
-    K   = (C./ns)/S
+    S   = cov(ys) + R2 # cov of y
+    K   = (C./ns)/S # ns normalization to make it a covariance matrix
     x .+= K*e
     R  .= R - K*S*K'
-    0. #logpdf(MvNormal(Matrix(S)), e) - 1/2*logdet(S) # TODO: this is not correct
+    logpdf(MvNormal(Matrix(S)), e) #- 1/2*logdet(S) # logdet is included in logpdf
 end
 
 
