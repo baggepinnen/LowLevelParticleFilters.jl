@@ -259,7 +259,7 @@ measurement(x,t,noise=false) = C*x + noise*rand(dg)
 # We now create the `AdvancedParticleFilter` and use it in the same way as the other filters:
 apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0)
 x,w,we,ll = forward_trajectory(apf, u, y)
-trajectorydensity(apf, x, we, y, xreal=xs)
+# trajectorydensity(apf, x, we, y, xreal=xs)
 
 # We can even use this type as an AuxiliaryParticleFilter
 apfa = AuxiliaryParticleFilter(apf)
