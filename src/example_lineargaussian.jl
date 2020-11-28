@@ -10,7 +10,7 @@
 # - `AuxiliaryParticleFilter`: This filter is identical to `ParticleFilter`, but uses a slightly different proposal mechanism for new particles.
 # - `AdvancedParticleFilter`: This filter gives you more flexibility, at the expense of having to define a few more functions. More instructions on this type below.
 # - `KalmanFilter`. Is what you would expect. Has the same features as the particle filters, but is restricted to linear dynamics and gaussian noise.
-# - `UnscentedKalmanFilter`. Is also what you would expect. Has almost the same features as the kalman filters, but handle nonlinear dynamics and measurement model, still requires an additive Gaussian noise model.
+# - `UnscentedKalmanFilter`. Is also what you would expect. Has almost the same features as the Kalman filters, but handle nonlinear dynamics and measurement model, still requires an additive Gaussian noise model.
 
 # # Functionality
 # - Filtering
@@ -18,7 +18,7 @@
 # - Parameter estimation using ML or PMMH (Particle Marginal Metropolis Hastings)
 
 # # Usage example
-# This example demostrates how we set up the filters, both PF and KF, for a simple linear system.
+# This example demonstrates how we set up the filters, both PF and KF, for a simple linear system.
 
 # ## Particle filter
 # Defining a particle filter is straightforward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u)` and the noise distribution `dg` in the measurement function `measurement(x)`. The distribution of the initial state `d0` must also be provided. An example for a linear Gaussian system is given below.
