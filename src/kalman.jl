@@ -19,6 +19,10 @@ end
 KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
 """
 function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
+    cR1 = cond(R1)
+    cR2 = cond(R2)
+    (cond(cR1) > 1e8 || cond(cR2) > 1e8) && @warn("Covariance matrices are poorly conditioned")
+    
     KalmanFilter(A,B,C,D,R1,R2,MvNormal(R2), d0, Vector(d0.μ), Matrix(d0.Σ), Ref(1))
 end
 
@@ -57,12 +61,15 @@ end
     UnscentedKalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
 """
 function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(R1))
+    cR1 = cond(R1)
+    cR2 = cond(R2)
+    (cond(cR1) > 1e8 || cond(cR2) > 1e8) && @warn("Covariance matrices are poorly conditioned")
     n = size(R1,1)
     p = size(R2,1)
-    R1 = SMatrix{n,n}(R1)
-    R2 = SMatrix{p,p}(R2)
+    R1s = SMatrix{n,n}(R1)
+    R2s = SMatrix{p,p}(R2)
     xs = sigmapoints(mean(d0), cov(d0))
-    UnscentedKalmanFilter(dynamics,measurement,R1,R2,MvNormal(Matrix(R2)), d0, xs, Vector(d0.μ), Matrix(d0.Σ), Ref(1))
+    UnscentedKalmanFilter(dynamics,measurement,R1s,R2s,MvNormal(Matrix(R2s)), d0, xs, Vector(d0.μ), Matrix(d0.Σ), Ref(1))
 end
 
 sample_state(kf::UnscentedKalmanFilter) = rand(kf.d0)

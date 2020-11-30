@@ -37,11 +37,11 @@ function correct!(kf::AbstractKalmanFilter, y, t::Integer = index(kf))
     e   = y .- Ct*x
     S   = Ct*R*Ct' + R2
     S   = 0.5(S+S')
-    K   = (R*Ct')/S
+    K   = (R*Ct')/Symmetric(S)
     x .+= K*e
     R  .= (I - K*Ct)*R # WARNING against I .- A
-    logpdf(MvNormal(S), e)# - 1/2*logdet(S) # logdet is included in logpdf
-end
+    logpdf(MvNormal(S), e)# - 1/2*logdet(S) 
+end# logdet is included in logpdf
 
 function correct!(kf::AbstractKalmanFilter, y, u, t::Integer = index(kf))
     @unpack C,D,x,R,R2 = kf
@@ -55,7 +55,7 @@ function correct!(kf::AbstractKalmanFilter, y, u, t::Integer = index(kf))
     e   = y .- Ct*x .- Dt*u
     S   = Ct*R*Ct' + R2
     S   = 0.5(S+S')
-    K   = (R*Ct')/S
+    K   = (R*Ct')/Symmetric(S)
     x .+= K*e
     R  .= (I - K*Ct)*R # WARNING against I .- A
     logpdf(MvNormal(S), e)# - 1/2*logdet(S) # logdet is included in logpdf
