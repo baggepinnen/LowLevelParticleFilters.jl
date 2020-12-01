@@ -6,6 +6,7 @@ export densityplot, debugplot, commandplot, trajectorydensity, dimensiondensity
 
 using StatsBase, Parameters, Lazy, Random, LinearAlgebra, Printf, LoopVectorization
 import PDMats # To extend some methods on static arrays
+import PDMats: PDMat
 using StaticArrays
 using Distributions
 using RecipesBase

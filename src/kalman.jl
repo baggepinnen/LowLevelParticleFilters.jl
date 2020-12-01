@@ -117,9 +117,10 @@ function predict!(ukf::UnscentedKalmanFilter, u, t::Integer = index(ukf))
     #     r .+= Symmetric(d*d')
     # end
     # R .= Symmetric(r)./n + R1
-    R .= cov(xs) + R1
+    R .= symmetrize(cov(xs)) + R1
     ukf.t[] += 1
 end
+
 
 
 correct!(ukf::UnscentedKalmanFilter, y, t::Integer = index(ukf)) = correct!(ukf::UnscentedKalmanFilter, y, 0, t)
@@ -134,15 +135,16 @@ function correct!(ukf::UnscentedKalmanFilter, y, u, t::Integer = index(ukf))
     ym = mean(ys)
     @inbounds for i in eachindex(ys) # Cross cov between x and y
         d   = ys[i]-ym
-        ca = (xs[i]-x)*d'
+        ca  = (xs[i]-x)*d'
         C  += ca
     end
     e   = y .- ym
-    S   = cov(ys) + R2 # cov of y
-    K   = (C./ns)/S # ns normalization to make it a covariance matrix
+    S   = symmetrize(cov(ys)) + R2 # cov of y
+    Sᵪ = cholesky(S)
+    K   = (C./ns)/Sᵪ # ns normalization to make it a covariance matrix
     x .+= K*e
-    R  .= R - K*S*K'
-    logpdf(MvNormal(Matrix(S)), e) #- 1/2*logdet(S) # logdet is included in logpdf
+    R  .= symmetrize(R - K*S*K')
+    logpdf(MvNormal(PDMat(S,Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf
 end
 
 

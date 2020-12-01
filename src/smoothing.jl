@@ -14,7 +14,7 @@ function smooth(kf::KalmanFilter, u::AbstractVector, y::AbstractVector)
     for t = T-1:-1:1
         C     = Rt[t]*kf.A/R[t+1]
         xT[t] = xt[t] .+ C*(xT[t+1] .- x[t+1])
-        RT[t] = Rt[t] .+ C*(RT[t+1] .- R[t+1])*C'
+        RT[t] = Rt[t] .+ symmetrize(C*(RT[t+1] .- R[t+1])*C')
     end
     xT,RT,ll
 end

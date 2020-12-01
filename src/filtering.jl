@@ -23,25 +23,21 @@ function predict!(kf::AbstractKalmanFilter, u, t::Integer = index(kf))
         Bt = B
     end
     x .= At*x .+ Bt*u |> vec
-    R .= At*R*At' + R1
+    R .= symmetrize(At*R*At') + R1
     kf.t[] += 1
 end
 
-function correct!(kf::AbstractKalmanFilter, y, t::Integer = index(kf))
-    @unpack C,x,R,R2 = kf
-    if ndims(C) == 3
-        Ct = C[:,:,t]
-    else
-        Ct = C
-    end
-    e   = y .- Ct*x
-    S   = Ct*R*Ct' + R2
-    S   = 0.5(S+S')
-    K   = (R*Ct')/Symmetric(S)
-    x .+= K*e
-    R  .= (I - K*Ct)*R # WARNING against I .- A
-    logpdf(MvNormal(S), e)# - 1/2*logdet(S) 
-end# logdet is included in logpdf
+function symmetrize(x::SArray)
+    x = 0.5 .* (x .+ x')
+    Symmetric(x)
+end
+function symmetrize(x)
+    x .+= x'
+    x .*= 0.5
+    Symmetric(x)
+end
+
+correct!(kf::AbstractKalmanFilter, y, t::Integer = index(kf)) = correct!(kf, y, 0, t)
 
 function correct!(kf::AbstractKalmanFilter, y, u, t::Integer = index(kf))
     @unpack C,D,x,R,R2 = kf
@@ -53,12 +49,12 @@ function correct!(kf::AbstractKalmanFilter, y, u, t::Integer = index(kf))
         Dt = D
     end
     e   = y .- Ct*x .- Dt*u
-    S   = Ct*R*Ct' + R2
-    S   = 0.5(S+S')
-    K   = (R*Ct')/Symmetric(S)
+    S   = symmetrize(Ct*R*Ct') + R2
+    Sᵪ  = cholesky(S)
+    K   = (R*Ct')/Sᵪ
     x .+= K*e
-    R  .= (I - K*Ct)*R # WARNING against I .- A
-    logpdf(MvNormal(S), e)# - 1/2*logdet(S) # logdet is included in logpdf
+    R  .= symmetrize((I - K*Ct)*R) # WARNING against I .- A
+    logpdf(MvNormal(PDMat(S, Sᵪ)), e)# - 1/2*logdet(S) # logdet is included in logpdf
 end
 
 """
