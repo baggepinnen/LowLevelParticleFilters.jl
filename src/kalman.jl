@@ -60,7 +60,7 @@ end
 """
     UnscentedKalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
 """
-function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(R1))
+function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)))
     cR1 = cond(R1)
     cR2 = cond(R2)
     (cond(cR1) > 1e8 || cond(cR2) > 1e8) && @warn("Covariance matrices are poorly conditioned")
@@ -84,9 +84,10 @@ sample_measurement(kf::UnscentedKalmanFilter, x, t) = kf.measurement(x) .+ rand(
 #     S
 # end
 
-function sigmapoints(m,Σ)
+function sigmapoints(m, Σ)
+    T = promote_type(eltype(m), eltype(Σ))
     n = max(length(m), size(Σ,1))
-    xs = [@SVector zeros(n) for _ in 1:(2n+1)]
+    xs = [@SVector zeros(T, n) for _ in 1:(2n+1)]
     sigmapoints!(xs,m,Σ)
 end
 
