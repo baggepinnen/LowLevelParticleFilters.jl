@@ -10,7 +10,7 @@ We provide a number of filter types
 - `AuxiliaryParticleFilter`: This filter is identical to `ParticleFilter`, but uses a slightly different proposal mechanism for new particles.
 - `AdvancedParticleFilter`: This filter gives you more flexibility, at the expense of having to define a few more functions. More instructions on this type below.
 - `KalmanFilter`. Is what you would expect. Has the same features as the particle filters, but is restricted to linear dynamics and gaussian noise.
-- `UnscentedKalmanFilter`. Is also what you would expect. Has almost the same features as the kalman filters, but handle nonlinear dynamics and measurement model, still requires an additive Gaussian noise model.
+- `UnscentedKalmanFilter`. Is also what you would expect. Has almost the same features as the Kalman filters, but handle nonlinear dynamics and measurement model, still requires an additive Gaussian noise model.
 
 # Functionality
 - Filtering
@@ -18,7 +18,7 @@ We provide a number of filter types
 - Parameter estimation using ML or PMMH (Particle Marginal Metropolis Hastings)
 
 # Usage example
-This example demostrates how we set up the filters, both PF and KF, for a simple linear system.
+This example demonstrates how we set up the filters, both PF and KF, for a simple linear system.
 
 ## Particle filter
 Defining a particle filter is straightforward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u)` and the noise distribution `dg` in the measurement function `measurement(x)`. The distribution of the initial state `d0` must also be provided. An example for a linear Gaussian system is given below.
@@ -61,7 +61,7 @@ We are now ready to define and use a filter
 
 ```julia
 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
-xs,u,y = simulate(pf,100,df) # We can simulate the model that the pf represents
+xs,u,y = simulate(pf,200,df) # We can simulate the model that the pf represents
 pf(u[1], y[1]) # Perform one filtering step using input u and measurement y
 particles(pf) # Query the filter for particles, try weights(pf) or expweights(pf) as well
 x̂ = weigthed_mean(pf) # using the current state
@@ -143,7 +143,7 @@ end
 Tuning a particle filter can be quite the challenge. To assist with this, we provide som visualization tools
 
 ```julia
-debugplot(pf,u,y, runall=true, xreal=x) # does not work well with gr() as backend, try pyplot()
+debugplot(pf,u[1:30],y[1:30], runall=true, xreal=x[1:30])
 ```
 
 ![window](figs/debugplot.png)
@@ -178,7 +178,12 @@ llspf = map(svec) do s
     pfs = ParticleFilter(2000, dynamics, measurement, df, dg, d0)
     loglik(pfs,u,y)
 end
-plot(svec, llspf, xscale=:log10, title="Log-likelihood", xlabel="Dynamics noise standard deviation", lab="PF")
+plot( svec, llspf,
+    xscale = :log10,
+    title = "Log-likelihood",
+    xlabel = "Dynamics noise standard deviation",
+    lab = "PF",
+)
 vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue), primary=false)
 ```
 
@@ -219,7 +224,14 @@ plot!(vecvec_to_mat(x), lab="true")
 To solve a MAP estimation problem, we need to define a function that takes a parameter vector and returns a particle filter
 
 ```julia
-filter_from_parameters(θ,pf=nothing) = ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
+filter_from_parameters(θ, pf = nothing) = ParticleFilter(
+    N,
+    dynamics,
+    measurement,
+    MvNormal(n, exp(θ[1])),
+    MvNormal(p, exp(θ[2])),
+    d0,
+)
 ```
 
 The call to `exp` on the parameters is so that we can define log-normal priors
@@ -247,7 +259,13 @@ v        = LinRange(-0.7,1,Nv)
 llxy     = (x,y) -> ll([x;y])
 VGx, VGy = meshgrid(v,v)
 VGz      = llxy.(VGx, VGy)
-heatmap(VGz, xticks=(1:Nv,round.(v,digits=2)),yticks=(1:Nv,round.(v,digits=2)), xlabel="sigma v", ylabel="sigma w") # Yes, labels are reversed
+heatmap(
+    VGz,
+    xticks = (1:Nv, round.(v, digits = 2)),
+    yticks = (1:Nv, round.(v, digits = 2)),
+    xlabel = "sigma v",
+    ylabel = "sigma w",
+) # Yes, labels are reversed
 ```
 
 ![window](figs/heatmap.svg)
@@ -261,7 +279,14 @@ This is pretty cool. We procede like we did for MAP above, but when calling the 
 
 ```julia
 N = 1000
-filter_from_parameters(θ,pf=nothing) = AuxiliaryParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0)
+filter_from_parameters(θ, pf = nothing) = AuxiliaryParticleFilter(
+    N,
+    dynamics,
+    measurement,
+    MvNormal(n, exp(θ[1])),
+    MvNormal(p, exp(θ[2])),
+    d0,
+)
 ```
 
 The call to `exp` on the parameters is so that we can define log-normal priors
@@ -278,7 +303,7 @@ We also need to define a function that suggests a new point from the "proposal d
 draw   = θ -> θ .+ rand(MvNormal(0.05ones(2)))
 burnin = 200
 @info "Starting Metropolis algorithm"
-@time theta, lls = metropolis(ll, 2000, θ₀, draw) # Run PMMH for 2000  iterations, takes about half a minute on my laptop
+@time theta, lls = metropolis(ll, 1200, θ₀, draw) # Run PMMH for 1200  iterations, takes about half a minute on my laptop
 thetam = reduce(hcat, theta)'[burnin+1:end,:] # Build a matrix of the output (was vecofvec)
 histogram(exp.(thetam), layout=(3,1)); plot!(lls[burnin+1:end], subplot=3) # Visualize
 ```
@@ -298,10 +323,12 @@ The `AdvancedParticleFilter` type requires you to implement the same functions a
 The function `dynamics` must have a method signature like below. It must provide one method that accepts state vector, control vector, time and `noise::Bool` that indicates whether or not to add noise to the state. If noise should be added, this should be done inside `dynamics` An example is given below
 
 ```julia
+using Random
+const rng = Random.MersenneTwister()
 function dynamics(x,u,t,noise=false) # It's important that this defaults to false
     x = A*x .+ B*u # A simple dynamics model
     if noise
-        x += rand(df)
+        x += rand(rng, df) # it's faster to supply your own rng
     end
     x
 end
@@ -319,7 +346,7 @@ This gives you very high flexibility. The noise model in either function can, fo
 To be able to simulate the `AdvancedParticleFilter` like we did with the simple filter above, the `measurement` method with the signature `measurement(x,t,noise=false)` must be available and return a sample measurement given state (and possibly time). For our example measurement model above, this would look like this
 
 ```julia
-measurement(x,t,noise=false) = C*x + noise*rand(dg)
+measurement(x,t,noise=false) = C*x + noise*rand(rng, dg)
 ```
 
 We now create the `AdvancedParticleFilter` and use it in the same way as the other filters:
@@ -329,6 +356,7 @@ apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, d
 x,w,we,ll = forward_trajectory(apf, u, y)
 trajectorydensity(apf, x, we, y, xreal=xs)
 ```
+
 
 We can even use this type as an AuxiliaryParticleFilter
 
@@ -348,7 +376,6 @@ dt = TupleProduct((Normal(0,2), Normal(0,2), Binomial())) # Mixed value support
 ```
 
 A small benchmark
-
 
 ```julia
 sv = @SVector randn(2)
@@ -373,11 +400,12 @@ Without loading `LowLevelParticleFilters`, the timing for the native distributio
 @btime logpdf($dm,$sv) # 46.415 ns (1 allocation: 96 bytes)
 ```
 
-
-# Performance test
+# Benchmark test
 To see how the performance varies with the number of particles, we simulate several times. The following code simulates the system and performs filtering using the simulated measuerments. We do this for varying number of time steps and varying number of particles.
 
 ```julia
+using Random
+const rng = Random.MersenneTwister()
 function run_test()
     particle_count = [10, 20, 50, 100, 200, 500, 1000]
     time_steps = [20, 100, 200]
@@ -388,13 +416,13 @@ function run_test()
             montecarlo_runs = 2*maximum(particle_count)*maximum(time_steps) ÷ T ÷ N
             E = sum(1:montecarlo_runs) do mc_run
                 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0) # Create filter
-                u = SVector{2,Float64}(randn(2))
-                x = SVector{2,Float64}(rand(d0))
+                u = @SVector randn(2)
+                x = SVector{2,Float64}(rand(rng, d0))
                 y = SVector{2,Float64}(sample_measurement(pf,x,1))
                 error = 0.0
                 @inbounds for t = 1:T-1
                     pf(u, y) # Update the particle filter
-                    x = dynamics(x,u) + SVector{2,Float64}(rand(df)) # Simulate the true dynamics and add some noise
+                    x = dynamics(x,u) + SVector{2,Float64}(rand(rng, df)) # Simulate the true dynamics and add some noise
                     y = SVector{2,Float64}(sample_measurement(pf,x,t)) # Simulate a measuerment
                     u = @SVector randn(2) # draw a random control input
                     error += sum(abs2,x-weigthed_mean(pf))
@@ -414,7 +442,7 @@ end
 @time RMSE = run_test()
 ```
 
-Propagated 8400000 particles in 3.568745383 seconds for an average of 2353.7683691344473 particles per millisecond
+Propagated 8400000 particles in 2.193401766 seconds for an average of 3829.6677472448064 particles per millisecond
 
 We then plot the results
 
@@ -428,3 +456,8 @@ gui()
 ```
 
 ![window](figs/rmse.png)
+
+---
+
+*This page was generated using [Literate.jl](https://github.com/fredrikekre/Literate.jl).*
+

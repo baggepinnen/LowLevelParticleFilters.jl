@@ -48,7 +48,7 @@ vecvec_to_mat(x) = copy(reduce(hcat, x)') # Helper function
 
 # We are now ready to define and use a filter
 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
-xs,u,y = simulate(pf,100,df) # We can simulate the model that the pf represents
+xs,u,y = simulate(pf,200,df) # We can simulate the model that the pf represents
 pf(u[1], y[1]) # Perform one filtering step using input u and measurement y
 particles(pf) # Query the filter for particles, try weights(pf) or expweights(pf) as well
 x̂ = weigthed_mean(pf) # using the current state
@@ -111,7 +111,7 @@ xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 
 # # Troubleshooting
 # Tuning a particle filter can be quite the challenge. To assist with this, we provide som visualization tools
-debugplot(pf,u,y, runall=true, xreal=x) # does not work well with gr() as backend, try pyplot()
+debugplot(pf,u[1:30],y[1:30], runall=true, xreal=x[1:30])
 # ![window](figs/debugplot.png)
 #md Time     Surviving    Effective nbr of particles
 #md --------------------------------------------------------------
@@ -227,7 +227,7 @@ ll     = log_likelihood_fun(filter_from_parameters,priors,u,y)
 draw   = θ -> θ .+ rand(MvNormal(0.05ones(2)))
 burnin = 200
 @info "Starting Metropolis algorithm"
-@time theta, lls = metropolis(ll, 2000, θ₀, draw) # Run PMMH for 2000  iterations, takes about half a minute on my laptop
+@time theta, lls = metropolis(ll, 1200, θ₀, draw) # Run PMMH for 1200  iterations, takes about half a minute on my laptop
 thetam = reduce(hcat, theta)'[burnin+1:end,:] # Build a matrix of the output (was vecofvec)
 histogram(exp.(thetam), layout=(3,1)); plot!(lls[burnin+1:end], subplot=3) # Visualize
 # ![window](figs/histogram.svg)
@@ -242,10 +242,12 @@ histogram(exp.(thetam), layout=(3,1)); plot!(lls[burnin+1:end], subplot=3) # Vis
 # # AdvancedParticleFilter
 # The `AdvancedParticleFilter` type requires you to implement the same functions as the regular `ParticleFilter`, but in this case you also need to handle sampling from the noise distributions yourself.
 # The function `dynamics` must have a method signature like below. It must provide one method that accepts state vector, control vector, time and `noise::Bool` that indicates whether or not to add noise to the state. If noise should be added, this should be done inside `dynamics` An example is given below
+using Random
+const rng = Random.MersenneTwister()
 function dynamics(x,u,t,noise=false) # It's important that this defaults to false
     x = A*x .+ B*u # A simple dynamics model
     if noise
-        x += rand(df)
+        x += rand(rng, df) # it's faster to supply your own rng
     end
     x
 end
@@ -255,7 +257,7 @@ function measurement_likelihood(x,y,t)
 end
 # This gives you very high flexibility. The noise model in either function can, for instance, be a function of the state, something that is not possible for the simple `ParticleFilter`
 # To be able to simulate the `AdvancedParticleFilter` like we did with the simple filter above, the `measurement` method with the signature `measurement(x,t,noise=false)` must be available and return a sample measurement given state (and possibly time). For our example measurement model above, this would look like this
-measurement(x,t,noise=false) = C*x + noise*rand(dg)
+measurement(x,t,noise=false) = C*x + noise*rand(rng, dg)
 # We now create the `AdvancedParticleFilter` and use it in the same way as the other filters:
 apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0)
 x,w,we,ll = forward_trajectory(apf, u, y)
@@ -292,7 +294,8 @@ dimensiondensity(apfa, x, we, y, 1, xreal=xs) # Same as above, but only plots a 
 
 # # Benchmark test
 # To see how the performance varies with the number of particles, we simulate several times. The following code simulates the system and performs filtering using the simulated measuerments. We do this for varying number of time steps and varying number of particles.
-
+using Random
+const rng = Random.MersenneTwister()
 function run_test()
     particle_count = [10, 20, 50, 100, 200, 500, 1000]
     time_steps = [20, 100, 200]
@@ -304,12 +307,12 @@ function run_test()
             E = sum(1:montecarlo_runs) do mc_run
                 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0) # Create filter
                 u = @SVector randn(2)
-                x = SVector{2,Float64}(rand(d0))
+                x = SVector{2,Float64}(rand(rng, d0))
                 y = SVector{2,Float64}(sample_measurement(pf,x,1))
                 error = 0.0
                 @inbounds for t = 1:T-1
                     pf(u, y) # Update the particle filter
-                    x = dynamics(x,u) + SVector{2,Float64}(rand(df)) # Simulate the true dynamics and add some noise
+                    x = dynamics(x,u) + SVector{2,Float64}(rand(rng, df)) # Simulate the true dynamics and add some noise
                     y = SVector{2,Float64}(sample_measurement(pf,x,t)) # Simulate a measuerment
                     u = @SVector randn(2) # draw a random control input
                     error += sum(abs2,x-weigthed_mean(pf))
@@ -327,7 +330,7 @@ function run_test()
 end
 
 @time RMSE = run_test()
-# Propagated 8400000 particles in 3.568745383 seconds for an average of 2353.7683691344473 particles per millisecond
+# Propagated 8400000 particles in 2.193401766 seconds for an average of 3829.6677472448064 particles per millisecond
 
 # We then plot the results
 time_steps     = [20, 100, 200]
