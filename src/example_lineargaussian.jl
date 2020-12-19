@@ -294,8 +294,6 @@ dimensiondensity(apfa, x, we, y, 1, xreal=xs) # Same as above, but only plots a 
 
 # # Benchmark test
 # To see how the performance varies with the number of particles, we simulate several times. The following code simulates the system and performs filtering using the simulated measuerments. We do this for varying number of time steps and varying number of particles.
-using Random
-const rng = Random.MersenneTwister()
 function run_test()
     particle_count = [10, 20, 50, 100, 200, 500, 1000]
     time_steps = [20, 100, 200]
