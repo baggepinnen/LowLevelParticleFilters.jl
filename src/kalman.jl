@@ -143,16 +143,17 @@ function correct!(ukf::UnscentedKalmanFilter, y, u, t::Integer = index(ukf))
     S   = symmetrize(cov(ys)) + R2 # cov of y
     Sᵪ = cholesky(S)
     K   = (C./ns)/Sᵪ # ns normalization to make it a covariance matrix
-    x .+= K*e
-    R  .= symmetrize(R - K*S*K')
+    # x .+= K*e
+    mul!(x, K, e, 1, 1)
+    RmKSKT!(R, K, S)
     logpdf(MvNormal(PDMat(S,Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf
 end
 
-
-
-
-
-
+@inline function RmKSKT!(R, K, S)
+    R .-= K*S*K'
+    symmetrize(R)
+    nothing
+end
 
 
 # SigmaFilter ==========================================================================

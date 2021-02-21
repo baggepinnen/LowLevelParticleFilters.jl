@@ -27,11 +27,11 @@ function predict!(kf::AbstractKalmanFilter, u, t::Integer = index(kf))
     kf.t[] += 1
 end
 
-function symmetrize(x::SArray)
+@inline function symmetrize(x::SArray)
     x = 0.5 .* (x .+ x')
     Symmetric(x)
 end
-function symmetrize(x)
+@inline function symmetrize(x)
     x .+= x'
     x .*= 0.5
     Symmetric(x)
