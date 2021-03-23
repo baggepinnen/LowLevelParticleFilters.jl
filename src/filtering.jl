@@ -43,12 +43,19 @@ function correct!(kf::AbstractKalmanFilter, y, u, t::Integer = index(kf))
     @unpack C,D,x,R,R2 = kf
     if ndims(C) == 3
         Ct = C[:,:,t]
-        Dt = D[:,:,t]
     else
         Ct = C
+    end
+    # Handle D separately in case it is 0
+    if ndims(D) == 3
+        Dt = D[:,:,t]
+    else
         Dt = D
     end
-    e   = y .- Ct*x .- Dt*u
+    e   = y .- Ct*x
+    if ! iszero(D)
+        e .-= Dt*u
+    end
     S   = symmetrize(Ct*R*Ct') + R2
     Sᵪ  = cholesky(S)
     K   = (R*Ct')/Sᵪ
@@ -166,7 +173,7 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
     xt   = Array{particletype(kf)}(undef,T)
     R    = Array{covtype(kf)}(undef,T)
     Rt   = Array{covtype(kf)}(undef,T)
-    ll   = 0.
+    ll   = zero(eltype(particletype(kf)))
     for t = 1:T
         x[t]  = state(kf)      |> copy
         R[t]  = covariance(kf) |> copy
