@@ -18,12 +18,16 @@ end
 """
 KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
 """
-function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
-    cR1 = cond(R1)
-    cR2 = cond(R2)
-    (cond(cR1) > 1e8 || cond(cR2) > 1e8) && @warn("Covariance matrices are poorly conditioned")
+function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(Matrix(R1)))
+    try
+        cR1 = cond(R1)
+        cR2 = cond(R2)
+        (cond(cR1) > 1e8 || cond(cR2) > 1e8) && @warn("Covariance matrices are poorly conditioned")
+    catch
+        nothing
+    end
     
-    KalmanFilter(A,B,C,D,R1,R2,MvNormal(R2), d0, Vector(d0.μ), Matrix(d0.Σ), Ref(1))
+    KalmanFilter(A,B,C,D,R1,R2,MvNormal(Matrix(R2)), d0, Vector(d0.μ), Matrix(d0.Σ), Ref(1))
 end
 
 
@@ -150,7 +154,8 @@ function correct!(ukf::UnscentedKalmanFilter, y, u, t::Integer = index(ukf))
     x .+= K*e
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized
     RmKSKT!(R, K, S)
-    logpdf(MvNormal(PDMat(S,Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf
+    ll = logpdf(MvNormal(PDMat(S,Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf
+    ll, e
 end
 
 @inline function RmKSKT!(R, K, S)
