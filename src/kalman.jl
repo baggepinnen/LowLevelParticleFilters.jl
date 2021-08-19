@@ -33,7 +33,8 @@ end
 
 sample_state(kf::AbstractKalmanFilter) = rand(kf.d0)
 sample_state(kf::AbstractKalmanFilter, x, u, t) = kf.A*x .+ kf.B*u .+ rand(MvNormal(kf.R1))
-sample_measurement(kf::AbstractKalmanFilter, x, u, t) = kf.C*x .+ kf.D*x .+ rand(MvNormal(kf.R2))
+sample_measurement(kf::AbstractKalmanFilter, x, t) = kf.C*x .+ rand(MvNormal(kf.R2))
+sample_measurement(kf::AbstractKalmanFilter, x, u, t) = kf.C*x .+ kf.D*u .+ rand(MvNormal(kf.R2))
 particletype(kf::AbstractKalmanFilter) = typeof(kf.x)
 covtype(kf::AbstractKalmanFilter)      = typeof(kf.R)
 state(kf::AbstractKalmanFilter)        = kf.x
@@ -204,6 +205,7 @@ end
 sample_state(sf::SigmaFilter) = rand(sf.initial_density)
 sample_state(sf::SigmaFilter, x, u, t) = sf.dynamics(x,u,t,true)
 sample_measurement(sf::SigmaFilter, x, t) = sf.measurement(x,t,true)
+sample_measurement(sf::SigmaFilter, x, u, t) = sf.measurement(x,u,t,true)
 num_particles(sf::SigmaFilter) = length(sf.x)
 particles(sf::SigmaFilter) = sf.x
 weights(sf::SigmaFilter) = sf.w
