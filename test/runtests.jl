@@ -326,5 +326,9 @@ end
     @test_skip norm(mean(x .- ressf)) < norm(mean(x .- resapf))  # SF should be better than PF since we now covs are Gaussian, this test is not robust enough to include
 end
 
+@testset "ekf" begin
+    @info "Testing ekf"
+    include("test_ekf.jl")
+end
 
 end

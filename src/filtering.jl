@@ -231,7 +231,7 @@ end
 
 
 """
-x,ll = mean_trajectory(pf, u::Vector{Vector}, y::Vector{Vector})
+    x,ll = mean_trajectory(pf, u::Vector{Vector}, y::Vector{Vector})
 
 This Function resets the particle filter to the initial state distribution upon start
 """
@@ -270,14 +270,19 @@ If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurem
 """
 function simulate(f::AbstractFilter,T::Int,du::Distribution)
     u = [rand(du) for t=1:T]
+    simulate(f, u)
+end
+
+function simulate(f::AbstractFilter,u)
     y = similar(u)
     x = similar(u)
     x[1] = sample_state(f)
+    T = length(u)
     for t = 1:T-1
-        y[t] = sample_measurement(f,x[t], t)
+        y[t] = sample_measurement(f,x[t], u[t], t)
         x[t+1] = sample_state(f, x[t], u[t], t)
     end
-    y[T] = sample_measurement(f,x[T], T)
+    y[T] = sample_measurement(f,x[T], u[T], T)
     x,u,y
 end
 

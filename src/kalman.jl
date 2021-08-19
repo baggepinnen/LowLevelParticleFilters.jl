@@ -33,7 +33,7 @@ end
 
 sample_state(kf::AbstractKalmanFilter) = rand(kf.d0)
 sample_state(kf::AbstractKalmanFilter, x, u, t) = kf.A*x .+ kf.B*u .+ rand(MvNormal(kf.R1))
-sample_measurement(kf::AbstractKalmanFilter, x, t) = kf.C*x .+ rand(MvNormal(kf.R2))
+sample_measurement(kf::AbstractKalmanFilter, x, u, t) = kf.C*x .+ kf.D*x .+ rand(MvNormal(kf.R2))
 particletype(kf::AbstractKalmanFilter) = typeof(kf.x)
 covtype(kf::AbstractKalmanFilter)      = typeof(kf.R)
 state(kf::AbstractKalmanFilter)        = kf.x
