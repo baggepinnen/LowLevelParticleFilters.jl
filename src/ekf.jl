@@ -1,9 +1,9 @@
 using LowLevelParticleFilters, ForwardDiff
 
-@with_kw struct ExtendedKalmanFilter <: AbstractKalmanFilter
-    kf::KalmanFilter
-    dynamics
-    measurement
+@with_kw struct ExtendedKalmanFilter{KF <: KalmanFilter, F, G} <: AbstractKalmanFilter
+    kf::KF
+    dynamics::F
+    measurement::G
 end
 
 function Base.getproperty(ekf::ExtendedKalmanFilter, s::Symbol)
