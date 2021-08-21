@@ -161,6 +161,7 @@ Base.@propagate_inbounds function measurement_equation!(pf::AbstractParticleFilt
     g = measurement_likelihood(pf)
     any(ismissing.(y)) && return w
     x = particles(pf)
+    Threads.@threads for i = 1:num_particles(pf)
         @inbounds w[i] += g(x[i], u, y, t)
     end
     w
@@ -172,8 +173,8 @@ Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilte
     f = dynamics(pf)
     s = state(pf)
     x,xp = s.x, s.xprev
-    @inbounds for i = eachindex(x)
-        x[i] = f(xp[j[i]], u, t, noise) # TODO: lots of allocations here
+    Threads.@threads for i = eachindex(x)
+        @inbounds x[i] = f(xp[j[i]], u, t, noise) # TODO: lots of allocations here
     end
     x
 end
@@ -182,8 +183,8 @@ Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilte
     noise === nothing && (noise = false)
     f = pf.dynamics
     x,xp = particles(pf), state(pf).xprev
-    @inbounds for i = eachindex(x)
-        x[i] = f(xp[i], u, t, noise)
+    Threads.@threads for i = eachindex(x)
+        @inbounds x[i] = f(xp[i], u, t, noise)
     end
     x
 end
