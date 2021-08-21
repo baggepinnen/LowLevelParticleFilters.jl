@@ -18,16 +18,16 @@ end
 
 function predict!(kf::ExtendedKalmanFilter, u, t::Integer = index(kf))
     @unpack x,R,R1 = kf
-    A = ForwardDiff.jacobian(x->kf.dynamics(x,u), x)
-    x .= kf.dynamics(x, u)
+    A = ForwardDiff.jacobian(x->kf.dynamics(x,u,t), x)
+    x .= kf.dynamics(x, u, t)
     R .= symmetrize(A*R*A') + R1
     kf.t[] += 1
 end
 
-function correct!(kf::ExtendedKalmanFilter, y, u, t::Integer = index(kf))
+function correct!(kf::ExtendedKalmanFilter, u, y, t::Integer = index(kf))
     @unpack x,R,R2 = kf
-    C = ForwardDiff.jacobian(x->kf.measurement(x,u), x)
-    e  = y .- kf.measurement(x,u)
+    C = ForwardDiff.jacobian(x->kf.measurement(x,u,t), x)
+    e  = y .- kf.measurement(x,u,t)
     S   = symmetrize(C*R*C') + R2
     Sᵪ  = cholesky(S)
     K   = (R*C')/Sᵪ
@@ -47,7 +47,7 @@ function smooth(kf::ExtendedKalmanFilter, u::AbstractVector, y::AbstractVector)
     xT[end]      = xt[end]      |> copy
     RT[end]      = Rt[end]      |> copy
     for t = T-1:-1:1
-        A = ForwardDiff.jacobian(x->kf.dynamics(x,u[t+1]), xt[t+1])
+        A = ForwardDiff.jacobian(x->kf.dynamics(x,u[t+1],t+1), xt[t+1])
         C     = Rt[t]*A/R[t+1]
         xT[t] = xt[t] .+ C*(xT[t+1] .- x[t+1])
         # xT[t][end] = clamp(xT[t][end], 0.01, 7.499)
@@ -57,10 +57,5 @@ function smooth(kf::ExtendedKalmanFilter, u::AbstractVector, y::AbstractVector)
 end
 
 sample_state(kf::ExtendedKalmanFilter) = rand(kf.d0)
-sample_state(kf::ExtendedKalmanFilter, x, u, t) = kf.dynamics(x,u) .+ rand(MvNormal(kf.R1))
-sample_measurement(kf::ExtendedKalmanFilter, x, u, t) = kf.measurement(x, u) .+ rand(MvNormal(kf.R2))
-
-d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
-du = MvNormal(2,1) # Control input distribution
-kf = KalmanFilter(A, B, C, 0, 0.001eye(n), eye(p), d0)
-ekf = LLPF.ExtendedKalmanFilter(kf, dynamics, measurement)
+sample_state(kf::ExtendedKalmanFilter, x, u, t) = kf.dynamics(x, u, t) .+ rand(MvNormal(kf.R1))
+sample_measurement(kf::ExtendedKalmanFilter, x, u, t) = kf.measurement(x, u, t) .+ rand(MvNormal(kf.R2))

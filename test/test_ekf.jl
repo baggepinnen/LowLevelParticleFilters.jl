@@ -11,8 +11,8 @@ B = @SMatrix randn(n,m)
 C = SMatrix{p,p}(eye(p))
 # C = SMatrix{p,n}([1 1])
 
-dynamics(x,u) = A*x .+ B*u
-measurement(x, u) = C*x
+dynamics(x,u,t) = A*x .+ B*u
+measurement(x,u,t) = C*x
 
 T = 800 # Number of time steps
 
@@ -36,7 +36,7 @@ xf2,xt2,R2,Rt2,ll2 = forward_trajectory(ekf, u, y)
 
 
 ## add nonlinear dynamics
-dynamics2(x,u) = A*x - 0.01*abs.(x) .+ B*u
+dynamics2(x,u,t) = A*x - 0.01*abs.(x) .+ B*u
 ekf = LLPF.ExtendedKalmanFilter(kf, dynamics2, measurement)
 x,u,y = LLPF.simulate(ekf,T,du)
 

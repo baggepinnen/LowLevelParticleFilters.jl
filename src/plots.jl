@@ -22,12 +22,13 @@ Will plot all the real states in `xindices` as well as the expected vs real meas
 - `yindices = 1:n_measurements`\n
 Returns: `pdata`
 """
-function pplot(pf, y, args...; kwargs...)
+function pplot(pf, u, y, args...; kwargs...)
     s = state(pf)
-    pplot(s.x, s.we, y, LowLevelParticleFilters.measurement(pf).(s.x, s.t[]), s.j, s.t[], args...; xprev=s.xprev, kwargs...)
+    t = s.t[]
+    pplot(s.x, s.we, u, y, LowLevelParticleFilters.measurement(pf).(s.x, Ref(u[t]), t), s.j, t, args...; xprev=s.xprev, kwargs...) 
 end
 
-function pplot(x, w, y, yhat, a, t, pdata; xreal=nothing, xprev=nothing,  density = true, leftonly = true, xindices = 1:length(x[1]), yindices = 1:length(y[1]), lowpass=0.9)
+function pplot(x, w, u, y, yhat, a, t, pdata; xreal=nothing, xprev=nothing,  density = true, leftonly = true, xindices = 1:length(x[1]), yindices = 1:length(y[1]), lowpass=0.9)
 
 
     (t == 1 || t % 35 == 0) &&  @printf "Time     Surviving    Effective nbr of particles\n--------------------------------------------------------------\n"
@@ -115,7 +116,7 @@ function commandplot(pf, u, y; kwargs...)
     reset!(pf)
     pfp = pf isa AuxiliaryParticleFilter ? pf.pf : pf
     commandplot() do pdata
-        pdata = pplot(pfp, y, pdata; kwargs...)
+        pdata = pplot(pfp, u, y, pdata; kwargs...)
         t = index(pf)
         LowLevelParticleFilters.update!(pf,u[t],y[t])
         pdata
@@ -136,7 +137,7 @@ function debugplot(pf, u, y; runall=false, kwargs...)
     reset!(pf)
     pfp = pf isa AuxiliaryParticleFilter ? pf.pf : pf
     for i = 1:length(y)
-        pdata = pplot(pfp, y, pdata; kwargs...)
+        pdata = pplot(pfp, u, y, pdata; kwargs...)
         t = index(pf)
         LowLevelParticleFilters.update!(pf,u[t],y[t])
         runall || display(pdata[1])

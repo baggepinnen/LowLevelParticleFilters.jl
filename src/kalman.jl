@@ -33,7 +33,6 @@ end
 
 sample_state(kf::AbstractKalmanFilter) = rand(kf.d0)
 sample_state(kf::AbstractKalmanFilter, x, u, t) = kf.A*x .+ kf.B*u .+ rand(MvNormal(kf.R1))
-sample_measurement(kf::AbstractKalmanFilter, x, t) = kf.C*x .+ rand(MvNormal(kf.R2))
 sample_measurement(kf::AbstractKalmanFilter, x, u, t) = kf.C*x .+ kf.D*u .+ rand(MvNormal(kf.R2))
 particletype(kf::AbstractKalmanFilter) = typeof(kf.x)
 covtype(kf::AbstractKalmanFilter)      = typeof(kf.R)
@@ -82,8 +81,8 @@ function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)
 end
 
 sample_state(kf::UnscentedKalmanFilter) = rand(kf.d0)
-sample_state(kf::UnscentedKalmanFilter, x, u, t) = kf.dynamics(x,u) .+ rand(MvNormal(Matrix(kf.R1)))
-sample_measurement(kf::UnscentedKalmanFilter, x, t) = kf.measurement(x) .+ rand(MvNormal(Matrix(kf.R2)))
+sample_state(kf::UnscentedKalmanFilter, x, u, t) = kf.dynamics(x,u,t) .+ rand(MvNormal(Matrix(kf.R1)))
+sample_measurement(kf::UnscentedKalmanFilter, x, u, t) = kf.measurement(x, u, t) .+ rand(MvNormal(Matrix(kf.R2)))
 
 # function transform_moments!(S,X,m,L)
 #     X .-= mean(X) # Normalize the sample
@@ -119,7 +118,7 @@ function predict!(ukf::UnscentedKalmanFilter, u, t::Integer = index(ukf))
     sigmapoints!(xs,x,R) # TODO: these are calculated in the update step
     r = copy(R)
     for i in eachindex(xs)
-        xs[i] = dynamics(xs[i],u)
+        xs[i] = dynamics(xs[i], u, t)
     end
     x .= mean(xs)
     # for i in eachindex(xs)
@@ -134,14 +133,16 @@ end
 
 
 correct!(ukf::UnscentedKalmanFilter, y, t::Integer = index(ukf)) = correct!(ukf::UnscentedKalmanFilter, y, 0, t)
-function correct!(ukf::UnscentedKalmanFilter, y, u, t::Integer = index(ukf))
+function correct!(ukf::UnscentedKalmanFilter, u, y, t::Integer = index(ukf))
     @unpack measurement,x,xs,R,R1,R2,R2d = ukf
     n = size(R1,1)
     p = size(R2,1)
     ns = length(xs)
     sigmapoints!(xs,x,R) # Update sigmapoints here since untransformed points required
     C = @SMatrix zeros(n,p)
-    ys = map(measurement, xs)
+    ys = map(xs) do x
+        measurement(x, u, t)
+    end
     ym = mean(ys)
     @inbounds for i in eachindex(ys) # Cross cov between x and y
         d   = ys[i]-ym
@@ -204,7 +205,6 @@ end
 
 sample_state(sf::SigmaFilter) = rand(sf.initial_density)
 sample_state(sf::SigmaFilter, x, u, t) = sf.dynamics(x,u,t,true)
-sample_measurement(sf::SigmaFilter, x, t) = sf.measurement(x,t,true)
 sample_measurement(sf::SigmaFilter, x, u, t) = sf.measurement(x,u,t,true)
 num_particles(sf::SigmaFilter) = length(sf.x)
 particles(sf::SigmaFilter) = sf.x

@@ -21,7 +21,7 @@
 # This example demonstrates how we set up the filters, both PF and KF, for a simple linear system.
 
 # ## Particle filter
-# Defining a particle filter is straightforward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u)` and the noise distribution `dg` in the measurement function `measurement(x)`. The distribution of the initial state `d0` must also be provided. An example for a linear Gaussian system is given below.
+# Defining a particle filter is straightforward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u,t)` and the noise distribution `dg` in the measurement function `measurement(x,u,t)`. The distribution of the initial state `d0` must also be provided. An example for a linear Gaussian system is given below.
 using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions, Plots
 
 # Define problem
@@ -42,8 +42,8 @@ const B = @SMatrix randn(n,m)
 const C = @SMatrix randn(p,n)
 
 # The following two functions are required by the filter
-dynamics(x,u) = A*x .+ B*u
-measurement(x) = C*x
+dynamics(x,u,t) = A*x .+ B*u
+measurement(x,u,t) = C*x
 vecvec_to_mat(x) = copy(reduce(hcat, x)') # Helper function
 
 # We are now ready to define and use a filter
@@ -55,7 +55,7 @@ x̂ = weigthed_mean(pf) # using the current state
 # If you want to perform filtering using vectors of inputs and measurements, try any of the functions
 x,w,we,ll = forward_trajectory(pf, u, y) # Filter whole vectors of signals
 x̂,ll = mean_trajectory(pf, u, y)
-trajectorydensity(pf,x,w,y,xreal=xs)
+trajectorydensity(pf,x,w,u,y,xreal=xs)
 # ![window](figs/trajdens.png)
 
 # If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurements.jl) is loaded, you may transform the output particles to `Matrix{MonteCarloMeasurements.Particles}` with the layout `T × n_states` using `Particles(x,we)`. Internally, the particles are then resampled such that they all have unit weight. This is conventient for making use of the [plotting facilities of MonteCarloMeasurements.jl](https://baggepinnen.github.io/MonteCarloMeasurements.jl/stable/#Plotting-1).
@@ -252,22 +252,22 @@ function dynamics(x,u,t,noise=false) # It's important that this defaults to fals
     x
 end
 # The `measurement_likelihood` function must have a method accepting state, measurement and time, and returning the log-likelihood of the measurement given the state, a simple example below:
-function measurement_likelihood(x,y,t)
+function measurement_likelihood(x,u,y,t)
     logpdf(dg, C*x-y) # A simple linear measurement model with normal additive noise
 end
 # This gives you very high flexibility. The noise model in either function can, for instance, be a function of the state, something that is not possible for the simple `ParticleFilter`
-# To be able to simulate the `AdvancedParticleFilter` like we did with the simple filter above, the `measurement` method with the signature `measurement(x,t,noise=false)` must be available and return a sample measurement given state (and possibly time). For our example measurement model above, this would look like this
-measurement(x,t,noise=false) = C*x + noise*rand(rng, dg)
+# To be able to simulate the `AdvancedParticleFilter` like we did with the simple filter above, the `measurement` method with the signature `measurement(x,u,t,noise=false)` must be available and return a sample measurement given state (and possibly time). For our example measurement model above, this would look like this
+measurement(x,u,t,noise=false) = C*x + noise*rand(rng, dg)
 # We now create the `AdvancedParticleFilter` and use it in the same way as the other filters:
 apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0)
 x,w,we,ll = forward_trajectory(apf, u, y)
-# trajectorydensity(apf, x, we, y, xreal=xs)
+# trajectorydensity(apf, x, we, u, y, xreal=xs)
 
 # We can even use this type as an AuxiliaryParticleFilter
 apfa = AuxiliaryParticleFilter(apf)
 x,w,we,ll = forward_trajectory(apfa, u, y)
-trajectorydensity(apfa, x, we, y, xreal=xs)
-dimensiondensity(apfa, x, we, y, 1, xreal=xs) # Same as above, but only plots a single dimension
+trajectorydensity(apfa, x, we, u, y, xreal=xs)
+dimensiondensity(apfa, x, we, u, y, 1, xreal=xs) # Same as above, but only plots a single dimension
 
 # # High performance Distributions
 # When `using LowLevelParticleFilters`, a number of methods related to distributions are defined for static arrays, making `logpdf` etc. faster. We also provide a new kind of distribution: `TupleProduct <: MultivariateDistribution` that behaves similarly to the `Product` distribution. The `TupleProduct` however stores the individual distributions in a tuple, has compile-time known length and supports `Mixed <: ValueSupport`, meaning that it can be a product of both `Continuous` and `Discrete` dimensions, somthing not supported by the standard `Product`. Example
@@ -306,12 +306,12 @@ function run_test()
                 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0) # Create filter
                 u = @SVector randn(2)
                 x = SVector{2,Float64}(rand(rng, d0))
-                y = SVector{2,Float64}(sample_measurement(pf,x,1))
+                y = SVector{2,Float64}(sample_measurement(pf,x,u,1))
                 error = 0.0
                 @inbounds for t = 1:T-1
                     pf(u, y) # Update the particle filter
-                    x = dynamics(x,u) + SVector{2,Float64}(rand(rng, df)) # Simulate the true dynamics and add some noise
-                    y = SVector{2,Float64}(sample_measurement(pf,x,t)) # Simulate a measuerment
+                    x = dynamics(x,u,t) + SVector{2,Float64}(rand(rng, df)) # Simulate the true dynamics and add some noise
+                    y = SVector{2,Float64}(sample_measurement(pf,x,u,t)) # Simulate a measuerment
                     u = @SVector randn(2) # draw a random control input
                     error += sum(abs2,x-weigthed_mean(pf))
                 end # t

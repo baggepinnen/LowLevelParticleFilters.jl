@@ -37,9 +37,9 @@ end
     Symmetric(x)
 end
 
-correct!(kf::AbstractKalmanFilter, y, t::Integer = index(kf)) = correct!(kf, y, 0, t)
+correct!(kf::AbstractKalmanFilter, u, y, t::Integer = index(kf)) = correct!(kf, u, y, 0, t)
 
-function correct!(kf::AbstractKalmanFilter, y, u, t::Integer = index(kf))
+function correct!(kf::AbstractKalmanFilter, u, y, t::Integer = index(kf))
     @unpack C,D,x,R,R2 = kf
     if ndims(C) == 3
         Ct = C[:,:,t]
@@ -65,10 +65,10 @@ function correct!(kf::AbstractKalmanFilter, y, u, t::Integer = index(kf))
 end
 
 """
-    predict!(f,u, t = index(f))
+    predict!(f, u, t = index(f))
 Move filter state forward in time using dynamics equation and input vector `u`.
 """
-function predict!(pf,u, t = index(pf))
+function predict!(pf, u, t = index(pf))
     s = pf.state
     N = num_particles(s)
     if shouldresample(pf)
@@ -85,28 +85,29 @@ end
 
 
 """
-     ll = correct!(f, y, t = index(f))
+     ll = correct!(f, u, y, t = index(f))
 Update state/covariance/weights based on measurement `y`,  returns loglikelihood.
 """
-function correct!(pf, y, t = index(pf))
-    measurement_equation!(pf, y, t)
-    loklik = logsumexp!(state(pf))
+function correct!(pf, u, y, t = index(pf))
+    measurement_equation!(pf, u, y, t)
+    ll = logsumexp!(state(pf))
+    ll, 0
 end
 
 """
-    ll = update!(f::AbstractFilter, u, y, t = index(f))
-Perform one step of `predict!` and `correct!`, returns loglikelihood.
+    ll, e = update!(f::AbstractFilter, u, y, t = index(f))
+Perform one step of `predict!` and `correct!`, returns loglikelihood and prediction error
 """
 function update!(f::AbstractFilter, u, y, t = index(f))
-    loklik = correct!(f, y, t)
+    ll_e = correct!(f, u, y, t)
     predict!(f, u, t)
-    loklik
+    ll_e
 end
 
 function update!(pf::AuxiliaryParticleFilter, u, y, y1, t = index(pf))
-    loklik = correct!(pf, y, t)
+    ll_e = correct!(pf, u, y, t)
     predict!(pf, u, y1, t)
-    loklik
+    ll_e
 end
 
 
@@ -116,7 +117,7 @@ function predict!(pf::AuxiliaryParticleFilter, u, y1, t = index(pf))
     propagate_particles!(pf.pf, u, t, nothing)# Propagate without noise
     λ  = s.we
     λ .= 0
-    measurement_equation!(pf.pf, y1, t, λ)
+    measurement_equation!(pf.pf, u, y1, t, λ)
     s.w .+= λ
     expnormalize!(s.w) # w used as buffer
     j = resample(ResampleSystematic, s.w , s.j, s.bins)
@@ -134,7 +135,7 @@ function predict!(pf::AuxiliaryParticleFilter{<:AdvancedParticleFilter},u, y, t 
     propagate_particles!(pf.pf, u, t, nothing)# Propagate without noise
     λ  = s.we
     λ .= 0
-    measurement_equation!(pf.pf, y, t, λ)
+    measurement_equation!(pf.pf, u, y, t, λ)
     s.w .+= λ
     expnormalize!(s.w) # w used as buffer
     j = resample(ResampleSystematic, s.w , s.j, s.bins)
@@ -177,7 +178,7 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
     for t = 1:T
         x[t]  = state(kf)      |> copy
         R[t]  = covariance(kf) |> copy
-        ll   += correct!(kf, y[t], u[t], t)
+        ll   += correct!(kf, u[t], y[t], t)[1]
         xt[t] = state(kf)      |> copy
         Rt[t] = covariance(kf) |> copy
         predict!(kf, u[t], t)
@@ -201,7 +202,7 @@ function forward_trajectory(pf, u::AbstractVector, y::AbstractVector)
     we = Array{Float64}(undef,N,T)
     ll = 0.
     @inbounds for t = 1:T
-        ll += correct!(pf, y[t], t)
+        ll += correct!(pf, u[t], y[t], t) |> first
         x[:,t] .= particles(pf)
         w[:,t] .= weights(pf)
         we[:,t] .= expweights(pf)
@@ -219,7 +220,7 @@ function forward_trajectory(pf::AuxiliaryParticleFilter, u::AbstractVector, y::A
     we = Array{Float64}(undef,N,T)
     ll = 0.
     @inbounds for t = 1:T
-        ll += correct!(pf, y[t], t)
+        ll += correct!(pf, u[t], y[t], t) |> first
         x[:,t] .= particles(pf)
         w[:,t] .= weights(pf)
         we[:,t] .= expweights(pf)
@@ -243,10 +244,10 @@ function reduce_trajectory(pf, u::Vector, y::Vector, f::F) where F
     T = length(y)
     N = num_particles(pf)
     x = Array{particletype(pf)}(undef,T)
-    ll = correct!(pf,y[1],1)
+    ll = correct!(pf,u[1],y[1],1) |> first
     x[1] = f(state(pf))
     for t = 2:T
-        ll += pf(u[t-1], y[t], t)
+        ll += pf(u[t-1], y[t], t) |> first
         x[t] = f(pf)
     end
     x,ll

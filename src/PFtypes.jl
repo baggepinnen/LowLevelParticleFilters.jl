@@ -42,34 +42,30 @@ function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, d
     w = fill(log(1/N), N)
     we = fill(1/N, N)
     s = PFstate(x,xprev,w,we,Ref(0.), collect(1:N), zeros(N),Ref(1))
-    f = 3 ∉ numargs(dynamics) ? @inline(function (x,u,t) dynamics(x,u) end) : dynamics
-    g = 2 ∉ numargs(measurement) ? (x,t) -> measurement(x) : measurement
 
-    ParticleFilter(state = s, dynamics = f, measurement = g,
-    dynamics_density=dynamics_density, measurement_density=measurement_density,
-    initial_density=initial_density)
+
+    ParticleFilter(; state = s, dynamics, measurement,
+    dynamics_density, measurement_density,
+    initial_density)
 end
 
 function ParticleFilter(s::PFstate, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density)
-    f = 3 ∉ numargs(dynamics) ? @inline(function (x,u,t) dynamics(x,u) end) : dynamics
-    g = 2 ∉ numargs(measurement) ? (x,t) -> measurement(x) : measurement
-
-    ParticleFilter(state = s, dynamics = f, measurement = g,
-    dynamics_density=dynamics_density, measurement_density=measurement_density,
-    initial_density=initial_density)
+    ParticleFilter(; state = s, dynamics, measurement,
+    dynamics_density, measurement_density,
+    initial_density)
 end
 
 
-Base.@propagate_inbounds function measurement_equation!(pf::ParticleFilter, y, t, w = pf.state.w, d=measurement_density(pf))
+Base.@propagate_inbounds function measurement_equation!(pf::ParticleFilter, u, y, t, w = pf.state.w, d=measurement_density(pf))
     x,g = particles(pf), measurement(pf)
-    any(ismissing.(y)) && return w
+    any(ismissing, y) && return w
     if d isa UnivariateDistribution && length(y) == 1
         for i = 1:num_particles(pf)
-            w[i] += logpdf(d, (y-g(x[i],t))[1])
+            w[i] += logpdf(d, (y-g(x[i],u,t))[1])
         end
     else
         for i = 1:num_particles(pf)
-            w[i] += logpdf(d, y-g(x[i],t))
+            w[i] += logpdf(d, y-g(x[i],u,t))
         end
     end
     w
@@ -84,17 +80,17 @@ Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u,j::V
     noise = zeros(D)
     if d === nothing
         for i = eachindex(x)
-            x[i] =  f(xp[j[i]] ,u, t)
+            x[i] =  f(xp[j[i]], u, t)
         end
     else
         for i = eachindex(x)
-            x[i] =  f(xp[j[i]] ,u, t) + VecT(rand!(pf.rng, d, noise))
+            x[i] =  f(xp[j[i]], u, t) + VecT(rand!(pf.rng, d, noise))
         end
     end
     x
 end
 
-Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u, t::Int, d=pf.dynamics_density)
+Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter, u, t::Int, d=pf.dynamics_density)
     f = pf.dynamics
     x,xp = pf.state.x, pf.state.xprev
     VecT = eltype(pf.state.x)
@@ -102,11 +98,11 @@ Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u, t::
     noise = zeros(D)
     if d === nothing
         for i = eachindex(x)
-            x[i] =  f(xp[i] ,u, t)
+            x[i] =  f(xp[i], u, t)
         end
     else
         for i = eachindex(x)
-            x[i] =  f(xp[i] ,u, t) + VecT(rand!(pf.rng, d, noise))
+            x[i] =  f(xp[i], u, t) + VecT(rand!(pf.rng, d, noise))
         end
     end
     x
@@ -148,7 +144,7 @@ end
 """
 ParticleFilter(num_particles, dynamics::Function, measurement::Function, initial_density)
 """
-function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, measurement_likelihood, dynamics_density, initial_density)
+function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, measurement_likelihood, dynamics_density, initial_density; kwargs...)
     r1 = rand(initial_density)
     xprev = Vector{SVector{length(initial_density),eltype(r1)}}([rand(initial_density) for n=1:N])
     x  = deepcopy(xprev)
@@ -156,17 +152,16 @@ function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Fun
     we = fill(1/N, N)
     s = PFstate(x,xprev,w,we,Ref(0.), collect(1:N), zeros(N),Ref(1))
 
-    AdvancedParticleFilter(state = s, dynamics = dynamics, measurement = measurement, measurement_likelihood=measurement_likelihood, dynamics_density=dynamics_density,
-    initial_density=initial_density)
+    AdvancedParticleFilter(; state = s, dynamics, measurement, measurement_likelihood, dynamics_density,
+    initial_density, kwargs...)
 end
 
 
-Base.@propagate_inbounds function measurement_equation!(pf::AbstractParticleFilter, y, t, w = weights(pf))
+Base.@propagate_inbounds function measurement_equation!(pf::AbstractParticleFilter, u, y, t, w = weights(pf))
     g = measurement_likelihood(pf)
     any(ismissing.(y)) && return w
     x = particles(pf)
-    @inbounds for i = 1:num_particles(pf)
-        w[i] += g(x[i],y,t)
+        @inbounds w[i] += g(x[i], u, y, t)
     end
     w
 end
@@ -207,9 +202,7 @@ end
 sample_state(pf::AbstractParticleFilter) = rand(pf.rng, pf.initial_density)
 sample_state(pf::ParticleFilter, x, u, t) = dynamics(pf)(x,u,t) + rand(pf.rng, pf.dynamics_density)
 sample_state(pf::AdvancedParticleFilter, x, u, t) = dynamics(pf)(x,u,t,true)
-sample_measurement(pf::AdvancedParticleFilter, x, t) = measurement(pf)(x, t, true)
 sample_measurement(pf::AdvancedParticleFilter, x, u, t) = measurement(pf)(x, u, t, true)
-sample_measurement(pf::AbstractParticleFilter, x, t) = measurement(pf)(x, t) .+ rand(pf.rng, pf.measurement_density)
 sample_measurement(pf::AbstractParticleFilter, x, u, t) = measurement(pf)(x, u, t) .+ rand(pf.rng, pf.measurement_density)
 expweights(pf::AbstractParticleFilter) = pf.state.we
 weights(s::PFstate)                    = s.w
@@ -220,7 +213,7 @@ num_particles(s::PFstate)              = num_particles(s.x)
 num_particles(s::AbstractArray)        = length(s)
 particles(s::PFstate)                  = s.x
 particletype(s::PFstate)               = eltype(s.x)
-particletype(pf::AbstractFilter)        = eltype(state(pf).x)
+particletype(pf::AbstractFilter)       = eltype(state(pf).x)
 
 
 
