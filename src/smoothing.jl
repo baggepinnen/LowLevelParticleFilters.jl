@@ -59,25 +59,32 @@ function smooth(pf::AbstractParticleFilter, xf, wf, wef, ll, M, u, y)
 end
 
 
+function sse(f::AbstractFilter, u, y, λ=1)
+    reset!(f)
+    ll = sum(zip(u, y)) do (u,y)
+        ll, e = f(u,y)
+        dot(e, λ, e)
+    end
+end
 
 
 """
     ll = loglik(filter,u,y)
 Calculate loglikelihood for entire sequences `u,y`
 """
-function loglik(f,u,y)
+function loglik(f::AbstractFilter,u,y)
     reset!(f)
-    ll = sum(x->f(x[1],x[2]), zip(u, y))
+    ll = sum(x->f(x[1],x[2])[1], zip(u, y))
 end
 
 function loglik(pf::AuxiliaryParticleFilter,u,y)
     reset!(pf)
-    ll = sum(t->pf(u[t],y[t],y[t+1],t), 1:length(u)-1)
-    ll + pf.pf(u[end],y[end], length(u))
+    ll = sum(t->pf(u[t],y[t],y[t+1],t)[1], 1:length(u)-1)
+    ll + pf.pf(u[end],y[end], length(u))[1]
 end
 
 """
-ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors::Vector{Distribution}, u, y)
+    ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors::Vector{Distribution}, u, y)
 
 returns function θ -> p(y|θ)p(θ)
 """

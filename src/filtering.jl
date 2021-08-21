@@ -61,7 +61,8 @@ function correct!(kf::AbstractKalmanFilter, u, y, t::Integer = index(kf))
     K   = (R*Ct')/Sᵪ
     x .+= K*e
     R  .= symmetrize((I - K*Ct)*R) # WARNING against I .- A
-    logpdf(MvNormal(PDMat(S, Sᵪ)), e)# - 1/2*logdet(S) # logdet is included in logpdf
+    ll = logpdf(MvNormal(PDMat(S, Sᵪ)), e)# - 1/2*logdet(S) # logdet is included in logpdf
+    ll, e
 end
 
 """

@@ -157,7 +157,7 @@ function correct!(ukf::UnscentedKalmanFilter, u, y, t::Integer = index(ukf))
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized
     RmKSKT!(R, K, S)
     ll = logpdf(MvNormal(PDMat(S,Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf
-    ll
+    ll, e
 end
 
 @inline function RmKSKT!(R, K, S)
