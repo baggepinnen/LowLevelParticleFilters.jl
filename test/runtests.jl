@@ -1,3 +1,4 @@
+ENV["GKSwstype"] = 100 # workaround for gr segfault on GH actions
 using LowLevelParticleFilters
 import LowLevelParticleFilters.resample
 using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions, Plots
