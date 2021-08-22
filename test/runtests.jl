@@ -2,6 +2,7 @@ using LowLevelParticleFilters
 import LowLevelParticleFilters.resample
 using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions, Plots
 using MonteCarloMeasurements
+gr(show=false)
 Random.seed!(0)
 
 @testset "LowLevelParticleFilters" begin
@@ -42,7 +43,7 @@ Random.seed!(0)
         logsumexp!(w,we)
         @test we |> resample |> sum >= 56
         @test length(resample(we)) == length(we)
-        for i = 1:10000
+        for i = 1:10
             w = randn(100); we = randn(100)
             logsumexp!(w,we)
             j = resample(we)
