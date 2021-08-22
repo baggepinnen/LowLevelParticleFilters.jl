@@ -92,7 +92,7 @@ end
 
 @userplot TrajectoryDensity
 @recipe function f(p::TrajectoryDensity; nbinsy=30, xreal=nothing)
-    pf,x,w,y = p.args[1:4]
+    pf,x,w,u,y = p.args[1:5]
     N,T = size(x)
     D = length(x[1])
     P = length(y[1])
@@ -102,7 +102,7 @@ end
     end
 
     w = vec(w)
-    x = vec(x)
+    vx = vec(x)
     background_color --> :black
 
     layout := D+P
@@ -115,14 +115,14 @@ end
             seriestype := :histogram2d
             bins --> (0.5:1:T+0.5,nbinsy)
             weights --> w
-            repeat((1:T)' .-0.5,N)[:], vec(getindex.(x,d))
+            repeat((1:T)' .-0.5,N)[:], vec(getindex.(vx,d))
         end
         xreal === nothing || @series begin
             seriestype := :scatter
             1:T, getindex.(xreal,d)
         end
     end
-    yhat = measurement(pf).(x,0)
+    yhat = measurement(pf).(x,u',0) |> vec
     for d = 1:P
         subplot := d+D
         @series begin
@@ -141,7 +141,7 @@ end
 @userplot DimensionDensity
 @recipe function f(p::DimensionDensity; nbinsy=30, xreal=nothing)
     length(p.args) >=5 || throw(ArgumentError("Supply arguments: pf,x,w,y,dimension::Int"))
-    pf,x,w,y,d = p.args[1:5]
+    pf,x,w,u,y,d = p.args[1:6]
     N,T = size(x)
     D = length(x[1])
     P = length(y[1])
@@ -166,7 +166,7 @@ end
         end
     else
         d -= D
-        yhat = measurement(pf).(x,0)
+        yhat = measurement(pf).(x,u',0) |> vec
         @series begin
             seriestype := :histogram2d
             bins --> (0.5:1:T+0.5,nbinsy)
