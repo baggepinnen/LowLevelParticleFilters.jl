@@ -1,3 +1,4 @@
+ENV["GKSwstype"] = 100 # workaround for gr segfault on GH actions
 using Documenter, LowLevelParticleFilters
 
 using Plots
