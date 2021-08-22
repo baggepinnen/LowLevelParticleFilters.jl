@@ -1,6 +1,6 @@
 
 """
-xT,RT,ll = smooth(kf::KalmanFilter, u::Vector, y::Vector)
+    xT,RT,ll = smooth(kf::KalmanFilter, u::Vector, y::Vector)
 Returns smoothed estimates of state `x` and covariance `R` given all input output data `u,y`
 """
 function smooth(kf::KalmanFilter, u::AbstractVector, y::AbstractVector)
@@ -149,7 +149,7 @@ end
 
 function metropolis_threaded(burnin, args...)
     res = []
-    mtx = Threads.Mutex()
+    mtx = ReentrantLock()
     Threads.@threads for i = 1:Threads.nthreads()
         p,l = metropolis(args...)
         resi = [reduce(hcat,p)' l]

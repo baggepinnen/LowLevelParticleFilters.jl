@@ -34,9 +34,9 @@ end
 AuxiliaryParticleFilter(args...;kwargs...) = AuxiliaryParticleFilter(ParticleFilter(args...;kwargs...))
 
 """
-ParticleFilter(num_particles, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density)
+    ParticleFilter(num_particles, dynamics, measurement, dynamics_density, measurement_density, initial_density)
 """
-function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density)
+function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density; kwargs...)
     xprev = Vector{SVector{length(initial_density),eltype(initial_density)}}([rand(initial_density) for n=1:N])
     x = deepcopy(xprev)
     w = fill(log(1/N), N)
@@ -46,13 +46,13 @@ function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, d
 
     ParticleFilter(; state = s, dynamics, measurement,
     dynamics_density, measurement_density,
-    initial_density)
+    initial_density, kwargs...)
 end
 
-function ParticleFilter(s::PFstate, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density)
+function ParticleFilter(s::PFstate, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density; kwargs...)
     ParticleFilter(; state = s, dynamics, measurement,
     dynamics_density, measurement_density,
-    initial_density)
+    initial_density, kwargs...)
 end
 
 
@@ -142,7 +142,7 @@ end
 
 
 """
-ParticleFilter(num_particles, dynamics::Function, measurement::Function, initial_density)
+    AdvancedParticleFilter(Nparticles, dynamics, measurement, measurement_likelihood, dynamics_density, initial_density; kwargs...)
 """
 function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, measurement_likelihood, dynamics_density, initial_density; kwargs...)
     r1 = rand(initial_density)

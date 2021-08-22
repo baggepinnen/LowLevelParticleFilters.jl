@@ -1,5 +1,5 @@
 """
-    Reset the filter to initial state and covariance/distribution
+Reset the filter to initial state and covariance/distribution
 """
 function reset!(pf::AbstractParticleFilter)
     s = state(pf)
@@ -161,7 +161,7 @@ end
 
 Run a Kalman filter forward
 
-#Returns:
+# Returns:
 - `x`: predictions
 - `xt`: filtered estimates
 - `R`: predicted covariance matrices
@@ -321,7 +321,7 @@ weigthed_mean(s) = weigthed_mean(s.x,s.we)
 weigthed_mean(pf::AbstractParticleFilter) = weigthed_mean(state(pf))
 weigthed_mean(s::SigmaFilter) = weigthed_mean(s.x,s.we)
 """
-    Similar to `weigthed_mean`, but returns covariances
+Similar to [`weigthed_mean`](@ref), but returns covariances
 """
 function weigthed_cov(x,we)
     N,T = size(x)

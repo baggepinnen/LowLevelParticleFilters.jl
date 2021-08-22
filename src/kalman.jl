@@ -16,7 +16,14 @@ end
 
 
 """
-KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
+    KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
+
+The matrices `A,B,C,D` define the dynamics
+```
+x' = Ax + Bu + w
+y  = Cx + Du + e
+```
+where `w ~ N(0, R1)`, `e ~ N(0, R2)` and `x(0) ~ d0`
 """
 function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(Matrix(R1)))
     try
@@ -62,7 +69,7 @@ end
 
 
 """
-    UnscentedKalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
+    UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)))
 """
 function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)))
     try
@@ -186,7 +193,7 @@ end
 
 
 """
-    SigmaFilter(dynamics,measurement,d0)
+    SigmaFilter(N,dynamics,measurement,measurement_likelihood,df,d0)
 """
 function SigmaFilter(N,dynamics,measurement,measurement_likelihood,df,d0)
     @show n = length(d0)

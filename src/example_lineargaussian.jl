@@ -1,22 +1,3 @@
-# # LowLevelParticleFilters
-# [![CI](https://github.com/baggepinnen/LowLevelParticleFilters.jl/workflows/CI/badge.svg)](https://github.com/baggepinnen/LowLevelParticleFilters.jl/actions)
-# [![codecov](https://codecov.io/gh/baggepinnen/LowLevelParticleFilters.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/baggepinnen/LowLevelParticleFilters.jl)
-
-# This readme is auto generated from the file [src/example_lineargaussian.jl](https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/src/example_lineargaussian.jl) using [Literate.jl](https://github.com/fredrikekre/Literate.jl)
-
-# # Types
-# We provide a number of filter types
-# - `ParticleFilter`: This filter is simple to use and assumes that both dynamics noise and measurement noise are additive.
-# - `AuxiliaryParticleFilter`: This filter is identical to `ParticleFilter`, but uses a slightly different proposal mechanism for new particles.
-# - `AdvancedParticleFilter`: This filter gives you more flexibility, at the expense of having to define a few more functions. More instructions on this type below.
-# - `KalmanFilter`. Is what you would expect. Has the same features as the particle filters, but is restricted to linear dynamics and gaussian noise.
-# - `UnscentedKalmanFilter`. Is also what you would expect. Has almost the same features as the Kalman filters, but handle nonlinear dynamics and measurement model, still requires an additive Gaussian noise model.
-
-# # Functionality
-# - Filtering
-# - Smoothing
-# - Parameter estimation using ML or PMMH (Particle Marginal Metropolis Hastings)
-
 # # Usage example
 # This example demonstrates how we set up the filters, both PF and KF, for a simple linear system.
 
@@ -340,4 +321,4 @@ gui()
 # ![window](figs/rmse.png)
 
 
-#jl # Compile using Literate.markdown("example_lineargaussian.jl", "..", name="README", documenter=false)
+#jl # Compile using Literate.markdown("example_lineargaussian.jl", documenter=false)
