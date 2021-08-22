@@ -1,7 +1,7 @@
-export weigthed_mean, weigthed_cov, plot_trajectories, scatter_particles, logsumexp!, smoothed_mean, smoothed_cov, smoothed_trajs, plot_priors
+export plot_trajectories, scatter_particles, logsumexp!, smoothed_mean, smoothed_cov, smoothed_trajs, plot_priors
 
 """
-ll = logsumexp!(w, we [, maxw])
+    ll = logsumexp!(w, we [, maxw])
 Normalizes the weight vector `w` and returns the weighted log-likelihood
 
 https://arxiv.org/pdf/1412.8695.pdf eq 3.8 for p(y)

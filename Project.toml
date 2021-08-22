@@ -5,6 +5,7 @@ version = "1.0.5"
 
 [deps]
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 Lazy = "50d2b5c4-7a5e-59d5-8109-a42b560f39c0"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LoopVectorization = "bdcacae8-1622-11e9-2a5c-532679323890"
@@ -20,6 +21,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 Distributions = "0.21.10, 0.22, 0.23, 0.24, 0.25"
+ForwardDiff = "0.10"
 Lazy = "<0.15, 0.15"
 LoopVectorization = "0.6, 0.7, 0.8, 0.9, 0.10, 0.11, 0.12"
 PDMats = "0.9, 0.10"

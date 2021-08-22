@@ -1,7 +1,9 @@
+ENV["GKSwstype"] = 100 # workaround for gr segfault on GH actions
 using LowLevelParticleFilters
 import LowLevelParticleFilters.resample
-using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions
+using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions, Plots
 using MonteCarloMeasurements
+gr(show=false)
 Random.seed!(0)
 
 @testset "LowLevelParticleFilters" begin
@@ -42,7 +44,7 @@ Random.seed!(0)
         logsumexp!(w,we)
         @test we |> resample |> sum >= 56
         @test length(resample(we)) == length(we)
-        for i = 1:10000
+        for i = 1:10
             w = randn(100); we = randn(100)
             logsumexp!(w,we)
             j = resample(we)
@@ -86,8 +88,8 @@ Random.seed!(0)
         C = SMatrix{p,p}(eye(p))
         # C = SMatrix{p,n}([1 1])
 
-        dynamics(x,u) = A*x .+ B*u
-        measurement(x) = C*x
+        dynamics(x,u,t) = A*x .+ B*u
+        measurement(x,u,t) = C*x
 
 
         N     = 1000 # Number of particles
@@ -106,7 +108,7 @@ Random.seed!(0)
         xf, wf, wef, ll = forward_trajectory(pf, u, y)
         parts = Particles(xf,wef)
         @test size(parts) == (T,n)
-        @test length(parts[1]) == N
+        @test length(parts[1].particles) == N
 
         xm = reduce(hcat,x)
         tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
@@ -208,8 +210,8 @@ Random.seed!(0)
         C = @SMatrix [1 0]
         # C = SMatrix{p,n}([1 1])
 
-        dynamics(x,u) = A*x .+ B*u
-        measurement(x) = C*x
+        dynamics(x,u,t) = A*x .+ B*u
+        measurement(x,u,t) = C*x
 
 
         N     = 100 # Number of particles
@@ -242,7 +244,7 @@ Random.seed!(0)
     dg = MvNormal(p,1.0)          # Dynamics noise Distribution
     df = MvNormal(n,0.1)          # Measurement noise Distribution
     d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
-    du    = MvNormal(2,1) # Control input distribution
+    du = MvNormal(2,1) # Control input distribution
 
     # Define random linenar state-space system
     Tr = randn(n,n)
@@ -251,8 +253,8 @@ Random.seed!(0)
     C = SMatrix{p,p}(eye(p))
     # C = SMatrix{p,n}([1 1])
 
-    dynamics(x,u) = A*x .+ B*u
-    measurement(x) = C*x
+    dynamics(x,u,t) = A*x .+ B*u
+    measurement(x,u,t) = C*x
 
     T     = 200 # Number of time steps
     kf   = KalmanFilter(A, B, C, 0, eye(n), eye(p), d0)
@@ -301,8 +303,8 @@ end
     # C = SMatrix{p,n}([1 1])
 
     dynamics(x,u,t,noise=false) = A*x .+ B*u + noise*rand(df)
-    measurement(x,t,noise=false) = C*x .+ noise*rand(dg)
-    measurement_likelihood(x,y,t) = logpdf(dg, measurement(x,t)-y)
+    measurement(x,u,t,noise=false) = C*x .+ noise*rand(dg)
+    measurement_likelihood(x,u,y,t) = logpdf(dg, measurement(x,u,t)-y)
     tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
 
     T     = 200 # Number of time steps
@@ -326,5 +328,9 @@ end
     @test_skip norm(mean(x .- ressf)) < norm(mean(x .- resapf))  # SF should be better than PF since we now covs are Gaussian, this test is not robust enough to include
 end
 
+@testset "ekf" begin
+    @info "Testing ekf"
+    include("test_ekf.jl")
+end
 
 end

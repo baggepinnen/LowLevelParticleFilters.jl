@@ -1,6 +1,6 @@
 module LowLevelParticleFilters
 
-export KalmanFilter, UnscentedKalmanFilter, ParticleFilter, AuxiliaryParticleFilter, AdvancedParticleFilter, SigmaFilter, PFstate, index, state, covariance, num_particles, effective_particles, weights, expweights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, mode_trajectory, update!, predict!, correct!, reset!, metropolis, shouldresample, TupleProduct
+export KalmanFilter, UnscentedKalmanFilter, ExtendedKalmanFilter, ParticleFilter, AuxiliaryParticleFilter, AdvancedParticleFilter, SigmaFilter, PFstate, index, state, covariance, num_particles, effective_particles, weights, expweights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, mode_trajectory, weigthed_mean, weigthed_cov, update!, predict!, correct!, reset!, metropolis, shouldresample, TupleProduct
 
 export densityplot, debugplot, commandplot, trajectorydensity, dimensiondensity
 
@@ -10,6 +10,7 @@ import PDMats: PDMat
 using StaticArrays
 using Distributions
 using RecipesBase
+using ForwardDiff
 
 abstract type ResamplingStrategy end
 struct ResampleSystematic <: ResamplingStrategy end
@@ -23,6 +24,7 @@ include("resample.jl")
 include("utils.jl")
 include("smoothing.jl")
 include("plotting.jl")
+include("ekf.jl")
 
 index(f::AbstractFilter) = f.t[]
 
