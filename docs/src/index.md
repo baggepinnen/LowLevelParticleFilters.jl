@@ -10,7 +10,7 @@ We provide a number of filter types
 - [`AdvancedParticleFilter`](@ref): This filter gives you more flexibility, at the expense of having to define a few more functions. More instructions on this type below.
 - [`KalmanFilter`](@ref). Is what you would expect. Has the same features as the particle filters, but is restricted to linear dynamics and gaussian noise.
 - [`UnscentedKalmanFilter`](@ref). Is also what you would expect. Has almost the same features as the Kalman filters, but handle nonlinear dynamics and measurement model, still requires an additive Gaussian noise model.
-- [`ExtendedKalmanFilter`](@ref). Available if `using ForwardDiff`. Runs a regular Kalman filter on linearized dynamics.
+- [`ExtendedKalmanFilter`](@ref). Runs a regular Kalman filter on linearized dynamics. Uses ForwardDiff.jl for linearization.
 
 # Functionality
 - Filtering

@@ -1,4 +1,4 @@
-using Documenter, LowLevelParticleFilters, ForwardDiff
+using Documenter, LowLevelParticleFilters
 
 using Plots
 gr()
