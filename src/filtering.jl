@@ -37,8 +37,6 @@ end
     Symmetric(x)
 end
 
-correct!(kf::AbstractKalmanFilter, u, y, t::Integer = index(kf)) = correct!(kf, u, y, 0, t)
-
 function correct!(kf::AbstractKalmanFilter, u, y, t::Integer = index(kf))
     @unpack C,D,x,R,R2 = kf
     if ndims(C) == 3

@@ -72,7 +72,7 @@ If you want to perform filtering using vectors of inputs and measurements, try a
 ```@example lingauss
 x,w,we,ll = forward_trajectory(pf, u, y) # Filter whole vectors of signals
 x̂,ll = mean_trajectory(pf, u, y)
-trajectorydensity(pf,x,w,u,y,xreal=xs)
+trajectorydensity(pf,x,w,u,y,xreal=xs, markersize=2)
 ```
 
 
@@ -106,9 +106,10 @@ plot!(vecvec_to_mat(x), l=:dash, lab="True")
 We can plot the particles themselves as well
 
 ```@example lingauss
+downsample = 5
 plot(vecvec_to_mat(x), l=(4,), layout=(2,1), show=false)
-scatter!(xbt[1,:,:]', subplot=1, show=false, m=(1,:black, 0.5), lab="")
-scatter!(xbt[2,:,:]', subplot=2, m=(1,:black, 0.5), lab="")
+scatter!(xbt[1, 1:downsample:end, :]', subplot=1, show=false, m=(1,:black, 0.5), lab="")
+scatter!(xbt[2, 1:downsample:end, :]', subplot=2, m=(1,:black, 0.5), lab="")
 ```
 
 
