@@ -1,22 +1,21 @@
-using LowLevelParticleFilters, ForwardDiff
-
-@with_kw struct ExtendedKalmanFilter{KF <: KalmanFilter, F, G} <: AbstractKalmanFilter
+abstract type AbstractExtendedKalmanFilter <: AbstractKalmanFilter end
+@with_kw struct ExtendedKalmanFilter{KF <: KalmanFilter, F, G} <: AbstractExtendedKalmanFilter
     kf::KF
     dynamics::F
     measurement::G
 end
 
-function Base.getproperty(ekf::ExtendedKalmanFilter, s::Symbol)
-    s ∈ fieldnames(ExtendedKalmanFilter) && return getfield(ekf, s)
+function Base.getproperty(ekf::EKF, s::Symbol) where EKF <: AbstractExtendedKalmanFilter
+    s ∈ fieldnames(EKF) && return getfield(ekf, s)
     return getproperty(ekf.kf, s)
 end
 
-function Base.propertynames(ekf::ExtendedKalmanFilter, private::Bool=false)
-    return (fieldnames(ExtendedKalmanFilter)..., fieldnames(KalmanFilter)...)
+function Base.propertynames(ekf::EKF, private::Bool=false) where EKF <: AbstractExtendedKalmanFilter
+    return (fieldnames(EKF)..., propertynames(ekf.kf, private)...)
 end
 
 
-function predict!(kf::ExtendedKalmanFilter, u, t::Integer = index(kf))
+function predict!(kf::AbstractExtendedKalmanFilter, u, t::Integer = index(kf))
     @unpack x,R,R1 = kf
     A = ForwardDiff.jacobian(x->kf.dynamics(x,u,t), x)
     x .= kf.dynamics(x, u, t)
@@ -24,7 +23,7 @@ function predict!(kf::ExtendedKalmanFilter, u, t::Integer = index(kf))
     kf.t[] += 1
 end
 
-function correct!(kf::ExtendedKalmanFilter, u, y, t::Integer = index(kf))
+function correct!(kf::AbstractExtendedKalmanFilter, u, y, t::Integer = index(kf))
     @unpack x,R,R2 = kf
     C = ForwardDiff.jacobian(x->kf.measurement(x,u,t), x)
     e  = y .- kf.measurement(x,u,t)
@@ -38,7 +37,7 @@ function correct!(kf::ExtendedKalmanFilter, u, y, t::Integer = index(kf))
 end
 
 
-function smooth(kf::ExtendedKalmanFilter, u::AbstractVector, y::AbstractVector)
+function smooth(kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::AbstractVector)
     reset!(kf)
     T            = length(y)
     x,xt,R,Rt,ll = forward_trajectory(kf, u, y)
@@ -56,6 +55,6 @@ function smooth(kf::ExtendedKalmanFilter, u::AbstractVector, y::AbstractVector)
     xT,RT,ll
 end
 
-sample_state(kf::ExtendedKalmanFilter) = rand(kf.d0)
-sample_state(kf::ExtendedKalmanFilter, x, u, t) = kf.dynamics(x, u, t) .+ rand(MvNormal(kf.R1))
-sample_measurement(kf::ExtendedKalmanFilter, x, u, t) = kf.measurement(x, u, t) .+ rand(MvNormal(kf.R2))
+sample_state(kf::AbstractExtendedKalmanFilter) = rand(kf.d0)
+sample_state(kf::AbstractExtendedKalmanFilter, x, u, t) = kf.dynamics(x, u, t) .+ rand(MvNormal(kf.R1))
+sample_measurement(kf::AbstractExtendedKalmanFilter, x, u, t) = kf.measurement(x, u, t) .+ rand(MvNormal(kf.R2))

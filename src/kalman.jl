@@ -37,6 +37,10 @@ function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(Matrix(R1)))
     KalmanFilter(A,B,C,D,R1,R2,MvNormal(Matrix(R2)), d0, Vector(d0.μ), Matrix(d0.Σ), Ref(1))
 end
 
+function Base.propertynames(kf::KF, private::Bool=false) where KF <: AbstractKalmanFilter
+    return fieldnames(KF)
+end
+
 
 sample_state(kf::AbstractKalmanFilter) = rand(kf.d0)
 sample_state(kf::AbstractKalmanFilter, x, u, t) = kf.A*x .+ kf.B*u .+ rand(MvNormal(kf.R1))
