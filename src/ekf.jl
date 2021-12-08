@@ -5,6 +5,13 @@ abstract type AbstractExtendedKalmanFilter <: AbstractKalmanFilter end
     measurement::G
 end
 
+"""
+    ExtendedKalmanFilter(kf, dynamics, measurement)
+
+An extended Kalman filter takes a standard Kalman filter as well as dynamics and measurement functions. The filter will linearize the dynamics using ForwardDiff.
+"""
+ExtendedKalmanFilter
+
 function Base.getproperty(ekf::EKF, s::Symbol) where EKF <: AbstractExtendedKalmanFilter
     s ∈ fieldnames(EKF) && return getfield(ekf, s)
     return getproperty(ekf.kf, s)

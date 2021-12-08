@@ -344,7 +344,6 @@ end
 
 @testset "ekf" begin
     @info "testing ekf"
-    @info "Testing ekf"
     include("test_ekf.jl")
 end
 
