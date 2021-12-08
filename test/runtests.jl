@@ -6,8 +6,13 @@ using MonteCarloMeasurements
 gr(show=false)
 Random.seed!(0)
 
+mvnormal(d::Int, σ::Real) = MvNormal(LinearAlgebra.Diagonal(fill(float(σ) ^ 2, d)))
+mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
+
 @testset "LowLevelParticleFilters" begin
+    @info "testing LowLevelParticleFilters"
     @testset "logsumexp" begin
+        @info "testing logsumexp"
         w = randn(10); we = similar(w)
         ll = logsumexp!(w,we)
         @test sum(we) ≈ 1
@@ -27,6 +32,7 @@ Random.seed!(0)
     end
 
     @testset "weigthed_mean" begin
+        @info "testing weigthed_mean"
         x = [randn(3) for i = 1:10000]
         w = ones(10000); we = similar(w)
         logsumexp!(w,we)
@@ -35,6 +41,7 @@ Random.seed!(0)
 
 
     @testset "resample" begin
+        @info "testing resample"
         s = PFstate(10)
         @test effective_particles(s.we) ≈ 10
         logsumexp!(s.w, s.we)
@@ -54,8 +61,9 @@ Random.seed!(0)
     end
 
     @testset "static distributions" begin
+        @info "testing static distributions"
         x = @SVector ones(2)
-        d = MvNormal(2,2)
+        d = mvnormal(2,2)
         @test logpdf(d,x) == logpdf(d,Vector(x))
         d = Product([Normal(0,2), Normal(0,2)])
         @test logpdf(d,x) == logpdf(d,Vector(x))
@@ -72,14 +80,15 @@ Random.seed!(0)
 
 
     @testset "End to end" begin
+        @info "testing End to end"
         eye(n) = Matrix{Float64}(I,n,n)
         n = 2 # Dinemsion of state
         m = 2 # Dinemsion of input
         p = 2 # Dinemsion of measurements
 
-        dg = MvNormal(p,1.0)          # Dynamics noise Distribution
-        df = MvNormal(n,0.1)          # Measurement noise Distribution
-        d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
+        dg = mvnormal(p,1.0)          # Dynamics noise Distribution
+        df = mvnormal(n,0.1)          # Measurement noise Distribution
+        d0 = mvnormal(randn(n),2.0)   # Initial state Distribution
 
         # Define random linenar state-space system
         Tr = randn(n,n)
@@ -99,7 +108,7 @@ Random.seed!(0)
         pfa   = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
         @test !shouldresample(pf)
         @test !shouldresample(pfa)
-        du    = MvNormal(2,1) # Control input distribution
+        du    = mvnormal(2,1) # Control input distribution
         xp,up,yp = LowLevelParticleFilters.simulate(pf,T,du,100)
         @test xp[1] isa MonteCarloMeasurements.Particles{Float64,100}
         @test size(xp) == (T,n)
@@ -151,13 +160,13 @@ Random.seed!(0)
 
         svec = exp10.(LinRange(-1,2,22))
         llspf = map(svec) do s
-            df = MvNormal(n,s)
+            df = mvnormal(n,s)
             pfs = ParticleFilter(N, dynamics, measurement, df, dg, d0)
             loglik(pfs,u,y)
         end
 
         llspfa = map(svec) do s
-            df = MvNormal(n,s)
+            df = mvnormal(n,s)
             pfs = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
             loglik(pfs,u,y)
         end
@@ -169,9 +178,10 @@ Random.seed!(0)
         # plot(svec, [llspf llspfa llskf], xscale=:log10, lab=["PF" "APF" "KF"])
 
         @testset "Metropolis" begin
+            @info "testing Metropolis"
             N = 1000
             function filter_from_parameters(θ,pf=nothing)
-                pf === nothing && (return ParticleFilter(N, dynamics, measurement, MvNormal(n,exp(θ[1])), MvNormal(p,exp(θ[2])), d0))
+                pf === nothing && (return ParticleFilter(N, dynamics, measurement, mvnormal(n,exp(θ[1])), mvnormal(p,exp(θ[2])), d0))
                 ParticleFilter(pf.state, dynamics, measurement, df,dg, d0)
             end
             # The call to `exp` on the parameters is so that we can define log-normal priors
@@ -186,6 +196,7 @@ Random.seed!(0)
         end
 
         @testset "example_lineargaussian" begin
+            @info "testing example_lineargaussian"
             include("../src/example_lineargaussian.jl")
         end
 
@@ -194,14 +205,15 @@ Random.seed!(0)
 
 
     @testset "debugplot" begin
+        @info "testing debugplot"
         eye(n) = Matrix{Float64}(I,n,n)
         n = 2 # Dinemsion of state
         m = 1 # Dinemsion of input
         p = 1 # Dinemsion of measurements
 
-        dg = MvNormal(p,1.0)          # Dynamics noise Distribution
-        df = MvNormal(n,0.1)          # Measurement noise Distribution
-        d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
+        dg = mvnormal(p,1.0)          # Dynamics noise Distribution
+        df = mvnormal(n,0.1)          # Measurement noise Distribution
+        d0 = mvnormal(randn(n),2.0)   # Initial state Distribution
 
         # Define random linenar state-space system
         Tr = randn(n,n)
@@ -218,7 +230,7 @@ Random.seed!(0)
         T     = 3   # Number of time steps
         pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
         pfa   = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
-        du    = MvNormal(1,1) # Control input distribution
+        du    = mvnormal(1,1) # Control input distribution
         x,u,y = LowLevelParticleFilters.simulate(pf,T,du)
         ##
 
@@ -235,16 +247,17 @@ Random.seed!(0)
 
 
 @testset "UKF" begin
+    @info "testing UKF"
 
     eye(n) = Matrix{Float64}(I,n,n)
     n = 2 # Dinemsion of state
     m = 2 # Dinemsion of input
     p = 2 # Dinemsion of measurements
 
-    dg = MvNormal(p,1.0)          # Dynamics noise Distribution
-    df = MvNormal(n,0.1)          # Measurement noise Distribution
-    d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
-    du = MvNormal(2,1) # Control input distribution
+    dg = mvnormal(p,1.0)          # Dynamics noise Distribution
+    df = mvnormal(n,0.1)          # Measurement noise Distribution
+    d0 = mvnormal(randn(n),2.0)   # Initial state Distribution
+    du = mvnormal(2,1) # Control input distribution
 
     # Define random linenar state-space system
     Tr = randn(n,n)
@@ -285,16 +298,17 @@ end
 
 
 @testset "Advanced filters" begin
+    @info "testing Advanced filters"
 
     eye(n) = Matrix{Float64}(I,n,n)
     n = 2 # Dinemsion of state
     m = 2 # Dinemsion of input
     p = 2 # Dinemsion of measurements
 
-    dg = MvNormal(p,1.0)          # Dynamics noise Distribution
-    df = MvNormal(n,0.1)          # Measurement noise Distribution
-    d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
-    du = MvNormal(2,1)            # Control input distribution
+    dg = mvnormal(p,1.0)          # Dynamics noise Distribution
+    df = mvnormal(n,0.1)          # Measurement noise Distribution
+    d0 = mvnormal(randn(n),2.0)   # Initial state Distribution
+    du = mvnormal(2,1)            # Control input distribution
 
     # Define random linenar state-space system
     A = SMatrix{n,n}([0.99 0.1; 0 0.2])
@@ -329,6 +343,7 @@ end
 end
 
 @testset "ekf" begin
+    @info "testing ekf"
     @info "Testing ekf"
     include("test_ekf.jl")
 end
