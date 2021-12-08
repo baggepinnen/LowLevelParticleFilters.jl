@@ -84,8 +84,8 @@ end
 
 
 """
-     ll = correct!(f, u, y, t = index(f))
-Update state/covariance/weights based on measurement `y`,  returns loglikelihood.
+     ll, e = correct!(f, u, y, t = index(f))
+Update state/covariance/weights based on measurement `y`,  returns loglikelihood and prediction error (the error is always 0 for particle filters).
 """
 function correct!(pf, u, y, t = index(pf))
     measurement_equation!(pf, u, y, t)
