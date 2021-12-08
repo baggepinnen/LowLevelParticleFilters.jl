@@ -42,6 +42,19 @@ function Base.propertynames(kf::KF, private::Bool=false) where KF <: AbstractKal
 end
 
 
+function Base.getproperty(kf::AbstractKalmanFilter, s::Symbol)
+    s ∈ fieldnames(typeof(kf)) && return getfield(kf, s)
+    if s === :nu
+        return size(kf.B, 2)
+    elseif s === :ny
+        return size(kf.R2, 1)
+    elseif s === :nx
+        return size(kf.R1, 1)
+    else
+        throw(ArgumentError("$(typeof(kf)) has no property named $s"))
+    end
+end
+
 sample_state(kf::AbstractKalmanFilter) = rand(kf.d0)
 sample_state(kf::AbstractKalmanFilter, x, u, t) = kf.A*x .+ kf.B*u .+ rand(MvNormal(kf.R1))
 sample_measurement(kf::AbstractKalmanFilter, x, u, t) = kf.C*x .+ kf.D*u .+ rand(MvNormal(kf.R2))

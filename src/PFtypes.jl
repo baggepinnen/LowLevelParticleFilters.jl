@@ -56,6 +56,21 @@ function ParticleFilter(s::PFstate, dynamics::Function, measurement::Function, d
 end
 
 
+function Base.getproperty(pf::AbstractParticleFilter, s::Symbol)
+    s ∈ fieldnames(typeof(pf)) && return getfield(pf, s)
+    if s === :nx
+        return length(pf.dynamics_density)
+    elseif s === :ny
+        return length(pf.measurement_density)
+    elseif s === :nu
+        return error("Input length unknown")
+    else
+        throw(ArgumentError("$(typeof(pf)) has no property named $s"))
+    end
+end
+
+
+
 Base.@propagate_inbounds function measurement_equation!(pf::ParticleFilter, u, y, t, w = pf.state.w, d=measurement_density(pf))
     x,g = particles(pf), measurement(pf)
     any(ismissing, y) && return w
