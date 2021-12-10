@@ -65,3 +65,5 @@ end
 sample_state(kf::AbstractExtendedKalmanFilter) = rand(kf.d0)
 sample_state(kf::AbstractExtendedKalmanFilter, x, u, t) = kf.dynamics(x, u, t) .+ rand(MvNormal(kf.R1))
 sample_measurement(kf::AbstractExtendedKalmanFilter, x, u, t) = kf.measurement(x, u, t) .+ rand(MvNormal(kf.R2))
+measurement(kf::AbstractExtendedKalmanFilter) = kf.measurement
+dynamics(kf::AbstractExtendedKalmanFilter) = kf.dynamics

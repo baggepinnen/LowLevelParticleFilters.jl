@@ -62,6 +62,33 @@ particletype(kf::AbstractKalmanFilter) = typeof(kf.x)
 covtype(kf::AbstractKalmanFilter)      = typeof(kf.R)
 state(kf::AbstractKalmanFilter)        = kf.x
 covariance(kf::AbstractKalmanFilter)   = kf.R
+function measurement(kf::AbstractKalmanFilter)
+    if ndims(kf.A) == 3
+        function (x,u,t)
+            y = kf.C[:,:,t]*x
+            if kf.D != 0
+                y .+= kf.D[:,:,t]*u
+            end
+            y
+        end
+    else
+        function (x,u,t)
+            y = kf.C*x
+            if kf.D != 0
+                y .+= kf.D*u
+            end
+            y
+        end
+    end
+end
+
+function dynamics(kf::AbstractKalmanFilter)
+    if ndims(kf.A) == 3
+        (x,u,t) -> kf.A[:,:,t]*x + kf.B[:,:,t]*u
+    else
+        (x,u,t) -> kf.A*x + kf.B*u
+    end
+end
 
 function reset!(kf::AbstractKalmanFilter)
     kf.x .= Vector(kf.d0.μ)
@@ -107,6 +134,8 @@ end
 sample_state(kf::UnscentedKalmanFilter) = rand(kf.d0)
 sample_state(kf::UnscentedKalmanFilter, x, u, t) = kf.dynamics(x,u,t) .+ rand(MvNormal(Matrix(kf.R1)))
 sample_measurement(kf::UnscentedKalmanFilter, x, u, t) = kf.measurement(x, u, t) .+ rand(MvNormal(Matrix(kf.R2)))
+measurement(kf::UnscentedKalmanFilter) = kf.measurement
+dynamics(kf::UnscentedKalmanFilter) = kf.dynamics
 
 # function transform_moments!(S,X,m,L)
 #     X .-= mean(X) # Normalize the sample
@@ -230,6 +259,8 @@ end
 sample_state(sf::SigmaFilter) = rand(sf.initial_density)
 sample_state(sf::SigmaFilter, x, u, t) = sf.dynamics(x,u,t,true)
 sample_measurement(sf::SigmaFilter, x, u, t) = sf.measurement(x,u,t,true)
+measurement(kf::SigmaFilter) = kf.measurement
+dynamics(kf::SigmaFilter) = kf.dynamics
 num_particles(sf::SigmaFilter) = length(sf.x)
 particles(sf::SigmaFilter) = sf.x
 weights(sf::SigmaFilter) = sf.w
