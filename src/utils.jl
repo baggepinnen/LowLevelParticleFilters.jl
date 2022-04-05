@@ -81,7 +81,8 @@ end
 
 """
     numparameters(f)
-Returns the number of parameters of `f` for the method which has the most parameters. This function is shamefully borrowed from [DiffEqBase.jl](https://github.com/JuliaDiffEq/DiffEqBase.jl/blob/master/src/utils.jl#L6)
+
+Returns the number of parameters of `f` for the method which has the most parameters. This function is shamelessly borrowed from [DiffEqBase.jl](https://github.com/JuliaDiffEq/DiffEqBase.jl/blob/master/src/utils.jl#L6)
 """
 function numargs(f)
     numparam = [num_types_in_tuple(m.sig) for m in methods(f)]
