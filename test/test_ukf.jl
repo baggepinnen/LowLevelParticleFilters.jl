@@ -14,8 +14,6 @@ nx = 2 # Dinemsion of state
 nu = 2 # Dinemsion of input
 ny = 2 # Dinemsion of measurements
 
-dg = mvnormal(ny,1.0)          # Dynamics noise Distribution
-df = mvnormal(nx,0.1)          # Measurement noise Distribution
 d0 = mvnormal(randn(nx),2.0)   # Initial state Distribution
 du = mvnormal(2,1) # Control input distribution
 
@@ -75,8 +73,6 @@ nu = 2 # Dinemsion of input
 ny = 2 # Dinemsion of measurements
 const Ts = 0.001
 
-dg = mvnormal(ny,1.0)          # Dynamics noise Distribution
-df = mvnormal(nx,0.1)          # Measurement noise Distribution
 d0 = mvnormal([1,0,0,0],0.1)   # Initial state Distribution
 du = mvnormal(2,0.1) # Control input distribution
 xz0 = [mean(d0); 0]
@@ -89,18 +85,12 @@ build_xz(x, z) = [x; z]
 g((x,y,u,v), (λ,), f, t) = SA[u^2 + v^2 − λ*(x^2 + y^2) − 9.82*y + x*f[1] + y*f[2]]
 g(xz, u, t) = g(get_x(xz), get_z(xz), u, t)
 
-xzp = LowLevelParticleFilters.get_xz(ukf, xz0, u0, 0)
-@test xzp[end] ≈ 0 atol=0.01 # zero centripetal acceleration at the point (x,y) = (1,0)
-@test g(xzp, u0, 0)[] ≈ 0 atol=0.01
-
-xzp = LowLevelParticleFilters.get_xz(ukf, randn(nx+1), u0, 0)
-@test g(xzp, u0, 0)[] ≈ 0 atol=0.01
-
+# Discretization of the continuous-time dynamics, we use a naive Euler approximation, real-world use should use a proper DAE solver, for example using the integrator interface in OrdinaryDiffEq.jl
 function dynamics(xz,u,t)
     der = pend(xz,u,t)
     xp = get_x(xz) + Ts*get_x(der) # Euler step
     xzp = build_xz(xp, get_z(xz))
-    LowLevelParticleFilters.get_xz(ukf, xzp, u, t) # Adjust z
+    LowLevelParticleFilters.get_xz(get_x_z, build_xz, g, xzp, u, t) # Adjust z
 end
 measurement(x,u,t) = x[1:2]
 
@@ -110,6 +100,15 @@ xzp = dynamics(xz0,u0,0)
 
 ukf0 = UnscentedKalmanFilter(dynamics, measurement, 0.000001eye(nx), 1eye(ny), d0)
 ukf  = LowLevelParticleFilters.DAEUnscentedKalmanFilter(ukf0; g, get_x_z, build_xz, xz0, nu=nu)
+
+let u0 = zeros(nu)
+    xzp = LowLevelParticleFilters.get_xz(ukf, xz0, u0, 0)
+    @test xzp[end] ≈ 0 atol=0.01 # zero centripetal acceleration at the point (x,y) = (1,0)
+    @test g(xzp, u0, 0)[] ≈ 0 atol=0.01
+
+    xzp = LowLevelParticleFilters.get_xz(ukf, randn(nx+1), u0, 0)
+    @test g(xzp, u0, 0)[] ≈ 0 atol=0.01
+end
 
 t = 0:Ts:3
 U = [sin.(t.^2) sin.(reverse(t).^2)]
