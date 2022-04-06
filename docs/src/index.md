@@ -8,9 +8,10 @@ We provide a number of filter types
 - [`ParticleFilter`](@ref): This filter is simple to use and assumes that both dynamics noise and measurement noise are additive.
 - [`AuxiliaryParticleFilter`](@ref): This filter is identical to [`ParticleFilter`](@ref), but uses a slightly different proposal mechanism for new particles.
 - [`AdvancedParticleFilter`](@ref): This filter gives you more flexibility, at the expense of having to define a few more functions. More instructions on this type below.
-- [`KalmanFilter`](@ref). Is what you would expect. Has the same features as the particle filters, but is restricted to linear dynamics (possibly time varying) and Gaussian noise.
-- [`UnscentedKalmanFilter`](@ref). Is also what you would expect. Has almost the same features as the Kalman filters, but handles nonlinear dynamics and measurement model, still requires an additive Gaussian noise model.
-- [`ExtendedKalmanFilter`](@ref). Runs a regular Kalman filter on with linearized dynamics. Uses ForwardDiff.jl for linearization.
+- [`KalmanFilter`](@ref). A standard Kalman filter. Has the same features as the particle filters, but is restricted to linear dynamics (possibly time varying) and Gaussian noise.
+- [`ExtendedKalmanFilter`](@ref): For nonlinear systems, the EKF runs a regular Kalman filter on linearized dynamics. Uses ForwardDiff.jl for linearization. The noise model must be Gaussian.
+- [`UnscentedKalmanFilter`](@ref): The Unscented kalman filter often performs slightly better than the Extended Kalman filter but may be slightly more computationally expensive. The UKF handles nonlinear dynamics and measurement model, but still requires an additive Gaussian noise model.
+- [`DAEUnscentedKalmanFilter`](@ref): An Unscented Kalman filter for differential-algebraic systems (DAE).
 
 # Functionality
 - Filtering
@@ -144,6 +145,9 @@ The UKF takes the same arguments as a regular [`KalmanFilter`](@ref), but the ma
 ```@example lingauss
 ukf    = UnscentedKalmanFilter(dynamics, measurement, eye(n), eye(p), MvNormal([1.,1.]))
 ```
+
+### UKF for DAE systems
+See the docstring for [`DAEUnscentedKalmanFilter`](@ref) or the [test file](https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/test/test_ukf.jl).
 
 
 # Troubleshooting
