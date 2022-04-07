@@ -81,7 +81,8 @@ end
 
 """
     numparameters(f)
-Returns the number of parameters of `f` for the method which has the most parameters. This function is shamefully borrowed from [DiffEqBase.jl](https://github.com/JuliaDiffEq/DiffEqBase.jl/blob/master/src/utils.jl#L6)
+
+Returns the number of parameters of `f` for the method which has the most parameters. This function is shamelessly borrowed from [DiffEqBase.jl](https://github.com/JuliaDiffEq/DiffEqBase.jl/blob/master/src/utils.jl#L6)
 """
 function numargs(f)
     numparam = [num_types_in_tuple(m.sig) for m in methods(f)]
@@ -103,10 +104,10 @@ end
 @inline Base.:(-)(::Distributions.Zeros, x::StaticArray) = -x
 @inline Distributions.logpdf(d::Distribution,x,xp,t) = logpdf(d,x-xp)
 @inline Distributions.sqmahal(d::MvNormal, x::StaticArray) = Distributions.invquad(d.Σ, x - d.μ)
-@inline PDMats.invquad(a::PDMats.ScalMat, x::StaticVector) = dot(x,x) * a.inv_value
+@inline PDMats.invquad(a::PDMats.ScalMat, x::StaticVector) = dot(x,x) / a.value
 @inline PDMats.invquad(a::PDMats.PDMat, x::StaticVector) = dot(x, a \ x) # \ not implemented
 @inline Base.:(\)(a::PDMats.PDMat, x::StaticVector) = a.chol \ x
-@inline PDMats.invquad(a::PDMats.PDiagMat, x::StaticVector) = PDMats.wsumsq(a.inv_diag, x)
+@inline PDMats.invquad(a::PDMats.PDiagMat, x::StaticVector) = PDMats.wsumsq(1 ./ a.diag, x)
 
 
 

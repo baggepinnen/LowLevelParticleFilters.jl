@@ -262,13 +262,15 @@ end
 
 
 """
-    x,u,y = simulate(f::AbstractFilter,T::Int,du::Distribution, [N])
+    x,u,y = simulate(f::AbstractFilter, T::Int, du::Distribution, [N])
+    x,u,y = simulate(f::AbstractFilter, u)
+
 Simulate dynamical system forward in time, returns state sequence, inputs and measurements
 `du` is a distribution of random inputs.
 
 If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurements.jl) is loaded, the argument `N::Int` can be supplied, in which case `N` simulations are done and the result is returned in the form of `Vector{MonteCarloMeasurements.Particles}`.
 """
-function simulate(f::AbstractFilter,T::Int,du::Distribution)
+function simulate(f::AbstractFilter, T::Int, du::Distribution)
     u = [rand(du) for t=1:T]
     simulate(f, u)
 end

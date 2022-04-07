@@ -12,9 +12,9 @@ m = 2   # Dimension of input
 p = 2   # Dimension of measurements
 N = 500 # Number of particles
 
-const dg = MvNormal(p,1.0)          # Measurement noise Distribution
-const df = MvNormal(n,1.0)          # Dynamics noise Distribution
-const d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
+const dg = MvNormal(Diagonal(ones(p)))          # Measurement noise Distribution
+const df = MvNormal(Diagonal(ones(n)))          # Dynamics noise Distribution
+const d0 = MvNormal(randn(n),2.0^2*I)   # Initial state Distribution
 
 # Define random linear state-space system
 Tr = randn(n,n)
@@ -51,7 +51,7 @@ N     = 2000 # Number of particles
 T     = 200 # Number of time steps
 M     = 100 # Number of smoothed backwards trajectories
 pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
-du    = MvNormal(2,1) # Control input distribution
+du    = MvNormal(Diagonal(ones(2))) # Control input distribution
 x,u,y = simulate(pf,T,du) # Simulate trajectory using the model in the filter
 tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
 x,u,y = tosvec.((x,u,y))
@@ -76,8 +76,8 @@ scatter!(xbt[2,:,:]', subplot=2, m=(1,:black, 0.5), lab="")
 # A Kalman filter is easily created using the constructor. Many of the functions defined for particle filters, are defined also for Kalman filters, e.g.:
 
 eye(n) = Matrix{Float64}(I,n,n)
-kf     = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal([1.,1.]))
-ukf    = UnscentedKalmanFilter(dynamics, measurement, eye(n), eye(p), MvNormal([1.,1.]))
+kf     = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal(Diagonal([1.,1.])))
+ukf    = UnscentedKalmanFilter(dynamics, measurement, eye(n), eye(p), MvNormal(Diagonal([1.,1.])))
 xf,xt,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
 xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 # It can also be called in a loop like the `pf` above
@@ -115,7 +115,7 @@ debugplot(pf,u[1:30],y[1:30], runall=true, xreal=x[1:30])
 # Plot likelihood as function of the variance of the dynamics noise
 svec = exp10.(LinRange(-1.5,1.5,60))
 llspf = map(svec) do s
-    df = MvNormal(n,s)
+    df = MvNormal(Diagonal(fill(s^2, n)))
     pfs = ParticleFilter(2000, dynamics, measurement, df, dg, d0)
     loglik(pfs,u,y)
 end
@@ -138,7 +138,7 @@ vline!([svec[findmax(llskf)[2]]], l=(:dash,:red), primary=false)
 # as we can see, the result is quite noisy due to the stochastic nature of particle filtering.
 
 # ### Smoothing using KF
-kf = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal(2,1))
+kf = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal(Diagonal(ones(2))))
 xf,xh,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
 xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 
@@ -155,8 +155,8 @@ filter_from_parameters(θ, pf = nothing) = ParticleFilter(
     N,
     dynamics,
     measurement,
-    MvNormal(n, exp(θ[1])),
-    MvNormal(p, exp(θ[2])),
+    MvNormal(Diagonal(fill(exp(θ[1]), n))),
+    MvNormal(Diagonal(fill(exp(θ[2]), p))),
     d0,
 )
 # The call to `exp` on the parameters is so that we can define log-normal priors
@@ -196,8 +196,8 @@ filter_from_parameters(θ, pf = nothing) = AuxiliaryParticleFilter(
     N,
     dynamics,
     measurement,
-    MvNormal(n, exp(θ[1])),
-    MvNormal(p, exp(θ[2])),
+    MvNormal(Diagonal(fill(exp(θ[1])^2, n))),
+    MvNormal(Diagonal(fill(exp(θ[2])^2, p))),
     d0,
 )
 # The call to `exp` on the parameters is so that we can define log-normal priors
@@ -205,7 +205,7 @@ priors = [Normal(0,2),Normal(0,2)]
 ll     = log_likelihood_fun(filter_from_parameters,priors,u,y)
 θ₀     = log.([1.,1.]) # Starting point
 # We also need to define a function that suggests a new point from the "proposal distribution". This can be pretty much anything, but it has to be symmetric since I was lazy and simplified an equation.
-draw   = θ -> θ .+ rand(MvNormal(0.05ones(2)))
+draw   = θ -> θ .+ rand(MvNormal(Diagonal(0.05^2 * ones(2))))
 burnin = 200
 @info "Starting Metropolis algorithm"
 @time theta, lls = metropolis(ll, 1200, θ₀, draw) # Run PMMH for 1200  iterations, takes about half a minute on my laptop

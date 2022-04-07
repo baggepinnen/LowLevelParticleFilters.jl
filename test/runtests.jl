@@ -189,7 +189,7 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
             ll     = log_likelihood_fun(filter_from_parameters,priors,u,y)
             θ₀ = log.([1.,1.]) # Starting point
             # We also need to define a function that suggests a new point from the "proposal distribution". This can be pretty much anything, but it has to be symmetric since I was lazy and simplified an equation.
-            draw = θ -> θ .+ rand(MvNormal(0.1ones(2)))
+            draw = θ -> θ .+ rand(MvNormal(Diagonal(0.1^2*ones(2))))
             burnin = 200
             theta, lls = metropolis(ll, 20, θ₀, draw)
 
@@ -248,50 +248,7 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
 
 @testset "UKF" begin
     @info "testing UKF"
-
-    eye(n) = Matrix{Float64}(I,n,n)
-    n = 2 # Dinemsion of state
-    m = 2 # Dinemsion of input
-    p = 2 # Dinemsion of measurements
-
-    dg = mvnormal(p,1.0)          # Dynamics noise Distribution
-    df = mvnormal(n,0.1)          # Measurement noise Distribution
-    d0 = mvnormal(randn(n),2.0)   # Initial state Distribution
-    du = mvnormal(2,1) # Control input distribution
-
-    # Define random linenar state-space system
-    Tr = randn(n,n)
-    A = SA[0.99 0.1; 0 0.2]
-    B = @SMatrix randn(n,m)
-    C = SMatrix{p,p}(eye(p))
-    # C = SMatrix{p,n}([1 1])
-
-    dynamics(x,u,t) = A*x .+ B*u
-    measurement(x,u,t) = C*x
-
-    T     = 200 # Number of time steps
-    kf   = KalmanFilter(A, B, C, 0, eye(n), eye(p), d0)
-    ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(n), eye(p), d0)
-    x,u,y = LowLevelParticleFilters.simulate(kf,T,du) # Simuate trajectory using the model in the filter
-    @test_nowarn LowLevelParticleFilters.simulate(ukf,T,du)
-    tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
-    x,u,y = tosvec.((x,u,y))
-
-
-    reskf = forward_trajectory(kf, u, y) # filtered, prediction, pred
-    resukf = forward_trajectory(ukf, u, y)
-
-    norm(mean(x .- reskf[1]))
-    norm(mean(x .- resukf[1]))
-
-    norm(mean(x .- reskf[2]))
-    norm(mean(x .- resukf[2]))
-    @test norm(mean(x .- reskf[2])) < norm(mean(x .- reskf[1])) # Filtered should be better than prediction
-    @test norm(mean(x .- resukf[2])) < norm(mean(x .- resukf[1]))
-    @test norm(mean(x .- reskf[2])) ≈ norm(mean(x .- resukf[2])) atol=5e-2
-    # @test norm(mean(x .- reskf[2])) < norm(mean(x .- resukf[2]))  # KF should be better than UKF
-    # @test norm(mean(x .- reskf[1])) < norm(mean(x .- resukf[1]))  # KF should be better than UKF
-    @test norm(mean(x .- reskf[2])) < 0.2
+    include("test_ukf.jl")
 end
 
 
