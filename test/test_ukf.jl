@@ -27,7 +27,7 @@ C = SMatrix{ny,ny}(eye(ny))
 dynamics(x,u,t) = A*x .+ B*u
 measurement(x,u,t) = C*x
 
-T     = 200 # Number of time steps
+T    = 200 # Number of time steps
 kf   = KalmanFilter(A, B, C, 0, eye(nx), eye(ny), d0)
 ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), eye(ny), d0)
 x,u,y = LowLevelParticleFilters.simulate(kf,T,du) # Simuate trajectory using the model in the filter
@@ -64,7 +64,7 @@ function pend(state, f, t=0)
         -λ*y - g + f[2]
         # x^2 + y^2 - 1 # Index 3, position constraint
         # x*u + y*v # index 2, tangential velocity
-        u^2 + v^2 − λ*(x^2 + y^2) − g*y + x*f[1] + y*f[2] # index 1, centripetal acceleration
+        u^2 + v^2 - λ*(x^2 + y^2) - g*y + x*f[1] + y*f[2] # index 1, centripetal acceleration
     ]
 end
 
@@ -82,7 +82,7 @@ get_x(xz) = SA[xz[1],xz[2],xz[3],xz[4]]
 get_z(xz) = SA[xz[5]]
 get_x_z(xz) = get_x(xz), get_z(xz)
 build_xz(x, z) = [x; z]
-g((x,y,u,v), (λ,), f, t) = SA[u^2 + v^2 − λ*(x^2 + y^2) − 9.82*y + x*f[1] + y*f[2]]
+g((x,y,u,v), (λ,), f, t) = SA[u^2 + v^2 - λ*(x^2 + y^2) - 9.82*y + x*f[1] + y*f[2]]
 g(xz, u, t) = g(get_x(xz), get_z(xz), u, t)
 
 # Discretization of the continuous-time dynamics, we use a naive Euler approximation, real-world use should use a proper DAE solver, for example using the integrator interface in OrdinaryDiffEq.jl
