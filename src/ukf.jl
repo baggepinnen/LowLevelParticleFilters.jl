@@ -7,8 +7,10 @@ end
 
 function sigmapoints!(xs, m, Σ::AbstractMatrix)
     n = length(xs[1])
-    X = sqrt(Symmetric(n*Σ))
-    for i in 1:n
+    @assert n == length(m)
+    # X = sqrt(Symmetric(n*Σ)) # 2.184 μs (16 allocations: 2.27 KiB)
+    X = cholesky!(Symmetric(n*Σ)).L # 170.869 ns (3 allocations: 176 bytes)
+    @inbounds @views for i in 1:n
         xs[i] = X[:,i]
         xs[i+n] = -xs[i] .+ m
         xs[i] = xs[i] .+ m
@@ -94,7 +96,7 @@ function correct!(ukf::UnscentedKalmanFilter, u, y, t::Integer = index(ukf))
     end
     e   = y .- ym
     S   = symmetrize(cov(ys)) + R2 # cov of y
-    Sᵪ = cholesky(S)
+    Sᵪ  = cholesky(S)
     K   = (C./ns)/Sᵪ # ns normalization to make it a covariance matrix
     x .+= K*e
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized
@@ -142,13 +144,14 @@ abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
     xz::XZT
     xzs::Vector{VZT}
     nu::Int
+    threads::Bool
     # TODO: root solver options
 end
 
 
 
 """
-    DAEUnscentedKalmanFilter(ukf; g, get_x_z, build_xz, xz0)
+    DAEUnscentedKalmanFilter(ukf; g, get_x_z, build_xz, xz0, threads=false)
 
 An Unscented Kalman filter for differential-algebraic systems (DAE).
 
@@ -161,6 +164,7 @@ Mandela, Rengaswamy, Narasimhan
 _ `get_x_z(xz) -> x, z` is a function that decomposes `xz` into `x` and `z`
 - `build_xz(x, z)` is the inverse of `get_x_z`
 - `xz0` the initial full state.
+- `threads`: If true, evaluates dynamics on Sigma points in parallel. This typically requires the dynamics to be non-allocating (use StaticArrays) to improve performance. 
 
 # Assumptions
 - The DAE dynamics is index 1 and can be written on the form 
@@ -171,11 +175,11 @@ y = h(x, z, u, t) # Measurements
 ```
 the measurements may be functions of both differential states `x` and algebraic variables `z`. Note, the actual dynamcis and measurement functions stored in the internal `ukf` should have signatures `(xz, u, t)`, i.e., they take the combined state containing both `x` and `z` in a single vector as dictated by the function `build_xz`. It is only the function `g` that is assumed to actually have the signature `g(x,z,u,t)`.
 """
-function DAEUnscentedKalmanFilter(ukf; g, get_x_z, build_xz, xz0, nu::Int)
+function DAEUnscentedKalmanFilter(ukf; g, get_x_z, build_xz, xz0, nu::Int, threads::Bool=false)
     T = eltype(ukf.xs[1])
     n = length(ukf.x)
     xzs = [@SVector zeros(T, length(xz0)) for _ in 1:(2n+1)] # These vectors have the length of xz0 but the number of them is determined by the dimension of x only
-    DAEUnscentedKalmanFilter(ukf, g, get_x_z, build_xz, copy(xz0), xzs, nu)
+    DAEUnscentedKalmanFilter(ukf, g, get_x_z, build_xz, copy(xz0), xzs, nu, threads)
 end
 
 
@@ -191,17 +195,17 @@ state(ukf::DAEUnscentedKalmanFilter) = ukf.xz
 function sample_state(kf::DAEUnscentedKalmanFilter)
     @unpack get_x_z, build_xz, xz, g, dynamics, R1, nu = kf
     xh = rand(kf.d0)
-    get_xz(get_x_z, build_xz, g, xz, zeros(nu), 0, xh)
+    calc_xz(get_x_z, build_xz, g, xz, zeros(nu), 0, xh)
 end
 function sample_state(kf::DAEUnscentedKalmanFilter, x, u, t)
     @unpack get_x_z, build_xz, xz, g, dynamics, R1 = kf
     xh = get_x_z(dynamics(x,u,t))[1] .+ rand(MvNormal(Matrix(R1)))
-    get_xz(get_x_z, build_xz, g, xz, u, t, xh)
+    calc_xz(get_x_z, build_xz, g, xz, u, t, xh)
 end
 
 """
-    get_xz(dae_ukf, xz, u, t, x=get_x_z(xz)[1])
-    get_xz(get_x_z, build_xz, g, xz, u, t, x=get_x_z(xz)[1])
+    calc_xz(dae_ukf, xz, u, t, x=get_x_z(xz)[1])
+    calc_xz(get_x_z, build_xz, g, xz, u, t, x=get_x_z(xz)[1])
 
 Find `z` such that g(x, z) = 0 (zeros of length(x) + length(z))
 The z part of xz is used as initial guess
@@ -210,30 +214,39 @@ The z part of xz is used as initial guess
 - `x`: If not provided, x from xz will be used
 - `xz`: Full state
 """
-function get_xz(get_x_z::Function, build_xz, g, xz::AbstractArray, u, t, xi=get_x_z(xz)[1])
+function calc_xz(get_x_z::Function, build_xz, g, xz::AbstractArray, u, t, xi=get_x_z(xz)[1])
     _, z0 = get_x_z(xz) # use previous z as initial guess for root finder
-    sol = solve(NonlinearProblem((z,_)->g(xi, z, u, t), z0), NewtonRaphson(), tol=1e-9) # function takes parameter as second arg
+    sol = solve(NonlinearProblem{false}((z,_)->g(xi, z, u, t), z0), NewtonRaphson(), tol=1e-9) # function takes parameter as second arg
     nr = norm(sol.resid)
     nr < 1e-3 || @warn "Root solving residual was large $nr" maxlog=10
     zi = sol.u
     build_xz(xi, zi)
 end
 
-get_xz(ukf::DAEUnscentedKalmanFilter, args...) = 
-    get_xz(ukf.get_x_z, ukf.build_xz, ukf.g, args...)
-
+calc_xz(ukf::DAEUnscentedKalmanFilter, args...) = 
+    calc_xz(ukf.get_x_z, ukf.build_xz, ukf.g, args...)
+using Polyester
 function predict!(ukf::DAEUnscentedKalmanFilter, u, t::Integer = index(ukf))
     @unpack dynamics,measurement,x,xs,xz,xzs,R,R1,g,build_xz,get_x_z = ukf
     ns = length(xs)
     sigmapoints!(xs,x,R) # generate only for x
-    for i in eachindex(xs)
-        # generate z
-        xzi = get_xz(ukf, xzs[i], u, t, xs[i])
-        xzs[i] = dynamics(xzi, u, t) # here they must be the same and in the correct order
-        xs[i],_ = get_x_z(xzs[i])
+    if ukf.threads
+        @batch for i in eachindex(xs)
+            # generate z
+            xzi = calc_xz(ukf, xzs[i], u, t, xs[i])
+            xzs[i] = dynamics(xzi, u, t) # here they must be the same and in the correct order
+            xs[i],_ = get_x_z(xzs[i])
+        end
+    else
+        for i in eachindex(xs)
+            # generate z
+            xzi = calc_xz(ukf, xzs[i], u, t, xs[i])
+            xzs[i] = dynamics(xzi, u, t) # here they must be the same and in the correct order
+            xs[i],_ = get_x_z(xzs[i])
+        end
     end
-    x .= mean(xs) # xz or xs here? Answer: Covariance is associate only with x
-    xz .= get_xz(ukf, xz, u, t, x)
+    x .= mean(xs) # xz or xs here? Answer: Covariance is associated only with x
+    xz .= calc_xz(ukf, xz, u, t, x)
     R .= symmetrize(cov(xs)) + R1
     ukf.t[] += 1
 end
@@ -245,7 +258,7 @@ function correct!(ukf::DAEUnscentedKalmanFilter, u, y, t::Integer = index(ukf))
     ns = length(xs)
     sigmapoints!(xs,x,R) # Update sigmapoints here since untransformed points required
     for i in eachindex(xs)
-        xzs[i] = get_xz(ukf, xzs[i], u, t, xs[i])
+        xzs[i] = calc_xz(ukf, xzs[i], u, t, xs[i])
     end
     C = @SMatrix zeros(n,p)
     ys = map(xzs) do xzi
@@ -263,7 +276,7 @@ function correct!(ukf::DAEUnscentedKalmanFilter, u, y, t::Integer = index(ukf))
     Sᵪ = cholesky(S)
     K   = (C./ns)/Sᵪ # ns normalization to make it a covariance matrix
     x .+= K*e
-    xz .= get_xz(ukf, xz, u, t, x)
+    xz .= calc_xz(ukf, xz, u, t, x)
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized
     RmKSKT!(R, K, S)
     ll = logpdf(MvNormal(PDMat(S,Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf

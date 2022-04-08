@@ -6,6 +6,22 @@ Random.seed!(0)
 mvnormal(d::Int, σ::Real) = MvNormal(LinearAlgebra.Diagonal(fill(float(σ) ^ 2, d)))
 mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
 
+## Test sigmapoints
+m = randn(3)
+S = randn(3,3)
+S = S'S
+xs = LowLevelParticleFilters.sigmapoints(m, S)
+X = reduce(hcat, xs)
+@test vec(mean(X, dims=2)) ≈ m
+@test cov(X, dims=2) ≈ S
+
+m = [1,2]
+S = [3. 1; 1 4]
+xs = LowLevelParticleFilters.sigmapoints(m, S)
+X = reduce(hcat, xs)
+@test vec(mean(X, dims=2)) ≈ m
+@test cov(X, dims=2) ≈ S
+
 
 ## Standard UKF
 
@@ -83,59 +99,66 @@ get_z(xz) = SA[xz[5]]
 get_x_z(xz) = get_x(xz), get_z(xz)
 build_xz(x, z) = [x; z]
 g((x,y,u,v), (λ,), f, t) = SA[u^2 + v^2 - λ*(x^2 + y^2) - 9.82*y + x*f[1] + y*f[2]]
+# g((x,y,u,v), (λ,), f, t) = SA[x*u + y*v]
 g(xz, u, t) = g(get_x(xz), get_z(xz), u, t)
 
 # Discretization of the continuous-time dynamics, we use a naive Euler approximation, real-world use should use a proper DAE solver, for example using the integrator interface in OrdinaryDiffEq.jl
 function dynamics(xz,u,t)
-    der = pend(xz,u,t)
-    xp = get_x(xz) + Ts*get_x(der) # Euler step
-    xzp = build_xz(xp, get_z(xz))
-    LowLevelParticleFilters.get_xz(get_x_z, build_xz, g, xzp, u, t) # Adjust z
+    Tsi = Ts/100
+    for i = 1:100
+        der = pend(xz,u,t)
+        xp = get_x(xz) + Tsi*get_x(der) # Euler step
+        xzp = build_xz(xp, get_z(xz))
+        xz = LowLevelParticleFilters.calc_xz(get_x_z, build_xz, g, xzp, u, t) # Adjust z
+    end
+    xz
 end
-measurement(x,u,t) = x[1:2]
+measurement(x,u,t) = SA[x[1], x[2]]
 
 u0 = randn(nu)
 xzp = dynamics(xz0,u0,0)
 @test g(xzp, u0, 0)[] ≈ 0 atol=0.01
 
 ukf0 = UnscentedKalmanFilter(dynamics, measurement, 0.000001eye(nx), 1eye(ny), d0)
-ukf  = LowLevelParticleFilters.DAEUnscentedKalmanFilter(ukf0; g, get_x_z, build_xz, xz0, nu=nu)
+for threads = (false, true)
+    ukf  = LowLevelParticleFilters.DAEUnscentedKalmanFilter(ukf0; g, get_x_z, build_xz, xz0, nu=nu, threads)
 
-let u0 = zeros(nu)
-    xzp = LowLevelParticleFilters.get_xz(ukf, xz0, u0, 0)
-    @test xzp[end] ≈ 0 atol=0.01 # zero centripetal acceleration at the point (x,y) = (1,0)
-    @test g(xzp, u0, 0)[] ≈ 0 atol=0.01
+    let u0 = zeros(nu)
+        xzp = LowLevelParticleFilters.calc_xz(ukf, xz0, u0, 0)
+        @test xzp[end] ≈ 0 atol=0.01 # zero centripetal acceleration at the point (x,y) = (1,0)
+        @test g(xzp, u0, 0)[] ≈ 0 atol=0.01
 
-    xzp = LowLevelParticleFilters.get_xz(ukf, randn(nx+1), u0, 0)
-    @test g(xzp, u0, 0)[] ≈ 0 atol=0.01
-end
+        xzp = LowLevelParticleFilters.calc_xz(ukf, randn(nx+1), u0, 0)
+        @test g(xzp, u0, 0)[] ≈ 0 atol=0.01
+    end
 
-t = 0:Ts:3
-U = [sin.(t.^2) sin.(reverse(t).^2)]
-u = U |> eachrow .|> vcat
-while true
-    global x, u, y
-    x,u,y = LowLevelParticleFilters.simulate(ukf, 1 .* u)
-    norm(x) < 1000 && break
-end
+    t = 0:Ts:3
+    U = [sin.(t.^2) sin.(reverse(t).^2)]
+    u = U |> eachrow .|> vcat
+    while true
+        global x, u, y
+        x,u,y = LowLevelParticleFilters.simulate(ukf, 1 .* u)
+        norm(x) < 3000 && break
+    end
 
-tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
-x,u,y = tosvec.((x,u,y))
+    tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
+    x,u,y = tosvec.((x,u,y))
 
-state(ukf) .+= 5 .* randn(nx+1)
+    state(ukf) .= [2,1,1,1,0]
 
-xf,xft,R,Rt,ll = forward_trajectory(ukf, u, y)
+    xf,xft,R,Rt,ll = forward_trajectory(ukf, u, y)
 
-@test all(zip(R,Rt)) do (R,Rt)
-    det(Rt) < det(R)
-end # test that the covariance decreases by the measurement update
-    
+    @test all(zip(R,Rt)) do (R,Rt)
+        det(Rt) < det(R)
+    end # test that the covariance decreases by the measurement update
+        
 
-@test norm(x[10:end] .- xf[10:end]) / norm(x) < 0.1
-@test norm(x[10:end] .- xft[10:end]) / norm(x) < 0.1
+    @test norm(x[10:end] .- xf[10:end]) / norm(x) < 0.2
+    @test norm(x[10:end] .- xft[10:end]) / norm(x) < 0.2
 
-if isinteractive()
-    plot(reduce(hcat, x)', layout=length(x[1]))
-    plot!(reduce(hcat, xf)')
-    plot!(reduce(hcat, xft)')
+    if isinteractive()
+        plot(reduce(hcat, x)', layout=length(x[1]))
+        plot!(reduce(hcat, xf)')
+        plot!(reduce(hcat, xft)')
+    end
 end
