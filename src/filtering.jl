@@ -144,7 +144,6 @@ end
 (pf::ParticleFilter)(u, y, p = parameters(pf), t = index(pf)) =  update!(pf, u, y, p, t)
 (pf::AuxiliaryParticleFilter)(u, y, y1, p = parameters(pf), t = index(pf)) =  update!(pf, u, y, y1, p, t)
 (pf::AdvancedParticleFilter)(u, y, p = parameters(pf), t = index(pf)) =  update!(pf, u, y, p, t)
-(pf::SigmaFilter)(u, y, p = parameters(pf), t = index(pf)) =  update!(pf, u, y, p, t)
 
 
 """
@@ -284,6 +283,7 @@ end
 
 """
     x̂ = weigthed_mean(x,we)
+    
 Calculated weighted mean of particle trajectories. `we` are expweights.
 """
 function weigthed_mean(x,we::AbstractVector)
@@ -312,8 +312,10 @@ end
 """
 weigthed_mean(s) = weigthed_mean(s.x,s.we)
 weigthed_mean(pf::AbstractParticleFilter) = weigthed_mean(state(pf))
-weigthed_mean(s::SigmaFilter) = weigthed_mean(s.x,s.we)
+
 """
+    weigthed_cov(x,we)
+
 Similar to [`weigthed_mean`](@ref), but returns covariances
 """
 function weigthed_cov(x,we)

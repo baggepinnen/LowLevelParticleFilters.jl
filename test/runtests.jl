@@ -285,18 +285,10 @@ end
     x,u,y = LowLevelParticleFilters.simulate(apf,T,du) # Simuate trajectory using the model in the filter
     x,u,y = tosvec.((x,u,y))
     @time resapf,ll = mean_trajectory(apf, u, y)
-    sf = SigmaFilter(N,dynamics, measurement, measurement_likelihood, df, d0)
-    @test_nowarn LowLevelParticleFilters.simulate(sf,T,du)
-    @time ressf,ll = mean_trajectory(sf, u, y)
-
-
+    
     norm(mean(x))
     norm(mean(x .- resapf))
-    norm(mean(x .- ressf))
-
-
-    @test norm(mean(x .- ressf)) ≈ norm(mean(x .- resapf)) atol=2e-1
-    @test_skip norm(mean(x .- ressf)) < norm(mean(x .- resapf))  # SF should be better than PF since we now covs are Gaussian, this test is not robust enough to include
+    
 end
 
 @testset "ekf" begin

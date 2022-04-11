@@ -30,7 +30,6 @@ end
 
 @inline logsumexp!(s) = logsumexp!(s.w,s.we,s.maxw)
 @inline logsumexp!(pf::AbstractParticleFilter) = logsumexp!(pf.state)
-@inline logsumexp!(pf::SigmaFilter) = logsumexp!(pf.w, pf.we)
 
 """
     expnormalize!(out,w)
