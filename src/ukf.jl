@@ -56,9 +56,9 @@ function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)
     UnscentedKalmanFilter(dynamics,measurement,R1s,R2s,MvNormal(Matrix(R2s)), d0, xs, Vector(d0.μ), Matrix(d0.Σ), Ref(1))
 end
 
-sample_state(kf::AbstractUnscentedKalmanFilter) = rand(kf.d0)
-sample_state(kf::AbstractUnscentedKalmanFilter, x, u, t) = kf.dynamics(x,u,t) .+ rand(MvNormal(Matrix(kf.R1)))
-sample_measurement(kf::AbstractUnscentedKalmanFilter, x, u, t) = kf.measurement(x, u, t) .+ rand(MvNormal(Matrix(kf.R2)))
+sample_state(kf::AbstractUnscentedKalmanFilter; noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
+sample_state(kf::AbstractUnscentedKalmanFilter, x, u, t; noise=true) = kf.dynamics(x,u,t) .+ noise*rand(MvNormal(Matrix(kf.R1)))
+sample_measurement(kf::AbstractUnscentedKalmanFilter, x, u, t; noise=true) = kf.measurement(x, u, t) .+ noise*rand(MvNormal(Matrix(kf.R2)))
 measurement(kf::AbstractUnscentedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 
@@ -192,14 +192,14 @@ Base.propertynames(ukf::DAEUnscentedKalmanFilter) = (fieldnames(typeof(ukf))...,
 
 state(ukf::DAEUnscentedKalmanFilter) = ukf.xz
 
-function sample_state(kf::DAEUnscentedKalmanFilter)
+function sample_state(kf::DAEUnscentedKalmanFilter; noise=true)
     @unpack get_x_z, build_xz, xz, g, dynamics, R1, nu = kf
-    xh = rand(kf.d0)
+    xh = noise ? rand(kf.d0) : mean(kf.d0)
     calc_xz(get_x_z, build_xz, g, xz, zeros(nu), 0, xh)
 end
-function sample_state(kf::DAEUnscentedKalmanFilter, x, u, t)
+function sample_state(kf::DAEUnscentedKalmanFilter, x, u, t; noise=true)
     @unpack get_x_z, build_xz, xz, g, dynamics, R1 = kf
-    xh = get_x_z(dynamics(x,u,t))[1] .+ rand(MvNormal(Matrix(R1)))
+    xh = get_x_z(dynamics(x,u,t))[1] .+ noise .* rand(MvNormal(Matrix(R1)))
     calc_xz(get_x_z, build_xz, g, xz, u, t, xh)
 end
 

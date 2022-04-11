@@ -55,9 +55,9 @@ function Base.getproperty(kf::AbstractKalmanFilter, s::Symbol)
     end
 end
 
-sample_state(kf::AbstractKalmanFilter) = rand(kf.d0)
-sample_state(kf::AbstractKalmanFilter, x, u, t) = kf.A*x .+ kf.B*u .+ rand(MvNormal(kf.R1))
-sample_measurement(kf::AbstractKalmanFilter, x, u, t) = kf.C*x .+ kf.D*u .+ rand(MvNormal(kf.R2))
+sample_state(kf::AbstractKalmanFilter; noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
+sample_state(kf::AbstractKalmanFilter, x, u, t; noise=true) = kf.A*x .+ kf.B*u .+ noise*rand(MvNormal(kf.R1))
+sample_measurement(kf::AbstractKalmanFilter, x, u, t; noise=true) = kf.C*x .+ kf.D*u .+ noise*rand(MvNormal(kf.R2))
 particletype(kf::AbstractKalmanFilter) = typeof(kf.x)
 covtype(kf::AbstractKalmanFilter)      = typeof(kf.R)
 state(kf::AbstractKalmanFilter)        = kf.x
@@ -134,9 +134,9 @@ function SigmaFilter(N,dynamics,measurement,measurement_likelihood,df,d0)
         Ref(1))
 end
 
-sample_state(sf::SigmaFilter) = rand(sf.initial_density)
-sample_state(sf::SigmaFilter, x, u, t) = sf.dynamics(x,u,t,true)
-sample_measurement(sf::SigmaFilter, x, u, t) = sf.measurement(x,u,t,true)
+sample_state(sf::SigmaFilter; noise=true) = noise ? rand(sf.initial_density) : mean(sf.initial_density)
+sample_state(sf::SigmaFilter, x, u, t; noise=true) = sf.dynamics(x,u,t,noise)
+sample_measurement(sf::SigmaFilter, x, u, t; noise=true) = sf.measurement(x,u,t,noise)
 measurement(kf::SigmaFilter) = kf.measurement
 dynamics(kf::SigmaFilter) = kf.dynamics
 num_particles(sf::SigmaFilter) = length(sf.x)

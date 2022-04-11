@@ -88,6 +88,7 @@ nx = 4 # Dinemsion of differential state
 nu = 2 # Dinemsion of input
 ny = 2 # Dinemsion of measurements
 const Ts = 0.001
+@inbounds measurement(x,u,t) = SA[x[1], x[end]] # measure one position and the algebraic state 
 
 d0 = mvnormal([1,0,0,0],0.1)   # Initial state Distribution
 du = mvnormal(2,0.1) # Control input distribution
@@ -113,13 +114,14 @@ function dynamics(xz,u,t)
     end
     xz
 end
-measurement(x,u,t) = SA[x[1], x[2]]
+
 
 u0 = randn(nu)
 xzp = dynamics(xz0,u0,0)
 @test g(xzp, u0, 0)[] ≈ 0 atol=0.01
 
-ukf0 = UnscentedKalmanFilter(dynamics, measurement, 0.000001eye(nx), 1eye(ny), d0)
+ukf0 = UnscentedKalmanFilter(dynamics, measurement, 0.0001eye(nx), 0.01eye(ny), d0)
+threads = true
 for threads = (false, true)
     ukf  = LowLevelParticleFilters.DAEUnscentedKalmanFilter(ukf0; g, get_x_z, build_xz, xz0, nu=nu, threads)
 
@@ -135,9 +137,10 @@ for threads = (false, true)
     t = 0:Ts:3
     U = [sin.(t.^2) sin.(reverse(t).^2)]
     u = U |> eachrow .|> vcat
+    local x, u, y
     while true
-        global x, u, y
-        x,u,y = LowLevelParticleFilters.simulate(ukf, 1 .* u)
+        # global x, u, y
+        x,u,y = LowLevelParticleFilters.simulate(ukf, 1 .* u, dynamics_noise=false)
         norm(x) < 3000 && break
     end
 
@@ -159,6 +162,6 @@ for threads = (false, true)
     if isinteractive()
         plot(reduce(hcat, x)', layout=length(x[1]))
         plot!(reduce(hcat, xf)')
-        plot!(reduce(hcat, xft)')
+        plot!(reduce(hcat, xft)') |> display
     end
 end
