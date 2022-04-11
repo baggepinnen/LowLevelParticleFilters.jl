@@ -215,13 +215,13 @@ end
 @forward AuxiliaryParticleFilter.pf state, particles, weights, expweights, reset!, weigthed_mean, measurement_equation!, sample_state, sample_measurement, index, num_particles, particletype, dynamics, measurement, dynamics_density, measurement_density, initial_density, resample_threshold, resampling_strategy, rng, mode_trajectory, mean_trajectory
 
 
-sample_state(pf::AbstractParticleFilter) = rand(pf.rng, pf.initial_density)
-sample_state(pf::ParticleFilter, x, u, t) = dynamics(pf)(x,u,t) + rand(pf.rng, pf.dynamics_density)
-sample_state(pf::AdvancedParticleFilter, x, u, t) = dynamics(pf)(x,u,t,true)
-sample_measurement(pf::AdvancedParticleFilter, x, u, t) = measurement(pf)(x, u, t, true)
-sample_measurement(pf::AbstractParticleFilter, x, u, t) = measurement(pf)(x, u, t) .+ rand(pf.rng, pf.measurement_density)
+sample_state(pf::AbstractParticleFilter; noise=true) = noise ? rand(pf.rng, pf.initial_density) : mean(pf.initial_density)
+sample_state(pf::ParticleFilter, x, u, t; noise=true) = dynamics(pf)(x,u,t) + noise*rand(pf.rng, pf.dynamics_density)
+sample_state(pf::AdvancedParticleFilter, x, u, t; noise=true) = dynamics(pf)(x,u,t,noise)
+sample_measurement(pf::AdvancedParticleFilter, x, u, t; noise=true) = measurement(pf)(x, u, t, noise)
+sample_measurement(pf::AbstractParticleFilter, x, u, t; noise=true) = measurement(pf)(x, u, t) .+ noise*rand(pf.rng, pf.measurement_density)
 
-sample_measurement(f::AbstractFilter, u) = sample_measurement(f, state(f), u, f.t[])
+sample_measurement(f::AbstractFilter, u; noise=true) = sample_measurement(f, state(f), u, f.t[]; noise)
 
 expweights(pf::AbstractParticleFilter) = pf.state.we
 weights(s::PFstate)                    = s.w

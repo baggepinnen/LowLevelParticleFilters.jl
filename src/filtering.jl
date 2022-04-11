@@ -262,27 +262,27 @@ end
 
 
 """
-    x,u,y = simulate(f::AbstractFilter, T::Int, du::Distribution, [N])
-    x,u,y = simulate(f::AbstractFilter, u)
+    x,u,y = simulate(f::AbstractFilter, T::Int, du::Distribution, [N]; dynamics_noise=true)
+    x,u,y = simulate(f::AbstractFilter, u; dynamics_noise=true)
 
 Simulate dynamical system forward in time, returns state sequence, inputs and measurements
 `du` is a distribution of random inputs.
 
 If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurements.jl) is loaded, the argument `N::Int` can be supplied, in which case `N` simulations are done and the result is returned in the form of `Vector{MonteCarloMeasurements.Particles}`.
 """
-function simulate(f::AbstractFilter, T::Int, du::Distribution)
+function simulate(f::AbstractFilter, T::Int, du::Distribution; dynamics_noise=true)
     u = [rand(du) for t=1:T]
-    simulate(f, u)
+    simulate(f, u; dynamics_noise)
 end
 
-function simulate(f::AbstractFilter,u)
+function simulate(f::AbstractFilter,u; dynamics_noise=true)
     y = similar(u)
     x = similar(u)
     x[1] = sample_state(f)
     T = length(u)
     for t = 1:T-1
         y[t] = sample_measurement(f,x[t], u[t], t)
-        x[t+1] = sample_state(f, x[t], u[t], t)
+        x[t+1] = sample_state(f, x[t], u[t], t; noise=dynamics_noise)
     end
     y[T] = sample_measurement(f,x[T], u[T], T)
     x,u,y

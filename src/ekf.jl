@@ -61,8 +61,8 @@ function smooth(kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::Abstract
     xT,RT,ll
 end
 
-sample_state(kf::AbstractExtendedKalmanFilter) = rand(kf.d0)
-sample_state(kf::AbstractExtendedKalmanFilter, x, u, t) = kf.dynamics(x, u, t) .+ rand(MvNormal(kf.R1))
-sample_measurement(kf::AbstractExtendedKalmanFilter, x, u, t) = kf.measurement(x, u, t) .+ rand(MvNormal(kf.R2))
+sample_state(kf::AbstractExtendedKalmanFilter; noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
+sample_state(kf::AbstractExtendedKalmanFilter, x, u, t; noise=true) = kf.dynamics(x, u, t) .+ noise*rand(MvNormal(kf.R1))
+sample_measurement(kf::AbstractExtendedKalmanFilter, x, u, t; noise=true) = kf.measurement(x, u, t) .+ noise*rand(MvNormal(kf.R2))
 measurement(kf::AbstractExtendedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractExtendedKalmanFilter) = kf.dynamics
