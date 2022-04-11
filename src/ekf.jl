@@ -22,18 +22,18 @@ function Base.propertynames(ekf::EKF, private::Bool=false) where EKF <: Abstract
 end
 
 
-function predict!(kf::AbstractExtendedKalmanFilter, u, t::Integer = index(kf))
+function predict!(kf::AbstractExtendedKalmanFilter, u, p = parameters(kf), t::Integer = index(kf))
     @unpack x,R,R1 = kf
-    A = ForwardDiff.jacobian(x->kf.dynamics(x,u,t), x)
-    x .= kf.dynamics(x, u, t)
+    A = ForwardDiff.jacobian(x->kf.dynamics(x,u,p,t), x)
+    x .= kf.dynamics(x, u, p, t)
     R .= symmetrize(A*R*A') + R1
     kf.t[] += 1
 end
 
-function correct!(kf::AbstractExtendedKalmanFilter, u, y, t::Integer = index(kf))
+function correct!(kf::AbstractExtendedKalmanFilter, u, y, p = parameters(kf), t::Integer = index(kf))
     @unpack x,R,R2 = kf
-    C = ForwardDiff.jacobian(x->kf.measurement(x,u,t), x)
-    e  = y .- kf.measurement(x,u,t)
+    C = ForwardDiff.jacobian(x->kf.measurement(x,u,p,t), x)
+    e  = y .- kf.measurement(x,u,p,t)
     S   = symmetrize(C*R*C') + R2
     Sᵪ  = cholesky(S)
     K   = (R*C')/Sᵪ
@@ -44,16 +44,16 @@ function correct!(kf::AbstractExtendedKalmanFilter, u, y, t::Integer = index(kf)
 end
 
 
-function smooth(kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::AbstractVector)
+function smooth(kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf))
     reset!(kf)
     T            = length(y)
-    x,xt,R,Rt,ll = forward_trajectory(kf, u, y)
+    x,xt,R,Rt,ll = forward_trajectory(kf, u, y, p)
     xT           = similar(xt)
     RT           = similar(Rt)
     xT[end]      = xt[end]      |> copy
     RT[end]      = Rt[end]      |> copy
     for t = T-1:-1:1
-        A = ForwardDiff.jacobian(x->kf.dynamics(x,u[t+1],t+1), xt[t+1])
+        A = ForwardDiff.jacobian(x->kf.dynamics(x,u[t+1],p,t+1), xt[t+1])
         C     = Rt[t]*A/R[t+1]
         xT[t] = xt[t] .+ C*(xT[t+1] .- x[t+1])
         RT[t] = Rt[t] .+ symmetrize(C*(RT[t+1] .- R[t+1])*C')
@@ -61,8 +61,8 @@ function smooth(kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::Abstract
     xT,RT,ll
 end
 
-sample_state(kf::AbstractExtendedKalmanFilter; noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
-sample_state(kf::AbstractExtendedKalmanFilter, x, u, t; noise=true) = kf.dynamics(x, u, t) .+ noise*rand(MvNormal(kf.R1))
-sample_measurement(kf::AbstractExtendedKalmanFilter, x, u, t; noise=true) = kf.measurement(x, u, t) .+ noise*rand(MvNormal(kf.R2))
+sample_state(kf::AbstractExtendedKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
+sample_state(kf::AbstractExtendedKalmanFilter, x, u, p, t; noise=true) = kf.dynamics(x, u, p, t) .+ noise*rand(MvNormal(kf.R1))
+sample_measurement(kf::AbstractExtendedKalmanFilter, x, u, p, t; noise=true) = kf.measurement(x, u, p, t) .+ noise*rand(MvNormal(kf.R2))
 measurement(kf::AbstractExtendedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractExtendedKalmanFilter) = kf.dynamics

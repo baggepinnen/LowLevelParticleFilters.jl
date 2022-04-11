@@ -55,39 +55,25 @@ function Base.getproperty(kf::AbstractKalmanFilter, s::Symbol)
     end
 end
 
-sample_state(kf::AbstractKalmanFilter; noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
-sample_state(kf::AbstractKalmanFilter, x, u, t; noise=true) = kf.A*x .+ kf.B*u .+ noise*rand(MvNormal(kf.R1))
-sample_measurement(kf::AbstractKalmanFilter, x, u, t; noise=true) = kf.C*x .+ kf.D*u .+ noise*rand(MvNormal(kf.R2))
+sample_state(kf::AbstractKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
+sample_state(kf::AbstractKalmanFilter, x, u, p=parameters(kf), t=0; noise=true) = kf.A*x .+ kf.B*u .+ noise*rand(MvNormal(kf.R1))
+sample_measurement(kf::AbstractKalmanFilter, x, u, p=parameters(kf), t=0; noise=true) = kf.C*x .+ kf.D*u .+ noise*rand(MvNormal(kf.R2))
 particletype(kf::AbstractKalmanFilter) = typeof(kf.x)
 covtype(kf::AbstractKalmanFilter)      = typeof(kf.R)
 state(kf::AbstractKalmanFilter)        = kf.x
 covariance(kf::AbstractKalmanFilter)   = kf.R
 function measurement(kf::AbstractKalmanFilter)
-    if ndims(kf.A) == 3
-        function (x,u,t)
-            y = kf.C[:,:,t]*x
-            if kf.D != 0
-                y .+= kf.D[:,:,t]*u
-            end
-            y
+    function (x,u,p,t)
+        y = get_mat(kf.C, x, u, p, t)*x
+        if !(isa(kf.D, Union{Number, AbstractArray}) && iszero(kf.D))
+            y .+= get_mat(kf.D, x, u, p, t)*u
         end
-    else
-        function (x,u,t)
-            y = kf.C*x
-            if kf.D != 0
-                y .+= kf.D*u
-            end
-            y
-        end
+        y
     end
 end
 
 function dynamics(kf::AbstractKalmanFilter)
-    if ndims(kf.A) == 3
-        (x,u,t) -> kf.A[:,:,t]*x + kf.B[:,:,t]*u
-    else
-        (x,u,t) -> kf.A*x + kf.B*u
-    end
+    (x,u,p,t) -> get_mat(kf.A, x, u, p, t)*x + get_mat(kf.B, x, u, p, t)*u
 end
 
 function reset!(kf::AbstractKalmanFilter)
@@ -118,6 +104,8 @@ end
 
 """
     SigmaFilter(N,dynamics,measurement,measurement_likelihood,df,d0)
+
+A SigmaFilter is like a mix of a PF and a UKF. Similar to an UnscentedKalmanFilter, it approximates distributions as Gaussians, but similar to particle filters, it uses a large number of samples when propagating the distributions.
 """
 function SigmaFilter(N,dynamics,measurement,measurement_likelihood,df,d0)
     @show n = length(d0)
@@ -134,9 +122,9 @@ function SigmaFilter(N,dynamics,measurement,measurement_likelihood,df,d0)
         Ref(1))
 end
 
-sample_state(sf::SigmaFilter; noise=true) = noise ? rand(sf.initial_density) : mean(sf.initial_density)
-sample_state(sf::SigmaFilter, x, u, t; noise=true) = sf.dynamics(x,u,t,noise)
-sample_measurement(sf::SigmaFilter, x, u, t; noise=true) = sf.measurement(x,u,t,noise)
+sample_state(sf::SigmaFilter, p=parameters(sf); noise=true) = noise ? rand(sf.initial_density) : mean(sf.initial_density)
+sample_state(sf::SigmaFilter, x, u, p, t; noise=true) = sf.dynamics(x,u,p,t,noise)
+sample_measurement(sf::SigmaFilter, x, u, p, t; noise=true) = sf.measurement(x,u,p,t,noise)
 measurement(kf::SigmaFilter) = kf.measurement
 dynamics(kf::SigmaFilter) = kf.dynamics
 num_particles(sf::SigmaFilter) = length(sf.x)
@@ -146,7 +134,7 @@ expweights(sf::SigmaFilter) = sf.we
 state(sf::SigmaFilter) = sf
 rng(sf::SigmaFilter) = Random.GLOBAL_RNG
 
-function predict!(sf::SigmaFilter, u, t::Integer = index(sf))
+function predict!(sf::SigmaFilter, u, p=parameters(sf), t::Integer = index(sf))
     @unpack dynamics,measurement,x,xprev,xm,R,w,we = sf
     N = length(x)
     n = length(x[1])
@@ -162,7 +150,7 @@ function predict!(sf::SigmaFilter, u, t::Integer = index(sf))
     noisevec = zeros(length(d))
     for i in eachindex(x)
         xi = SVector{n,Float64}(rand!(d, noisevec))
-        x[i] = dynamics(xi, u, t, true)
+        x[i] = dynamics(xi, u, p, t, true)
     end
     w  .= -log(N)
     we .= 1/N
@@ -172,7 +160,7 @@ function predict!(sf::SigmaFilter, u, t::Integer = index(sf))
 end
 
 
-Base.@propagate_inbounds propagate_particles!(sf::SigmaFilter, u, j::Vector{Int}, t::Int, noise=true) = propagate_particles!(sf, u, t, noise)
+Base.@propagate_inbounds propagate_particles!(sf::SigmaFilter, u, j::Vector{Int}, p, t::Int, noise::Union{Bool, Nothing}=true) = propagate_particles!(sf, u, p, t, noise)
 
 # Base.@propagate_inbounds function measurement_equation!(sf::SigmaFilter, y, t, w = weights(sf))
 #     g = measurement_likelihood(sf)

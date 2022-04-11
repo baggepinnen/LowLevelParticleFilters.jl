@@ -13,15 +13,14 @@ function reset!(pf::AbstractParticleFilter)
     s.t[] = 1
 end
 
-function predict!(kf::AbstractKalmanFilter, u, t::Integer = index(kf))
+get_mat(A::Union{AbstractMatrix, Number},x,u,p,t) = A
+get_mat(A::AbstractArray{<:Any, 3},x,u,p,t) = @view A[:,:,t]
+get_mat(A::Function,x,u,p,t) = A(x,u,p,t)
+
+function predict!(kf::AbstractKalmanFilter, u, p=parameters(kf), t::Integer = index(kf))
     @unpack A,B,x,R,R1 = kf
-    if ndims(A) == 3
-        At = A[:,:,t]
-        Bt = B[:,:,t]
-    else
-        At = A
-        Bt = B
-    end
+    At = get_mat(A, x, u, p, t)
+    Bt = get_mat(B, x, u, p, t)
     x .= At*x .+ Bt*u |> vec
     R .= symmetrize(At*R*At') + R1
     kf.t[] += 1
@@ -37,21 +36,12 @@ end
     Symmetric(x)
 end
 
-function correct!(kf::AbstractKalmanFilter, u, y, t::Integer = index(kf))
+function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Integer = index(kf))
     @unpack C,D,x,R,R2 = kf
-    if ndims(C) == 3
-        Ct = C[:,:,t]
-    else
-        Ct = C
-    end
-    # Handle D separately in case it is 0
-    if ndims(D) == 3
-        Dt = D[:,:,t]
-    else
-        Dt = D
-    end
+    Ct = get_mat(C, x, u, p, t)
+    Dt = get_mat(D, x, u, p, t)
     e   = y .- Ct*x
-    if ! iszero(D)
+    if !iszero(D)
         e .-= Dt*u
     end
     S   = symmetrize(Ct*R*Ct') + R2
@@ -64,19 +54,20 @@ function correct!(kf::AbstractKalmanFilter, u, y, t::Integer = index(kf))
 end
 
 """
-    predict!(f, u, t = index(f))
+    predict!(f, u, p=parameters(f), t = index(f))
+
 Move filter state forward in time using dynamics equation and input vector `u`.
 """
-function predict!(pf, u, t = index(pf))
+function predict!(pf, u, p=parameters(pf), t = index(pf))
     s = pf.state
     N = num_particles(s)
     if shouldresample(pf)
         j = resample(pf)
-        propagate_particles!(pf, u, j, t)
+        propagate_particles!(pf, u, j, p, t)
         reset_weights!(s)
     else # Resample not needed
         s.j .= 1:N
-        propagate_particles!(pf, u, t)
+        propagate_particles!(pf, u, p, t)
     end
     copyto!(s.xprev, s.x)
     pf.state.t[] += 1
@@ -84,39 +75,41 @@ end
 
 
 """
-     ll, e = correct!(f, u, y, t = index(f))
+    ll, e = correct!(f, u, y, p=parameters(f), t = index(f))
+    
 Update state/covariance/weights based on measurement `y`,  returns loglikelihood and prediction error (the error is always 0 for particle filters).
 """
-function correct!(pf, u, y, t = index(pf))
-    measurement_equation!(pf, u, y, t)
+function correct!(pf, u, y, p=parameters(pf), t = index(pf))
+    measurement_equation!(pf, u, y, p, t)
     ll = logsumexp!(state(pf))
     ll, 0
 end
 
 """
-    ll, e = update!(f::AbstractFilter, u, y, t = index(f))
+    ll, e = update!(f::AbstractFilter, u, y, p=parameters(f), t = index(f))
+
 Perform one step of `predict!` and `correct!`, returns loglikelihood and prediction error
 """
-function update!(f::AbstractFilter, u, y, t = index(f))
-    ll_e = correct!(f, u, y, t)
-    predict!(f, u, t)
+function update!(f::AbstractFilter, u, y, p=parameters(f), t = index(f))
+    ll_e = correct!(f, u, y, p, t)
+    predict!(f, u, p, t)
     ll_e
 end
 
-function update!(pf::AuxiliaryParticleFilter, u, y, y1, t = index(pf))
-    ll_e = correct!(pf, u, y, t)
-    predict!(pf, u, y1, t)
+function update!(pf::AuxiliaryParticleFilter, u, y, y1, p=parameters(pf), t = index(pf))
+    ll_e = correct!(pf, u, y, p, t)
+    predict!(pf, u, y1, p, t)
     ll_e
 end
 
 
 
-function predict!(pf::AuxiliaryParticleFilter, u, y1, t = index(pf))
+function predict!(pf::AuxiliaryParticleFilter, u, y1, p = parameters(pf), t = index(pf))
     s = state(pf)
-    propagate_particles!(pf.pf, u, t, nothing)# Propagate without noise
+    propagate_particles!(pf.pf, u, p, t, nothing)# Propagate without noise
     λ  = s.we
     λ .= 0
-    measurement_equation!(pf.pf, u, y1, t, λ)
+    measurement_equation!(pf.pf, u, y1, p, t, λ)
     s.w .+= λ
     expnormalize!(s.w) # w used as buffer
     j = resample(ResampleSystematic, s.w , s.j, s.bins)
@@ -129,33 +122,33 @@ function predict!(pf::AuxiliaryParticleFilter, u, y1, t = index(pf))
 end
 
 
-function predict!(pf::AuxiliaryParticleFilter{<:AdvancedParticleFilter},u, y, t = index(pf))
+function predict!(pf::AuxiliaryParticleFilter{<:AdvancedParticleFilter},u, y, p=parameters(pf), t = index(pf))
     s = state(pf)
-    propagate_particles!(pf.pf, u, t, nothing)# Propagate without noise
+    propagate_particles!(pf.pf, u, p, t, nothing)# Propagate without noise
     λ  = s.we
     λ .= 0
-    measurement_equation!(pf.pf, u, y, t, λ)
+    measurement_equation!(pf.pf, u, y, p, t, λ)
     s.w .+= λ
     expnormalize!(s.w) # w used as buffer
     j = resample(ResampleSystematic, s.w , s.j, s.bins)
     reset_weights!(s)
-    propagate_particles!(pf.pf, u, j, t)# Propagate with noise and permutation
+    propagate_particles!(pf.pf, u, j, p, t)# Propagate with noise and permutation
 
     s.t[] += 1
     copyto!(s.xprev, s.x)
 end
 
 
-(kf::KalmanFilter)(u, y, t = index(kf)) =  update!(kf, u, y, t)
-(kf::UnscentedKalmanFilter)(u, y, t = index(kf)) =  update!(kf, u, y, t)
-(pf::ParticleFilter)(u, y, t = index(pf)) =  update!(pf, u, y, t)
-(pf::AuxiliaryParticleFilter)(u, y, y1, t = index(pf)) =  update!(pf, u, y, y1, t)
-(pf::AdvancedParticleFilter)(u, y, t = index(pf)) =  update!(pf, u, y, t)
-(pf::SigmaFilter)(u, y, t = index(pf)) =  update!(pf, u, y, t)
+(kf::KalmanFilter)(u, y, p=parameters(kf), t = index(kf)) =  update!(kf, u, y, p, t)
+(kf::AbstractUnscentedKalmanFilter)(u, y, p = parameters(kf), t = index(kf)) =  update!(kf, u, y, p, t)
+(pf::ParticleFilter)(u, y, p = parameters(pf), t = index(pf)) =  update!(pf, u, y, p, t)
+(pf::AuxiliaryParticleFilter)(u, y, y1, p = parameters(pf), t = index(pf)) =  update!(pf, u, y, y1, p, t)
+(pf::AdvancedParticleFilter)(u, y, p = parameters(pf), t = index(pf)) =  update!(pf, u, y, p, t)
+(pf::SigmaFilter)(u, y, p = parameters(pf), t = index(pf)) =  update!(pf, u, y, p, t)
 
 
 """
-    x,xt,R,Rt,ll = forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector)
+    x,xt,R,Rt,ll = forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector, p=parameters(kf))
 
 Run a Kalman filter forward
 
@@ -166,7 +159,7 @@ Run a Kalman filter forward
 - `Rt`: filter covariances
 - `ll`: loglik
 """
-function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector)
+function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf))
     reset!(kf)
     T    = length(y)
     x    = Array{particletype(kf)}(undef,T)
@@ -177,22 +170,22 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
     for t = 1:T
         x[t]  = state(kf)      |> copy
         R[t]  = covariance(kf) |> copy
-        ll   += correct!(kf, u[t], y[t], t)[1]
+        ll   += correct!(kf, u[t], y[t], p, t)[1]
         xt[t] = state(kf)      |> copy
         Rt[t] = covariance(kf) |> copy
-        predict!(kf, u[t], t)
+        predict!(kf, u[t], p, t)
     end
     x,xt,R,Rt,ll
 end
 
 
 """
-    x,w,we,ll = forward_trajectory(pf, u::AbstractVector, y::AbstractVector)
+    x,w,we,ll = forward_trajectory(pf, u::AbstractVector, y::AbstractVector, p=parameters(pf))
 Run the particle filter for a sequence of inputs and measurements. Return particles, weights, expweights and loglikelihood
 
 If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurements.jl) is loaded, you may transform the output particles to `Matrix{MonteCarloMeasurements.Particles}` using `Particles(x,we)`. Internally, the particles are then resampled such that they all have unit weight. This is conventient for making use of the [plotting facilities of MonteCarloMeasurements.jl](https://baggepinnen.github.io/MonteCarloMeasurements.jl/stable/#Plotting-1).
 """
-function forward_trajectory(pf, u::AbstractVector, y::AbstractVector)
+function forward_trajectory(pf, u::AbstractVector, y::AbstractVector, p=parameters(pf))
     reset!(pf)
     T = length(y)
     N = num_particles(pf)
@@ -201,16 +194,16 @@ function forward_trajectory(pf, u::AbstractVector, y::AbstractVector)
     we = Array{Float64}(undef,N,T)
     ll = 0.
     @inbounds for t = 1:T
-        ll += correct!(pf, u[t], y[t], t) |> first
+        ll += correct!(pf, u[t], y[t], p, t) |> first
         x[:,t] .= particles(pf)
         w[:,t] .= weights(pf)
         we[:,t] .= expweights(pf)
-        predict!(pf, u[t], t)
+        predict!(pf, u[t], p, t)
     end
     x,w,we,ll
 end
 
-function forward_trajectory(pf::AuxiliaryParticleFilter, u::AbstractVector, y::AbstractVector)
+function forward_trajectory(pf::AuxiliaryParticleFilter, u::AbstractVector, y::AbstractVector, p=parameters(pf))
     reset!(pf)
     T = length(y)
     N = num_particles(pf)
@@ -219,11 +212,11 @@ function forward_trajectory(pf::AuxiliaryParticleFilter, u::AbstractVector, y::A
     we = Array{Float64}(undef,N,T)
     ll = 0.
     @inbounds for t = 1:T
-        ll += correct!(pf, u[t], y[t], t) |> first
+        ll += correct!(pf, u[t], y[t], p, t) |> first
         x[:,t] .= particles(pf)
         w[:,t] .= weights(pf)
         we[:,t] .= expweights(pf)
-        t < T && predict!(pf, u[t], y[t+1], t)
+        t < T && predict!(pf, u[t], y[t+1], p, t)
     end
     x,w,we,ll
 end
@@ -231,22 +224,22 @@ end
 
 
 """
-    x,ll = mean_trajectory(pf, u::Vector{Vector}, y::Vector{Vector})
+    x,ll = mean_trajectory(pf, u::Vector{Vector}, y::Vector{Vector}, p=parameters(pf))
 
 This Function resets the particle filter to the initial state distribution upon start
 """
 mean_trajectory(pf, u::Vector, y::Vector) = reduce_trajectory(pf, u::Vector, y::Vector, weigthed_mean)
 mode_trajectory(pf, u::Vector, y::Vector) = reduce_trajectory(pf, u::Vector, y::Vector, mode)
 
-function reduce_trajectory(pf, u::Vector, y::Vector, f::F) where F
+function reduce_trajectory(pf, u::Vector, y::Vector, f::F, p=parameters(pf)) where F
     reset!(pf)
     T = length(y)
     N = num_particles(pf)
     x = Array{particletype(pf)}(undef,T)
-    ll = correct!(pf,u[1],y[1],1) |> first
+    ll = correct!(pf,u[1],y[1],p,1) |> first
     x[1] = f(state(pf))
     for t = 2:T
-        ll += pf(u[t-1], y[t], t) |> first
+        ll += pf(u[t-1], y[t], p, t) |> first
         x[t] = f(pf)
     end
     x,ll
@@ -262,7 +255,7 @@ end
 
 
 """
-    x,u,y = simulate(f::AbstractFilter, T::Int, du::Distribution, [N]; dynamics_noise=true)
+    x,u,y = simulate(f::AbstractFilter, T::Int, du::Distribution, p, [N]; dynamics_noise=true)
     x,u,y = simulate(f::AbstractFilter, u; dynamics_noise=true)
 
 Simulate dynamical system forward in time, returns state sequence, inputs and measurements
@@ -270,21 +263,21 @@ Simulate dynamical system forward in time, returns state sequence, inputs and me
 
 If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurements.jl) is loaded, the argument `N::Int` can be supplied, in which case `N` simulations are done and the result is returned in the form of `Vector{MonteCarloMeasurements.Particles}`.
 """
-function simulate(f::AbstractFilter, T::Int, du::Distribution; dynamics_noise=true)
+function simulate(f::AbstractFilter, T::Int, du::Distribution, p=parameters(f); dynamics_noise=true)
     u = [rand(du) for t=1:T]
-    simulate(f, u; dynamics_noise)
+    simulate(f, u, p; dynamics_noise)
 end
 
-function simulate(f::AbstractFilter,u; dynamics_noise=true)
+function simulate(f::AbstractFilter,u,p=parameters(f); dynamics_noise=true)
     y = similar(u)
     x = similar(u)
-    x[1] = sample_state(f)
+    x[1] = sample_state(f, p)
     T = length(u)
     for t = 1:T-1
-        y[t] = sample_measurement(f,x[t], u[t], t)
-        x[t+1] = sample_state(f, x[t], u[t], t; noise=dynamics_noise)
+        y[t] = sample_measurement(f,x[t], u[t], p, t)
+        x[t+1] = sample_state(f, x[t], u[t], p, t; noise=dynamics_noise)
     end
-    y[T] = sample_measurement(f,x[T], u[T], T)
+    y[T] = sample_measurement(f,x[T], u[T], p, T)
     x,u,y
 end
 

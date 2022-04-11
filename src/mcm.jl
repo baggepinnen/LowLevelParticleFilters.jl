@@ -3,8 +3,8 @@ import .MonteCarloMeasurements: Particles
 # From simulation result to particles
 
 vv2m(x) = copy(reduce(hcat, x)')
-function simulate(pf, n, du, Npart::Int)
-    sims = map(_->vv2m.(simulate(pf, n, du)), 1:Npart)
+function simulate(pf, n, du, p, Npart::Int)
+    sims = map(_->vv2m.(simulate(pf, n, du, p)), 1:Npart)
     ns = length(sims[1]) # number of time series, usually x,u,y
     ntuple(ns) do s
         xes = getindex.(sims,s)

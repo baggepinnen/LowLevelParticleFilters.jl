@@ -11,7 +11,10 @@ using StaticArrays
 using Distributions
 using RecipesBase
 using ForwardDiff
-# using NonlinearSolve
+using NonlinearSolve
+using Polyester
+
+using SciMLBase
 
 abstract type ResamplingStrategy end
 struct ResampleSystematic <: ResamplingStrategy end

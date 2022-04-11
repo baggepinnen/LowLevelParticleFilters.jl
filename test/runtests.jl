@@ -97,8 +97,8 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
         C = SMatrix{p,p}(eye(p))
         # C = SMatrix{p,n}([1 1])
 
-        dynamics(x,u,t) = A*x .+ B*u
-        measurement(x,u,t) = C*x
+        dynamics(x,u,p,t) = A*x .+ B*u
+        measurement(x,u,p,t) = C*x
 
 
         N     = 1000 # Number of particles
@@ -109,7 +109,7 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
         @test !shouldresample(pf)
         @test !shouldresample(pfa)
         du    = mvnormal(2,1) # Control input distribution
-        xp,up,yp = LowLevelParticleFilters.simulate(pf,T,du,100)
+        xp,up,yp = LowLevelParticleFilters.simulate(pf,T,du,0,100)
         @test xp[1] isa MonteCarloMeasurements.Particles{Float64,100}
         @test size(xp) == (T,n)
         x,u,y = LowLevelParticleFilters.simulate(pf,T,du)
@@ -186,7 +186,7 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
             end
             # The call to `exp` on the parameters is so that we can define log-normal priors
             priors = [Normal(1,2),Normal(1,2)]
-            ll     = log_likelihood_fun(filter_from_parameters,priors,u,y)
+            ll     = log_likelihood_fun(filter_from_parameters,priors,u,y,0)
             θ₀ = log.([1.,1.]) # Starting point
             # We also need to define a function that suggests a new point from the "proposal distribution". This can be pretty much anything, but it has to be symmetric since I was lazy and simplified an equation.
             draw = θ -> θ .+ rand(MvNormal(Diagonal(0.1^2*ones(2))))
@@ -222,8 +222,8 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
         C = @SMatrix [1 0]
         # C = SMatrix{p,n}([1 1])
 
-        dynamics(x,u,t) = A*x .+ B*u
-        measurement(x,u,t) = C*x
+        dynamics(x,u,p,t) = A*x .+ B*u
+        measurement(x,u,p,t) = C*x
 
 
         N     = 100 # Number of particles
@@ -273,9 +273,9 @@ end
     C = SMatrix{p,p}(eye(p))
     # C = SMatrix{p,n}([1 1])
 
-    dynamics(x,u,t,noise=false) = A*x .+ B*u + noise*rand(df)
-    measurement(x,u,t,noise=false) = C*x .+ noise*rand(dg)
-    measurement_likelihood(x,u,y,t) = logpdf(dg, measurement(x,u,t)-y)
+    dynamics(x,u,p,t,noise=false) = A*x .+ B*u + noise*rand(df)
+    measurement(x,u,p,t,noise=false) = C*x .+ noise*rand(dg)
+    measurement_likelihood(x,u,y,p,t) = logpdf(dg, measurement(x,u,p,t)-y)
     tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
 
     T     = 200 # Number of time steps

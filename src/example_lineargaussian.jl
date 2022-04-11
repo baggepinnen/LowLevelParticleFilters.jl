@@ -23,8 +23,8 @@ const B = @SMatrix randn(n,m)
 const C = @SMatrix randn(p,n)
 
 # The following two functions are required by the filter
-dynamics(x,u,t) = A*x .+ B*u
-measurement(x,u,t) = C*x
+dynamics(x,u,p,t) = A*x .+ B*u
+measurement(x,u,p,t) = C*x
 vecvec_to_mat(x) = copy(reduce(hcat, x)') # Helper function
 
 # We are now ready to define and use a filter
@@ -162,7 +162,7 @@ filter_from_parameters(θ, pf = nothing) = ParticleFilter(
 # The call to `exp` on the parameters is so that we can define log-normal priors
 priors = [Normal(0,2),Normal(0,2)]
 # Now we call the function `log_likelihood_fun` that returns a function to be minimized
-ll = log_likelihood_fun(filter_from_parameters,priors,u,y)
+ll = log_likelihood_fun(filter_from_parameters,priors,u,y,0)
 # Since this is a low-dimensional problem, we can plot the LL on a 2d-grid
 function meshgrid(a,b)
     grid_a = [i for i in a, j in b]
@@ -202,7 +202,7 @@ filter_from_parameters(θ, pf = nothing) = AuxiliaryParticleFilter(
 )
 # The call to `exp` on the parameters is so that we can define log-normal priors
 priors = [Normal(0,2),Normal(0,2)]
-ll     = log_likelihood_fun(filter_from_parameters,priors,u,y)
+ll     = log_likelihood_fun(filter_from_parameters,priors,u,y,0)
 θ₀     = log.([1.,1.]) # Starting point
 # We also need to define a function that suggests a new point from the "proposal distribution". This can be pretty much anything, but it has to be symmetric since I was lazy and simplified an equation.
 draw   = θ -> θ .+ rand(MvNormal(Diagonal(0.05^2 * ones(2))))
@@ -224,8 +224,8 @@ histogram(exp.(thetam), layout=(3,1)); plot!(lls[burnin+1:end], subplot=3) # Vis
 # The `AdvancedParticleFilter` type requires you to implement the same functions as the regular `ParticleFilter`, but in this case you also need to handle sampling from the noise distributions yourself.
 # The function `dynamics` must have a method signature like below. It must provide one method that accepts state vector, control vector, time and `noise::Bool` that indicates whether or not to add noise to the state. If noise should be added, this should be done inside `dynamics` An example is given below
 using Random
-const rng = Random.MersenneTwister()
-function dynamics(x,u,t,noise=false) # It's important that this defaults to false
+const rng = Random.Xoshiro()
+function dynamics(x,u,p,t,noise=false) # It's important that this defaults to false
     x = A*x .+ B*u # A simple dynamics model
     if noise
         x += rand(rng, df) # it's faster to supply your own rng
@@ -233,12 +233,12 @@ function dynamics(x,u,t,noise=false) # It's important that this defaults to fals
     x
 end
 # The `measurement_likelihood` function must have a method accepting state, measurement and time, and returning the log-likelihood of the measurement given the state, a simple example below:
-function measurement_likelihood(x,u,y,t)
+function measurement_likelihood(x,u,y,p,t)
     logpdf(dg, C*x-y) # A simple linear measurement model with normal additive noise
 end
 # This gives you very high flexibility. The noise model in either function can, for instance, be a function of the state, something that is not possible for the simple `ParticleFilter`
 # To be able to simulate the `AdvancedParticleFilter` like we did with the simple filter above, the `measurement` method with the signature `measurement(x,u,t,noise=false)` must be available and return a sample measurement given state (and possibly time). For our example measurement model above, this would look like this
-measurement(x,u,t,noise=false) = C*x + noise*rand(rng, dg)
+measurement(x,u,p,t,noise=false) = C*x + noise*rand(rng, dg)
 # We now create the `AdvancedParticleFilter` and use it in the same way as the other filters:
 apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0)
 x,w,we,ll = forward_trajectory(apf, u, y)
@@ -287,12 +287,12 @@ function run_test()
                 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0) # Create filter
                 u = @SVector randn(2)
                 x = SVector{2,Float64}(rand(rng, d0))
-                y = SVector{2,Float64}(sample_measurement(pf,x,u,1))
+                y = SVector{2,Float64}(sample_measurement(pf,x,u,0,1))
                 error = 0.0
                 @inbounds for t = 1:T-1
                     pf(u, y) # Update the particle filter
-                    x = dynamics(x,u,t) + SVector{2,Float64}(rand(rng, df)) # Simulate the true dynamics and add some noise
-                    y = SVector{2,Float64}(sample_measurement(pf,x,u,t)) # Simulate a measuerment
+                    x = dynamics(x,u,0,t) + SVector{2,Float64}(rand(rng, df)) # Simulate the true dynamics and add some noise
+                    y = SVector{2,Float64}(sample_measurement(pf,x,u,0,t)) # Simulate a measuerment
                     u = @SVector randn(2) # draw a random control input
                     error += sum(abs2,x-weigthed_mean(pf))
                 end # t
@@ -317,7 +317,6 @@ particle_count = [10, 20, 50, 100, 200, 500, 1000]
 nT             = length(time_steps)
 leg            = reshape(["$(time_steps[i]) time steps" for i = 1:nT], 1,:)
 plot(particle_count,RMSE,xscale=:log10, ylabel="RMS errors", xlabel=" Number of particles", lab=leg)
-gui()
 # ![window](figs/rmse.png)
 
 

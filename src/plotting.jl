@@ -93,6 +93,7 @@ end
 @userplot TrajectoryDensity
 @recipe function f(p::TrajectoryDensity; nbinsy=30, xreal=nothing)
     pf,x,w,u,y = p.args[1:5]
+    p = parameters(pf)
     N,T = size(x)
     D = length(x[1])
     P = length(y[1])
@@ -122,7 +123,7 @@ end
             1:T, getindex.(xreal,d)
         end
     end
-    yhat = measurement(pf).(x,u',0) |> vec
+    yhat = measurement(pf).(x,u',Ref(p),0) |> vec
     for d = 1:P
         subplot := d+D
         @series begin

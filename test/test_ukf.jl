@@ -40,8 +40,8 @@ B = @SMatrix randn(nx,nu)
 C = SMatrix{ny,ny}(eye(ny))
 # C = SMatrix{p,n}([1 1])
 
-dynamics(x,u,t) = A*x .+ B*u
-measurement(x,u,t) = C*x
+dynamics(x,u,p,t) = A*x .+ B*u
+measurement(x,u,p,t) = C*x
 
 T    = 200 # Number of time steps
 kf   = KalmanFilter(A, B, C, 0, eye(nx), eye(ny), d0)
@@ -70,7 +70,7 @@ norm(mean(x .- resukf[2]))
 
 ## DAE UKF =====================================================================
 "A pendulum in DAE form"
-function pend(state, f, t=0)
+function pend(state, f, p, t=0)
     x,y,u,v,λ = state
     g = 9.82
     SA[
@@ -88,7 +88,7 @@ nx = 4 # Dinemsion of differential state
 nu = 2 # Dinemsion of input
 ny = 2 # Dinemsion of measurements
 const Ts = 0.001
-@inbounds measurement(x,u,t) = SA[x[1], x[end]] # measure one position and the algebraic state 
+@inbounds measurement(x,u,p,t) = SA[x[1], x[end]] # measure one position and the algebraic state 
 
 d0 = mvnormal([1,0,0,0],0.1)   # Initial state Distribution
 du = mvnormal(2,0.1) # Control input distribution
@@ -99,39 +99,39 @@ get_x(xz) = SA[xz[1],xz[2],xz[3],xz[4]]
 get_z(xz) = SA[xz[5]]
 get_x_z(xz) = get_x(xz), get_z(xz)
 build_xz(x, z) = [x; z]
-g((x,y,u,v), (λ,), f, t) = SA[u^2 + v^2 - λ*(x^2 + y^2) - 9.82*y + x*f[1] + y*f[2]]
+g((x,y,u,v), (λ,), f, p, t) = SA[u^2 + v^2 - λ*(x^2 + y^2) - 9.82*y + x*f[1] + y*f[2]]
 # g((x,y,u,v), (λ,), f, t) = SA[x*u + y*v]
-g(xz, u, t) = g(get_x(xz), get_z(xz), u, t)
+g(xz, u, p, t) = g(get_x(xz), get_z(xz), u, p, t)
 
 # Discretization of the continuous-time dynamics, we use a naive Euler approximation, real-world use should use a proper DAE solver, for example using the integrator interface in OrdinaryDiffEq.jl
-function dynamics(xz,u,t)
+function dynamics(xz,u,p,t)
     Tsi = Ts/100
     for i = 1:100
-        der = pend(xz,u,t)
+        der = pend(xz,u,p,t)
         xp = get_x(xz) + Tsi*get_x(der) # Euler step
         xzp = build_xz(xp, get_z(xz))
-        xz = LowLevelParticleFilters.calc_xz(get_x_z, build_xz, g, xzp, u, t) # Adjust z
+        xz = LowLevelParticleFilters.calc_xz(get_x_z, build_xz, g, xzp, u, p, t) # Adjust z
     end
     xz
 end
 
 
 u0 = randn(nu)
-xzp = dynamics(xz0,u0,0)
-@test g(xzp, u0, 0)[] ≈ 0 atol=0.01
+xzp = dynamics(xz0,u0,0,0)
+@test g(xzp, u0, 0, 0)[] ≈ 0 atol=0.01
 
 ukf0 = UnscentedKalmanFilter(dynamics, measurement, 0.0001eye(nx), 0.01eye(ny), d0)
-threads = true
+threads = false
 for threads = (false, true)
     ukf  = LowLevelParticleFilters.DAEUnscentedKalmanFilter(ukf0; g, get_x_z, build_xz, xz0, nu=nu, threads)
 
     let u0 = zeros(nu)
-        xzp = LowLevelParticleFilters.calc_xz(ukf, xz0, u0, 0)
+        xzp = LowLevelParticleFilters.calc_xz(ukf, xz0, u0, 0, 0)
         @test xzp[end] ≈ 0 atol=0.01 # zero centripetal acceleration at the point (x,y) = (1,0)
-        @test g(xzp, u0, 0)[] ≈ 0 atol=0.01
+        @test g(xzp, u0, 0, 0)[] ≈ 0 atol=0.01
 
-        xzp = LowLevelParticleFilters.calc_xz(ukf, randn(nx+1), u0, 0)
-        @test g(xzp, u0, 0)[] ≈ 0 atol=0.01
+        xzp = LowLevelParticleFilters.calc_xz(ukf, randn(nx+1), u0, 0, 0)
+        @test g(xzp, u0, 0, 0)[] ≈ 0 atol=0.01
     end
 
     t = 0:Ts:3

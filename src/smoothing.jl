@@ -1,12 +1,13 @@
 
 """
-    xT,RT,ll = smooth(kf::KalmanFilter, u::Vector, y::Vector)
+    xT,RT,ll = smooth(kf::KalmanFilter, u::Vector, y::Vector, p=parameters(kf))
+
 Returns smoothed estimates of state `x` and covariance `R` given all input output data `u,y`
 """
-function smooth(kf::KalmanFilter, u::AbstractVector, y::AbstractVector)
+function smooth(kf::KalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf))
     reset!(kf)
     T            = length(y)
-    x,xt,R,Rt,ll = forward_trajectory(kf, u, y)
+    x,xt,R,Rt,ll = forward_trajectory(kf, u, y, p)
     xT           = similar(xt)
     RT           = similar(Rt)
     xT[end]      = xt[end]      |> copy
@@ -25,12 +26,12 @@ function smooth(pf::AbstractParticleFilter, M, u, y)
 end
 
 """
-    xb,ll = smooth(pf, M, u, y)
+    xb,ll = smooth(pf, M, u, y, p=parameters(pf))
 
 Perform particle smoothing using forward-filtering, backward simulation. Return smoothed particles and loglikelihood.
-See also `smoothed_trajs`, `smoothed_mean`, `smoothed_cov`
+See also [`smoothed_trajs`](@ref), [`smoothed_mean`](@ref), [`smoothed_cov`](@ref)
 """
-function smooth(pf::AbstractParticleFilter, xf, wf, wef, ll, M, u, y)
+function smooth(pf::AbstractParticleFilter, xf, wf, wef, ll, M, u, y, p=parameters(pf))
     T = length(y)
     N = num_particles(pf)
     f = dynamics(pf)
@@ -47,7 +48,7 @@ function smooth(pf::AbstractParticleFilter, xf, wf, wef, ll, M, u, y)
         # tset = Set{Int}()
         for m = 1:M
             for n = 1:N
-                wb[n] = wf[n,t] + logpdf(df, xb[m,t+1], f(xf[n,t],u[t],t), t)
+                wb[n] = wf[n,t] + logpdf(df, xb[m,t+1], f(xf[n,t],u[t],p,t), t)
             end
             i = draw_one_categorical(pf,wb)
             # push!(tset, i)
@@ -59,36 +60,37 @@ function smooth(pf::AbstractParticleFilter, xf, wf, wef, ll, M, u, y)
 end
 
 
-function sse(f::AbstractFilter, u, y, λ=1)
+function sse(f::AbstractFilter, u, y, p=parameters(pf), λ=1)
     reset!(f)
     ll = sum(zip(u, y)) do (u,y)
-        ll, e = f(u,y)
+        ll, e = f(u,y,p)
         dot(e, λ, e)
     end
 end
 
 
 """
-    ll = loglik(filter,u,y)
+    ll = loglik(filter,u,y,p=parameters(filter))
+
 Calculate loglikelihood for entire sequences `u,y`
 """
-function loglik(f::AbstractFilter,u,y)
+function loglik(f::AbstractFilter,u,y,p=parameters(f))
     reset!(f)
-    ll = sum(x->f(x[1],x[2])[1], zip(u, y))
+    ll = sum(x->f(x[1],x[2],p)[1], zip(u, y))
 end
 
-function loglik(pf::AuxiliaryParticleFilter,u,y)
+function loglik(pf::AuxiliaryParticleFilter,u,y,p=parameters(pf))
     reset!(pf)
-    ll = sum(t->pf(u[t],y[t],y[t+1],t)[1], 1:length(u)-1)
-    ll + pf.pf(u[end],y[end], length(u))[1]
+    ll = sum(t->pf(u[t],y[t],y[t+1],p,t)[1], 1:length(u)-1)
+    ll + pf.pf(u[end],y[end], p, length(u))[1]
 end
 
 """
-    ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors::Vector{Distribution}, u, y)
+    ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors::Vector{Distribution}, u, y, p)
 
 returns function θ -> p(y|θ)p(θ)
 """
-function log_likelihood_fun(filter_from_parameters,priors::Vector{<:Distribution},u,y)
+function log_likelihood_fun(filter_from_parameters,priors::Vector{<:Distribution},u,y, p)
     n = numargs(filter_from_parameters)
     pf = nothing
     function (θ)
@@ -97,7 +99,7 @@ function log_likelihood_fun(filter_from_parameters,priors::Vector{<:Distribution
         ll = sum(i->logpdf(priors[i], θ[i]), eachindex(priors))
         isfinite(ll) || return -Inf
         pf = filter_from_parameters(θ,pf)
-        ll += loglik(pf,u,y)
+        ll += loglik(pf,u,y,p)
     end
 end
 
