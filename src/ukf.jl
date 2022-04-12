@@ -23,70 +23,77 @@ end
 
 abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
 
-@with_kw struct UnscentedKalmanFilter{DT,MT,R1T,R2T,R2DT,D0T,VT,XT,RT} <: AbstractUnscentedKalmanFilter
+@with_kw struct UnscentedKalmanFilter{DT,MT,R1T,R2T,D0T,VT,XT,RT,P} <: AbstractUnscentedKalmanFilter
     dynamics::DT
     measurement::MT
     R1::R1T
     R2::R2T
-    R2d::R2DT
     d0::D0T
     xs::Vector{VT}
     x::XT
     R::RT
-    t::Ref{Int} = Ref(1)
+    t::Base.RefValue{Int} = Ref(1)
+    ny::Int
+    nu::Int
+    p::P
 end
 
 
 """
-    UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)))
+    UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0=MvNormal(Matrix(R1)); p = SciMLBase.NullParameters(), ny, nu)
+
+A nonlinear state estimator propagating uncertainty using the unscented transform.
+
+The dynamics and measurement function are on the following form
+```
+x' = dynamics(x, u, p, t) + w
+y  = measurement(x, u, p, t) + e
+```
+where `w ~ N(0, R1)`, `e ~ N(0, R2)` and `x(0) ~ d0`
+
+The matrices `R1, R2` can be time varying such that, e.g., `R1[:, :, t]` contains the ``R1`` matrix at time index `t`.
+They can also be given as functions on the form
+```
+Rfun(x, u, p, t) -> R
+```
+For maximum performance, provide statically sized matrices from StaticArrays.jl
+
+`ny, nu` indicate the number of outputs and inputs.
 """
-function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)))
-    try
-        cR1 = cond(R1)
-        cR2 = cond(R2)
-        (cond(cR1) > 1e8 || cond(cR2) > 1e8) && @warn("Covariance matrices are poorly conditioned")
-    catch
-        nothing
-    end
-    n = size(R1,1)
-    p = size(R2,1)
-    R1s = SMatrix{n,n}(R1)
-    R2s = SMatrix{p,p}(R2)
+function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)); p = SciMLBase.NullParameters(), nu::Int, ny::Int)
     xs = sigmapoints(mean(d0), cov(d0))
-    UnscentedKalmanFilter(dynamics,measurement,R1s,R2s,MvNormal(Matrix(R2s)), d0, xs, Vector(d0.μ), Matrix(d0.Σ), Ref(1))
+    UnscentedKalmanFilter(dynamics,measurement,R1,R2, d0, xs, Vector(d0.μ), Matrix(d0.Σ), Ref(1), ny, nu, p)
 end
 
-sample_state(kf::AbstractUnscentedKalmanFilter; noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
-sample_state(kf::AbstractUnscentedKalmanFilter, x, u, t; noise=true) = kf.dynamics(x,u,t) .+ noise*rand(MvNormal(Matrix(kf.R1)))
-sample_measurement(kf::AbstractUnscentedKalmanFilter, x, u, t; noise=true) = kf.measurement(x, u, t) .+ noise*rand(MvNormal(Matrix(kf.R2)))
+sample_state(kf::AbstractUnscentedKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
+sample_state(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf); noise=true) = kf.dynamics(x,u,p,t) .+ noise.*rand(MvNormal(Matrix(get_mat(kf.R1, x, u, p, t))))
+sample_measurement(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf); noise=true) = kf.measurement(x, u, p, t) .+ noise.*rand(MvNormal(Matrix(get_mat(kf.R2, x, u, p, t))))
 measurement(kf::AbstractUnscentedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 
 
-function predict!(ukf::UnscentedKalmanFilter, u, t::Integer = index(ukf))
+function predict!(ukf::UnscentedKalmanFilter, u, p = parameters(ukf), t::Integer = index(ukf))
     @unpack dynamics,measurement,x,xs,R,R1 = ukf
     ns = length(xs)
     sigmapoints!(xs,x,R) # TODO: these are calculated in the update step
     for i in eachindex(xs)
-        xs[i] = dynamics(xs[i], u, t)
+        xs[i] = dynamics(xs[i], u, p, t)
     end
     x .= mean(xs)
-    R .= symmetrize(cov(xs)) + R1
+    R .= symmetrize(cov(xs)) + get_mat(R1, x, u, p, t)
     ukf.t[] += 1
 end
 
 
-
-correct!(ukf::UnscentedKalmanFilter, y, t::Integer = index(ukf)) = correct!(ukf, y, 0, t)
-function correct!(ukf::UnscentedKalmanFilter, u, y, t::Integer = index(ukf))
-    @unpack measurement,x,xs,R,R1,R2,R2d = ukf
+function correct!(ukf::UnscentedKalmanFilter, u, y, p=parameters(ukf), t::Integer = index(ukf))
+    @unpack measurement,x,xs,R,R1,R2 = ukf
     n = size(R1,1)
     p = size(R2,1)
     ns = length(xs)
     sigmapoints!(xs,x,R) # Update sigmapoints here since untransformed points required
     C = @SMatrix zeros(n,p)
     ys = map(xs) do x
-        measurement(x, u, t)
+        measurement(x, u, p, t)
     end
     ym = mean(ys)
     @inbounds for i in eachindex(ys) # Cross cov between x and y
@@ -95,7 +102,7 @@ function correct!(ukf::UnscentedKalmanFilter, u, y, t::Integer = index(ukf))
         C  += ca
     end
     e   = y .- ym
-    S   = symmetrize(cov(ys)) + R2 # cov of y
+    S   = symmetrize(cov(ys)) + get_mat(R2, x, u, p, t) # cov of y
     Sᵪ  = cholesky(S)
     K   = (C./ns)/Sᵪ # ns normalization to make it a covariance matrix
     x .+= K*e
@@ -133,11 +140,10 @@ y = h(x, z)
 4. calc new covariance matrix
 =#
 
-using NonlinearSolve
 abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
 
-@with_kw struct DAEUnscentedKalmanFilter{DT,MT,R1T,R2T,R2DT,D0T,VT,XT,RT,G,GXZ,BXZ,XZT,VZT} <: AbstractUnscentedKalmanFilter
-    ukf::UnscentedKalmanFilter{DT,MT,R1T,R2T,R2DT,D0T,VT,XT,RT}
+@with_kw struct DAEUnscentedKalmanFilter{DT,MT,R1T,R2T,D0T,VT,XT,RT,P,G,GXZ,BXZ,XZT,VZT} <: AbstractUnscentedKalmanFilter
+    ukf::UnscentedKalmanFilter{DT,MT,R1T,R2T,D0T,VT,XT,RT,P}
     g::G
     get_x_z::GXZ
     build_xz::BXZ
@@ -160,7 +166,7 @@ Mandela, Rengaswamy, Narasimhan
 
 # Arguments
 - `ukf` is a regular [`UnscentedKalmanFilter`](@ref) that contains `dynamics(xz, u, t)` that propagates the combined state `xz(k)` to `xz(k+1)` and a measurement function with signature `(xz, u, t)`
-- `g(x, z, u, t)` is a function that should fulfill `g(x, z, u, t) = 0`
+- `g(x, z, u, p, t)` is a function that should fulfill `g(x, z, u, p, t) = 0`
 _ `get_x_z(xz) -> x, z` is a function that decomposes `xz` into `x` and `z`
 - `build_xz(x, z)` is the inverse of `get_x_z`
 - `xz0` the initial full state.
@@ -169,11 +175,11 @@ _ `get_x_z(xz) -> x, z` is a function that decomposes `xz` into `x` and `z`
 # Assumptions
 - The DAE dynamics is index 1 and can be written on the form 
 ```
-ẋ = f(x, z, u, t) # Differential equations
-0 = g(x, z, u, t) # Algebraic equations
-y = h(x, z, u, t) # Measurements
+ẋ = f(x, z, u, p, t) # Differential equations
+0 = g(x, z, u, p, t) # Algebraic equations
+y = h(x, z, u, p, t) # Measurements
 ```
-the measurements may be functions of both differential states `x` and algebraic variables `z`. Note, the actual dynamcis and measurement functions stored in the internal `ukf` should have signatures `(xz, u, t)`, i.e., they take the combined state containing both `x` and `z` in a single vector as dictated by the function `build_xz`. It is only the function `g` that is assumed to actually have the signature `g(x,z,u,t)`.
+the measurements may be functions of both differential states `x` and algebraic variables `z`. Note, the actual dynamcis and measurement functions stored in the internal `ukf` should have signatures `(xz, u, p, t)`, i.e., they take the combined state containing both `x` and `z` in a single vector as dictated by the function `build_xz`. It is only the function `g` that is assumed to actually have the signature `g(x,z,u,p,t)`.
 """
 function DAEUnscentedKalmanFilter(ukf; g, get_x_z, build_xz, xz0, nu::Int, threads::Bool=false)
     T = eltype(ukf.xs[1])
@@ -192,20 +198,20 @@ Base.propertynames(ukf::DAEUnscentedKalmanFilter) = (fieldnames(typeof(ukf))...,
 
 state(ukf::DAEUnscentedKalmanFilter) = ukf.xz
 
-function sample_state(kf::DAEUnscentedKalmanFilter; noise=true)
-    @unpack get_x_z, build_xz, xz, g, dynamics, R1, nu = kf
+function sample_state(kf::DAEUnscentedKalmanFilter, p=parameters(kf); noise=true)
+    @unpack get_x_z, build_xz, xz, g, dynamics, nu = kf
     xh = noise ? rand(kf.d0) : mean(kf.d0)
-    calc_xz(get_x_z, build_xz, g, xz, zeros(nu), 0, xh)
+    calc_xz(get_x_z, build_xz, g, xz, zeros(nu), p, 0, xh)
 end
-function sample_state(kf::DAEUnscentedKalmanFilter, x, u, t; noise=true)
+function sample_state(kf::DAEUnscentedKalmanFilter, x, u, p, t; noise=true)
     @unpack get_x_z, build_xz, xz, g, dynamics, R1 = kf
-    xh = get_x_z(dynamics(x,u,t))[1] .+ noise .* rand(MvNormal(Matrix(R1)))
-    calc_xz(get_x_z, build_xz, g, xz, u, t, xh)
+    xh = get_x_z(dynamics(x,u,p,t))[1] .+ noise .* rand(MvNormal(Matrix(get_mat(R1, x, u, p, t))))
+    calc_xz(get_x_z, build_xz, g, xz, u, p, t, xh)
 end
 
 """
-    calc_xz(dae_ukf, xz, u, t, x=get_x_z(xz)[1])
-    calc_xz(get_x_z, build_xz, g, xz, u, t, x=get_x_z(xz)[1])
+    calc_xz(dae_ukf, xz, u, p, t, x=get_x_z(xz)[1])
+    calc_xz(get_x_z, build_xz, g, xz, u, p, t, x=get_x_z(xz)[1])
 
 Find `z` such that g(x, z) = 0 (zeros of length(x) + length(z))
 The z part of xz is used as initial guess
@@ -214,9 +220,9 @@ The z part of xz is used as initial guess
 - `x`: If not provided, x from xz will be used
 - `xz`: Full state
 """
-function calc_xz(get_x_z::Function, build_xz, g, xz::AbstractArray, u, t, xi=get_x_z(xz)[1])
+function calc_xz(get_x_z::Function, build_xz, g, xz::AbstractArray, u, p, t, xi=get_x_z(xz)[1])
     _, z0 = get_x_z(xz) # use previous z as initial guess for root finder
-    sol = solve(NonlinearProblem{false}((z,_)->g(xi, z, u, t), z0), NewtonRaphson(), tol=1e-9) # function takes parameter as second arg
+    sol = solve(NonlinearProblem{false}((z,_)->g(xi, z, u, p, t), z0), NewtonRaphson(), tol=1e-9) # function takes parameter as second arg
     nr = norm(sol.resid)
     nr < 1e-3 || @warn "Root solving residual was large $nr" maxlog=10
     zi = sol.u
@@ -225,44 +231,44 @@ end
 
 calc_xz(ukf::DAEUnscentedKalmanFilter, args...) = 
     calc_xz(ukf.get_x_z, ukf.build_xz, ukf.g, args...)
-using Polyester
-function predict!(ukf::DAEUnscentedKalmanFilter, u, t::Integer = index(ukf))
+
+function predict!(ukf::DAEUnscentedKalmanFilter, u, p = parameters(ukf), t::Integer = index(ukf))
     @unpack dynamics,measurement,x,xs,xz,xzs,R,R1,g,build_xz,get_x_z = ukf
     ns = length(xs)
     sigmapoints!(xs,x,R) # generate only for x
     if ukf.threads
         @batch for i in eachindex(xs)
             # generate z
-            xzi = calc_xz(ukf, xzs[i], u, t, xs[i])
-            xzs[i] = dynamics(xzi, u, t) # here they must be the same and in the correct order
+            xzi = calc_xz(ukf, xzs[i], u, p, t, xs[i])
+            xzs[i] = dynamics(xzi, u, p, t) # here they must be the same and in the correct order
             xs[i],_ = get_x_z(xzs[i])
         end
     else
         for i in eachindex(xs)
             # generate z
-            xzi = calc_xz(ukf, xzs[i], u, t, xs[i])
-            xzs[i] = dynamics(xzi, u, t) # here they must be the same and in the correct order
+            xzi = calc_xz(ukf, xzs[i], u, p, t, xs[i])
+            xzs[i] = dynamics(xzi, u, p, t) # here they must be the same and in the correct order
             xs[i],_ = get_x_z(xzs[i])
         end
     end
     x .= mean(xs) # xz or xs here? Answer: Covariance is associated only with x
-    xz .= calc_xz(ukf, xz, u, t, x)
-    R .= symmetrize(cov(xs)) + R1
+    xz .= calc_xz(ukf, xz, u, p, t, x)
+    R .= symmetrize(cov(xs)) + get_mat(R1, x, u, p, t)
     ukf.t[] += 1
 end
 
-function correct!(ukf::DAEUnscentedKalmanFilter, u, y, t::Integer = index(ukf))
-    @unpack measurement,x,xs,xz,xzs,R,R1,R2,R2d,g,get_x_z,build_xz  = ukf
+function correct!(ukf::DAEUnscentedKalmanFilter, u, y, p = parameters(ukf), t::Integer = index(ukf))
+    @unpack measurement,x,xs,xz,xzs,R,R1,R2,g,get_x_z,build_xz  = ukf
     n = size(R1,1)
     p = size(R2,1)
     ns = length(xs)
     sigmapoints!(xs,x,R) # Update sigmapoints here since untransformed points required
     for i in eachindex(xs)
-        xzs[i] = calc_xz(ukf, xzs[i], u, t, xs[i])
+        xzs[i] = calc_xz(ukf, xzs[i], u, p, t, xs[i])
     end
     C = @SMatrix zeros(n,p)
     ys = map(xzs) do xzi
-        measurement(xzi, u, t)
+        measurement(xzi, u, p, t)
     end
     ym = mean(ys)
     @inbounds for i in eachindex(ys) # Cross cov between x and y
@@ -272,11 +278,11 @@ function correct!(ukf::DAEUnscentedKalmanFilter, u, y, t::Integer = index(ukf))
         C  += ca
     end
     e   = y .- ym
-    S   = symmetrize(cov(ys)) + R2 # cov of y
+    S   = symmetrize(cov(ys)) + get_mat(R2, x, u, p, t) # cov of y
     Sᵪ = cholesky(S)
     K   = (C./ns)/Sᵪ # ns normalization to make it a covariance matrix
     x .+= K*e
-    xz .= calc_xz(ukf, xz, u, t, x)
+    xz .= calc_xz(ukf, xz, u, p, t, x)
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized
     RmKSKT!(R, K, S)
     ll = logpdf(MvNormal(PDMat(S,Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf

@@ -1,6 +1,6 @@
 abstract type AbstractKalmanFilter <: AbstractFilter end
 
-@with_kw struct KalmanFilter{AT,BT,CT,DT,R1T,R2T,R2DT,D0T,XT,RT} <: AbstractKalmanFilter
+@with_kw struct KalmanFilter{AT,BT,CT,DT,R1T,R2T,R2DT,D0T,XT,RT,P} <: AbstractKalmanFilter
     A::AT
     B::BT
     C::CT
@@ -11,12 +11,13 @@ abstract type AbstractKalmanFilter <: AbstractFilter end
     d0::D0T
     x::XT
     R::RT
-    t::Ref{Int} = Ref(1)
+    t::Base.RefValue{Int} = Ref(1)
+    p::P
 end
 
 
 """
-    KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1))
+    KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1); p = SciMLBase.NullParameters())
 
 The matrices `A,B,C,D` define the dynamics
 ```
@@ -24,8 +25,15 @@ x' = Ax + Bu + w
 y  = Cx + Du + e
 ```
 where `w ~ N(0, R1)`, `e ~ N(0, R2)` and `x(0) ~ d0`
+
+The matrices can be time varying such that, e.g., `A[:, :, t]` contains the ``A`` matrix at time index `t`.
+They can also be given as functions on the form
+```
+Afun(x, u, p, t) -> A
+```
+For maximum performance, provide statically sized matrices from StaticArrays.jl
 """
-function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(Matrix(R1)))
+function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(Matrix(R1)); p = SciMLBase.NullParameters())
     try
         cR1 = cond(R1)
         cR2 = cond(R2)
@@ -34,7 +42,7 @@ function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(Matrix(R1)))
         nothing
     end
     
-    KalmanFilter(A,B,C,D,R1,R2,MvNormal(Matrix(R2)), d0, Vector(d0.μ), Matrix(d0.Σ), Ref(1))
+    KalmanFilter(A,B,C,D,R1,R2,MvNormal(Matrix(R2)), d0, Vector(d0.μ), Matrix(d0.Σ), Ref(1), p)
 end
 
 function Base.propertynames(kf::KF, private::Bool=false) where KF <: AbstractKalmanFilter
@@ -55,39 +63,25 @@ function Base.getproperty(kf::AbstractKalmanFilter, s::Symbol)
     end
 end
 
-sample_state(kf::AbstractKalmanFilter; noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
-sample_state(kf::AbstractKalmanFilter, x, u, t; noise=true) = kf.A*x .+ kf.B*u .+ noise*rand(MvNormal(kf.R1))
-sample_measurement(kf::AbstractKalmanFilter, x, u, t; noise=true) = kf.C*x .+ kf.D*u .+ noise*rand(MvNormal(kf.R2))
+sample_state(kf::AbstractKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
+sample_state(kf::AbstractKalmanFilter, x, u, p=parameters(kf), t=0; noise=true) = kf.A*x .+ kf.B*u .+ noise*rand(MvNormal(get_mat(kf.R1, x, u, p, t)))
+sample_measurement(kf::AbstractKalmanFilter, x, u, p=parameters(kf), t=0; noise=true) = kf.C*x .+ kf.D*u .+ noise*rand(MvNormal(get_mat(kf.R2, x, u, p, t)))
 particletype(kf::AbstractKalmanFilter) = typeof(kf.x)
 covtype(kf::AbstractKalmanFilter)      = typeof(kf.R)
 state(kf::AbstractKalmanFilter)        = kf.x
 covariance(kf::AbstractKalmanFilter)   = kf.R
 function measurement(kf::AbstractKalmanFilter)
-    if ndims(kf.A) == 3
-        function (x,u,t)
-            y = kf.C[:,:,t]*x
-            if kf.D != 0
-                y .+= kf.D[:,:,t]*u
-            end
-            y
+    function (x,u,p,t)
+        y = get_mat(kf.C, x, u, p, t)*x
+        if !(isa(kf.D, Union{Number, AbstractArray}) && iszero(kf.D))
+            y .+= get_mat(kf.D, x, u, p, t)*u
         end
-    else
-        function (x,u,t)
-            y = kf.C*x
-            if kf.D != 0
-                y .+= kf.D*u
-            end
-            y
-        end
+        y
     end
 end
 
 function dynamics(kf::AbstractKalmanFilter)
-    if ndims(kf.A) == 3
-        (x,u,t) -> kf.A[:,:,t]*x + kf.B[:,:,t]*u
-    else
-        (x,u,t) -> kf.A*x + kf.B*u
-    end
+    (x,u,p,t) -> get_mat(kf.A, x, u, p, t)*x + get_mat(kf.B, x, u, p, t)*u
 end
 
 function reset!(kf::AbstractKalmanFilter)
@@ -95,91 +89,3 @@ function reset!(kf::AbstractKalmanFilter)
     kf.R .= copy(Matrix(kf.d0.Σ))
     kf.t[] = 1
 end
-
-
-
-# SigmaFilter ==========================================================================
-
-struct SigmaFilter{DT,MT,MLT,D0T,DFT,VT} <: AbstractParticleFilter
-    dynamics::DT
-    measurement::MT
-    measurement_likelihood::MLT
-    w::Vector{Float64}
-    we::Vector{Float64}
-    initial_density::D0T
-    dynamics_density::DFT
-    x::Vector{VT}
-    xprev::Vector{VT}
-    xm::Vector{Float64}
-    R::Matrix{Float64}
-    t::Ref{Int}
-end
-
-
-"""
-    SigmaFilter(N,dynamics,measurement,measurement_likelihood,df,d0)
-"""
-function SigmaFilter(N,dynamics,measurement,measurement_likelihood,df,d0)
-    @show n = length(d0)
-    xs = rand(d0,N)
-    xs = reinterpret(SVector{n,Float64}, xs)[:]
-    SigmaFilter(dynamics,measurement,measurement_likelihood,
-        zeros(length(xs)), # w
-        zeros(length(xs)), # we
-        d0, df,
-        xs,                # x
-        copy(xs),          # xprev
-        Vector(d0.μ),      # xm
-        Matrix(d0.Σ),      # R
-        Ref(1))
-end
-
-sample_state(sf::SigmaFilter; noise=true) = noise ? rand(sf.initial_density) : mean(sf.initial_density)
-sample_state(sf::SigmaFilter, x, u, t; noise=true) = sf.dynamics(x,u,t,noise)
-sample_measurement(sf::SigmaFilter, x, u, t; noise=true) = sf.measurement(x,u,t,noise)
-measurement(kf::SigmaFilter) = kf.measurement
-dynamics(kf::SigmaFilter) = kf.dynamics
-num_particles(sf::SigmaFilter) = length(sf.x)
-particles(sf::SigmaFilter) = sf.x
-weights(sf::SigmaFilter) = sf.w
-expweights(sf::SigmaFilter) = sf.we
-state(sf::SigmaFilter) = sf
-rng(sf::SigmaFilter) = Random.GLOBAL_RNG
-
-function predict!(sf::SigmaFilter, u, t::Integer = index(sf))
-    @unpack dynamics,measurement,x,xprev,xm,R,w,we = sf
-    N = length(x)
-    n = length(x[1])
-    xm .= sum(x->x[1]*x[2], zip(x,we)) # Must update based on correction
-    R .= 0
-    for i in eachindex(x)
-        δ = x[i]-xm
-        R .+= (δ*δ')*we[i]
-    end
-    R ./= (1-sum(abs2,we))
-    R .= (R + R')/2 + 1e-16I
-    d = MvNormal(xm,R)
-    noisevec = zeros(length(d))
-    for i in eachindex(x)
-        xi = SVector{n,Float64}(rand!(d, noisevec))
-        x[i] = dynamics(xi, u, t, true)
-    end
-    w  .= -log(N)
-    we .= 1/N
-    xm .= mean(x)
-    R  .= cov(x)
-    sf.t[] += 1
-end
-
-
-Base.@propagate_inbounds propagate_particles!(sf::SigmaFilter, u, j::Vector{Int}, t::Int, noise=true) = propagate_particles!(sf, u, t, noise)
-
-# Base.@propagate_inbounds function measurement_equation!(sf::SigmaFilter, y, t, w = weights(sf))
-#     g = measurement_likelihood(sf)
-#     any(ismissing.(y)) && return w
-#     x = particles(sf)
-#     @inbounds for i = 1:num_particles(sf)
-#         w[i] += g(x[i],y,t)
-#     end
-#     w
-# end

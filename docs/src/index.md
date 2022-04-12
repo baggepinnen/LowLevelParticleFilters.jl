@@ -48,18 +48,20 @@ const B = @SMatrix randn(n,m)
 const C = @SMatrix randn(p,n)
 ```
 
-Next, we define the dynamics and measurement equations, they both take the signature `(x,u,t) = (state, input, time)` 
+Next, we define the dynamics and measurement equations, they both take the signature `(x,u,p,t) = (state, input, parameters, time)` 
 ```@example lingauss
-dynamics(x,u,t) = A*x .+ B*u
-measurement(x,u,t) = C*x
+dynamics(x,u,p,t) = A*x .+ B*u
+measurement(x,u,p,t) = C*x
 vecvec_to_mat(x) = copy(reduce(hcat, x)') # Helper function
 ```
+the parameter `p` can be anything, and is often optional. If `p` is not provided when performing operations on filters, any `p` stored in the filter objects (if supported) is used. The default if none is provided and none is stored in the filter is `p = SciMLBase.NullParameters()`.
 
 We are now ready to define and use a filter
 
 ```@example lingauss
 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 ```
+
 With the filter in hand, we can simulate from its dynamics and query some properties
 ```@example lingauss
 xs,u,y = simulate(pf,200,df) # We can simulate the model that the pf represents
@@ -71,9 +73,9 @@ x̂ = weigthed_mean(pf)        # using the current state
 If you want to perform filtering using vectors of inputs and measurements, try any of the functions
 
 ```@example lingauss
-x,w,we,ll = forward_trajectory(pf, u, y) # Filter whole vectors of signals
+sol = forward_trajectory(pf, u, y) # Filter whole vectors of signals
 x̂,ll = mean_trajectory(pf, u, y)
-trajectorydensity(pf,x,w,u,y,xreal=xs, markersize=2)
+plot(sol, xreal=xs, markersize=2)
 ```
 
 
@@ -130,13 +132,14 @@ xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 It can also be called in a loop like the `pf` above
 
 ```julia
+p = nothing
 for t = 1:T
-    kf(u,y) # Performs both correct and predict!!
+    kf(u,y,p) # Performs both correct and predict!!
     # alternatively
-    ll += correct!(kf, y, t) # Returns loglik
+    ll += correct!(kf, y, p, t) # Returns loglik
     x   = state(kf)
     R   = covariance(kf)
-    predict!(kf, u, t)
+    predict!(kf, u, p, t)
 end
 ```
 
@@ -170,11 +173,12 @@ We provide som basic functionality for maximum likelihood estimation and MAP est
 Plot likelihood as function of the variance of the dynamics noise
 
 ```@example lingauss
+p = nothing
 svec = exp10.(LinRange(-1.5,1.5,60))
 llspf = map(svec) do s
     df = MvNormal(n,s)
     pfs = ParticleFilter(2000, dynamics, measurement, df, dg, d0)
-    loglik(pfs,u,y)
+    loglik(pfs, u, y, p)
 end
 plot( svec, llspf,
     xscale = :log10,
@@ -191,7 +195,7 @@ We can do the same with a Kalman filter
 eye(n) = Matrix{Float64}(I,n,n)
 llskf = map(svec) do s
     kfs = KalmanFilter(A, B, C, 0, s^2*eye(n), eye(p), d0)
-    loglik(kfs,u,y)
+    loglik(kfs, u, y, p)
 end
 plot!(svec, llskf, yscale=:identity, xscale=:log10, lab="Kalman", c=:red)
 vline!([svec[findmax(llskf)[2]]], l=(:dash,:red), primary=false)
@@ -203,8 +207,8 @@ as we can see, the result is quite noisy due to the stochastic nature of particl
 
 ```@example lingauss
 kf = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal(2,1))
-xf,xh,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
-xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
+xf,xh,R,Rt,ll = forward_trajectory(kf, u, y, p) # filtered, prediction, pred cov, filter cov, loglik
+xT,R,lls = smooth(kf, u, y, p) # Smoothed state, smoothed cov, loglik
 ```
 
 Plot and compare PF and KF
@@ -239,7 +243,7 @@ priors = [Normal(0,2),Normal(0,2)]
 Now we call the function `log_likelihood_fun` that returns a function to be minimized
 
 ```@example lingauss
-ll = log_likelihood_fun(filter_from_parameters,priors,u,y)
+ll = log_likelihood_fun(filter_from_parameters, priors, u, y, p)
 ```
 
 Since this is a low-dimensional problem, we can plot the LL on a 2d-grid
@@ -288,7 +292,7 @@ The call to `exp` on the parameters is so that we can define log-normal priors
 
 ```@example lingauss
 priors = [Normal(0,2),Normal(0,2)]
-ll     = log_likelihood_fun(filter_from_parameters,priors,u,y)
+ll     = log_likelihood_fun(filter_from_parameters, priors, u, y, p)
 θ₀     = log.([1.,1.]) # Starting point
 ```
 
@@ -318,8 +322,8 @@ The function `dynamics` must have a method signature like below. It must provide
 
 ```@example lingauss
 using Random
-const rng = Random.MersenneTwister()
-function dynamics(x,u,t,noise=false) # It's important that this defaults to false
+const rng = Random.Xoshiro()
+function dynamics(x, u, p, t, noise=false) # It's important that this defaults to false
     x = A*x .+ B*u # A simple dynamics model
     if noise
         x += rand(rng, df) # it's faster to supply your own rng
@@ -331,7 +335,7 @@ end
 The `measurement_likelihood` function must have a method accepting state, measurement and time, and returning the log-likelihood of the measurement given the state, a simple example below:
 
 ```@example lingauss
-function measurement_likelihood(x,u,y,t)
+function measurement_likelihood(x, u, y, p, t)
     logpdf(dg, C*x-y) # A simple linear measurement model with normal additive noise
 end
 ```
@@ -340,23 +344,24 @@ This gives you very high flexibility. The noise model in either function can, fo
 To be able to simulate the `AdvancedParticleFilter` like we did with the simple filter above, the `measurement` method with the signature `measurement(x,u,t,noise=false)` must be available and return a sample measurement given state (and possibly time). For our example measurement model above, this would look like this
 
 ```@example lingauss
-measurement(x,u,t,noise=false) = C*x + noise*rand(rng, dg)
+measurement(x, u, p, t, noise=false) = C*x + noise*rand(rng, dg)
 ```
 
 We now create the `AdvancedParticleFilter` and use it in the same way as the other filters:
 
 ```@example lingauss
 apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0)
-x,w,we,ll = forward_trajectory(apf, u, y)
+sol = forward_trajectory(apf, u, y, p)
 ```
 
-trajectorydensity(apf, x, we, u, y, xreal=xs)
-
+```@example lingauss
+plot(sol, xreal=xs)
+```
 We can even use this type as an AuxiliaryParticleFilter
 
 ```@example lingauss
 apfa = AuxiliaryParticleFilter(apf)
-x,w,we,ll = forward_trajectory(apfa, u, y)
-trajectorydensity(apfa, x, we, u, y, xreal=xs)
-dimensiondensity(apfa, x, we, u, y, 1, xreal=xs) # Same as above, but only plots a single dimension
+sol = forward_trajectory(apfa, u, y, p)
+plot(sol, xreal=xs)
+plot(sol, dim=1, xreal=xs) # Same as above, but only plots a single dimension
 ```

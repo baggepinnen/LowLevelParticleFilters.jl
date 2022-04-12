@@ -22,10 +22,10 @@ Will plot all the real states in `xindices` as well as the expected vs real meas
 - `yindices = 1:n_measurements`\n
 Returns: `pdata`
 """
-function pplot(pf, u, y, args...; kwargs...)
+function pplot(pf::AbstractFilter, u, y, p, args...; kwargs...)
     s = state(pf)
     t = s.t[]
-    pplot(s.x, s.we, u, y, LowLevelParticleFilters.measurement(pf).(s.x, Ref(u[t]), t), s.j, t, args...; xprev=s.xprev, kwargs...) 
+    pplot(s.x, s.we, u, y, LowLevelParticleFilters.measurement(pf).(s.x, Ref(u[t]), Ref(p), t), s.j, t, args...; xprev=s.xprev, kwargs...) 
 end
 
 function pplot(x, w, u, y, yhat, a, t, pdata; xreal=nothing, xprev=nothing,  density = true, leftonly = true, xindices = 1:length(x[1]), yindices = 1:length(y[1]), lowpass=0.9)
@@ -104,42 +104,42 @@ end
 
 
 """
-    commandplot(pf, u, y; kwargs...)
+    commandplot(pf, u, y, p=parameters(pf); kwargs...)
 
 Produce a helpful plot. For customization options (`kwargs...`), see `?pplot`.
 After each time step, a command from the user is requested.
 - q: quit
 - s n: step `n` steps
 """
-function commandplot(pf, u, y; kwargs...)
+function commandplot(pf, u, y, p=parameters(pf); kwargs...)
     # pdata = nothing
     reset!(pf)
     pfp = pf isa AuxiliaryParticleFilter ? pf.pf : pf
     commandplot() do pdata
-        pdata = pplot(pfp, u, y, pdata; kwargs...)
+        pdata = pplot(pfp, u, y, p, pdata; kwargs...)
         t = index(pf)
-        LowLevelParticleFilters.update!(pf,u[t],y[t])
+        LowLevelParticleFilters.update!(pf,u[t],y[t],p)
         pdata
     end
 end
 
 
 """
-    debugplot(pf, u, y; runall=false, kwargs...)
+    debugplot(pf, u, y, p=parameters(pf); runall=false, kwargs...)
 
 Produce a helpful plot. For customization options (`kwargs...`), see `?pplot`.
 - ` runall=false:` if true, runs all time steps befor displaying (faster), if false, displays the plot after each time step.
 
 The generated plot becomes quite heavy. Initially, try limiting your input to 100 time steps to verify that it doesn't crash.
 """
-function debugplot(pf, u, y; runall=false, kwargs...)
+function debugplot(pf, u, y, p=parameters(pf); runall=false, kwargs...)
     pdata = nothing
     reset!(pf)
     pfp = pf isa AuxiliaryParticleFilter ? pf.pf : pf
     for i = 1:length(y)
-        pdata = pplot(pfp, u, y, pdata; kwargs...)
+        pdata = pplot(pfp, u, y, p, pdata; kwargs...)
         t = index(pf)
-        LowLevelParticleFilters.update!(pf,u[t],y[t])
+        LowLevelParticleFilters.update!(pf,u[t],y[t], p)
         runall || display(pdata[1])
     end
     display(pdata[1])

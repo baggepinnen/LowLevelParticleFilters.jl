@@ -11,8 +11,8 @@ B = @SMatrix randn(n,m)
 C = SMatrix{p,p}(eye(p))
 # C = SMatrix{p,n}([1 1])
 
-dynamics(x,u,t) = A*x .+ B*u
-measurement(x,u,t) = C*x
+dynamics(x,u,p,t) = A*x .+ B*u
+measurement(x,u,p,t) = C*x
 
 T = 800 # Number of time steps
 
@@ -23,29 +23,29 @@ ekf = LLPF.ExtendedKalmanFilter(kf, dynamics, measurement)
 x,u,y = LLPF.simulate(kf,T,du)
 
 
-xf,xt,R,Rt,ll = forward_trajectory(kf, u, y)
-xf2,xt2,R2,Rt2,ll2 = forward_trajectory(ekf, u, y)
+sol = forward_trajectory(kf, u, y)
+sol2 = forward_trajectory(ekf, u, y)
 
 
 # When the dynamics is linear, these should be the same
-@test reduce(hcat, xf) ≈ reduce(hcat, xf2)
-@test reduce(hcat, xt) ≈ reduce(hcat, xt2)
-@test reduce(hcat, R)  ≈ reduce(hcat, R2)
-@test reduce(hcat, Rt) ≈ reduce(hcat, Rt2)
-@test ll ≈ ll2
+@test reduce(hcat, sol.x) ≈ reduce(hcat, sol2.x)
+@test reduce(hcat, sol.xt) ≈ reduce(hcat, sol2.xt)
+@test reduce(hcat, sol.R)  ≈ reduce(hcat, sol2.R)
+@test reduce(hcat, sol.Rt) ≈ reduce(hcat, sol2.Rt)
+@test sol.ll ≈ sol2.ll
 
 
 ## add nonlinear dynamics
-dynamics2(x,u,t) = A*x - 0.01*abs.(x) .+ B*u
+dynamics2(x,u,p,t) = A*x - 0.01*abs.(x) .+ B*u
 ekf = LLPF.ExtendedKalmanFilter(kf, dynamics2, measurement)
 x,u,y = LLPF.simulate(ekf,T,du)
 
-xf,xt,R,Rt,ll = forward_trajectory(kf, u, y)
-xf2,xt2,R2,Rt2,ll2 = forward_trajectory(ekf, u, y)
+sol = forward_trajectory(kf, u, y)
+sol2 = forward_trajectory(ekf, u, y)
 
-@test norm(reduce(hcat, x .- xf)) > norm(reduce(hcat, x .- xf2))
-@test norm(reduce(hcat, x .- xt)) > norm(reduce(hcat, x .- xt2))
-@test ll < ll2
+@test norm(reduce(hcat, x .- sol.x)) > norm(reduce(hcat, x .- sol2.x))
+@test norm(reduce(hcat, x .- sol.xt)) > norm(reduce(hcat, x .- sol2.xt))
+@test sol.ll < sol2.ll
 
 # plot(reduce(hcat, x)', layout=2, lab="True")
 # plot!(reduce(hcat, xf)', lab="Kf")
