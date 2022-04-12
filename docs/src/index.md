@@ -5,10 +5,10 @@
 
 This is a library for *state estimation*, that is, given measurements ``y(t)`` from a dynamical system, estimate the state vector ``x(t)``. Throughout, we assume dynamics on the form
 ```math
-x(t+1) = f(x(t), u(t), p, t, w(t))
+x(t+1) = f(x(t), u(t), p, t, w(t))\\
 y(t) = g(x(t), u(t), p, t, e(t))
 ```
-where ``x`` is the state vector, ``u`` an input, ``p`` some form of parameters, ``t`` is the time and ``w,e`` are disturbances (noise). Throughout the documentation, we often call the function ``f`` `dynamics` and the function ``g`` measurement.
+where ``x`` is the state vector, ``u`` an input, ``p`` some form of parameters, ``t`` is the time and ``w,e`` are disturbances (noise). Throughout the documentation, we often call the function ``f`` `dynamics` and the function ``g`` `measurement`.
 
 The dynamics above describe a *discrete-time* system, i.e., the function ``f`` is takes the current state and produces the *next state*. This is in contrast to a *continuous-time* system, where ``f`` takes the current state but produces the *time derivative* of the state. A continuous-time system can be *discretized*, described in detail in [Discretization](@ref).
 
@@ -67,6 +67,7 @@ Tr = randn(n,n)
 const A = SMatrix{n,n}(Tr*diagm(0=>LinRange(0.5,0.95,n))/Tr)
 const B = @SMatrix randn(n,m)
 const C = @SMatrix randn(p,n)
+nothing # hide
 ```
 
 Next, we define the dynamics and measurement equations, they both take the signature `(x,u,p,t) = (state, input, parameters, time)` 
@@ -143,7 +144,7 @@ scatter!(xbt[2, 1:downsample:end, :]', subplot=2, m=(1,:black, 0.5), lab="")
 # Kalman filter
 The Kalman filter assumes that ``f`` and ``g`` are linear function, i.e., that they can be written on the form
 ```math
-x(t+1) = Ax(t) + Bu(t) + w(t)
+x(t+1) = Ax(t) + Bu(t) + w(t)\\
 y(t) = Cx(t) + Du(t) + e(t)
 ```
 where ``w ~ N(0, R_1)`` and ``e ~ N(0, R_2)`` are zero mean and Gaussian. The Kalman filter represents the posterior distributions over ``x`` by the mean and a covariance matrix. The magic behind the Kalman filter is that linear transformations of Gaussian distributions remain Gaussian, and we thus have a very efficient way of representing them.
@@ -157,6 +158,7 @@ R2 = eye(p)
 kf = KalmanFilter(A, B, C, 0, R1, R2, d0)
 sol = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
 xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
+nothing # hide
 ```
 
 It can also be called in a loop like the `pf` above
@@ -182,6 +184,7 @@ Kalman filters can also be used for smoothing
 ```@example lingauss
 kf = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal(diagm(ones(2))))
 xT,R,lls = smooth(kf, u, y, p) # Smoothed state, smoothed cov, loglik
+nothing # hide
 ```
 
 Plot and compare PF and KF
@@ -231,6 +234,7 @@ function dynamics(x, u, p, t, noise=false) # It's important that this defaults t
     end
     x
 end
+nothing # hide
 ```
 
 The `measurement_likelihood` function must have a method accepting state, measurement, parameter and time, and returning the log-likelihood of the measurement given the state, a simple example below:
@@ -239,6 +243,7 @@ The `measurement_likelihood` function must have a method accepting state, measur
 function measurement_likelihood(x, u, y, p, t)
     logpdf(dg, C*x-y) # A simple linear measurement model with normal additive noise
 end
+nothing # hide
 ```
 
 This gives you very high flexibility. The noise model in either function can, for instance, be a function of the state, something that is not possible for the simple `ParticleFilter`.
@@ -246,6 +251,7 @@ To be able to simulate the `AdvancedParticleFilter` like we did with the simple 
 
 ```@example lingauss
 measurement(x, u, p, t, noise=false) = C*x + noise*rand(rng, dg)
+nothing # hide
 ```
 
 We now create the `AdvancedParticleFilter` and use it in the same way as the other filters:

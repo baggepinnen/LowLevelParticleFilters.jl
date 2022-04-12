@@ -3,7 +3,7 @@ State estimation is an integral part of many parameter-estimation methods. Below
 1. Methods that optimize prediction error or likelihood by tweaking model parameters.
 2. Methods that add the parameters to be estimated as states in the model and estimate them using standard state estimation. 
 
-From the first camp, we provide som basic functionality for maximum likelihood estimation and MAP estimation, described below. An example 2), joint state and parameter estimation, is provided in [Joint state and parameter estimation](@ref).
+From the first camp, we provide som basic functionality for maximum likelihood estimation and MAP estimation, described below. An example of 2), joint state and parameter estimation, is provided in [Joint state and parameter estimation](@ref).
 
 
 ## Maximum-likelihood estimation
@@ -68,6 +68,7 @@ To solve a MAP estimation problem, we need to define a function that takes a par
 
 ```@example ml_map
 filter_from_parameters(θ, pf = nothing) = KalmanFilter(A, B, C, 0, exp(θ[1])^2*eye(nx), exp(θ[2])^2*eye(ny), d0) # Works with particle filters as well
+nothing # hide
 ```
 
 The call to `exp` on the parameters is so that we can define log-normal priors
@@ -80,6 +81,7 @@ Now we call the function `log_likelihood_fun` that returns a function to be mini
 
 ```@example ml_map
 ll = log_likelihood_fun(filter_from_parameters, priors, u, y, p)
+nothing # hide
 ```
 
 Since this is a low-dimensional problem, we can plot the LL on a 2d-grid
@@ -112,6 +114,7 @@ We proceed like we did for MAP above, but when calling the function `metropolis`
 ```@example ml_map
 N = 1000
 filter_from_parameters(θ, pf = nothing) = KalmanFilter(A, B, C, 0, exp(θ[1])^2*I(nx), exp(θ[2])^2*I(ny), d0) # Works with particle filters as well
+nothing # hide
 ```
 
 The call to `exp` on the parameters is so that we can define log-normal priors
@@ -120,6 +123,7 @@ The call to `exp` on the parameters is so that we can define log-normal priors
 priors = [Normal(0,2),Normal(0,2)]
 ll     = log_likelihood_fun(filter_from_parameters, priors, u, y, p)
 θ₀     = log.([1.0, 1.0]) # Starting point
+nothing # hide
 ```
 
 We also need to define a function that suggests a new point from the "proposal distribution". This can be pretty much anything, but it has to be symmetric since I was lazy and simplified an equation.
@@ -180,6 +184,7 @@ We then define a measurement function, we measure the levels of tanks 1 and two,
 ```@example paramest
 measurement(x,u,p,t) = SA[x[1], x[2]]
 discrete_dynamics = LowLevelParticleFilters.rk4(quadtank, Ts, supersample=2)
+nothing # hide
 ```
 
 We simulate the system using the `rollout` function and add some noise to the measurements. The inputs in this case are just square waves.
@@ -199,7 +204,7 @@ plot(
 )
 ```
 
-To perform the joint state and parameter estimation, we define a version of the dynamics that contains an extra state, corresponding to the unknown or time varying parameter, in this case ``a1``. We do not have any apriori information about how this parameter changes, so we say that its derivative is 0 and it's thus only driven by noise:
+To perform the joint state and parameter estimation, we define a version of the dynamics that contains an extra state, corresponding to the unknown or time varying parameter, in this case ``a_1``. We do not have any apriori information about how this parameter changes, so we say that its derivative is 0 and it's thus only driven by noise:
 ```@example paramest
 function quadtank_paramest(h, u, p, t)
     kc = 0.5
@@ -222,6 +227,7 @@ function quadtank_paramest(h, u, p, t)
 end
 
 discrete_dynamics_params = LowLevelParticleFilters.rk4(quadtank_paramest, Ts, supersample=2)
+nothing # hide
 ```
 
 We then define a nonlinear state estimator, we will use the [`UnscentedKalmanFilter`](@ref), and solve the filtering problem. We start by an initial state estimate ``x_0`` that is slightly off for the parameter ``a_1``
@@ -242,7 +248,7 @@ as we can see, the correct value of the parameter is quickly found (``x_5``), an
 If adaptive parameter estimation is coupled with a model-based controller, we get an adaptive controller! Note: the state that corresponds to the estimated parameter is typically not controllable, a fact that may require some special care for some control methods.
 
 ## Using an optimizer
-Maximum-likelihood or prediction-error estimation is stright-forward by simply differentiating through the state estimator using automatic differentiation. In this example, we will continue the example from above, but now estimate all the parameters of the quad-tank process. This time, they will not vary with time.
+Maximum-likelihood or prediction-error estimation is straight-forward by simply differentiating through the state estimator using automatic differentiation. In this example, we will continue the example from above, but now estimate all the parameters of the quad-tank process. This time, they will not vary with time.
 
 This time, we define the dynamics function such that it takes its parameters from the `p` input argument. We also define a variable `p_true` that contains the true values that we will use to simulate some estimation data
 ```@example paramest
@@ -265,6 +271,7 @@ end
 
 discrete_dynamics = LowLevelParticleFilters.rk4(quadtank, Ts, supersample=2)
 p_true = [0.5, 1.6, 1.6, 4.9, 0.03, 0.2]
+nothing # hide
 ```
 
 Similar to previous example, we simulate the system, this time using a more exciting input in order to be able to identify several parameters
@@ -297,6 +304,7 @@ function cost(p::Vector{T}) where T
     kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), R1); ny, nu)
     LowLevelParticleFilters.sse(kf, u, y, p)
 end
+nothing # hide
 ```
 We generate a random initial guess for the estimation problem
 ```@example paramest

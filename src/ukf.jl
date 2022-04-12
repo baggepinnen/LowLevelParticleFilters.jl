@@ -51,7 +51,7 @@ y  = measurement(x, u, p, t) + e
 ```
 where `w ~ N(0, R1)`, `e ~ N(0, R2)` and `x(0) ~ d0`
 
-The matrices `R1, R2` can be time varying such that, e.g., `R1[:, :, t]` contains the ``R1`` matrix at time index `t`.
+The matrices `R1, R2` can be time varying such that, e.g., `R1[:, :, t]` contains the ``R_1`` matrix at time index `t`.
 They can also be given as functions on the form
 ```
 Rfun(x, u, p, t) -> R
