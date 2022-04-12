@@ -7,3 +7,6 @@
 Modules = [LowLevelParticleFilters]
 Private = false
 ```
+```@docs
+LowLevelParticleFilters.rk4
+```
