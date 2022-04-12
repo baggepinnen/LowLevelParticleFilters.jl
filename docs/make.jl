@@ -11,6 +11,7 @@ makedocs(
       modules = [LowLevelParticleFilters],
       pages = [
             "Home" => "index.md",
+            "Parameter estimation" => "parameter_estimation.md",
             "Benchmark" => "benchmark.md",
             "High-performance distributions" => "distributions.md",
             "API" => "api.md",

@@ -166,43 +166,6 @@ The plot displays all states and all measurements. The heatmap in the background
 You can also manually step through the time-series using
 - `commandplot(pf,u,y; kwargs...)`
 For options to the debug plots, see `?pplot`.
-
-# Parameter estimation
-We provide som basic functionality for maximum likelihood estimation and MAP estimation
-## ML estimation
-Plot likelihood as function of the variance of the dynamics noise
-
-```@example lingauss
-p = nothing
-svec = exp10.(LinRange(-1.5,1.5,60))
-llspf = map(svec) do s
-    df = MvNormal(n,s)
-    pfs = ParticleFilter(2000, dynamics, measurement, df, dg, d0)
-    loglik(pfs, u, y, p)
-end
-plot( svec, llspf,
-    xscale = :log10,
-    title = "Log-likelihood",
-    xlabel = "Dynamics noise standard deviation",
-    lab = "PF",
-)
-vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue), primary=false)
-```
-
-We can do the same with a Kalman filter
-
-```@example lingauss
-eye(n) = Matrix{Float64}(I,n,n)
-llskf = map(svec) do s
-    kfs = KalmanFilter(A, B, C, 0, s^2*eye(n), eye(p), d0)
-    loglik(kfs, u, y, p)
-end
-plot!(svec, llskf, yscale=:identity, xscale=:log10, lab="Kalman", c=:red)
-vline!([svec[findmax(llskf)[2]]], l=(:dash,:red), primary=false)
-```
-
-as we can see, the result is quite noisy due to the stochastic nature of particle filtering.
-
 ## Smoothing using KF
 
 ```@example lingauss
@@ -220,101 +183,13 @@ plot!(vecvec_to_mat(x), lab="true")
 ```
 
 
-## MAP estiamtion
-To solve a MAP estimation problem, we need to define a function that takes a parameter vector and returns a particle filter
-
-```@example lingauss
-filter_from_parameters(θ, pf = nothing) = ParticleFilter(
-    N,
-    dynamics,
-    measurement,
-    MvNormal(n, exp(θ[1])),
-    MvNormal(p, exp(θ[2])),
-    d0,
-)
-```
-
-The call to `exp` on the parameters is so that we can define log-normal priors
-
-```@example lingauss
-priors = [Normal(0,2),Normal(0,2)]
-```
-
-Now we call the function `log_likelihood_fun` that returns a function to be minimized
-
-```@example lingauss
-ll = log_likelihood_fun(filter_from_parameters, priors, u, y, p)
-```
-
-Since this is a low-dimensional problem, we can plot the LL on a 2d-grid
-
-```@example lingauss
-function meshgrid(a,b)
-    grid_a = [i for i in a, j in b]
-    grid_b = [j for i in a, j in b]
-    grid_a, grid_b
-end
-Nv       = 20
-v        = LinRange(-0.7,1,Nv)
-llxy     = (x,y) -> ll([x;y])
-VGx, VGy = meshgrid(v,v)
-VGz      = llxy.(VGx, VGy)
-heatmap(
-    VGz,
-    xticks = (1:Nv, round.(v, digits = 2)),
-    yticks = (1:Nv, round.(v, digits = 2)),
-    xlabel = "sigma v",
-    ylabel = "sigma w",
-) # Yes, labels are reversed
-```
 
 
 Something seems to be off with this figure as the hottest spot is not really where we would expect it
 
 Optimization of the log likelihood can be done by, e.g., global/black box methods, see [BlackBoxOptim.jl](https://github.com/robertfeldt/BlackBoxOptim.jl). Standard tricks apply, such as performing the parameter search in log-space etc.
 
-## Bayesian inference using PMMH
-This is pretty cool. We procede like we did for MAP above, but when calling the function `metropolis`, we will get the entire posterior distribution of the parameter vector, for the small cost of a massive increase in computational cost.
 
-```@example lingauss
-N = 1000
-filter_from_parameters(θ, pf = nothing) = AuxiliaryParticleFilter(
-    N,
-    dynamics,
-    measurement,
-    MvNormal(n, exp(θ[1])),
-    MvNormal(p, exp(θ[2])),
-    d0,
-)
-```
-
-The call to `exp` on the parameters is so that we can define log-normal priors
-
-```@example lingauss
-priors = [Normal(0,2),Normal(0,2)]
-ll     = log_likelihood_fun(filter_from_parameters, priors, u, y, p)
-θ₀     = log.([1.,1.]) # Starting point
-```
-
-We also need to define a function that suggests a new point from the "proposal distribution". This can be pretty much anything, but it has to be symmetric since I was lazy and simplified an equation.
-
-```@example lingauss
-draw   = θ -> θ .+ rand(MvNormal(0.05ones(2)))
-burnin = 200
-@info "Starting Metropolis algorithm"
-@time theta, lls = metropolis(ll, 1200, θ₀, draw) # Run PMMH for 1200  iterations, takes about half a minute on my laptop
-thetam = reduce(hcat, theta)'[burnin+1:end,:] # Build a matrix of the output (was vecofvec)
-histogram(exp.(thetam), layout=(3,1)); plot!(lls[burnin+1:end], subplot=3) # Visualize
-```
-
-
-If you are lucky, you can run the above threaded as well. I tried my best to make particle fitlers thread safe with their own rngs etc., but your milage may vary.
-
-```@example lingauss
-@time thetalls = LowLevelParticleFilters.metropolis_threaded(burnin, ll, 500, θ₀, draw)
-histogram(exp.(thetalls[:,1:2]), layout=3)
-plot!(thetalls[:,3], subplot=3)
-```
 
 # AdvancedParticleFilter
 The `AdvancedParticleFilter` type requires you to implement the same functions as the regular `ParticleFilter`, but in this case you also need to handle sampling from the noise distributions yourself.
