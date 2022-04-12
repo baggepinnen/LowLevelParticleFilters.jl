@@ -282,6 +282,14 @@ function simulate(f::AbstractFilter,u,p=parameters(f); dynamics_noise=true)
     x,u,y
 end
 
+function rollout(f, x0::AbstractVector, u, p=nothing)
+    x = [x0]
+    for (i,u) in enumerate(u)
+        push!(x, f(x[end], u, p, i))
+    end
+    x
+end
+
 
 """
     x̂ = weigthed_mean(x,we)

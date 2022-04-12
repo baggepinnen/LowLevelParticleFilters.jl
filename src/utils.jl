@@ -168,3 +168,26 @@ function double_integrator_covariance(h, σ=1)
     σ*[h^4/4 h^3/2
     h^3/2  h^2]
 end
+
+"""
+    f_discrete = rk4(f, Ts; supersample = 1)
+
+Discretize `f` using RK4 with sample time `Ts`. 
+"""
+function rk4(f::F, Ts0; supersample::Integer = 1) where {F}
+    supersample ≥ 1 || throw(ArgumentError("supersample must be positive."))
+    # Runge-Kutta 4 method
+    Ts = Ts0 / supersample # to preserve type stability in case Ts0 is an integer
+    let Ts = Ts
+        function (x, u, p, t)
+            for _ in 1:supersample
+                f1 = f(x, u, p, t)
+                f2 = f(x + Ts / 2 * f1, u, p, t + Ts / 2)
+                f3 = f(x + Ts / 2 * f2, u, p, t + Ts / 2)
+                f4 = f(x + Ts * f3, u, p, t + Ts)
+                x += Ts / 6 * (f1 + 2 * f2 + 2 * f3 + f4)
+            end
+            return x
+        end
+    end
+end

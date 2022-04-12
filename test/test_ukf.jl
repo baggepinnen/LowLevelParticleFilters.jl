@@ -87,7 +87,7 @@ end
 nx = 4 # Dinemsion of differential state
 nu = 2 # Dinemsion of input
 ny = 2 # Dinemsion of measurements
-const Ts = 0.001
+const Ts_ekf = 0.001
 @inbounds measurement(x,u,p,t) = SA[x[1], x[end]] # measure one position and the algebraic state 
 
 d0 = mvnormal([1,0,0,0],0.1)   # Initial state Distribution
@@ -105,7 +105,7 @@ g(xz, u, p, t) = g(get_x(xz), get_z(xz), u, p, t)
 
 # Discretization of the continuous-time dynamics, we use a naive Euler approximation, real-world use should use a proper DAE solver, for example using the integrator interface in OrdinaryDiffEq.jl
 function dynamics(xz,u,p,t)
-    Tsi = Ts/100
+    Tsi = Ts_ekf/100
     for i = 1:100
         der = pend(xz,u,p,t)
         xp = get_x(xz) + Tsi*get_x(der) # Euler step
@@ -134,7 +134,7 @@ for threads = (false, true)
         @test g(xzp, u0, 0, 0)[] ≈ 0 atol=0.01
     end
 
-    t = 0:Ts:3
+    t = 0:Ts_ekf:3
     U = [sin.(t.^2) sin.(reverse(t).^2)]
     u = U |> eachrow .|> vcat
     local x, u, y

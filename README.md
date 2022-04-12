@@ -9,8 +9,10 @@ We provide a number of filter types
 - `ParticleFilter`: This filter is simple to use and assumes that both dynamics noise and measurement noise are additive.
 - `AuxiliaryParticleFilter`: This filter is identical to `ParticleFilter`, but uses a slightly different proposal mechanism for new particles.
 - `AdvancedParticleFilter`: This filter gives you more flexibility, at the expense of having to define a few more functions. More instructions on this type below.
-- `KalmanFilter`. Is what you would expect. Has the same features as the particle filters, but is restricted to linear dynamics and gaussian noise.
-- `UnscentedKalmanFilter`. Is also what you would expect. Has almost the same features as the Kalman filters, but handle nonlinear dynamics and measurement model, still requires an additive Gaussian noise model.
+- `KalmanFilter`. A standard Kalman filter. Has the same features as the particle filters, but is restricted to linear dynamics (possibly time varying) and Gaussian noise.
+- `ExtendedKalmanFilter`: For nonlinear systems, the EKF runs a regular Kalman filter on linearized dynamics. Uses ForwardDiff.jl for linearization. The noise model must be Gaussian.
+- `UnscentedKalmanFilter`: The Unscented kalman filter often performs slightly better than the Extended Kalman filter but may be slightly more computationally expensive. The UKF handles nonlinear dynamics and measurement model, but still requires an additive Gaussian noise model.
+- `DAEUnscentedKalmanFilter`: An Unscented Kalman filter for differential-algebraic systems (DAE).
 
 # Functionality
 - Filtering
