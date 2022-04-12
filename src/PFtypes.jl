@@ -18,7 +18,7 @@ end
 
 PFstate(N::Integer) = PFstate([zeros(N)],[zeros(N)],fill(-log(N), N),fill(1/N, N),Ref(0.),collect(1:N),zeros(N), Ref(1))
 
-@with_kw struct ParticleFilter{ST,FT,GT,FDT,GDT,IDT,RST<:DataType,RNGT} <: AbstractParticleFilter
+@with_kw struct ParticleFilter{ST,FT,GT,FDT,GDT,IDT,RST<:DataType,RNGT,P} <: AbstractParticleFilter
     state::ST
     dynamics::FT
     measurement::GT
@@ -28,6 +28,7 @@ PFstate(N::Integer) = PFstate([zeros(N)],[zeros(N)],fill(-log(N), N),fill(1/N, N
     resample_threshold::Float64 = 0.1
     resampling_strategy::RST = ResampleSystematic
     rng::RNGT = Xoshiro()
+    p::P = SciMLBase.NullParameters()
 end
 
 struct AuxiliaryParticleFilter{T<:AbstractParticleFilter} <: AbstractParticleFilter
@@ -37,7 +38,7 @@ end
 AuxiliaryParticleFilter(args...;kwargs...) = AuxiliaryParticleFilter(ParticleFilter(args...;kwargs...))
 
 """
-    ParticleFilter(num_particles, dynamics, measurement, dynamics_density, measurement_density, initial_density)
+    ParticleFilter(num_particles, dynamics, measurement, dynamics_density, measurement_density, initial_density; p = SciMLBase.NullParameters())
 """
 function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density; kwargs...)
     xprev = Vector{SVector{length(initial_density),eltype(initial_density)}}([rand(initial_density) for n=1:N])
@@ -49,7 +50,7 @@ function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, d
 
     ParticleFilter(; state = s, dynamics, measurement,
     dynamics_density, measurement_density,
-    initial_density, kwargs...)
+    initial_density, p, kwargs...)
 end
 
 function ParticleFilter(s::PFstate, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density; kwargs...)
@@ -140,7 +141,7 @@ end
 
 
 
-@with_kw struct AdvancedParticleFilter{ST,FT,GT,GLT,FDT,IDT,RST<:DataType,RNGT} <: AbstractParticleFilter
+@with_kw struct AdvancedParticleFilter{ST,FT,GT,GLT,FDT,IDT,RST<:DataType,RNGT,P} <: AbstractParticleFilter
     state::ST
     dynamics::FT
     measurement::GT
@@ -150,11 +151,12 @@ end
     resample_threshold::Float64 = 0.5
     resampling_strategy::RST = ResampleSystematic
     rng::RNGT = Xoshiro()
+    p::P = SciMLBase.NullParameters()
 end
 
 
 """
-    AdvancedParticleFilter(Nparticles, dynamics, measurement, measurement_likelihood, dynamics_density, initial_density; kwargs...)
+    AdvancedParticleFilter(Nparticles, dynamics, measurement, measurement_likelihood, dynamics_density, initial_density; p = SciMLBase.NullParameters(), kwargs...)
 """
 function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, measurement_likelihood, dynamics_density, initial_density; kwargs...)
     r1 = rand(initial_density)

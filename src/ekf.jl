@@ -8,7 +8,17 @@ end
 """
     ExtendedKalmanFilter(kf, dynamics, measurement)
 
+A nonlinear state estimator propagating uncertainty using linearization.
+
 An extended Kalman filter takes a standard Kalman filter as well as dynamics and measurement functions. The filter will linearize the dynamics using ForwardDiff.
+The dynamics and measurement function are on the following form
+```
+x' = dynamics(x, u, p, t) + w
+y  = measurement(x, u, p, t) + e
+```
+where `w ~ N(0, R1)`, `e ~ N(0, R2)` and `x(0) ~ d0`
+
+See also [`UnscentedKalmanFilter`](@ref) which is typically more accurate than `ExtendedKalmanFilter`. See [`KalmanFilter`](@ref) for detailed instructions on how to set up the Kalman filter `kf`.
 """
 ExtendedKalmanFilter
 
@@ -26,7 +36,7 @@ function predict!(kf::AbstractExtendedKalmanFilter, u, p = parameters(kf), t::In
     @unpack x,R,R1 = kf
     A = ForwardDiff.jacobian(x->kf.dynamics(x,u,p,t), x)
     x .= kf.dynamics(x, u, p, t)
-    R .= symmetrize(A*R*A') + R1
+    R .= symmetrize(A*R*A') + get_mat(R1, x, u, p, t)
     kf.t[] += 1
 end
 
@@ -34,7 +44,7 @@ function correct!(kf::AbstractExtendedKalmanFilter, u, y, p = parameters(kf), t:
     @unpack x,R,R2 = kf
     C = ForwardDiff.jacobian(x->kf.measurement(x,u,p,t), x)
     e  = y .- kf.measurement(x,u,p,t)
-    S   = symmetrize(C*R*C') + R2
+    S   = symmetrize(C*R*C') + get_mat(R2, x, u, p, t)
     Sᵪ  = cholesky(S)
     K   = (R*C')/Sᵪ
     x .+= vec(K*e)
@@ -62,7 +72,7 @@ function smooth(kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::Abstract
 end
 
 sample_state(kf::AbstractExtendedKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
-sample_state(kf::AbstractExtendedKalmanFilter, x, u, p, t; noise=true) = kf.dynamics(x, u, p, t) .+ noise*rand(MvNormal(kf.R1))
-sample_measurement(kf::AbstractExtendedKalmanFilter, x, u, p, t; noise=true) = kf.measurement(x, u, p, t) .+ noise*rand(MvNormal(kf.R2))
+sample_state(kf::AbstractExtendedKalmanFilter, x, u, p, t; noise=true) = kf.dynamics(x, u, p, t) .+ noise*rand(MvNormal(get_mat(kf.R1, x, u, p, t)))
+sample_measurement(kf::AbstractExtendedKalmanFilter, x, u, p, t; noise=true) = kf.measurement(x, u, p, t) .+ noise*rand(MvNormal(get_mat(kf.R2, x, u, p, t)))
 measurement(kf::AbstractExtendedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractExtendedKalmanFilter) = kf.dynamics

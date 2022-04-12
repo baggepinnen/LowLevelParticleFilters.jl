@@ -45,7 +45,7 @@ measurement(x,u,p,t) = C*x
 
 T    = 200 # Number of time steps
 kf   = KalmanFilter(A, B, C, 0, eye(nx), eye(ny), d0)
-ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), eye(ny), d0)
+ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), eye(ny), d0; ny, nu)
 x,u,y = LowLevelParticleFilters.simulate(kf,T,du) # Simuate trajectory using the model in the filter
 @test_nowarn LowLevelParticleFilters.simulate(ukf,T,du)
 tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
@@ -120,7 +120,7 @@ u0 = randn(nu)
 xzp = dynamics(xz0,u0,0,0)
 @test g(xzp, u0, 0, 0)[] ≈ 0 atol=0.01
 
-ukf0 = UnscentedKalmanFilter(dynamics, measurement, 0.0001eye(nx), 0.01eye(ny), d0)
+ukf0 = UnscentedKalmanFilter(dynamics, measurement, 0.0001eye(nx), 0.01eye(ny), d0; ny, nu)
 threads = false
 for threads = (false, true)
     ukf  = LowLevelParticleFilters.DAEUnscentedKalmanFilter(ukf0; g, get_x_z, build_xz, xz0, nu=nu, threads)

@@ -13,16 +13,16 @@ function reset!(pf::AbstractParticleFilter)
     s.t[] = 1
 end
 
-get_mat(A::Union{AbstractMatrix, Number},x,u,p,t) = A
-get_mat(A::AbstractArray{<:Any, 3},x,u,p,t) = @view A[:,:,t]
-get_mat(A::Function,x,u,p,t) = A(x,u,p,t)
+@inline get_mat(A::Union{AbstractMatrix, Number},x,u,p,t) = A
+@inline get_mat(A::AbstractArray{<:Any, 3},x,u,p,t) = @view A[:,:,t]
+@inline get_mat(A::Function,x,u,p,t) = A(x,u,p,t)
 
 function predict!(kf::AbstractKalmanFilter, u, p=parameters(kf), t::Integer = index(kf))
     @unpack A,B,x,R,R1 = kf
     At = get_mat(A, x, u, p, t)
     Bt = get_mat(B, x, u, p, t)
     x .= At*x .+ Bt*u |> vec
-    R .= symmetrize(At*R*At') + R1
+    R .= symmetrize(At*R*At') + get_mat(R1, x, u, p, t)
     kf.t[] += 1
 end
 
@@ -44,7 +44,7 @@ function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Integer =
     if !iszero(D)
         e .-= Dt*u
     end
-    S   = symmetrize(Ct*R*Ct') + R2
+    S   = symmetrize(Ct*R*Ct') + get_mat(R2, x, u, p, t)
     Sᵪ  = cholesky(S)
     K   = (R*Ct')/Sᵪ
     x .+= K*e
@@ -256,8 +256,8 @@ end
 
 
 """
-    x,u,y = simulate(f::AbstractFilter, T::Int, du::Distribution, p, [N]; dynamics_noise=true)
-    x,u,y = simulate(f::AbstractFilter, u; dynamics_noise=true)
+    x,u,y = simulate(f::AbstractFilter, T::Int, du::Distribution, p=parameters(f), [N]; dynamics_noise=true)
+    x,u,y = simulate(f::AbstractFilter, u, p=parameters(f); dynamics_noise=true)
 
 Simulate dynamical system forward in time, returns state sequence, inputs and measurements
 `du` is a distribution of random inputs.

@@ -61,7 +61,12 @@ function smooth(pf::AbstractParticleFilter, xf, wf, wef, ll, M, u, y, p=paramete
     return xb,ll
 end
 
+"""
+    sse(f::AbstractFilter, u, y, p = parameters(pf), λ = 1)
 
+Calculate the sum of squared errors ``\\sum dot(e, λ, e)``.
+- `λ`: May be a weighting matrix.
+"""
 function sse(f::AbstractFilter, u, y, p=parameters(pf), λ=1)
     reset!(f)
     ll = sum(zip(u, y)) do (u,y)
@@ -72,7 +77,7 @@ end
 
 
 """
-    ll = loglik(filter,u,y,p=parameters(filter))
+    ll = loglik(filter, u, y, p=parameters(filter))
 
 Calculate loglikelihood for entire sequences `u,y`
 """

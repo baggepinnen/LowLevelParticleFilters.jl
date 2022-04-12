@@ -297,4 +297,9 @@ end
     include("test_ekf.jl")
 end
 
+@testset "parameters" begin
+    @info "Testing parameters"
+    include("test_parameters.jl")
+end
+
 end
