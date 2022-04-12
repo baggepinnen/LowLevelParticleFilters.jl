@@ -50,7 +50,7 @@ function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, d
 
     ParticleFilter(; state = s, dynamics, measurement,
     dynamics_density, measurement_density,
-    initial_density, p, kwargs...)
+    initial_density, kwargs...)
 end
 
 function ParticleFilter(s::PFstate, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density; kwargs...)

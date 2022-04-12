@@ -7,20 +7,20 @@ using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions, Plots
 
 # Define problem
 
-n = 2   # Dimension of state
-m = 2   # Dimension of input
-p = 2   # Dimension of measurements
+nx = 2   # Dimension of state
+nu = 2   # Dimension of input
+ny = 2   # Dimension of measurements
 N = 500 # Number of particles
 
-const dg = MvNormal(Diagonal(ones(p)))          # Measurement noise Distribution
-const df = MvNormal(Diagonal(ones(n)))          # Dynamics noise Distribution
-const d0 = MvNormal(randn(n),2.0^2*I)   # Initial state Distribution
+const dg = MvNormal(Diagonal(ones(ny)))          # Measurement noise Distribution
+const df = MvNormal(Diagonal(ones(nx)))          # Dynamics noise Distribution
+const d0 = MvNormal(randn(nx),2.0^2*I)   # Initial state Distribution
 
 # Define random linear state-space system
-Tr = randn(n,n)
-const A = SMatrix{n,n}(Tr*diagm(0=>LinRange(0.5,0.95,n))/Tr)
-const B = @SMatrix randn(n,m)
-const C = @SMatrix randn(p,n)
+Tr = randn(nx,nx)
+const A = SMatrix{nx,nx}(Tr*diagm(0=>LinRange(0.5,0.95,nx))/Tr)
+const B = @SMatrix randn(nx,nu)
+const C = @SMatrix randn(ny,nx)
 
 # The following two functions are required by the filter
 dynamics(x,u,p,t) = A*x .+ B*u
@@ -76,8 +76,8 @@ scatter!(xbt[2,:,:]', subplot=2, m=(1,:black, 0.5), lab="")
 # A Kalman filter is easily created using the constructor. Many of the functions defined for particle filters, are defined also for Kalman filters, e.g.:
 
 eye(n) = Matrix{Float64}(I,n,n)
-kf     = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal(Diagonal([1.,1.])))
-ukf    = UnscentedKalmanFilter(dynamics, measurement, eye(n), eye(p), MvNormal(Diagonal([1.,1.])))
+kf     = KalmanFilter(A, B, C, 0, eye(nx), eye(ny), MvNormal(Diagonal([1.,1.])))
+ukf    = UnscentedKalmanFilter(dynamics, measurement, eye(nx), eye(ny), MvNormal(Diagonal([1.,1.])); nu, ny)
 sol = forward_trajectory(kf, u, y) 
 xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 # It can also be called in a loop like the `pf` above
@@ -115,7 +115,7 @@ debugplot(pf,u[1:30],y[1:30], runall=true, xreal=x[1:30])
 # Plot likelihood as function of the variance of the dynamics noise
 svec = exp10.(LinRange(-1.5,1.5,60))
 llspf = map(svec) do s
-    df = MvNormal(Diagonal(fill(s^2, n)))
+    df = MvNormal(Diagonal(fill(s^2, nx)))
     pfs = ParticleFilter(2000, dynamics, measurement, df, dg, d0)
     loglik(pfs,u,y)
 end
@@ -129,7 +129,7 @@ vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue), primary=false)
 # We can do the same with a Kalman filter
 eye(n) = Matrix{Float64}(I,n,n)
 llskf = map(svec) do s
-    kfs = KalmanFilter(A, B, C, 0, s^2*eye(n), eye(p), d0)
+    kfs = KalmanFilter(A, B, C, 0, s^2*eye(nx), eye(ny), d0)
     loglik(kfs,u,y)
 end
 plot!(svec, llskf, yscale=:identity, xscale=:log10, lab="Kalman", c=:red)
@@ -138,7 +138,7 @@ vline!([svec[findmax(llskf)[2]]], l=(:dash,:red), primary=false)
 # as we can see, the result is quite noisy due to the stochastic nature of particle filtering.
 
 # ### Smoothing using KF
-kf = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal(Diagonal(ones(2))))
+kf = KalmanFilter(A, B, C, 0, eye(nx), eye(ny), MvNormal(Diagonal(ones(2))))
 sol = forward_trajectory(kf, u, y) 
 xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 
@@ -155,8 +155,8 @@ filter_from_parameters(θ, pf = nothing) = ParticleFilter(
     N,
     dynamics,
     measurement,
-    MvNormal(Diagonal(fill(exp(θ[1]), n))),
-    MvNormal(Diagonal(fill(exp(θ[2]), p))),
+    MvNormal(Diagonal(fill(exp(θ[1]), nx))),
+    MvNormal(Diagonal(fill(exp(θ[2]), ny))),
     d0,
 )
 # The call to `exp` on the parameters is so that we can define log-normal priors
@@ -196,8 +196,8 @@ filter_from_parameters(θ, pf = nothing) = AuxiliaryParticleFilter(
     N,
     dynamics,
     measurement,
-    MvNormal(Diagonal(fill(exp(θ[1])^2, n))),
-    MvNormal(Diagonal(fill(exp(θ[2])^2, p))),
+    MvNormal(Diagonal(fill(exp(θ[1])^2, nx))),
+    MvNormal(Diagonal(fill(exp(θ[2])^2, ny))),
     d0,
 )
 # The call to `exp` on the parameters is so that we can define log-normal priors

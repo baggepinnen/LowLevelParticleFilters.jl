@@ -147,7 +147,7 @@ end
 
 
 """
-    x,xt,R,Rt,ll = forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector, p=parameters(kf))
+    sol = forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector, p=parameters(kf))
 
 Run a Kalman filter forward
 

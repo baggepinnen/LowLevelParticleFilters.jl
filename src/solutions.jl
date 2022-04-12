@@ -21,27 +21,27 @@ struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll} <: AbstractFilteringSo
     ll::Tll
 end
 
-@recipe function plot(sol::KalmanFilteringSolution)
+@recipe function plot(sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true)
     nx, nu, ny = length(sol.x[1]), length(sol.u[1]), length(sol.y[1])
-    layout --> nx+nu+nu
-    @series begin
-        label --> "x(t|t-1)"
+    layout --> nx + plotu*nu + ploty*ny
+    plotx && @series begin
+        label --> ["x$(i)(t|t-1)" for i in 1:nx] |> permutedims
         subplot --> (1:nx)'
         reduce(hcat, sol.x)'
     end
-    @series begin
-        label --> "x(t|t)"
+    plotxt && @series begin
+        label --> ["x$(i)(t|t)" for i in 1:nx] |> permutedims
         subplot --> (1:nx)'
         reduce(hcat, sol.xt)'
     end
-    @series begin
-        label --> "u"
-        subplot --> (1:nu)' .+ nx
+    plotu && @series begin
+        label --> ["u$(i)" for i in 1:nu] |> permutedims
+        subplot --> (1:nu)' .+ nx*(plotx || plotxt)
         reduce(hcat, sol.u)'
     end
-    @series begin
-        label --> "y"
-        subplot --> (1:ny)' .+ (nx+nu)
+    ploty && @series begin
+        label --> ["y$(i)" for i in 1:ny] |> permutedims
+        subplot --> (1:ny)' .+ (nx*(plotx || plotxt) + nu*plotu)
         reduce(hcat, sol.y)'
     end
 end
