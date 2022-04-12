@@ -33,7 +33,7 @@ abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
     xs::Vector{VT}
     x::XT
     R::RT
-    t::Ref{Int} = Ref(1)
+    t::Base.RefValue{Int} = Ref(1)
 end
 
 

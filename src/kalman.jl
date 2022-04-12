@@ -11,7 +11,7 @@ abstract type AbstractKalmanFilter <: AbstractFilter end
     d0::D0T
     x::XT
     R::RT
-    t::Ref{Int} = Ref(1)
+    t::Base.RefValue{Int} = Ref(1)
 end
 
 

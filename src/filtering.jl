@@ -151,7 +151,7 @@ end
 
 Run a Kalman filter forward
 
-# Returns:
+# Returns a KalmanFilteringSolution: with the following
 - `x`: predictions
 - `xt`: filtered estimates
 - `R`: predicted covariance matrices
@@ -174,13 +174,15 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
         Rt[t] = covariance(kf) |> copy
         predict!(kf, u[t], p, t)
     end
-    x,xt,R,Rt,ll
+    KalmanFilteringSolution(kf,u,y,x,xt,R,Rt,ll)
 end
 
 
 """
-    x,w,we,ll = forward_trajectory(pf, u::AbstractVector, y::AbstractVector, p=parameters(pf))
-Run the particle filter for a sequence of inputs and measurements. Return particles, weights, expweights and loglikelihood
+    sol = forward_trajectory(pf, u::AbstractVector, y::AbstractVector, p=parameters(pf))
+
+Run the particle filter for a sequence of inputs and measurements. Return a solution with
+`x,w,we,ll = particles, weights, expweights and loglikelihood`
 
 If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurements.jl) is loaded, you may transform the output particles to `Matrix{MonteCarloMeasurements.Particles}` using `Particles(x,we)`. Internally, the particles are then resampled such that they all have unit weight. This is conventient for making use of the [plotting facilities of MonteCarloMeasurements.jl](https://baggepinnen.github.io/MonteCarloMeasurements.jl/stable/#Plotting-1).
 """
@@ -199,7 +201,7 @@ function forward_trajectory(pf, u::AbstractVector, y::AbstractVector, p=paramete
         we[:,t] .= expweights(pf)
         predict!(pf, u[t], p, t)
     end
-    x,w,we,ll
+    ParticleFilteringSolution(pf,u,y,x,w,we,ll)
 end
 
 function forward_trajectory(pf::AuxiliaryParticleFilter, u::AbstractVector, y::AbstractVector, p=parameters(pf))
@@ -217,7 +219,7 @@ function forward_trajectory(pf::AuxiliaryParticleFilter, u::AbstractVector, y::A
         we[:,t] .= expweights(pf)
         t < T && predict!(pf, u[t], y[t+1], p, t)
     end
-    x,w,we,ll
+    ParticleFilteringSolution(pf,u,y,x,w,we,ll)
 end
 
 
@@ -283,7 +285,7 @@ end
 
 """
     x̂ = weigthed_mean(x,we)
-    
+
 Calculated weighted mean of particle trajectories. `we` are expweights.
 """
 function weigthed_mean(x,we::AbstractVector)

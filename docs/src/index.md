@@ -61,6 +61,7 @@ We are now ready to define and use a filter
 ```@example lingauss
 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 ```
+
 With the filter in hand, we can simulate from its dynamics and query some properties
 ```@example lingauss
 xs,u,y = simulate(pf,200,df) # We can simulate the model that the pf represents
@@ -72,9 +73,9 @@ x̂ = weigthed_mean(pf)        # using the current state
 If you want to perform filtering using vectors of inputs and measurements, try any of the functions
 
 ```@example lingauss
-x,w,we,ll = forward_trajectory(pf, u, y) # Filter whole vectors of signals
+sol = forward_trajectory(pf, u, y) # Filter whole vectors of signals
 x̂,ll = mean_trajectory(pf, u, y)
-trajectorydensity(pf,x,w,u,y,xreal=xs, markersize=2)
+plot(sol, xreal=xs, markersize=2)
 ```
 
 
@@ -350,16 +351,17 @@ We now create the `AdvancedParticleFilter` and use it in the same way as the oth
 
 ```@example lingauss
 apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0)
-x,w,we,ll = forward_trajectory(apf, u, y, p)
+sol = forward_trajectory(apf, u, y, p)
 ```
 
-trajectorydensity(apf, x, we, u, y, xreal=xs)
-
+```@example lingauss
+plot(sol, xreal=xs)
+```
 We can even use this type as an AuxiliaryParticleFilter
 
 ```@example lingauss
 apfa = AuxiliaryParticleFilter(apf)
-x,w,we,ll = forward_trajectory(apfa, u, y, p)
-trajectorydensity(apfa, x, we, u, y, xreal=xs)
-dimensiondensity(apfa, x, we, u, y, 1, xreal=xs) # Same as above, but only plots a single dimension
+sol = forward_trajectory(apfa, u, y, p)
+plot(sol, xreal=xs)
+plot(sol, dim=1, xreal=xs) # Same as above, but only plots a single dimension
 ```

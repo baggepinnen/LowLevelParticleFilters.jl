@@ -7,26 +7,28 @@ Returns smoothed estimates of state `x` and covariance `R` given all input outpu
 function smooth(kf::KalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf))
     reset!(kf)
     T            = length(y)
-    x,xt,R,Rt,ll = forward_trajectory(kf, u, y, p)
+    sol = forward_trajectory(kf, u, y, p)
+    (; x,xt,R,Rt,ll) = sol
     xT           = similar(xt)
     RT           = similar(Rt)
     xT[end]      = xt[end]      |> copy
     RT[end]      = Rt[end]      |> copy
     for t = T-1:-1:1
-        C     = Rt[t]*kf.A/R[t+1]
+        C     = Rt[t]*get_mat(kf.A, xT[t+1], u[t+1], p, t+1)/R[t+1]
         xT[t] = xt[t] .+ C*(xT[t+1] .- x[t+1])
         RT[t] = Rt[t] .+ symmetrize(C*(RT[t+1] .- R[t+1])*C')
     end
     xT,RT,ll
 end
 
-function smooth(pf::AbstractParticleFilter, M, u, y)
-    xf,wf,wef,ll = forward_trajectory(pf, u, y)
-    smooth(pf::AbstractParticleFilter, xf, wf, wef, ll, M, u, y)
+function smooth(pf::AbstractParticleFilter, M, u, y, p=parameters(pf))
+    sol = forward_trajectory(pf, u, y, p)
+    smooth(pf::AbstractParticleFilter, sol.x, sol.w, sol.we, sol.ll, M, u, y, p)
 end
 
 """
     xb,ll = smooth(pf, M, u, y, p=parameters(pf))
+    xb,ll = smooth(pf, xf, wf, wef, ll, M, u, y, p=parameters(pf))
 
 Perform particle smoothing using forward-filtering, backward simulation. Return smoothed particles and loglikelihood.
 See also [`smoothed_trajs`](@ref), [`smoothed_mean`](@ref), [`smoothed_cov`](@ref)

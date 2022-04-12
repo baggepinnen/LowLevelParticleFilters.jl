@@ -114,8 +114,8 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
         @test size(xp) == (T,n)
         x,u,y = LowLevelParticleFilters.simulate(pf,T,du)
 
-        xf, wf, wef, ll = forward_trajectory(pf, u, y)
-        parts = Particles(xf,wef)
+        sol = forward_trajectory(pf, u, y)
+        parts = Particles(sol.x,sol.we)
         @test size(parts) == (T,n)
         @test length(parts[1].particles) == N
 
@@ -141,11 +141,12 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
         xbc = smoothed_cov(xb)      # And covariance
         @test all(tr(C) < 2 for C in xbc)
         maximum(tr(C) for C in xbc)
-        xbt = smoothed_trajs(xb)    # Can't remember what this does
+        xbt = smoothed_trajs(xb)
 
         kf     = KalmanFilter(A, B, C, 0, 0.01eye(n), eye(p), d0)
         # x,u,y = simulate(kf,T,du)
-        xf,xt,R,Rt,ll = forward_trajectory(kf, u, y)
+        ksol = forward_trajectory(kf, u, y)
+        plot(ksol)
         xT,R,lls = smooth(kf, u, y)
 
         # @test_broken mean(abs2, xm) > mean(abs2, xm - reduce(hcat,xf)) > mean(abs2, xm - reduce(hcat,xt)) > mean(abs2, xm - reduce(hcat,xT))

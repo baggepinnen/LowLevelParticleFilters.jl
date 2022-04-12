@@ -10,10 +10,10 @@ struct PFstate{PT<:AbstractArray, FT<:AbstractFloat}
     xprev::Vector{PT}
     w::Vector{FT}
     we::Vector{FT}
-    maxw::Ref{FT}
+    maxw::Base.RefValue{FT}
     j::Vector{Int64}
     bins::Vector{Float64}
-    t::Ref{Int}
+    t::Base.RefValue{Int}
 end
 
 PFstate(N::Integer) = PFstate([zeros(N)],[zeros(N)],fill(-log(N), N),fill(1/N, N),Ref(0.),collect(1:N),zeros(N), Ref(1))

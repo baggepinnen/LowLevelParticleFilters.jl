@@ -34,9 +34,9 @@ pf(u[1], y[1]) # Perform one filtering step using input u and measurement y
 particles(pf) # Query the filter for particles, try weights(pf) or expweights(pf) as well
 x̂ = weigthed_mean(pf) # using the current state
 # If you want to perform filtering using vectors of inputs and measurements, try any of the functions
-x,w,we,ll = forward_trajectory(pf, u, y) # Filter whole vectors of signals
+sol = forward_trajectory(pf, u, y) # Filter whole vectors of signals
 x̂,ll = mean_trajectory(pf, u, y)
-trajectorydensity(pf,x,w,u,y,xreal=xs)
+plot(sol, xreal=xs)
 # ![window](figs/trajdens.png)
 
 # If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurements.jl) is loaded, you may transform the output particles to `Matrix{MonteCarloMeasurements.Particles}` with the layout `T × n_states` using `Particles(x,we)`. Internally, the particles are then resampled such that they all have unit weight. This is conventient for making use of the [plotting facilities of MonteCarloMeasurements.jl](https://baggepinnen.github.io/MonteCarloMeasurements.jl/stable/#Plotting-1).
@@ -78,7 +78,7 @@ scatter!(xbt[2,:,:]', subplot=2, m=(1,:black, 0.5), lab="")
 eye(n) = Matrix{Float64}(I,n,n)
 kf     = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal(Diagonal([1.,1.])))
 ukf    = UnscentedKalmanFilter(dynamics, measurement, eye(n), eye(p), MvNormal(Diagonal([1.,1.])))
-xf,xt,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
+sol = forward_trajectory(kf, u, y) 
 xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 # It can also be called in a loop like the `pf` above
 #md for t = 1:T
@@ -139,7 +139,7 @@ vline!([svec[findmax(llskf)[2]]], l=(:dash,:red), primary=false)
 
 # ### Smoothing using KF
 kf = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal(Diagonal(ones(2))))
-xf,xh,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
+sol = forward_trajectory(kf, u, y) 
 xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 
 # Plot and compare PF and KF
@@ -241,14 +241,14 @@ end
 measurement(x,u,p,t,noise=false) = C*x + noise*rand(rng, dg)
 # We now create the `AdvancedParticleFilter` and use it in the same way as the other filters:
 apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0)
-x,w,we,ll = forward_trajectory(apf, u, y)
-# trajectorydensity(apf, x, we, u, y, xreal=xs)
+sol = forward_trajectory(apf, u, y)
+# plot(sol, xreal=xs)
 
 # We can even use this type as an AuxiliaryParticleFilter
 apfa = AuxiliaryParticleFilter(apf)
-x,w,we,ll = forward_trajectory(apfa, u, y)
-trajectorydensity(apfa, x, we, u, y, xreal=xs)
-dimensiondensity(apfa, x, we, u, y, 1, xreal=xs) # Same as above, but only plots a single dimension
+sol = forward_trajectory(apfa, u, y)
+plot(sol, xreal=xs)
+plot(sol, xreal=xs, dim=1) # Same as above, but only plots a single dimension
 
 # # High performance Distributions
 # When `using LowLevelParticleFilters`, a number of methods related to distributions are defined for static arrays, making `logpdf` etc. faster. We also provide a new kind of distribution: `TupleProduct <: MultivariateDistribution` that behaves similarly to the `Product` distribution. The `TupleProduct` however stores the individual distributions in a tuple, has compile-time known length and supports `Mixed <: ValueSupport`, meaning that it can be a product of both `Continuous` and `Discrete` dimensions, somthing not supported by the standard `Product`. Example
@@ -309,7 +309,7 @@ function run_test()
 end
 
 @time RMSE = run_test()
-# Propagated 8400000 particles in 2.193401766 seconds for an average of 3829.6677472448064 particles per millisecond
+# Propagated 8400000 particles in 1.612975455 seconds for an average of 5207.766785267046 particles per millisecond
 
 # We then plot the results
 time_steps     = [20, 100, 200]

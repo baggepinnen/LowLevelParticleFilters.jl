@@ -55,17 +55,17 @@ x,u,y = tosvec.((x,u,y))
 reskf = forward_trajectory(kf, u, y) # filtered, prediction, pred
 resukf = forward_trajectory(ukf, u, y)
 
-norm(mean(x .- reskf[1]))
-norm(mean(x .- resukf[1]))
+norm(mean(x .- reskf.x))
+norm(mean(x .- resukf.x))
 
-norm(mean(x .- reskf[2]))
-norm(mean(x .- resukf[2]))
-@test norm(mean(x .- reskf[2])) < norm(mean(x .- reskf[1])) # Filtered should be better than prediction
-@test norm(mean(x .- resukf[2])) < norm(mean(x .- resukf[1]))
-@test norm(mean(x .- reskf[2])) ≈ norm(mean(x .- resukf[2])) atol=5e-2
-# @test norm(mean(x .- reskf[2])) < norm(mean(x .- resukf[2]))  # KF should be better than UKF
-# @test norm(mean(x .- reskf[1])) < norm(mean(x .- resukf[1]))  # KF should be better than UKF
-@test norm(mean(x .- reskf[2])) < 0.2
+norm(mean(x .- reskf.xt))
+norm(mean(x .- resukf.xt))
+@test norm(mean(x .- reskf.xt)) < norm(mean(x .- reskf.x)) # Filtered should be better than prediction
+@test norm(mean(x .- resukf.xt)) < norm(mean(x .- resukf.x))
+@test norm(mean(x .- reskf.xt)) ≈ norm(mean(x .- resukf.xt)) atol=5e-2
+# @test norm(mean(x .- reskf.xt)) < norm(mean(x .- resukf.xt))  # KF should be better than UKF
+# @test norm(mean(x .- reskf.x)) < norm(mean(x .- resukf.x))  # KF should be better than UKF
+@test norm(mean(x .- reskf.xt)) < 0.2
 
 
 ## DAE UKF =====================================================================
@@ -149,19 +149,19 @@ for threads = (false, true)
 
     state(ukf) .= [2,1,1,1,0]
 
-    xf,xft,R,Rt,ll = forward_trajectory(ukf, u, y)
+    sol = forward_trajectory(ukf, u, y)
 
-    @test all(zip(R,Rt)) do (R,Rt)
+    @test all(zip(sol.R, sol.Rt)) do (R,Rt)
         det(Rt) < det(R)
     end # test that the covariance decreases by the measurement update
         
 
-    @test norm(x[10:end] .- xf[10:end]) / norm(x) < 0.2
-    @test norm(x[10:end] .- xft[10:end]) / norm(x) < 0.2
+    @test norm(x[10:end] .- sol.x[10:end]) / norm(x) < 0.2
+    @test norm(x[10:end] .- sol.xt[10:end]) / norm(x) < 0.2
 
     if isinteractive()
         plot(reduce(hcat, x)', layout=length(x[1]))
-        plot!(reduce(hcat, xf)')
-        plot!(reduce(hcat, xft)') |> display
+        plot!(reduce(hcat, sol.x)')
+        plot!(reduce(hcat, sol.xt)') |> display
     end
 end

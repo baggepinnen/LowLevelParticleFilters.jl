@@ -40,7 +40,7 @@ end
 @time RMSE = run_test()
 ````
 
-Propagated 8400000 particles in 2.193401766 seconds for an average of 3829.6677472448064 particles per millisecond
+Propagated 8400000 particles in 1.612975455 seconds for an average of 5207.766785267046 particles per millisecond
 
 We then plot the results
 
