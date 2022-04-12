@@ -20,6 +20,6 @@ makedocs(
 ) # Due to lots of plots, this will just have to be run on my local machine
 
 deploydocs(
-      deps = Deps.pip("pygments", "mkdocs", "python-markdown-math", "mkdocs-cinder"),
+      # deps = Deps.pip("pygments", "mkdocs", "python-markdown-math", "mkdocs-cinder"),
       repo = "github.com/baggepinnen/LowLevelParticleFilters.jl.git",
 )

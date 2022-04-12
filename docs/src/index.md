@@ -88,7 +88,7 @@ We also provide a particle smoother, based on forward filtering, backward simula
 
 ```@example lingauss
 N     = 2000 # Number of particles
-T     = 200  # Number of time steps
+T     = 80   # Number of time steps
 M     = 100  # Number of smoothed backwards trajectories
 pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 du    = MvNormal(2,1)     # Control input distribution
@@ -124,8 +124,7 @@ A Kalman filter is easily created using the constructor. Many of the functions d
 ```@example lingauss
 eye(n) = Matrix{Float64}(I,n,n)
 kf     = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal([1.,1.]))
-ukf    = UnscentedKalmanFilter(dynamics, measurement, eye(n), eye(p), MvNormal([1.,1.]))
-xf,xt,R,Rt,ll = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
+sol = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
 xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 ```
 
@@ -146,7 +145,7 @@ end
 ## Unscented Kalman Filter
 The UKF takes the same arguments as a regular [`KalmanFilter`](@ref), but the matrices definiting the dynamics are replaced by two functions, `dynamics` and `measurement`, working in the same way as for the `ParticleFilter` above.
 ```@example lingauss
-ukf    = UnscentedKalmanFilter(dynamics, measurement, eye(n), eye(p), MvNormal([1.,1.]))
+ukf    = UnscentedKalmanFilter(dynamics, measurement, eye(n), eye(p), MvNormal([1.,1.]), nu=m, ny=p)
 ```
 
 ### UKF for DAE systems
@@ -157,7 +156,7 @@ See the docstring for [`DAEUnscentedKalmanFilter`](@ref) or the [test file](http
 Tuning a particle filter can be quite the challenge. To assist with this, we provide som visualization tools
 
 ```@example lingauss
-debugplot(pf,u[1:30],y[1:30], runall=true, xreal=x[1:30])
+debugplot(pf,u[1:20],y[1:20], runall=true, xreal=x[1:20])
 ```
 
 
@@ -169,8 +168,7 @@ For options to the debug plots, see `?pplot`.
 ## Smoothing using KF
 
 ```@example lingauss
-kf = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal(2,1))
-xf,xh,R,Rt,ll = forward_trajectory(kf, u, y, p) # filtered, prediction, pred cov, filter cov, loglik
+kf = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal(diagm(ones(2))))
 xT,R,lls = smooth(kf, u, y, p) # Smoothed state, smoothed cov, loglik
 ```
 
@@ -238,5 +236,8 @@ We can even use this type as an AuxiliaryParticleFilter
 apfa = AuxiliaryParticleFilter(apf)
 sol = forward_trajectory(apfa, u, y, p)
 plot(sol, xreal=xs)
+```
+
+```@example lingauss
 plot(sol, dim=1, xreal=xs) # Same as above, but only plots a single dimension
 ```

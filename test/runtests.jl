@@ -196,11 +196,6 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
 
         end
 
-        @testset "example_lineargaussian" begin
-            @info "testing example_lineargaussian"
-            include("../src/example_lineargaussian.jl")
-        end
-
     end
 
 
@@ -302,4 +297,16 @@ end
     include("test_parameters.jl")
 end
 
+
+
+end
+
+@testset "example_quadtank" begin
+    @info "Testing example_quadtank"
+    include("../src/example_quadtank.jl")
+end
+
+@testset "example_lineargaussian" begin
+    @info "testing example_lineargaussian"
+    include("../src/example_lineargaussian.jl")
 end

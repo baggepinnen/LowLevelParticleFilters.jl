@@ -41,8 +41,9 @@ julia = "1.7"
 
 [extras]
 MonteCarloMeasurements = "0987c9cc-fe09-11e8-30f0-b96dd679fdca"
+Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["MonteCarloMeasurements", "Test", "Plots"]
+test = ["MonteCarloMeasurements", "Optim", "Test", "Plots"]

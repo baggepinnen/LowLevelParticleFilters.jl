@@ -104,9 +104,9 @@ function log_likelihood_fun(filter_from_parameters,priors::Vector{<:Distribution
         pf === nothing && (pf = filter_from_parameters(θ))
         length(θ) == length(priors) || throw(ArgumentError("Input must have same length as priors"))
         ll = sum(i->logpdf(priors[i], θ[i]), eachindex(priors))
-        isfinite(ll) || return -Inf
+        isfinite(ll) || return eltype(θ)(-Inf)
         pf = filter_from_parameters(θ,pf)
-        ll += loglik(pf,u,y,p)
+        ll + loglik(pf,u,y,p)
     end
 end
 
@@ -156,10 +156,15 @@ function metropolis(ll, R, θ₀, draw = naive_sampler(θ₀))
     params, lls
 end
 
-function metropolis_threaded(burnin, args...)
+"""
+    metropolis_threaded(burnin, args...; nthreads=Threads.nthreads())
+
+Run `Threads.nthreads()` individual Markov chains. `args...` are the same as for [`metropolis`](@ref).
+"""
+function metropolis_threaded(burnin, args...; nthreads=Threads.nthreads())
     res = []
     mtx = ReentrantLock()
-    Threads.@threads for i = 1:Threads.nthreads()
+    Threads.@threads for i = 1:nthreads
         p,l = metropolis(args...)
         resi = [reduce(hcat,p)' l]
         resi = resi[burnin+1:end,:]

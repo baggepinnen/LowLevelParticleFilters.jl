@@ -35,6 +35,11 @@ struct AuxiliaryParticleFilter{T<:AbstractParticleFilter} <: AbstractParticleFil
     pf::T
 end
 
+"""
+    AuxiliaryParticleFilter(args...; kwargs...)
+
+Takes exactly the same arguments as [`ParticleFilter`](@ref), or an instance of [`ParticleFilter`](@ref).
+"""
 AuxiliaryParticleFilter(args...;kwargs...) = AuxiliaryParticleFilter(ParticleFilter(args...;kwargs...))
 
 """
