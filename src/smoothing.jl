@@ -179,6 +179,7 @@ end
 
 """
     smoothed_mean(xb)
+
 Helper function to calculate the mean of smoothed particle trajectories
 """
 function smoothed_mean(xb)
@@ -190,6 +191,7 @@ end
 
 """
     smoothed_cov(xb)
+
 Helper function to calculate the covariance of smoothed particle trajectories
 """
 function smoothed_cov(xb)
@@ -200,6 +202,7 @@ end
 
 """
     smoothed_trajs(xb)
+    
 Helper function to get particle trajectories as a 3-dimensions array (N,M,T) instead of matrix of vectors.
 """
 function smoothed_trajs(xb)

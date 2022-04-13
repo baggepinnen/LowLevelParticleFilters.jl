@@ -42,6 +42,7 @@ end
 # """
 """
     draw_one_categorical(pf,w)
+    
 Obs! This function expects log-weights
 """
 function draw_one_categorical(pf,w)

@@ -172,7 +172,10 @@ end
 """
     f_discrete = rk4(f, Ts; supersample = 1)
 
-Discretize `f` using RK4 with sample time `Ts`. 
+Discretize a continuous-time dynamics function `f` using RK4 with sample time `Ts`. 
+`f` is assumed to have the signature `f : (x,u,p,t)->ẋ` and the returned function `f_discrete : (x,u,p,t)->x(t+1)`.
+
+`supersample` determins the number of internal steps, 1 is often sufficient.
 """
 function rk4(f::F, Ts0; supersample::Integer = 1) where {F}
     supersample ≥ 1 || throw(ArgumentError("supersample must be positive."))

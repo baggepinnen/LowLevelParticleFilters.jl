@@ -110,6 +110,9 @@ If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurem
 
 For a full usage example, see the benchmark section below or [example_lineargaussian.jl](https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/src/example_lineargaussian.jl)
 
+## Resampling
+The particle filter will perform a resampling step whenever the distribution of the weights has become degenerate. The resampling is triggered when the *effective number of samples* is smaller than `pf.resample_threshold` ``\in [0, 1]``, this value can be set when constructing the filter. How the resampling is done is governed by `pf.resampling_strategy`, we currently provide `ResampleSystematic <: ResamplingStrategy` as the only implemented strategy. See https://en.wikipedia.org/wiki/Particle_filter for more info.
+
 # Particle Smoothing
 Smoothing is the process of finding the best state estimate given both past and future data. Smoothing is thus only possible in an offline setting. This package provides a particle smoother, based on forward filtering, backward simulation (FFBS), example usage follows:
 ```@example lingauss
@@ -145,12 +148,12 @@ scatter!(xbt[2, 1:downsample:end, :]', subplot=2, m=(1,:black, 0.5), lab="")
 
 
 # Kalman filter
-The Kalman filter assumes that ``f`` and ``g`` are linear function, i.e., that they can be written on the form
+The [`KalmanFilter`](@ref) ([wiki](https://en.wikipedia.org/wiki/Kalman_filter)) assumes that ``f`` and ``g`` are linear functions, i.e., that they can be written on the form
 ```math
 x(t+1) = Ax(t) + Bu(t) + w(t)\\
 y(t) = Cx(t) + Du(t) + e(t)
 ```
-where ``w \sim N(0, R_1)`` and ``e \sim N(0, R_2)`` are zero mean and Gaussian. The Kalman filter represents the posterior distributions over ``x`` by the mean and a covariance matrix. The magic behind the Kalman filter is that linear transformations of Gaussian distributions remain Gaussian, and we thus have a very efficient way of representing them.
+for some matrices ``A,B,C,D`` where ``w \sim N(0, R_1)`` and ``e \sim N(0, R_2)`` are zero mean and Gaussian. The Kalman filter represents the posterior distributions over ``x`` by the mean and a covariance matrix. The magic behind the Kalman filter is that linear transformations of Gaussian distributions remain Gaussian, and we thus have a very efficient way of representing them.
 
 A Kalman filter is easily created using the constructor. Many of the functions defined for particle filters, are defined also for Kalman filters, e.g.:
 
@@ -178,7 +181,7 @@ for t = 1:T
 end
 ```
 
-The matrices in the Kalman filter may be time varying, such that `A[:, :, t]` is ``A(t)``. They may also be provided as functions on the form ``A(t) = A(x, u, p, t)``. This works for both dynamics and covariance matrices.
+The matrices in the Kalman filter may be *time varying*, such that `A[:, :, t]` is ``A(t)``. They may also be provided as functions on the form ``A(t) = A(x, u, p, t)``. This works for both dynamics and covariance matrices.
 
 The numeric type used in the Kalman filter is determined from the mean of the initial state distribution, so make sure that this has the correct type if you intend to use, e.g., `Float32` or `ForwardDiff.Dual` for automatic differentiation.
 
@@ -201,7 +204,7 @@ plot!(vecvec_to_mat(x), lab="true")
 
 # Unscented Kalman Filter
 
-The UKF represents posterior distributions over ``x`` as Gaussian distributions, but propagate them through a nonlinear function ``f`` by a deterministic sampling of a small number of particles called *sigma points* (this is referred to as the *unscented transform*). This UKF thus handles nonlinear functions ``f,g``, but only Gaussian disturbances and unimodal posteriors.
+The [`UnscentedKalmanFilter`](@ref) represents posterior distributions over ``x`` as Gaussian distributions, but propagate them through a nonlinear function ``f`` by a deterministic sampling of a small number of particles called *sigma points* (this is referred to as the [*unscented transform*](https://en.wikipedia.org/wiki/Unscented_transform)). This UKF thus handles nonlinear functions ``f,g``, but only Gaussian disturbances and unimodal posteriors.
 
 The UKF takes the same arguments as a regular [`KalmanFilter`](@ref), but the matrices defining the dynamics are replaced by two functions, `dynamics` and `measurement`, working in the same way as for the `ParticleFilter` above.
 ```@example lingauss
@@ -209,10 +212,15 @@ ukf = UnscentedKalmanFilter(dynamics, measurement, eye(n), eye(p), MvNormal([1.,
 ```
 
 ## UKF for DAE systems
-See the docstring for [`DAEUnscentedKalmanFilter`](@ref) or the [test file](https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/test/test_ukf.jl).
+See the docstring for [`DAEUnscentedKalmanFilter`](@ref) or the [test file](https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/test/test_ukf.jl). This filter is modeled after
+> "Nonlinear State Estimation of Differential Algebraic Systems"
+> Ravi K. Mandela, Raghunathan Rengaswamy, Shankar Narasimhan
+
+!!! warning
+    This filter is still considered experimental and subject to change without respecting semantic versioning. Use at your own risk.
 
 # Extended Kalman Filter
-The EKF is similar to the UKF, ubt propagates Gaussian distributions by linearizing the dynamics and using the formulas for linear systems similar to the standard Kalman filter. This can be slightly faster than the UKF (not always), but also less accurate for strongly nonlinear systems. The linearization is performed automatically using ForwardDiff.jl. In general, the UKF is recommended over the EKF unless the EKF is faster and computational performance is the top priority.
+The [`ExtendedKalmanFilter`](@ref) ([EKF](https://en.wikipedia.org/wiki/Extended_Kalman_filter))is similar to the UKF, ubt propagates Gaussian distributions by linearizing the dynamics and using the formulas for linear systems similar to the standard Kalman filter. This can be slightly faster than the UKF (not always), but also less accurate for strongly nonlinear systems. The linearization is performed automatically using ForwardDiff.jl. In general, the UKF is recommended over the EKF unless the EKF is faster and computational performance is the top priority.
 
 The EKF has the following signature
 ```julia
@@ -224,7 +232,7 @@ where `kf` is a standard [`KalmanFilter`](@ref) from which the covariance proper
 # AdvancedParticleFilter
 The `AdvancedParticleFilter` works very much like the [`ParticleFilter`](@ref), but admits more flexibility in its noise models.
 
-The `AdvancedParticleFilter` type requires you to implement the same functions as the regular `ParticleFilter`, but in this case you also need to handle sampling from the noise distributions yourself.
+The [`AdvancedParticleFilter`](@ref) type requires you to implement the same functions as the regular `ParticleFilter`, but in this case you also need to handle sampling from the noise distributions yourself.
 The function `dynamics` must have a method signature like below. It must provide one method that accepts state vector, control vector, parameter, time *and* `noise::Bool` that indicates whether or not to add noise to the state. If noise should be added, this should be done inside `dynamics` An example is given below
 
 ```@example lingauss
@@ -249,15 +257,15 @@ end
 nothing # hide
 ```
 
-This gives you very high flexibility. The noise model in either function can, for instance, be a function of the state, something that is not possible for the simple `ParticleFilter`.
-To be able to simulate the `AdvancedParticleFilter` like we did with the simple filter above, the `measurement` method with the signature `measurement(x,u,p,t,noise=false)` must be available and return a sample measurement given state (and possibly time). For our example measurement model above, this would look like this
+This gives you very high flexibility. The noise model in either function can, for instance, be a function of the state, something that is not possible for the simple [`ParticleFilter`](@ref).
+To be able to simulate the [`AdvancedParticleFilter`](@ref) like we did with the simple filter above, the `measurement` method with the signature `measurement(x,u,p,t,noise=false)` must be available and return a sample measurement given state (and possibly time). For our example measurement model above, this would look like this
 
 ```@example lingauss
 measurement(x, u, p, t, noise=false) = C*x + noise*rand(rng, dg)
 nothing # hide
 ```
 
-We now create the `AdvancedParticleFilter` and use it in the same way as the other filters:
+We now create the [`AdvancedParticleFilter`](@ref) and use it in the same way as the other filters:
 
 ```@example lingauss
 apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0)
@@ -289,7 +297,7 @@ debugplot(pf,u[1:20],y[1:20], runall=true, xreal=x[1:20])
 
 
 
-The plot displays all states and all measurements. The heatmap in the background represents the weighted particle distributions per time step. For the measurement sequences, the heatmap represent the distibutions of predicted measurements. The blue dots corresponds to measured values. In this case, we simulated the data and we had access to states as well, if we do not have that, just omit `xreal`.
+The plot displays all states and all measurements. The heatmap in the background represents the weighted particle distributions per time step. For the measurement sequences, the heatmap represent the distributions of predicted measurements. The blue dots corresponds to measured values. In this case, we simulated the data and we had access to states as well, if we do not have that, just omit `xreal`.
 You can also manually step through the time-series using
 - `commandplot(pf,u,y; kwargs...)`
 For options to the debug plots, see `?pplot`.
@@ -299,7 +307,7 @@ For options to the debug plots, see `?pplot`.
 
 Something seems to be off with this figure as the hottest spot is not really where we would expect it
 
-Optimization of the log likelihood can be done by, e.g., global/black box methods, see [BlackBoxOptim.jl](https://github.com/robertfeldt/BlackBoxOptim.jl). Standard tricks apply, such as performing the parameter search in log-space etc.
+Optimization of the log likelihood can be done by, e.g., global/black box methods, see [BlackBoxOptim.jl](https://github.com/robertfeldt/BlackBoxOptim.jl), see examples in [Parameter Estimation](@ref). Standard tricks apply, such as performing the parameter search in log-space etc.
 
 
 

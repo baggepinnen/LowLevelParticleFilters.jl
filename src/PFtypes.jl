@@ -44,6 +44,8 @@ AuxiliaryParticleFilter(args...;kwargs...) = AuxiliaryParticleFilter(ParticleFil
 
 """
     ParticleFilter(num_particles, dynamics, measurement, dynamics_density, measurement_density, initial_density; p = SciMLBase.NullParameters())
+
+See the docs for more information: https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/#Particle-filter-1
 """
 function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density; kwargs...)
     xprev = Vector{SVector{length(initial_density),eltype(initial_density)}}([rand(initial_density) for n=1:N])
@@ -162,6 +164,8 @@ end
 
 """
     AdvancedParticleFilter(Nparticles, dynamics, measurement, measurement_likelihood, dynamics_density, initial_density; p = SciMLBase.NullParameters(), kwargs...)
+
+See the docs for more information: https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/#AdvancedParticleFilter-1
 """
 function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, measurement_likelihood, dynamics_density, initial_density; kwargs...)
     r1 = rand(initial_density)

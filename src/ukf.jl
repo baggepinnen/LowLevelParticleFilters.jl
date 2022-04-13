@@ -1,3 +1,8 @@
+"""
+    sigmapoints(m, Σ)
+
+Return a vector of (2n+1) static vectors, where `n` is the length of `m`, representing sigma points with mean `m` and covariance `Σ`.
+"""
 function sigmapoints(m, Σ)
     T = promote_type(eltype(m), eltype(Σ))
     n = max(length(m), size(Σ,1))
@@ -164,8 +169,11 @@ An Unscented Kalman filter for differential-algebraic systems (DAE).
 Ref: "Nonlinear State Estimation of Differential Algebraic Systems", 
 Mandela, Rengaswamy, Narasimhan
 
+!!! warning
+    This filter is still considered experimental and subject to change without respecting semantic versioning. Use at your own risk.
+
 # Arguments
-- `ukf` is a regular [`UnscentedKalmanFilter`](@ref) that contains `dynamics(xz, u, t)` that propagates the combined state `xz(k)` to `xz(k+1)` and a measurement function with signature `(xz, u, t)`
+- `ukf` is a regular [`UnscentedKalmanFilter`](@ref) that contains `dynamics(xz, u, p, t)` that propagates the combined state `xz(k)` to `xz(k+1)` and a measurement function with signature `(xz, u, p, t)`
 - `g(x, z, u, p, t)` is a function that should fulfill `g(x, z, u, p, t) = 0`
 _ `get_x_z(xz) -> x, z` is a function that decomposes `xz` into `x` and `z`
 - `build_xz(x, z)` is the inverse of `get_x_z`
