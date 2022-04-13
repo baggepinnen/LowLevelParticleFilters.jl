@@ -1,5 +1,5 @@
 # Parameter Estimation
-State estimation is an integral part of many parameter-estimation methods. Below, we will iluustrate several different methods of performing parameter estimation. We can roughly divide the methods into two camps
+State estimation is an integral part of many parameter-estimation methods. Below, we will illustrate several different methods of performing parameter estimation. We can roughly divide the methods into two camps
 1. Methods that optimize prediction error or likelihood by tweaking model parameters.
 2. Methods that add the parameters to be estimated as states in the model and estimate them using standard state estimation. 
 
@@ -7,7 +7,7 @@ From the first camp, we provide som basic functionality for maximum likelihood e
 
 
 ## Maximum-likelihood estimation
-Filters calculate the likelihood while performing filtering, we may for example plot likelihood as function of the variance of the dynamics noise
+Filters calculate the likelihood and prediction errors while performing filtering, this can be used to perform maximum likelihood estimation or prediction-error minimization. We may for example plot likelihood as function of the variance of the dynamics noise
 
 ```@setup ml_map
 using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions, Plots
@@ -34,7 +34,7 @@ xs,u,y = simulate(pf,300,df)
 
 ```@example ml_map
 p = nothing
-svec = exp10.(LinRange(-1.5,1.5,60))
+svec = exp10.(LinRange(-1.2, 1.2, 60))
 llspf = map(svec) do s
     df = MvNormal(nx,s)
     pfs = ParticleFilter(2000, dynamics, measurement, df, dg, d0)
@@ -64,8 +64,9 @@ vline!([svec[findmax(llskf)[2]]], l=(:dash,:red), primary=false)
 as we can see, the result is quite noisy due to the stochastic nature of particle filtering.
 
 ## MAP estiamtion
-To solve a MAP estimation problem, we need to define a function that takes a parameter vector and returns a filter
+In this example, we will estimate the variance of the noises in the dynamics and the measurement functions.
 
+To solve a MAP estimation problem, we need to define a function that takes a parameter vector and returns a filter, the parameters are used to construct the covariance matrices:
 ```@example ml_map
 filter_from_parameters(θ, pf = nothing) = KalmanFilter(A, B, C, 0, exp(θ[1])^2*eye(nx), exp(θ[2])^2*eye(ny), d0) # Works with particle filters as well
 nothing # hide
@@ -147,7 +148,7 @@ plot!(thetalls[:,3], subplot=3)
 ```
 
 ## Joint state and parameter estimation
-In this example, we'll show how to perform parameter estimation by treating a parameter as a state. This method can not only estimate constant parameters, but also time-varying parameters. The system we will consider is a quadruple tank, where two upper tanks feed into two lower tanks. The outlet for tank 1 can vary in size, simulating, e.g., that something partially blocks the outlet. We start by defining the dynamics on a form that changes the outlet area ``a_1`` at time ``t=500``:
+In this example, we'll show how to perform parameter estimation by treating a parameter as a state. This method can not only estimate constant parameters, but also **time-varying parameters**. The system we will consider is a quadruple tank, where two upper tanks feed into two lower tanks. The outlet for tank 1 can vary in size, simulating, e.g., that something partially blocks the outlet. We start by defining the dynamics on a form that changes the outlet area ``a_1`` at time ``t=500``:
 ```@example paramest
 using LowLevelParticleFilters
 using Distributions
@@ -179,8 +180,9 @@ nu = 2 # number of control inputs
 nx = 4 # number of states
 ny = 2 # number of measured outputs
 Ts = 1 # sample time
+nothing # hide
 ```
-We then define a measurement function, we measure the levels of tanks 1 and two, and discretize the continuous-time dynamics using a Runge-Kutta 4 integrator:
+We then define a measurement function, we measure the levels of tanks 1 and 2, and discretize the continuous-time dynamics using a Runge-Kutta 4 integrator [`LowLevelParticleFilters.rk4`](@ref):
 ```@example paramest
 measurement(x,u,p,t) = SA[x[1], x[2]]
 discrete_dynamics = LowLevelParticleFilters.rk4(quadtank, Ts, supersample=2)
@@ -247,10 +249,14 @@ as we can see, the correct value of the parameter is quickly found (``x_5``), an
 
 If adaptive parameter estimation is coupled with a model-based controller, we get an adaptive controller! Note: the state that corresponds to the estimated parameter is typically not controllable, a fact that may require some special care for some control methods.
 
+We may ask ourselves, what's the difference between a parameter and a state variable if we can add parameters as states? Typically, parameters do not vary with time, and if they do, they vary significantly slower than the states. State variables also have dynamics associate with them, whereas we often have no idea about how the parameters vary other than that they vary slowly.
+
+Abrupt changes to the dynamics like in the example above can happen in practice, for instance, due to equipment failure or change of operating mode. This can be treated as a scenario with time-varying parameters that are continuously estimated. 
+
 ## Using an optimizer
 Maximum-likelihood or prediction-error estimation is straight-forward by simply differentiating through the state estimator using automatic differentiation. In this example, we will continue the example from above, but now estimate all the parameters of the quad-tank process. This time, they will not vary with time.
 
-This time, we define the dynamics function such that it takes its parameters from the `p` input argument. We also define a variable `p_true` that contains the true values that we will use to simulate some estimation data
+We now define the dynamics function such that it takes its parameters from the `p` input argument. We also define a variable `p_true` that contains the true values that we will use to simulate some estimation data
 ```@example paramest
 function quadtank(h, u, p, t)
     kc = p[1]

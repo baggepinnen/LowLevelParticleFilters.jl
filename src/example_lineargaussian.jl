@@ -92,7 +92,7 @@ xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 
 # # Troubleshooting
 # Tuning a particle filter can be quite the challenge. To assist with this, we provide som visualization tools
-debugplot(pf,u[1:30],y[1:30], runall=true, xreal=x[1:30])
+debugplot(pf,u[1:20],y[1:20], runall=true, xreal=x[1:20])
 # ![window](figs/debugplot.png)
 #md Time     Surviving    Effective nbr of particles
 #md --------------------------------------------------------------

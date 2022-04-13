@@ -10,17 +10,17 @@ y(t) = g(x(t), u(t), p, t, e(t))
 ```
 where ``x`` is the state vector, ``u`` an input, ``p`` some form of parameters, ``t`` is the time and ``w,e`` are disturbances (noise). Throughout the documentation, we often call the function ``f`` `dynamics` and the function ``g`` `measurement`.
 
-The dynamics above describe a *discrete-time* system, i.e., the function ``f`` is takes the current state and produces the *next state*. This is in contrast to a *continuous-time* system, where ``f`` takes the current state but produces the *time derivative* of the state. A continuous-time system can be *discretized*, described in detail in [Discretization](@ref).
+The dynamics above describe a *discrete-time* system, i.e., the function ``f`` takes the current state and produces the *next state*. This is in contrast to a *continuous-time* system, where ``f`` takes the current state but produces the *time derivative* of the state. A continuous-time system can be *discretized*, described in detail in [Discretization](@ref).
 
 The parameters ``p`` can be anything, or left out. You may write the dynamics functions such that they depend on ``p`` and include parameters when you create a filter object. You may also override the parameters stored in the filter object when you call any function on the filter object. This behavior is modeled after the SciML ecosystem.
 
-Depending on the nature of ``f`` and ``g``, the best method of estimating the state may vary. If ``f,g`` are linear and the disturbances are additive and Gaussian, the [`KalmanFilter`](@ref) is an optimal state estimator. If any of the above assumptions fail to hold, we may need to resort to more advanced estimators. This package provides several filter types, outlined below
+Depending on the nature of ``f`` and ``g``, the best method of estimating the state may vary. If ``f,g`` are linear and the disturbances are additive and Gaussian, the [`KalmanFilter`](@ref) is an optimal state estimator. If any of the above assumptions fail to hold, we may need to resort to more advanced estimators. This package provides several filter types, outlined below.
 
 ## Estimator types
 We provide a number of filter types
 - [`KalmanFilter`](@ref). A standard Kalman filter. Is restricted to linear dynamics (possibly time varying) and Gaussian noise.
 - [`ExtendedKalmanFilter`](@ref): For nonlinear systems, the EKF runs a regular Kalman filter on linearized dynamics. Uses ForwardDiff.jl for linearization. The noise model must be Gaussian.
-- [`UnscentedKalmanFilter`](@ref): The Unscented kalman filter often performs slightly better than the Extended Kalman filter but may be slightly more computationally expensive. The UKF handles nonlinear dynamics and measurement model, but still requires an additive Gaussian noise model and assumes all posterior distributions are Gaussian, i.e., can not handle multi-modal posteriors.
+- [`UnscentedKalmanFilter`](@ref): The Unscented Kalman filter often performs slightly better than the Extended Kalman filter but may be slightly more computationally expensive. The UKF handles nonlinear dynamics and measurement model, but still requires an additive Gaussian noise model and assumes all posterior distributions are Gaussian, i.e., can not handle multi-modal posteriors.
 - [`ParticleFilter`](@ref): The particle filter is a nonlinear estimator. This filter is simple to use and assumes that both dynamics noise and measurement noise are additive. Particle filters handle multi-modal posteriors.
 - [`AuxiliaryParticleFilter`](@ref): This filter is identical to [`ParticleFilter`](@ref), but uses a slightly different proposal mechanism for new particles.
 - [`AdvancedParticleFilter`](@ref): This filter gives you more flexibility, at the expense of having to define a few more functions. This filter does not require the noise to be additive and is thus the most flexible filter type.
@@ -33,15 +33,17 @@ This package provides
 - Parameter estimation.
 
 All filters work in two distinct steps.
-1. The prediction step. During prediction, we use the dynamics model to form ``x(t+1|t) = f(x(t), ...)``
-2. The correction step. In this step, we adjust the predicted state ``x(t+1|t)`` using the measurement ``y(t+1)`` to form ``x(t+1|t+1)``. In general, all filters represent not only a point estimate of ``x(t)``, but a representation of the complete posterior probability distribution over ``x`` given all the data available up to time ``t``. One major difference between different filter types is how they represent these probability distributions.
+1. The *prediction* step ([`predict!`](@ref)). During prediction, we use the dynamics model to form ``x(t|t-1) = f(x(t-1), ...)``
+2. The *correction* step ([`correct!`](@ref)). In this step, we adjust the predicted state ``x(t|t-1)`` using the measurement ``y(t)`` to form ``x(t|t)``.
+
+In general, all filters represent not only a point estimate of ``x(t)``, but a representation of the complete posterior probability distribution over ``x`` given all the data available up to time ``t``. One major difference between different filter types is how they represent these probability distributions.
 
 
 
 # Particle filter
-A particle filter represents the probability distribution over the state as a collection of samples. each sample is propagated through the dynamics function ``f`` individually. When a measurement becomes available, the samples, called *particles*, are given a weight based on how likely the particle is given the measurement. Each particle can thus be seen as representing a hypothesis about the current state of the system. After a few time steps, most weights are inevitably going to be extremely small, a manifestation of the curse of dimensionality, and a resampling step is incorporated to refresh the particle distribution and focus the particles on areas of the state space with high posterior probability.
+A particle filter represents the probability distribution over the state as a collection of samples, each sample is propagated through the dynamics function ``f`` individually. When a measurement becomes available, the samples, called *particles*, are given a weight based on how likely the particle is given the measurement. Each particle can thus be seen as representing a hypothesis about the current state of the system. After a few time steps, most weights are inevitably going to be extremely small, a manifestation of the curse of dimensionality, and a resampling step is incorporated to refresh the particle distribution and focus the particles on areas of the state space with high posterior probability.
 
-Defining a particle filter is straightforward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u,t)` and the noise distribution `dg` in the measurement function `measurement(x,u,t)`. Both of these noise sources are assumed to be additive. The distribution of the initial state `d0` must also be provided. An example for a linear Gaussian system is given below.
+Defining a particle filter is straightforward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u,p,t)` and the noise distribution `dg` in the measurement function `measurement(x,u,p,t)`. Both of these noise sources are assumed to be additive, but can have any distribution. The distribution of the initial state `d0` must also be provided. An example for a linear Gaussian system is given below.
 
 ```@example lingauss
 using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions, Plots
@@ -58,6 +60,7 @@ N = 500 # Number of particles
 const dg = MvNormal(p,1.0)          # Measurement noise Distribution
 const df = MvNormal(n,1.0)          # Dynamics noise Distribution
 const d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
+nothing # hide
 ```
 
 Define random linear state-space system
@@ -147,7 +150,7 @@ The Kalman filter assumes that ``f`` and ``g`` are linear function, i.e., that t
 x(t+1) = Ax(t) + Bu(t) + w(t)\\
 y(t) = Cx(t) + Du(t) + e(t)
 ```
-where ``w ~ N(0, R_1)`` and ``e ~ N(0, R_2)`` are zero mean and Gaussian. The Kalman filter represents the posterior distributions over ``x`` by the mean and a covariance matrix. The magic behind the Kalman filter is that linear transformations of Gaussian distributions remain Gaussian, and we thus have a very efficient way of representing them.
+where ``w \sim N(0, R_1)`` and ``e \sim N(0, R_2)`` are zero mean and Gaussian. The Kalman filter represents the posterior distributions over ``x`` by the mean and a covariance matrix. The magic behind the Kalman filter is that linear transformations of Gaussian distributions remain Gaussian, and we thus have a very efficient way of representing them.
 
 A Kalman filter is easily created using the constructor. Many of the functions defined for particle filters, are defined also for Kalman filters, e.g.:
 
