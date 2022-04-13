@@ -218,7 +218,7 @@ See the docstring for [`DAEUnscentedKalmanFilter`](@ref) or the [test file](http
     This filter is still considered experimental and subject to change without respecting semantic versioning. Use at your own risk.
 
 # Extended Kalman Filter
-The [`ExtendedKalmanFilter`](@ref) ([EKF](https://en.wikipedia.org/wiki/Extended_Kalman_filter))is similar to the UKF, ubt propagates Gaussian distributions by linearizing the dynamics and using the formulas for linear systems similar to the standard Kalman filter. This can be slightly faster than the UKF (not always), but also less accurate for strongly nonlinear systems. The linearization is performed automatically using ForwardDiff.jl. In general, the UKF is recommended over the EKF unless the EKF is faster and computational performance is the top priority.
+The [`ExtendedKalmanFilter`](@ref) ([EKF](https://en.wikipedia.org/wiki/Extended_Kalman_filter)) is similar to the UKF, but propagates Gaussian distributions by linearizing the dynamics and using the formulas for linear systems similar to the standard Kalman filter. This can be slightly faster than the UKF (not always), but also less accurate for strongly nonlinear systems. The linearization is performed automatically using ForwardDiff.jl. In general, the UKF is recommended over the EKF unless the EKF is faster and computational performance is the top priority.
 
 The EKF has the following signature
 ```julia
@@ -228,7 +228,7 @@ where `kf` is a standard [`KalmanFilter`](@ref) from which the covariance proper
 
 
 # AdvancedParticleFilter
-The `AdvancedParticleFilter` works very much like the [`ParticleFilter`](@ref), but admits more flexibility in its noise models.
+The [`AdvancedParticleFilter`](@ref) works very much like the [`ParticleFilter`](@ref), but admits more flexibility in its noise models.
 
 The [`AdvancedParticleFilter`](@ref) type requires you to implement the same functions as the regular `ParticleFilter`, but in this case you also need to handle sampling from the noise distributions yourself.
 The function `dynamics` must have a method signature like below. It must provide one method that accepts state vector, control vector, parameter, time *and* `noise::Bool` that indicates whether or not to add noise to the state. If noise should be added, this should be done inside `dynamics` An example is given below
@@ -246,7 +246,7 @@ end
 nothing # hide
 ```
 
-The `measurement_likelihood` function must have a method accepting state, measurement, parameter and time, and returning the log-likelihood of the measurement given the state, a simple example below:
+The `measurement_likelihood` function must have a method accepting state, input, measurement, parameter and time, and returning the log-likelihood of the measurement given the state, a simple example below:
 
 ```@example lingauss
 function measurement_likelihood(x, u, y, p, t)
@@ -303,17 +303,3 @@ Something seems to be off with this figure as the hottest spot is not really whe
 
 Optimization of the log likelihood can be done by, e.g., global/black box methods, see [BlackBoxOptim.jl](https://github.com/robertfeldt/BlackBoxOptim.jl), see examples in [Parameter Estimation](@ref). Standard tricks apply, such as performing the parameter search in log-space etc.
 
-
-
-# Discretization
-Continuous-time dynamics functions on the form `(x,u,p,t) -> ẋ` can be discretized (integrated) using the function [`LowLevelParticleFilters.rk4`](@ref), e.g.,
-```julia
-discrete_dynamics = LowLevelParticleFilters.rk4(continuous_dynamics, sampletime; supersample=1)
-```
-where the integer `supersample` determines the number of RK4 steps that is taken internally for each change of the control signal (1 is often sufficient and is the default). The returned function `discrete_dynamics` is on the form `(x,u,p,t) -> x⁺`.
-
-
-When solving state-estimation problems, accurate integration is often less important than during simulation. The motivations for this are several
-- The dynamics model is often inaccurate, and solving an inaccurate model to high accuracy can be a waste of effort.
-- The performance is often dictated by the disturbances acting on the system.
-- State-estimation enjoys feedback from measurements that corrects for slight errors due to integration.
