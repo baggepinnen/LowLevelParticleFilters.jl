@@ -82,23 +82,24 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
     @testset "End to end" begin
         @info "testing End to end"
         eye(n) = Matrix{Float64}(I,n,n)
-        n = 2 # Dinemsion of state
-        m = 2 # Dinemsion of input
-        p = 2 # Dinemsion of measurements
+
+        # Define random linenar state-space system
+        n = 2   # Dimension of state
+        m = 1   # Dimension of input
+        p = 1   # Dimension of measurements
 
         dg = mvnormal(p,1.0)          # Dynamics noise Distribution
         df = mvnormal(n,0.1)          # Measurement noise Distribution
         d0 = mvnormal(randn(n),2.0)   # Initial state Distribution
-
+        
         # Define random linenar state-space system
-        Tr = randn(n,n)
-        A = SMatrix{n,n}([0.99 0.1; 0 0.2])
-        B = @SMatrix randn(n,m)
-        C = SMatrix{p,p}(eye(p))
-        # C = SMatrix{p,n}([1 1])
+        const A_test = SA[0.97043   -0.097368
+                     0.09736    0.970437]
+        const B_test = SA[0.1; 0;;]
+        const C_test = SA[0 1.0]
 
-        dynamics(x,u,p,t) = A*x .+ B*u
-        measurement(x,u,p,t) = C*x
+        dynamics(x,u,p,t) = A_test*x .+ B_test*u
+        measurement(x,u,p,t) = C_test*x
 
 
         N     = 1000 # Number of particles
@@ -108,7 +109,7 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
         pfa   = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
         @test !shouldresample(pf)
         @test !shouldresample(pfa)
-        du    = mvnormal(2,1) # Control input distribution
+        du    = mvnormal(m,1) # Control input distribution
         xp,up,yp = LowLevelParticleFilters.simulate(pf,T,du,0,100)
         @test xp[1] isa MonteCarloMeasurements.Particles{Float64,100}
         @test size(xp) == (T,n)
@@ -143,15 +144,15 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
         maximum(tr(C) for C in xbc)
         xbt = smoothed_trajs(xb)
 
-        kf     = KalmanFilter(A, B, C, 0, 0.01eye(n), eye(p), d0)
+        kf     = KalmanFilter(A_test, B_test, C_test, 0, 0.01eye(n), eye(p), d0)
         # x,u,y = simulate(kf,T,du)
         ksol = forward_trajectory(kf, u, y)
         plot(ksol)
         xT,R,lls = smooth(kf, u, y)
 
-        # @test_broken mean(abs2, xm) > mean(abs2, xm - reduce(hcat,xf)) > mean(abs2, xm - reduce(hcat,xt)) > mean(abs2, xm - reduce(hcat,xT))
-        # @test_broken mean(abs2, xm) > mean(abs2, xm - reduce(hcat,xpf))  > mean(abs2, xm - reduce(hcat,xt)) > mean(abs2, xm - reduce(hcat,xT))
-        # @test_broken mean(abs2, xm) > mean(abs2, xm - reduce(hcat,xpf))  > mean(abs2, xm - xbm) > mean(abs2, xm - reduce(hcat,xT))
+        @test mean(abs2, xm) > mean(abs2, xm - reduce(hcat,ksol.x)) > mean(abs2, xm - reduce(hcat,ksol.xt)) > mean(abs2, xm - reduce(hcat,xT)) # Kalman: prediction > filtering > smoothing
+        @test mean(abs2, xm) > mean(abs2, xm - reduce(hcat,xpf)) > mean(abs2, xm - reduce(hcat,xT)) # particle filtering improves but not as good as kalman smoothing
+        @test mean(abs2, xm - reduce(hcat,xpf)) > mean(abs2, xm - xbm) # particle smoothing improves over filtering
         # plot(xm', layout=2)
         # plot!(reduce(hcat,xf)')
         # plot!(reduce(hcat,xt)')

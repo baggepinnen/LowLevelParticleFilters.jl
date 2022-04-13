@@ -15,7 +15,7 @@ C = SA[0 1.0]
 dynamics(x,u,p,t) = A*x .+ B*u
 measurement(x,u,p,t) = C*x
 
-T = 800 # Number of time steps
+T = 5000 # Number of time steps
 
 d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
 du = MvNormal(m,1) # Control input distribution
@@ -27,8 +27,8 @@ x,u,y = LLPF.simulate(kf,T,du)
 @test kf.nu == m
 @test kf.ny == p
 
-@test LowLevelParticleFilters.measurement(kf)(x[1],u[1],0,0) == measurement(x[1],u[1],0,0)
-@test LowLevelParticleFilters.dynamics(kf)(x[1],u[1],0,0) == dynamics(x[1],u[1],0,0)
+@test LowLevelParticleFilters.measurement(kf)(x[1],u[1],0,0) ≈ measurement(x[1],u[1],0,0)
+@test LowLevelParticleFilters.dynamics(kf)(x[1],u[1],0,0) ≈ dynamics(x[1],u[1],0,0)
 
 
 sol = forward_trajectory(kf, u, y)
@@ -44,7 +44,7 @@ sol2 = forward_trajectory(ekf, u, y)
 
 
 ## add nonlinear dynamics
-dynamics2(x,u,p,t) = A*x - 0.01*abs.(x) .+ B*u
+dynamics2(x,u,p,t) = A*x - 0.01*sin.(x) .+ B*u
 ekf = LLPF.ExtendedKalmanFilter(kf, dynamics2, measurement)
 x,u,y = LLPF.simulate(ekf,T,du)
 
@@ -53,11 +53,11 @@ sol2 = forward_trajectory(ekf, u, y)
 
 @test norm(reduce(hcat, x .- sol.x)) > norm(reduce(hcat, x .- sol2.x))
 @test norm(reduce(hcat, x .- sol.xt)) > norm(reduce(hcat, x .- sol2.xt))
-@test sol.ll < sol2.ll
+@test sol.ll < 0.999*sol2.ll # using the ekf should improve ll (we add a small margin since it otherwise fails in about 1/10)
 
 # plot(reduce(hcat, x)', layout=2, lab="True")
-# plot!(reduce(hcat, xf)', lab="Kf")
-# plot!(reduce(hcat, xf2)', lab="EKF")
+# plot!(reduce(hcat, sol.x)', lab="Kf")
+# plot!(reduce(hcat, sol2.x)', lab="EKF")
 
 xT,RT,ll = smooth(ekf, u, y)
-@test norm(reduce(hcat, x .- xT)) < norm(reduce(hcat, x .- sol2.x)) # Smoothing solution better than filtering sol
+@test norm(reduce(hcat, x .- xT)) < norm(reduce(hcat, x .- sol2.x)) # Smoothing solution better than filtering sol (normally around 8-20% better)

@@ -242,13 +242,13 @@ measurement(x,u,p,t,noise=false) = C*x + noise*rand(rng, dg)
 # We now create the `AdvancedParticleFilter` and use it in the same way as the other filters:
 apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, dx0)
 sol = forward_trajectory(apf, u, y)
-# plot(sol, xreal=xs)
+# plot(sol, xreal=x)
 
 # We can even use this type as an AuxiliaryParticleFilter
 apfa = AuxiliaryParticleFilter(apf)
 sol = forward_trajectory(apfa, u, y)
-plot(sol, xreal=xs)
-plot(sol, xreal=xs, dim=1) # Same as above, but only plots a single dimension
+plot(sol, xreal=x)
+plot(sol, xreal=x, dim=1) # Same as above, but only plots a single dimension
 
 # # High performance Distributions
 # When `using LowLevelParticleFilters`, a number of methods related to distributions are defined for static arrays, making `logpdf` etc. faster. We also provide a new kind of distribution: `TupleProduct <: MultivariateDistribution` that behaves similarly to the `Product` distribution. The `TupleProduct` however stores the individual distributions in a tuple, has compile-time known length and supports `Mixed <: ValueSupport`, meaning that it can be a product of both `Continuous` and `Discrete` dimensions, somthing not supported by the standard `Product`. Example
