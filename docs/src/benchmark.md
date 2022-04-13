@@ -1,9 +1,12 @@
 
 
 # Benchmark test
-To see how the performance varies with the number of particles, we simulate several times. The following code simulates the system and performs filtering using the simulated measuerments. We do this for varying number of time steps and varying number of particles.
+To see how the performance varies with the number of particles, we simulate several times. The following code simulates the system and performs filtering using the simulated measurements. We do this for varying number of time steps and varying number of particles.
 
-````julia
+!!! note
+    To run this code, see the bottom of `src/example_lineargaussian.jl`.
+
+```julia
 function run_test()
     particle_count = [10, 20, 50, 100, 200, 500, 1000]
     time_steps = [20, 100, 200]
@@ -38,18 +41,18 @@ function run_test()
 end
 
 @time RMSE = run_test()
-````
+```
 
-Propagated 8400000 particles in 1.612975455 seconds for an average of 5207.766785267046 particles per millisecond
+Propagated 8400000 particles in 1.140468043 seconds for an average of 7365.397085484139 particles per millisecond
 
 We then plot the results
 
-````julia
+```julia
 time_steps     = [20, 100, 200]
 particle_count = [10, 20, 50, 100, 200, 500, 1000]
 nT             = length(time_steps)
 leg            = reshape(["$(time_steps[i]) time steps" for i = 1:nT], 1,:)
 plot(particle_count,RMSE,xscale=:log10, ylabel="RMS errors", xlabel=" Number of particles", lab=leg)
-````
+```
 
 ![window](https://raw.githubusercontent.com/baggepinnen/LowLevelParticleFilters.jl/master/figs/rmse.png)
