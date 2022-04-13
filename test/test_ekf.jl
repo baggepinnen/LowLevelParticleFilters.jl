@@ -22,6 +22,13 @@ kf = KalmanFilter(A, B, C, 0, 0.001eye(n), eye(p), d0)
 ekf = LLPF.ExtendedKalmanFilter(kf, dynamics, measurement)
 x,u,y = LLPF.simulate(kf,T,du)
 
+@test kf.nx == n
+@test kf.nu == m
+@test kf.ny == p
+
+@test LowLevelParticleFilters.measurement(kf)(x[1],u[1],0,0) == measurement(x[1],u[1],0,0)
+@test LowLevelParticleFilters.dynamics(kf)(x[1],u[1],0,0) == dynamics(x[1],u[1],0,0)
+
 
 sol = forward_trajectory(kf, u, y)
 sol2 = forward_trajectory(ekf, u, y)
@@ -50,3 +57,6 @@ sol2 = forward_trajectory(ekf, u, y)
 # plot(reduce(hcat, x)', layout=2, lab="True")
 # plot!(reduce(hcat, xf)', lab="Kf")
 # plot!(reduce(hcat, xf2)', lab="EKF")
+
+xT,RT,ll = smooth(ekf, u, y)
+@test norm(reduce(hcat, x .- xT)) < norm(reduce(hcat, x .- sol2.x)) # Smoothing solution better than filtering sol

@@ -34,7 +34,7 @@ xs,u,y = simulate(pf,300,df)
 
 ```@example ml_map
 p = nothing
-svec = exp10.(LinRange(-1.2, 1.2, 60))
+svec = exp10.(LinRange(-1.0, 1.2, 60))
 llspf = map(svec) do s
     df = MvNormal(nx,s)
     pfs = ParticleFilter(2000, dynamics, measurement, df, dg, d0)

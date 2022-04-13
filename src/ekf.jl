@@ -57,7 +57,8 @@ end
 function smooth(kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf))
     reset!(kf)
     T            = length(y)
-    x,xt,R,Rt,ll = forward_trajectory(kf, u, y, p)
+    sol = forward_trajectory(kf, u, y, p)
+    (; x,xt,R,Rt,ll) = sol
     xT           = similar(xt)
     RT           = similar(Rt)
     xT[end]      = xt[end]      |> copy
