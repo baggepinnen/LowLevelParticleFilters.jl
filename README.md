@@ -4,20 +4,18 @@
 [![Documentation, stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable)
 [![Documentation, latest](https://img.shields.io/badge/docs-latest-blue.svg)](https://baggepinnen.github.io/LowLevelParticleFilters.jl/dev)
 
-# Types
+This is a library for state estimation, smoothing and parameter estimation.
+
+# Estimator Types
 We provide a number of filter types
 - `ParticleFilter`: This filter is simple to use and assumes that both dynamics noise and measurement noise are additive.
 - `AuxiliaryParticleFilter`: This filter is identical to `ParticleFilter`, but uses a slightly different proposal mechanism for new particles.
-- `AdvancedParticleFilter`: This filter gives you more flexibility, at the expense of having to define a few more functions. More instructions on this type below.
+- `AdvancedParticleFilter`: This filter gives you more flexibility, at the expense of having to define a few more functions.
 - `KalmanFilter`. A standard Kalman filter. Has the same features as the particle filters, but is restricted to linear dynamics (possibly time varying) and Gaussian noise.
 - `ExtendedKalmanFilter`: For nonlinear systems, the EKF runs a regular Kalman filter on linearized dynamics. Uses ForwardDiff.jl for linearization. The noise model must be Gaussian.
 - `UnscentedKalmanFilter`: The Unscented kalman filter often performs slightly better than the Extended Kalman filter but may be slightly more computationally expensive. The UKF handles nonlinear dynamics and measurement model, but still requires an additive Gaussian noise model.
 - `DAEUnscentedKalmanFilter`: An Unscented Kalman filter for differential-algebraic systems (DAE).
 
-# Functionality
-- Filtering
-- Smoothing
-- Parameter estimation using ML or PMMH (Particle Marginal Metropolis Hastings)
 
 # Documentation
 [![Documentation, stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable)
