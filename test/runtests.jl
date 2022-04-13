@@ -93,10 +93,10 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
         d0 = mvnormal(randn(n),2.0)   # Initial state Distribution
         
         # Define random linenar state-space system
-        const A_test = SA[0.97043   -0.097368
+        A_test = SA[0.97043   -0.097368
                      0.09736    0.970437]
-        const B_test = SA[0.1; 0;;]
-        const C_test = SA[0 1.0]
+        B_test = SA[0.1; 0;;]
+        C_test = SA[0 1.0]
 
         dynamics(x,u,p,t) = A_test*x .+ B_test*u
         measurement(x,u,p,t) = C_test*x
@@ -174,7 +174,7 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
         end
 
         llskf = map(svec) do s
-            kfs = KalmanFilter(A, B, C, 0, s^2*eye(n), eye(p), d0)
+            kfs = KalmanFilter(A_test, B_test, C_test, 0, s^2*eye(n), eye(p), d0)
             loglik(kfs,u,y)
         end
         # plot(svec, [llspf llspfa llskf], xscale=:log10, lab=["PF" "APF" "KF"])
