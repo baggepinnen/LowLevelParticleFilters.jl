@@ -1,15 +1,16 @@
 using LowLevelParticleFilters, ForwardDiff, Distributions
 const LLPF = LowLevelParticleFilters
-eye(n) = Matrix{Float64}(I,n,n)
-n = 2 # Dinemsion of state
-m = 2 # Dinemsion of input
-p = 2 # Dinemsion of measurements
+
+n = 2   # Dimension of state
+m = 1   # Dimension of input
+p = 1   # Dimension of measurements
+
 
 # Define random linenar state-space system
-A = SMatrix{n,n}([0.99 0.1; 0 0.2])
-B = @SMatrix randn(n,m)
-C = SMatrix{p,p}(eye(p))
-# C = SMatrix{p,n}([1 1])
+A = SA[0.97043   -0.097368
+             0.09736    0.970437]
+B = SA[0.1; 0;;]
+C = SA[0 1.0]
 
 dynamics(x,u,p,t) = A*x .+ B*u
 measurement(x,u,p,t) = C*x
@@ -17,8 +18,8 @@ measurement(x,u,p,t) = C*x
 T = 800 # Number of time steps
 
 d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
-du = MvNormal(2,1) # Control input distribution
-kf = KalmanFilter(A, B, C, 0, 0.001eye(n), eye(p), d0)
+du = MvNormal(m,1) # Control input distribution
+kf = KalmanFilter(A, B, C, 0, 0.001I(n), I(p), d0)
 ekf = LLPF.ExtendedKalmanFilter(kf, dynamics, measurement)
 x,u,y = LLPF.simulate(kf,T,du)
 

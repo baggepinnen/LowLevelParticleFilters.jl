@@ -64,8 +64,8 @@ function smooth(kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::Abstract
     xT[end]      = xt[end]      |> copy
     RT[end]      = Rt[end]      |> copy
     for t = T-1:-1:1
-        A = ForwardDiff.jacobian(x->kf.dynamics(x,u[t+1],p,t+1), xt[t+1])
-        C     = Rt[t]*A/R[t+1]
+        A = ForwardDiff.jacobian(x->kf.dynamics(x,u[t+1],p,t+1), xT[t+1])
+        C     = Rt[t]*A'/R[t+1]
         xT[t] = xt[t] .+ C*(xT[t+1] .- x[t+1])
         RT[t] = Rt[t] .+ symmetrize(C*(RT[t+1] .- R[t+1])*C')
     end

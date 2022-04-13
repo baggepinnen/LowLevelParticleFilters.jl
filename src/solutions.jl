@@ -108,7 +108,7 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
                 1:T, getindex.(xreal,d)
             end
         end
-        yhat = measurement(f).(x,u',Ref(p),0) |> vec
+        yhat = measurement(f).(x, permutedims(u), Ref(p), (1:T)') |> vec
         for d = 1:P
             subplot := d+D
             @series begin

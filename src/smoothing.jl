@@ -14,7 +14,7 @@ function smooth(kf::KalmanFilter, u::AbstractVector, y::AbstractVector, p=parame
     xT[end]      = xt[end]      |> copy
     RT[end]      = Rt[end]      |> copy
     for t = T-1:-1:1
-        C     = Rt[t]*get_mat(kf.A, xT[t+1], u[t+1], p, t+1)/R[t+1]
+        C     = Rt[t]*get_mat(kf.A, xT[t+1], u[t+1], p, t+1)'/R[t+1]
         xT[t] = xt[t] .+ C*(xT[t+1] .- x[t+1])
         RT[t] = Rt[t] .+ symmetrize(C*(RT[t+1] .- R[t+1])*C')
     end
@@ -202,7 +202,7 @@ end
 
 """
     smoothed_trajs(xb)
-    
+
 Helper function to get particle trajectories as a 3-dimensions array (N,M,T) instead of matrix of vectors.
 """
 function smoothed_trajs(xb)
