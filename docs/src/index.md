@@ -53,8 +53,8 @@ Define problem
 
 ```@example lingauss
 n = 2   # Dimension of state
-m = 2   # Dimension of input
-p = 2   # Dimension of measurements
+m = 1   # Dimension of input
+p = 1   # Dimension of measurements
 N = 500 # Number of particles
 
 const dg = MvNormal(p,1.0)          # Measurement noise Distribution
@@ -63,13 +63,13 @@ const d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
 nothing # hide
 ```
 
-Define random linear state-space system
+Define linear state-space system (using StaticArrays for maximum performance)
 
 ```@example lingauss
-Tr = randn(n,n)
-const A = SMatrix{n,n}(Tr*diagm(0=>LinRange(0.5,0.95,n))/Tr)
-const B = @SMatrix randn(n,m)
-const C = @SMatrix randn(p,n)
+const A = SA[0.97043   -0.097368
+             0.09736    0.970437]
+const B = SA[0.1; 0;;]
+const C = SA[0 1.0]
 nothing # hide
 ```
 
@@ -90,7 +90,8 @@ pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 
 With the filter in hand, we can simulate from its dynamics and query some properties
 ```@example lingauss
-xs,u,y = simulate(pf,200,df) # We can simulate the model that the pf represents
+du = MvNormal(m,1.0)         # Random input distribution for simulation
+xs,u,y = simulate(pf,200,du) # We can simulate the model that the pf represents
 pf(u[1], y[1])               # Perform one filtering step using input u and measurement y
 particles(pf)                # Query the filter for particles, try weights(pf) or expweights(pf) as well
 x̂ = weigthed_mean(pf)        # using the current state
@@ -120,7 +121,7 @@ N     = 2000 # Number of particles
 T     = 80   # Number of time steps
 M     = 100  # Number of smoothed backwards trajectories
 pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
-du    = MvNormal(2,1)     # Control input distribution
+du    = MvNormal(m,1)     # Control input distribution
 x,u,y = simulate(pf,T,du) # Simulate trajectory using the model in the filter
 tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
 x,u,y = tosvec.((x,u,y))
@@ -158,26 +159,23 @@ for some matrices ``A,B,C,D`` where ``w \sim N(0, R_1)`` and ``e \sim N(0, R_2)`
 A Kalman filter is easily created using the constructor. Many of the functions defined for particle filters, are defined also for Kalman filters, e.g.:
 
 ```@example lingauss
-eye(n) = Matrix{Float64}(I,n,n)
-R1 = eye(n)
-R2 = eye(p)
+R1 = cov(df)
+R2 = cov(dg)
 kf = KalmanFilter(A, B, C, 0, R1, R2, d0)
 sol = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
-xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 nothing # hide
 ```
 
 It can also be called in a loop like the `pf` above
 
 ```julia
-p = nothing
 for t = 1:T
-    kf(u,y,p) # Performs both correct and predict!!
+    kf(u,y) # Performs both correct and predict!!
     # alternatively
-    ll, e = correct!(kf, y, p, t) # Returns loglikelihood and prediction error
+    ll, e = correct!(kf, y, nothing, t) # Returns loglikelihood and prediction error
     x     = state(kf)
     R     = covariance(kf)
-    predict!(kf, u, p, t)
+    predict!(kf, u, nothing, t)
 end
 ```
 
@@ -188,7 +186,7 @@ The numeric type used in the Kalman filter is determined from the mean of the in
 ## Smoothing using KF
 Kalman filters can also be used for smoothing 
 ```@example lingauss
-kf = KalmanFilter(A, B, C, 0, eye(n), eye(p), MvNormal(diagm(ones(2))))
+kf = KalmanFilter(A, B, C, 0, cov(df), cov(dg), d0)
 xT,R,lls = smooth(kf, u, y, p) # Smoothed state, smoothed cov, loglik
 nothing # hide
 ```
@@ -208,7 +206,7 @@ The [`UnscentedKalmanFilter`](@ref) represents posterior distributions over ``x`
 
 The UKF takes the same arguments as a regular [`KalmanFilter`](@ref), but the matrices defining the dynamics are replaced by two functions, `dynamics` and `measurement`, working in the same way as for the `ParticleFilter` above.
 ```@example lingauss
-ukf = UnscentedKalmanFilter(dynamics, measurement, eye(n), eye(p), MvNormal([1.,1.]), nu=m, ny=p)
+ukf = UnscentedKalmanFilter(dynamics, measurement, cov(df), cov(dg), MvNormal([1.,1.]), nu=m, ny=p)
 ```
 
 ## UKF for DAE systems
@@ -273,18 +271,14 @@ sol = forward_trajectory(apf, u, y, p)
 ```
 
 ```@example lingauss
-plot(sol, xreal=xs)
+plot(sol, xreal=x)
 ```
 We can even use this type as an AuxiliaryParticleFilter
 
 ```@example lingauss
 apfa = AuxiliaryParticleFilter(apf)
 sol = forward_trajectory(apfa, u, y, p)
-plot(sol, xreal=xs)
-```
-
-```@example lingauss
-plot(sol, dim=1, xreal=xs) # Same as above, but only plots a single dimension
+plot(sol, dim=1, xreal=x) # Same as above, but only plots a single dimension
 ```
 
 
