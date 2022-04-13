@@ -4,6 +4,7 @@ abstract type AbstractParticleFilter <: AbstractFilter end
 function parameters(f::AbstractFilter)
     hasproperty(f, :p) ? getproperty(f, :p) : SciMLBase.NullParameters()
 end
+parameters(f) = SciMLBase.NullParameters()
 
 struct PFstate{PT<:AbstractArray, FT<:AbstractFloat}
     x::Vector{PT}
