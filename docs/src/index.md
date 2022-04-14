@@ -111,7 +111,7 @@ If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurem
 
 For a full usage example, see the benchmark section below or [example_lineargaussian.jl](https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/src/example_lineargaussian.jl)
 
-## Resampling
+### Resampling
 The particle filter will perform a resampling step whenever the distribution of the weights has become degenerate. The resampling is triggered when the *effective number of samples* is smaller than `pf.resample_threshold` ``\in [0, 1]``, this value can be set when constructing the filter. How the resampling is done is governed by `pf.resampling_strategy`, we currently provide `ResampleSystematic <: ResamplingStrategy` as the only implemented strategy. See https://en.wikipedia.org/wiki/Particle_filter for more info.
 
 # Particle Smoothing

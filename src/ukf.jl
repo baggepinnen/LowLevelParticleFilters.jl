@@ -175,10 +175,10 @@ Mandela, Rengaswamy, Narasimhan
 # Arguments
 - `ukf` is a regular [`UnscentedKalmanFilter`](@ref) that contains `dynamics(xz, u, p, t)` that propagates the combined state `xz(k)` to `xz(k+1)` and a measurement function with signature `(xz, u, p, t)`
 - `g(x, z, u, p, t)` is a function that should fulfill `g(x, z, u, p, t) = 0`
-_ `get_x_z(xz) -> x, z` is a function that decomposes `xz` into `x` and `z`
+- `get_x_z(xz) -> x, z` is a function that decomposes `xz` into `x` and `z`
 - `build_xz(x, z)` is the inverse of `get_x_z`
 - `xz0` the initial full state.
-- `threads`: If true, evaluates dynamics on Sigma points in parallel. This typically requires the dynamics to be non-allocating (use StaticArrays) to improve performance. 
+- `threads`: If true, evaluates dynamics on sigma points in parallel. This typically requires the dynamics to be non-allocating (use StaticArrays) to improve performance. 
 
 # Assumptions
 - The DAE dynamics is index 1 and can be written on the form 

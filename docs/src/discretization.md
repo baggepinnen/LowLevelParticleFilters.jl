@@ -22,7 +22,7 @@ A linear system on the form
 x(t+1) = Ax(t) + Bu(t)\\
 y(t) = Cx(t) + Du(t)
 ```
-can be discretized using [`ControlSystems.c2d`](https://juliacontrol.github.io/ControlSystems.jl/latest/lib/synthesis/#ControlSystems.c2d), which defaults to a zero-order hold discretization.
+can be discretized using [`ControlSystems.c2d`](https://juliacontrol.github.io/ControlSystems.jl/latest/lib/synthesis/#ControlSystems.c2d), which defaults to a zero-order hold discretization. See the example below for more info.
 
 ## Covariance matrices
 Covariance matrices for continuous-time noise processes can be discretized using
@@ -40,7 +40,7 @@ The method used comes from theorem 5 in the reference below.
 > Differential Lyapunov Equation With Applications to Kalman Filtering", 
 > Patrik Axelsson and Fredrik Gustafsson
 
-On singular covariance matrices: The traditional double integrator with covariance matrix `Q = diagm([0,σ²])` can not be sampled with this method. Instead, the input matrix ("Cholesky factor") of `Q` must be manually kept track of, e.g., the noise of variance `σ²` enters like `N = [0, 1]` which is sampled using ZoH and becomes `Nd = [Ts^2 / 2; Ts]` which results in the covariance matrix `σ² * Nd * Nd'` (see example below).
+**On singular covariance matrices:** The traditional double integrator with covariance matrix `Q = diagm([0,σ²])` can not be sampled with this method. Instead, the input matrix ("Cholesky factor") of `Q` must be manually kept track of, e.g., the noise of variance `σ²` enters like `N = [0, 1]` which is sampled using ZoH and becomes `Nd = [Ts^2 / 2; Ts]` which results in the covariance matrix `σ² * Nd * Nd'` (see example below).
 
 ## Example
 The following example will discretize a linear double integrator system. Double integrators arise when the position of an object is controlled by a force, i.e., when Newtons second law ``f = ma`` governs the dynamics. The system can be written on the form

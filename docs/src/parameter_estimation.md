@@ -7,20 +7,19 @@ From the first camp, we provide som basic functionality for maximum likelihood e
 
 
 ## Maximum-likelihood estimation
-Filters calculate the likelihood and prediction errors while performing filtering, this can be used to perform maximum likelihood estimation or prediction-error minimization. We may for example plot likelihood as function of the variance of the dynamics noise
+Filters calculate the likelihood and prediction errors while performing filtering, this can be used to perform maximum likelihood estimation or prediction-error minimization. One can estimate all kinds of parameters using this method, in the example below, we will estimate the noise covariance. We may for example plot likelihood as function of the variance of the dynamics noise like this
 
 ```@setup ml_map
 using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions, Plots
 nx = 2   # Dimension of state
 nu = 2   # Dimension of input
 ny = 2   # Dimension of measurements
-N = 800 # Number of particles
+N = 2000 # Number of particles
 
 const dg = MvNormal(ny,1.0)          # Measurement noise Distribution
 const df = MvNormal(nx,1.0)          # Dynamics noise Distribution
 const d0 = MvNormal(randn(nx),2.0)   # Initial state Distribution
 
-Tr = randn(nx,nx)
 const A = SA[1 0.1; 0 1]
 const B = @SMatrix [0.0 0.1; 1 0.1]
 const C = @SMatrix [1.0 0; 0 1]
@@ -34,10 +33,10 @@ xs,u,y = simulate(pf,300,df)
 
 ```@example ml_map
 p = nothing
-svec = exp10.(LinRange(-1.0, 1.2, 60))
+svec = exp10.(LinRange(-0.8, 1.2, 60))
 llspf = map(svec) do s
     df = MvNormal(nx,s)
-    pfs = ParticleFilter(2000, dynamics, measurement, df, dg, d0)
+    pfs = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
     loglik(pfs, u, y, p)
 end
 plot( svec, llspf,
@@ -48,6 +47,7 @@ plot( svec, llspf,
 )
 vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue), primary=false)
 ```
+the correct value for the simulated data is 1 (the simulated system is the same as on the front page of the docs).
 
 We can do the same with a Kalman filter
 
@@ -61,9 +61,9 @@ plot!(svec, llskf, yscale=:identity, xscale=:log10, lab="Kalman", c=:red)
 vline!([svec[findmax(llskf)[2]]], l=(:dash,:red), primary=false)
 ```
 
-as we can see, the result is quite noisy due to the stochastic nature of particle filtering.
+the result can be quite noisy due to the stochastic nature of particle filtering. The particle filter likelihood never reaches as high as for the Kalman filter which is optimal for the linear example system we are simulating here. For maximum-likelihood estimation, the [`AuxiliaryParticleFilter`](@ref) is typically more accurate than the standard [`ParticleFilter`](@ref)
 
-## MAP estiamtion
+## MAP estimation
 In this example, we will estimate the variance of the noises in the dynamics and the measurement functions.
 
 To solve a MAP estimation problem, we need to define a function that takes a parameter vector and returns a filter, the parameters are used to construct the covariance matrices:
@@ -110,10 +110,9 @@ For higher-dimensional problems, we may estimate the parameters using an optimiz
 
 
 ## Bayesian inference using PMMH
-We proceed like we did for MAP above, but when calling the function `metropolis`, we will get the entire posterior distribution of the parameter vector, for the small cost of a massive increase in the amount of computations.
+We proceed like we did for MAP above, but when calling the function `metropolis`, we will get the entire posterior distribution of the parameter vector, for the small cost of a massive increase in the amount of computations. [`metropolis`](@ref) runs the [Metropolis Hastings algorithm](https://en.wikipedia.org/wiki/Metropolis%E2%80%93Hastings_algorithm), or more precisely if a particle filter is used, the "Particle Marginal Metropolis Hastings" (PMMH) algorithm. Here we use the Kalman filter simply to have the documentation build a bit faster, it can be quite heavy to run.
 
 ```@example ml_map
-N = 1000
 filter_from_parameters(θ, pf = nothing) = KalmanFilter(A, B, C, 0, exp(θ[1])^2*I(nx), exp(θ[2])^2*I(ny), d0) # Works with particle filters as well
 nothing # hide
 ```
@@ -130,13 +129,14 @@ nothing # hide
 We also need to define a function that suggests a new point from the "proposal distribution". This can be pretty much anything, but it has to be symmetric since I was lazy and simplified an equation.
 
 ```@example ml_map
-draw   = θ -> θ .+ 0.05 .* rand.()
-burnin = 200
+draw   = θ -> θ .+ 0.05 .* randn.() # This function dictates how new proposal parameters are being generated. 
+burnin = 200 # remove this many initial samples ("burn-in period")
 @info "Starting Metropolis algorithm"
 @time theta, lls = metropolis(ll, 2200, θ₀, draw) # Run PMMH for 2200  iterations
-thetam = reduce(hcat, theta)'[burnin+1:end,:] # Build a matrix of the output (was vecofvec)
-histogram(exp.(thetam), layout=(3,1)); plot!(lls[burnin+1:end], subplot=3) # Visualize
+thetam = reduce(hcat, theta)'[burnin+1:end,:] # Build a matrix of the output
+histogram(exp.(thetam), layout=(3,1), lab=["R1" "R2"]); plot!(lls[burnin+1:end], subplot=3, lab="log likelihood") # Visualize
 ```
+In this example, we initialize the MH algorithm on the correct value `θ₀`, in general, you'd see a period in the beginning where the likelihood (bottom plot) is much lower than during the rest of the sampling, this is the reason we remove a number of samples in the beginning, typically referred to as "burn in".
 
 
 If you are lucky, you can run the above threaded as well. I tried my best to make particle filters thread safe with their own rngs etc., but your milage may vary. For threading to help, the dynamics must be non-allocating, e.g., by using StaticArrays etc.
