@@ -2,7 +2,7 @@ ENV["GKSwstype"] = 322 # workaround for gr segfault on GH actions
 using Documenter, LowLevelParticleFilters
 
 using Plots
-gr()
+gr(format=:png)
 
 
 makedocs(
@@ -15,6 +15,7 @@ makedocs(
             "Parameter estimation" => "parameter_estimation.md",
             "Benchmark" => "benchmark.md",
             "High-performance distributions" => "distributions.md",
+            "Advanced tutorial" => "beetle_example.md",
             "API" => "api.md",
       ],
       format = Documenter.HTML(prettyurls = haskey(ENV, "CI")),
