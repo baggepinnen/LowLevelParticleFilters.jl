@@ -76,7 +76,6 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
         @test cov(dt) == cov(d)
         @test extrema(dt) == ((-Inf, -Inf), (Inf, Inf))
         @test entropy(dt) == entropy(d)
-        @test rand(dt) isa Vector{Float64}
 
     end
 
