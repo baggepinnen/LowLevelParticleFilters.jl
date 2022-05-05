@@ -154,7 +154,13 @@ Distributions.mean(d::TupleProduct) = vcat(mean.(d.v)...)
 Distributions.var(d::TupleProduct) = vcat(var.(d.v)...)
 Distributions.cov(d::TupleProduct) = Diagonal(var(d))
 Distributions.entropy(d::TupleProduct) = sum(entropy, d.v)
+Base.extrema(d::TupleProduct) = minimum.(d.v), maximum.(d.v)
 
+@generated function Random.rand(rng::AbstractRNG, d::TupleProduct{N}) where N
+    quote
+        SVector(Base.Cartesian.@ntuple $N i->(rand(rng, d.v[i])))
+    end
+end
 
 """
     C = double_integrator_covariance(h, σ=1)

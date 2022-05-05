@@ -71,8 +71,10 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
         dt = LowLevelParticleFilters.TupleProduct((Normal(0,2), Normal(0,2)))
         @test logpdf(dt,x) == logpdf(dt,Vector(x)) == logpdf(d,x)
         @test_nowarn rand(dt)
+        @test rand(dt) isa SVector{2, Float64}
         @test var(dt) == var(d)
         @test cov(dt) == cov(d)
+        @test extrema(dt) == ((-Inf, -Inf), (Inf, Inf))
         @test entropy(dt) == entropy(d)
         @test rand(dt) isa Vector{Float64}
 
