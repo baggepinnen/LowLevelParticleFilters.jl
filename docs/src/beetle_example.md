@@ -3,10 +3,12 @@ This is an example of smoothing the 2-dimensional trajectory of a moving dung be
 
 In this example we will describe the position coordinates, ``x`` and ``y``, of the beetle as functions of its velocity, ``v_t``, and direction, ``θ_t``:
 ```math
-x_{t+1} = x_t + \cos(θ_t)v_t \\
-y_{t+1} = y_t + \sin(θ_t)v_t \\
-v_{t+1} = v_t + e_t \\
-θ_{t+1} = θ_t + w_t
+\begin{aligned}
+x_{t+1} &= x_t + \cos(θ_t)v_t \\
+y_{t+1} &= y_t + \sin(θ_t)v_t \\
+v_{t+1} &= v_t + e_t \\
+θ_{t+1} &= θ_t + w_t
+\end{aligned}
 ```
 where
 ``
@@ -26,7 +28,7 @@ nothing # hide
 ```
 We then define some properties of the dynamics and the filter. We will use an [`AdvancedParticleFilter`](@ref) since we want to have fine-grained control over the noise sampling for the mode switch.
 ```@example beetle
-N = 1000 # Number of particles in the particle filter
+N = 2000 # Number of particles in the particle filter
 n = 4 # Dimension of state: we have speed and angle, so two
 p = 2 # Dimension of measurements, we can measure the x and the y, so also two
 @inline pos(s) = s[SVector(1,2)]
@@ -40,15 +42,12 @@ We then define the probability distributions we need.
 ```@example beetle
 dgσ = 1 # the deviation of the measurement noise distribution
 dvσ = 0.3 # the deviation of the dynamics noise distribution
-ϕσ = 0.5
+ϕσ  = 0.5
 const switch_prob = 0.03 # Probability of mode switch
 const dg = MvNormal(@SVector(zeros(p)), dgσ^2) # Measurement noise Distribution
 const df = LowLevelParticleFilters.TupleProduct((Normal.(0,[1e-1, 1e-1, dvσ, ϕσ])...,Binomial(1,switch_prob)))
-const df2 = LowLevelParticleFilters.TupleProduct((Normal.(0,[1e-1, 1e-1, dvσ, ϕσ])...,))#Binomial(1,switch_prob)))
-
 const d0 = MvNormal(SVector(y[1]..., 0.5, atan((y[2]-y[1])...), 0), [3.,3,2,2,0])
-
-const noisevec = zeros(5)
+const noisevec = zeros(5) # cache vector
 nothing # hide
 ```
 
@@ -127,7 +126,7 @@ plot!(fig1, sbm[1,:],sbm[2,:], lab="xs")
 ```@example beetle
 plot!(fig2, identity.(sbm'[:,4]), lab="smoothed")
 ```
-We see that the smoothed trajectory may look very different from the filter trajectory. This is an indication that it's hard to tell what state the beetle is currently in, but easy to look back and tell what state the beetle must have been in at a historical point. 
+We see that the smoothed trajectory may look very different from the filter trajectory. This is an indication that it's hard to tell what state the beetle is currently in, but easier to look back and tell what state the beetle must have been in at a historical point. 
 
 
 We can also visualize the mode state
