@@ -85,7 +85,7 @@ u = zeros(length(y))
 pf = AuxiliaryParticleFilter(AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0))
 T = length(y)
 sol = forward_trajectory(pf,u[1:T],y[1:T])
-(; x,w,we,ll) = sol
+(x,w,we,ll) = sol
 plot(sol, markerstrokecolor=:auto, m=(2,0.5), format=:png)
 ```
 We can clearly see when the beetle switched mode (state 5). This corresponds well to annotations provided by a biologist and is the fundamental question we want to answer with the filtering procedure.
@@ -126,7 +126,7 @@ plot!(fig1, sbm[1,:],sbm[2,:], lab="xs")
 ```@example beetle
 plot!(fig2, identity.(sbm'[:,4]), lab="smoothed")
 ```
-We see that the smoothed trajectory may look very different from the filter trajectory. This is an indication that it's hard to tell what state the beetle is currently in, but easier to look back and tell what state the beetle must have been in at a historical point. 
+We see that the smoothed trajectory may look very different from the filter trajectory. This is an indication that it's hard to tell what state the beetle is currently in, but easier to look back and tell what state the beetle must have been in at a historical point.
 
 
 We can also visualize the mode state

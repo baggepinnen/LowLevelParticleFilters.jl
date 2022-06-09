@@ -82,7 +82,7 @@ u = zeros(length(y))
 pf = AuxiliaryParticleFilter(AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0))
 T = length(y)
 sol=forward_trajectory(pf,u[1:T],y[1:T])
-(; x,w,we,ll) = sol
+(x,w,we,ll) = sol
 @show ll
 plot(sol, markerstrokecolor=:auto, m=(2,0.5))
 ##

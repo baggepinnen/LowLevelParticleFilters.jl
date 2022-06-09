@@ -69,7 +69,7 @@ struct ParticleFilteringSolution{F,Tu,Ty,Tx,Tw,Twe,Tll} <: AbstractFilteringSolu
 end
 
 function td_getargs(sol::ParticleFilteringSolution, d::Int=1)
-    (; f,x,w,u,y) = sol
+    (f,x,w,u,y) = sol
     f,x,w,u,y,d
 end
 
@@ -77,7 +77,7 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
 
 @recipe function plot(sol::ParticleFilteringSolution; nbinsy=30, xreal=nothing, dim=nothing)
     if dim === nothing || dim === (:)
-        (; f,x,w,u,y) = sol
+        (f,x,w,u,y) = sol
         p = parameters(f)
         N,T = size(x)
         D = length(x[1])
@@ -123,17 +123,17 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
             end
         end
     else
-        (; f,x,w,u,y) = sol
+        (f,x,w,u,y) = sol
         d = dim
         N,T = size(x)
         D = length(x[1])
         P = length(y[1])
-    
+
         if sum(w) ≉ T
             w = exp.(w)
             w ./= sum(w, dims=1)
         end
-    
+
         label := ""
         markercolor --> :cyan
         if d <= D
@@ -160,7 +160,7 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
                 seriestype := :scatter
                 1:T, getindex.(y,d)
             end
-    
+
         end
     end
 end
