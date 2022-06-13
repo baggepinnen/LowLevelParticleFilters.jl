@@ -1,4 +1,4 @@
-export plot_trajectories, scatter_particles, logsumexp!, smoothed_mean, smoothed_cov, smoothed_trajs, plot_priors
+export logsumexp!, smoothed_mean, smoothed_cov, smoothed_trajs
 
 """
     ll = logsumexp!(w, we [, maxw])
