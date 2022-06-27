@@ -11,7 +11,7 @@ A small benchmark
 
 ```julia
 sv = @SVector randn(2)
-d = Product([Normal(0,2), Normal(0,2)])
+d = Distributions.Product([Normal(0,2), Normal(0,2)])
 dt = TupleProduct((Normal(0,2), Normal(0,2)))
 dm = MvNormal(2, 2)
 @btime logpdf($d,$(Vector(sv))) # 32.449 ns (1 allocation: 32 bytes)
