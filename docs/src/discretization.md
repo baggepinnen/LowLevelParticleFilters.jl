@@ -19,7 +19,7 @@ where the integer `supersample` determines the number of RK4 steps that is taken
 ## Linear systems
 A linear system on the form 
 ```math
-x(t+1) = Ax(t) + Bu(t)\\
+\dot{x}(t) = Ax(t) + Bu(t)\\
 y(t) = Cx(t) + Du(t)
 ```
 can be discretized using [`ControlSystems.c2d`](https://juliacontrol.github.io/ControlSystems.jl/latest/lib/synthesis/#ControlSystems.c2d), which defaults to a zero-order hold discretization. See the example below for more info.
