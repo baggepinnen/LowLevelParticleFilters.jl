@@ -24,7 +24,7 @@ ExtendedKalmanFilter
 
 function Base.getproperty(ekf::EKF, s::Symbol) where EKF <: AbstractExtendedKalmanFilter
     s ∈ fieldnames(EKF) && return getfield(ekf, s)
-    return getproperty(ekf.kf, s)
+    return getproperty(getfield(ekf, :kf), s)
 end
 
 function Base.propertynames(ekf::EKF, private::Bool=false) where EKF <: AbstractExtendedKalmanFilter
