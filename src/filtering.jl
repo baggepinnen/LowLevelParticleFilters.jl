@@ -31,8 +31,11 @@ end
     Symmetric(x)
 end
 @inline function symmetrize(x)
-    x .+= x'
-    x .*= 0.5
+    n = size(x,1)
+    @inbounds for i = 1:n, j = i+1:n
+        x[i,j] = 0.5 * (x[i,j] + x[j,i])
+        x[j,i] = x[i,j]
+    end
     Symmetric(x)
 end
 
