@@ -11,7 +11,7 @@ using StaticArrays
 using Distributions
 using RecipesBase
 using ForwardDiff
-using NonlinearSolve
+using SimpleNonlinearSolve
 using Polyester
 
 using SciMLBase

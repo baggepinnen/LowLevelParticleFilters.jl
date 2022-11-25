@@ -230,7 +230,7 @@ The z part of xz is used as initial guess
 """
 function calc_xz(get_x_z::Function, build_xz, g, xz::AbstractArray, u, p, t, xi=get_x_z(xz)[1])
     _, z0 = get_x_z(xz) # use previous z as initial guess for root finder
-    sol = solve(NonlinearProblem{false}((z,_)->g(xi, z, u, p, t), z0), NewtonRaphson(), tol=1e-9) # function takes parameter as second arg
+    sol = solve(NonlinearProblem{false}((z,_)->g(xi, z, u, p, t), z0), SimpleNewtonRaphson(), tol=1e-9) # function takes parameter as second arg
     nr = norm(sol.resid)
     nr < 1e-3 || @warn "Root solving residual was large $nr" maxlog=10
     zi = sol.u
