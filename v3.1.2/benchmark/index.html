@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Benchmark · LowLevelParticleFilters Documentation</title><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.11.1/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit">LowLevelParticleFilters Documentation</span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../discretization/">Discretization</a></li><li><a class="tocitem" href="../parameter_estimation/">Parameter estimation</a></li><li class="is-active"><a class="tocitem" href>Benchmark</a></li><li><a class="tocitem" href="../distributions/">High-performance distributions</a></li><li><a class="tocitem" href="../beetle_example/">Advanced tutorial</a></li><li><a class="tocitem" href="../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Benchmark</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Benchmark</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/docs/src/benchmark.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Benchmark-test-1"><a class="docs-heading-anchor" href="#Benchmark-test-1">Benchmark test</a><a class="docs-heading-anchor-permalink" href="#Benchmark-test-1" title="Permalink"></a></h1><p>To see how the performance varies with the number of particles, we simulate several times. The following code simulates the system and performs filtering using the simulated measurements. We do this for varying number of time steps and varying number of particles.</p><div class="admonition is-info"><header class="admonition-header">Note</header><div class="admonition-body"><p>To run this code, see the bottom of <code>src/example_lineargaussian.jl</code>.</p></div></div><pre><code class="language-julia">function run_test()
+    particle_count = [10, 20, 50, 100, 200, 500, 1000]
+    time_steps = [20, 100, 200]
+    RMSE = zeros(length(particle_count),length(time_steps)) # Store the RMS errors
+    propagated_particles = 0
+    t = @elapsed for (Ti,T) = enumerate(time_steps)
+        for (Ni,N) = enumerate(particle_count)
+            montecarlo_runs = 2*maximum(particle_count)*maximum(time_steps) ÷ T ÷ N
+            E = sum(1:montecarlo_runs) do mc_run
+                pf = ParticleFilter(N, dynamics, measurement, df, dg, d0) # Create filter
+                u = @SVector randn(2)
+                x = SVector{2,Float64}(rand(rng, d0))
+                y = SVector{2,Float64}(sample_measurement(pf,x,u,0,1))
+                error = 0.0
+                @inbounds for t = 1:T-1
+                    pf(u, y) # Update the particle filter
+                    x = dynamics(x,u,t) + SVector{2,Float64}(rand(rng, df)) # Simulate the true dynamics and add some noise
+                    y = SVector{2,Float64}(sample_measurement(pf,x,u,0,t)) # Simulate a measuerment
+                    u = @SVector randn(2) # draw a random control input
+                    error += sum(abs2,x-weigthed_mean(pf))
+                end # t
+                √(error/T)
+            end # MC
+            RMSE[Ni,Ti] = E/montecarlo_runs
+            propagated_particles += montecarlo_runs*N*T
+            @show N
+        end # N
+        @show T
+    end # T
+    println(&quot;Propagated $propagated_particles particles in $t seconds for an average of $(propagated_particles/t/1000) particles per millisecond&quot;)
+    return RMSE
+end
+
+@time RMSE = run_test()</code></pre><p>Propagated 8400000 particles in 1.140468043 seconds for an average of 7365.397085484139 particles per millisecond</p><p>We then plot the results</p><pre><code class="language-julia">time_steps     = [20, 100, 200]
+particle_count = [10, 20, 50, 100, 200, 500, 1000]
+nT             = length(time_steps)
+leg            = reshape([&quot;$(time_steps[i]) time steps&quot; for i = 1:nT], 1,:)
+plot(particle_count,RMSE,xscale=:log10, ylabel=&quot;RMS errors&quot;, xlabel=&quot; Number of particles&quot;, lab=leg)</code></pre><p><img src="https://raw.githubusercontent.com/baggepinnen/LowLevelParticleFilters.jl/master/figs/rmse.png" alt="window"/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../parameter_estimation/">« Parameter estimation</a><a class="docs-footer-nextpage" href="../distributions/">High-performance distributions »</a></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Thursday 15 December 2022 13:50">Thursday 15 December 2022</span>. Using Julia version 1.7.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
