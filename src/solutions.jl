@@ -34,7 +34,7 @@ end
         subplot --> (1:nx)'
         timevec, reduce(hcat, sol.xt)'
     end
-    plotu && @series begin
+    plotu && nu > 0 && @series begin
         label --> ["u$(i)" for i in 1:nu] |> permutedims
         subplot --> (1:nu)' .+ nx*(plotx || plotxt)
         timevec, reduce(hcat, sol.u)'
