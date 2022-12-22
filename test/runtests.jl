@@ -31,12 +31,12 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
         @test sum(w) ≈ 1
     end
 
-    @testset "weigthed_mean" begin
-        @info "testing weigthed_mean"
+    @testset "weighted_mean" begin
+        @info "testing weighted_mean"
         x = [randn(3) for i = 1:10000]
         w = ones(10000); we = similar(w)
         logsumexp!(w,we)
-        @test sum(abs, weigthed_mean(x,we)) < 0.06
+        @test sum(abs, weighted_mean(x,we)) < 0.06
     end
 
 

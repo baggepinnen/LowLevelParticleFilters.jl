@@ -94,7 +94,7 @@ du = MvNormal(m,1.0)         # Random input distribution for simulation
 xs,u,y = simulate(pf,200,du) # We can simulate the model that the pf represents
 pf(u[1], y[1])               # Perform one filtering step using input u and measurement y
 particles(pf)                # Query the filter for particles, try weights(pf) or expweights(pf) as well
-x̂ = weigthed_mean(pf)        # using the current state
+x̂ = weighted_mean(pf)        # using the current state
 ```
 
 If you want to perform filtering using vectors of inputs and measurements, try any of the functions

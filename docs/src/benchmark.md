@@ -26,7 +26,7 @@ function run_test()
                     x = dynamics(x,u,t) + SVector{2,Float64}(rand(rng, df)) # Simulate the true dynamics and add some noise
                     y = SVector{2,Float64}(sample_measurement(pf,x,u,0,t)) # Simulate a measuerment
                     u = @SVector randn(2) # draw a random control input
-                    error += sum(abs2,x-weigthed_mean(pf))
+                    error += sum(abs2,x-weighted_mean(pf))
                 end # t
                 √(error/T)
             end # MC

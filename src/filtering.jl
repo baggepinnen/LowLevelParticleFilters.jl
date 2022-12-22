@@ -242,7 +242,7 @@ end
 
 This Function resets the particle filter to the initial state distribution upon start
 """
-mean_trajectory(pf, u::Vector, y::Vector) = reduce_trajectory(pf, u::Vector, y::Vector, weigthed_mean)
+mean_trajectory(pf, u::Vector, y::Vector) = reduce_trajectory(pf, u::Vector, y::Vector, weighted_mean)
 mode_trajectory(pf, u::Vector, y::Vector) = reduce_trajectory(pf, u::Vector, y::Vector, mode)
 
 function reduce_trajectory(pf, u::Vector, y::Vector, f::F, p=parameters(pf)) where F
@@ -305,11 +305,11 @@ end
 
 
 """
-    x̂ = weigthed_mean(x,we)
+    x̂ = weighted_mean(x,we)
 
 Calculated weighted mean of particle trajectories. `we` are expweights.
 """
-function weigthed_mean(x,we::AbstractVector)
+function weighted_mean(x,we::AbstractVector)
     @assert sum(we) ≈ 1
     xh = zeros(size(x[1]))
     @inbounds @simd  for i = eachindex(x)
@@ -317,7 +317,7 @@ function weigthed_mean(x,we::AbstractVector)
     end
     return xh
 end
-function weigthed_mean(x,we::AbstractMatrix)
+function weighted_mean(x,we::AbstractMatrix)
     N,T = size(x)
     @assert sum(we) ≈ T
     xh = zeros(eltype(x), T)
@@ -330,18 +330,18 @@ function weigthed_mean(x,we::AbstractMatrix)
 end
 
 """
-    x̂ = weigthed_mean(pf)
-    x̂ = weigthed_mean(s::PFstate)
+    x̂ = weighted_mean(pf)
+    x̂ = weighted_mean(s::PFstate)
 """
-weigthed_mean(s) = weigthed_mean(s.x,s.we)
-weigthed_mean(pf::AbstractParticleFilter) = weigthed_mean(state(pf))
+weighted_mean(s) = weighted_mean(s.x,s.we)
+weighted_mean(pf::AbstractParticleFilter) = weighted_mean(state(pf))
 
 """
-    weigthed_cov(x,we)
+    weighted_cov(x,we)
 
-Similar to [`weigthed_mean`](@ref), but returns covariances
+Similar to [`weighted_mean`](@ref), but returns covariances
 """
-function weigthed_cov(x,we)
+function weighted_cov(x,we)
     N,T = size(x)
     n = length(x[1])
     [cov(copy(reshape(reinterpret(Float64, x[:,t]),n,N)),ProbabilityWeights(we[:,t]), dims=2, corrected=true) for t = 1:T]
