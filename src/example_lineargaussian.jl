@@ -32,7 +32,7 @@ pf = ParticleFilter(N, dynamics, measurement, df, dg, dx0)
 xs,u,y = simulate(pf,200,df) # We can simulate the model that the pf represents
 pf(u[1], y[1]) # Perform one filtering step using input u and measurement y
 particles(pf) # Query the filter for particles, try weights(pf) or expweights(pf) as well
-x̂ = weigthed_mean(pf) # using the current state
+x̂ = weighted_mean(pf) # using the current state
 # If you want to perform filtering using vectors of inputs and measurements, try any of the functions
 sol = forward_trajectory(pf, u, y) # Filter whole vectors of signals
 x̂,ll = mean_trajectory(pf, u, y)
@@ -294,7 +294,7 @@ function run_test()
                     x = dynamics(x,u,0,t) + SVector{2,Float64}(rand(rng, df)) # Simulate the true dynamics and add some noise
                     y = SVector{2,Float64}(sample_measurement(pf,x,u,0,t)) # Simulate a measuerment
                     u = @SVector randn(2) # draw a random control input
-                    error += sum(abs2,x-weigthed_mean(pf))
+                    error += sum(abs2,x-weighted_mean(pf))
                 end # t
                 √(error/T)
             end # MC
