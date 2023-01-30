@@ -39,6 +39,11 @@ end
     Symmetric(x)
 end
 
+"""
+    (; ll, e, S, Sᵪ, K) = correct!(kf::AbstractKalmanFilter, u, y, p = parameters(kf), t::Integer = index(kf))
+
+The correct step for a Kalman filter returns not only the log likelihood `ll` and the prediction error `e`, but also the covariance of the output `S`, its Cholesky factor `Sᵪ` and the Kalman gain `K`.
+"""
 function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Integer = index(kf))
     @unpack C,D,x,R,R2 = kf
     Ct = get_mat(C, x, u, p, t)
@@ -53,7 +58,7 @@ function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Integer =
     x .+= K*e
     R  .= symmetrize((I - K*Ct)*R) # WARNING against I .- A
     ll = logpdf(MvNormal(PDMat(S, Sᵪ)), e)# - 1/2*logdet(S) # logdet is included in logpdf
-    ll, e
+    (; ll, e, S, Sᵪ, K)
 end
 
 """

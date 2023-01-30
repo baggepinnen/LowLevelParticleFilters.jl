@@ -114,7 +114,7 @@ function correct!(ukf::UnscentedKalmanFilter, u, y, p=parameters(ukf), t::Intege
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized
     RmKSKT!(R, K, S)
     ll = logpdf(MvNormal(PDMat(S,Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf
-    ll, e
+    (; ll, e, S, Sᵪ, K)
 end
 
 @inline function RmKSKT!(R, K, S)
@@ -294,5 +294,5 @@ function correct!(ukf::DAEUnscentedKalmanFilter, u, y, p = parameters(ukf), t::I
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized
     RmKSKT!(R, K, S)
     ll = logpdf(MvNormal(PDMat(S,Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf
-    ll, e
+    (; ll, e, S, Sᵪ, K)
 end
