@@ -17,6 +17,23 @@ end
 @inline get_mat(A::AbstractArray{<:Any, 3},x,u,p,t) = @view A[:,:,t]
 @inline get_mat(A::Function,x,u,p,t) = A(x,u,p,t)
 
+"""
+    get_mat(A::Union{AbstractMatrix, Number},x,u,p,t) = A
+    get_mat(A::AbstractArray{<:Any, 3},x,u,p,t) = A[:,:,t]
+    get_mat(A::Function,x,u,p,t) = A(x,u,p,t)
+
+This is a helper function that makes it possible to supply any of
+- A matrix
+- A "time varying" matrix where time is in the last dimension
+- A function of `x,u,p,t` that returns the matrix
+
+This is useful to implement things like
+- Time varying dynamics
+- Nonlinear dynamics in the form of parameter-varying dynamics
+- Time or state varying process noise
+"""
+get_mat
+
 function predict!(kf::AbstractKalmanFilter, u, p=parameters(kf), t::Integer = index(kf))
     @unpack A,B,x,R,R1 = kf
     At = get_mat(A, x, u, p, t)
