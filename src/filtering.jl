@@ -79,6 +79,9 @@ function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Integer =
     if !iszero(D)
         e .-= Dt*u
     end
+    if kf.α != 1
+        R2 = (1/kf.α)*R2
+    end
     S   = symmetrize(Ct*R*Ct') + R2
     Sᵪ  = cholesky(S)
     K   = (R*Ct')/Sᵪ

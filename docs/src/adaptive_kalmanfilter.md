@@ -12,7 +12,8 @@ where $w_k \sim \mathcal{N}(0, σ_w)$ is the process noise, and $v_k \sim \mathc
 We start by generating some position data that we want to perform filtering on. The "object" we want to track is initially stationary, and transitions to moving with a constant velocity after a while. 
 
 ```@example ADAPTIVE_KALMAN
-using LowLevelParticleFilters, Plots
+using LowLevelParticleFilters, Plots, Random
+Random.seed!(1)
 
 # Create a time series for filtering
 x = [zeros(50); 0:100]
@@ -97,7 +98,7 @@ Not too bad! This time the filter estimate is much more responsive during the tr
 plot([es σs], lab=["Prediction error" "Z-score"])
 ```
 
-Notice how the prediction errors, that should ideally be centered around zero, remain negative for a long time interval after the transition. This is because the dynamics noise covariance is increased for a while after the transition.  If we want, we could mitigate this and make the adaptation even more sophisticated by letting the covariance remain large for a while after a transition in operating mode has been detected. Below, we implement a simple version of this, where we use a multiplier ``σ_{wt}`` that defaults to 1, but is increase to a very large value of 10000 if a transition is detected. When no transition is detected, ``σ_{wt}`` is decreased exponentially back down to 1.
+Notice how the prediction errors, that should ideally be centered around zero, remain predominantly negative for a long time interval after the transition. This can be attributed to an overshoot in the velocity state of the estimator, but the rapid decrease of the covariance after the transition makes the filter slow at correcting its overshoot. If we want, we could mitigate this and make the adaptation even more sophisticated by letting the covariance remain large for a while after a transition in operating mode has been detected. Below, we implement a simple version of this, where we use a multiplier ``σ_{wt}`` that defaults to 1, but is increase to a very large value of 1000 if a transition is detected. When no transition is detected, ``σ_{wt}`` is decreased exponentially back down to 1.
 
 ```@example ADAPTIVE_KALMAN
 σw  = 1e-5 # Set the covariance to a low value by default
@@ -118,7 +119,7 @@ for t = 1:T # Main filter loop
     push!(es, e[]) # Save for plotting
     push!(σs, σ)
     if σ > 3 # If the Z-score is too high
-        σwt = 10000.0 # Set the R1 multiplier to a very large value
+        σwt = 1000.0 # Set the R1 multiplier to a very large value
     else
         σwt = max(0.7σwt, 1.0) # Decrease exponentially back to 1
     end
@@ -136,8 +137,11 @@ plot([Y Yh'], lab=["Measurement" "Adaptive estimate"])
 ```@example ADAPTIVE_KALMAN
 plot([es σs σwts], lab=["Prediction error" "Z-score" "\$σ_{wt}\$ multiplier"], layout=2, sp=[1 1 2])
 ```
+This time, the prediction errors look more like white noise centered around zero after the initial transient caused by the transition.
 
 ## Summary
 This tutorial demonstrated simple Kalman filtering for a double integrator without control inputs. We saw how the filtering estimate could be improved by playing around with the covariance matrices of the estimator, helping it catch up to fast changes in the behavior of the system without sacrificing steady-state noise properties.
 
 In this case, we handled the modification of ``R_1`` outside of the filter, implementing our own filtering loop. Some applications get away with instead providing time-varying matrices in the form of a 3-dimension array, where the third dimension corresponds to time, or instead of providing a matrix, providing a function ``R_1(x, u, p, t)`` allows the matrix to be a function of state, input, parameters and time. These options apply to all matrices in the filter, including the dynamics matrices, ``A,B,C,D``.
+
+Lastly, we mention the ability of the [`KalmanFilter`](@ref) to act like a recursive least-squares estimator, by setting the "forgetting factor ``α>1`` when creating the [`KalmanFilter`](@ref). ``α>1`` will cause the filter will exhibit exponential forgetting similar to an RLS estimator, in addition to the covariance inflation due to R1. It is thus possible to get a RLS-like algorithm by setting ``R_1 = 0`` and ``α > 1``.

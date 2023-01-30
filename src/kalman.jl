@@ -1,6 +1,6 @@
 abstract type AbstractKalmanFilter <: AbstractFilter end
 
-@with_kw struct KalmanFilter{AT,BT,CT,DT,R1T,R2T,R2DT,D0T,XT,RT,P} <: AbstractKalmanFilter
+@with_kw struct KalmanFilter{AT,BT,CT,DT,R1T,R2T,R2DT,D0T,XT,RT,P,αT} <: AbstractKalmanFilter
     A::AT
     B::BT
     C::CT
@@ -12,12 +12,13 @@ abstract type AbstractKalmanFilter <: AbstractFilter end
     x::XT
     R::RT
     t::Base.RefValue{Int} = Ref(1)
-    p::P
+    p::P = SciMLBase.NullParameters()
+    α::αT = 1.0
 end
 
 
 """
-    KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1); p = SciMLBase.NullParameters())
+    KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(R1); p = SciMLBase.NullParameters(), α=1)
 
 The matrices `A,B,C,D` define the dynamics
 ```
@@ -32,9 +33,15 @@ They can also be given as functions on the form
 Afun(x, u, p, t) -> A
 ```
 For maximum performance, provide statically sized matrices from StaticArrays.jl
+
+α is an optional "forgetting factor", if this is set to a value > 1, such as 1.01-1.2, the filter will, in addition to the covariance inflation due to ``R_1``, exhibit "exponential forgetting" similar to a [Recursive Least-Squares (RLS) estimator](https://en.wikipedia.org/wiki/Recursive_least_squares_filter). It is thus possible to get a RLS-like algorithm by setting ``R_1=0, R_2=1`` and ``α > 1`` (``α`` is the inverse of the traditional RLS parameter ``α = 1/λ``). The exact form of the covariance update is
+```math
+R(t+1|t) = α AR(t)A^T + R_1
+```
 """
-function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(Matrix(R1)); p = SciMLBase.NullParameters())
-    KalmanFilter(A,B,C,D,R1,R2,MvNormal(Matrix(R2)), d0, Vector(d0.μ), Matrix(d0.Σ), Ref(1), p)
+function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(Matrix(R1)); p = SciMLBase.NullParameters(), α = 1.0)
+    α ≥ 1 || @warn "α should be > 1 for exponential forgetting. An α < 1 will lead to exponential loss of adaptation over time."
+    KalmanFilter(A,B,C,D,R1,R2,MvNormal(Matrix(R2)), d0, Vector(d0.μ), Matrix(d0.Σ), Ref(1), p, α)
 end
 
 function Base.propertynames(kf::KF, private::Bool=false) where KF <: AbstractKalmanFilter
