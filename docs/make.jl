@@ -9,13 +9,17 @@ makedocs(
       sitename = "LowLevelParticleFilters Documentation",
       doctest = false,
       modules = [LowLevelParticleFilters],
+      # pagesonly = true,
       pages = [
             "Home" => "index.md",
             "Discretization" => "discretization.md",
             "Parameter estimation" => "parameter_estimation.md",
             "Benchmark" => "benchmark.md",
             "High-performance distributions" => "distributions.md",
-            "Advanced tutorial" => "beetle_example.md",
+            "Advanced tutorials" => [
+                  "Kalman-filter tutorial" => "adaptive_kalmanfilter.md",
+                  "Particle-filter tutorial" => "beetle_example.md",
+            ],
             "API" => "api.md",
       ],
       format = Documenter.HTML(prettyurls = haskey(ENV, "CI")),
