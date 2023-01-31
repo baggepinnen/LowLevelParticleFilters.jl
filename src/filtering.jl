@@ -47,6 +47,11 @@ function predict!(kf::AbstractKalmanFilter, u, p=parameters(kf), t::Integer = in
     Bt = get_mat(B, x, u, p, t)
     x .= At*x .+ Bt*u |> vec
     R .= symmetrize(At*R*At') + R1
+    if kf.α == 1
+        R .= symmetrize(At*R*At') + R1
+    else
+        R .= symmetrize(kf.α*At*R*At') + R1
+    end
     kf.t[] += 1
 end
 
@@ -78,9 +83,6 @@ function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Integer =
     e   = y .- Ct*x
     if !iszero(D)
         e .-= Dt*u
-    end
-    if kf.α != 1
-        R2 = (1/kf.α)*R2
     end
     S   = symmetrize(Ct*R*Ct') + R2
     Sᵪ  = cholesky(S)
