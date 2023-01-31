@@ -46,7 +46,6 @@ function predict!(kf::AbstractKalmanFilter, u, p=parameters(kf), t::Integer = in
     At = get_mat(A, x, u, p, t)
     Bt = get_mat(B, x, u, p, t)
     x .= At*x .+ Bt*u |> vec
-    R .= symmetrize(At*R*At') + R1
     if kf.α == 1
         R .= symmetrize(At*R*At') + R1
     else
