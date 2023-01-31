@@ -36,7 +36,11 @@ function predict!(kf::AbstractExtendedKalmanFilter, u, p = parameters(kf), t::In
     @unpack x,R = kf
     A = ForwardDiff.jacobian(x->kf.dynamics(x,u,p,t), x)
     x .= kf.dynamics(x, u, p, t)
-    R .= symmetrize(A*R*A') + R1
+    if kf.α == 1
+        R .= symmetrize(A*R*A') + R1
+    else
+        R .= symmetrize(kf.α*A*R*A') + R1
+    end
     kf.t[] += 1
 end
 

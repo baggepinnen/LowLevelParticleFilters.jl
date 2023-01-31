@@ -19,7 +19,7 @@ T = 5000 # Number of time steps
 
 d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
 du = MvNormal(m,1) # Control input distribution
-kf = KalmanFilter(A, B, C, 0, 0.001I(n), I(p), d0)
+kf = KalmanFilter(A, B, C, 0, 0.001I(n), I(p), d0, α=1.01)
 ekf = LLPF.ExtendedKalmanFilter(kf, dynamics, measurement)
 x,u,y = LLPF.simulate(kf,T,du)
 
