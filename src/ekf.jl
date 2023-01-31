@@ -32,19 +32,19 @@ function Base.propertynames(ekf::EKF, private::Bool=false) where EKF <: Abstract
 end
 
 
-function predict!(kf::AbstractExtendedKalmanFilter, u, p = parameters(kf), t::Integer = index(kf))
-    @unpack x,R,R1 = kf
+function predict!(kf::AbstractExtendedKalmanFilter, u, p = parameters(kf), t::Integer = index(kf); R1 = get_mat(kf.R1, kf.x, u, p, t))
+    @unpack x,R = kf
     A = ForwardDiff.jacobian(x->kf.dynamics(x,u,p,t), x)
     x .= kf.dynamics(x, u, p, t)
-    R .= symmetrize(A*R*A') + get_mat(R1, x, u, p, t)
+    R .= symmetrize(A*R*A') + R1
     kf.t[] += 1
 end
 
-function correct!(kf::AbstractExtendedKalmanFilter, u, y, p = parameters(kf), t::Integer = index(kf))
-    @unpack x,R,R2 = kf
+function correct!(kf::AbstractExtendedKalmanFilter, u, y, p = parameters(kf), t::Integer = index(kf); R2 = get_mat(kf.R2, kf.x, u, p, t))
+    @unpack x,R = kf
     C = ForwardDiff.jacobian(x->kf.measurement(x,u,p,t), x)
     e  = y .- kf.measurement(x,u,p,t)
-    S   = symmetrize(C*R*C') + get_mat(R2, x, u, p, t)
+    S   = symmetrize(C*R*C') + R2
     Sᵪ  = cholesky(S)
     K   = (R*C')/Sᵪ
     x .+= vec(K*e)

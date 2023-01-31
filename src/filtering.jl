@@ -34,12 +34,23 @@ This is useful to implement things like
 """
 get_mat
 
-function predict!(kf::AbstractKalmanFilter, u, p=parameters(kf), t::Integer = index(kf))
-    @unpack A,B,x,R,R1 = kf
+"""
+    predict!(kf::AbstractKalmanFilter, u, p = parameters(kf), t::Integer = index(kf); R1)
+
+Perform the prediction step (updating the state estimate to ``x(t+1|t)``).
+If `R1` stored in `kf` is a function `R1(x, u, p, t)`, this function is evaluated at the state *before* the prediciton is performed.
+The dynamics noise covariance matrix `R1` stored in `kf` can optionally be overridden by passing the argument `R1`, in this case `R1` must be a matrix.
+"""
+function predict!(kf::AbstractKalmanFilter, u, p=parameters(kf), t::Integer = index(kf); R1 = get_mat(kf.R1, kf.x, u, p, t))
+    @unpack A,B,x,R = kf
     At = get_mat(A, x, u, p, t)
     Bt = get_mat(B, x, u, p, t)
     x .= At*x .+ Bt*u |> vec
-    R .= symmetrize(At*R*At') + get_mat(R1, x, u, p, t)
+    if kf.α == 1
+        R .= symmetrize(At*R*At') + R1
+    else
+        R .= symmetrize(kf.α*At*R*At') + R1
+    end
     kf.t[] += 1
 end
 
@@ -57,19 +68,22 @@ end
 end
 
 """
-    (; ll, e, S, Sᵪ, K) = correct!(kf::AbstractKalmanFilter, u, y, p = parameters(kf), t::Integer = index(kf))
+    (; ll, e, S, Sᵪ, K) = correct!(kf::AbstractKalmanFilter, u, y, p = parameters(kf), t::Integer = index(kf), R2)
 
 The correct step for a Kalman filter returns not only the log likelihood `ll` and the prediction error `e`, but also the covariance of the output `S`, its Cholesky factor `Sᵪ` and the Kalman gain `K`.
+
+If `R2` stored in `kf` is a function `R2(x, u, p, t)`, this function is evaluated at the state *before* the correction is performed.
+The measurement noise covariance matrix `R2` stored in the filter object can optionally be overridden by passing the argument `R2`, in this case `R2` must be a matrix.
 """
-function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Integer = index(kf))
-    @unpack C,D,x,R,R2 = kf
+function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Integer = index(kf); R2 = get_mat(kf.R2, kf.x, u, p, t))
+    @unpack C,D,x,R = kf
     Ct = get_mat(C, x, u, p, t)
     Dt = get_mat(D, x, u, p, t)
     e   = y .- Ct*x
     if !iszero(D)
         e .-= Dt*u
     end
-    S   = symmetrize(Ct*R*Ct') + get_mat(R2, x, u, p, t)
+    S   = symmetrize(Ct*R*Ct') + R2
     Sᵪ  = cholesky(S)
     K   = (R*Ct')/Sᵪ
     x .+= K*e

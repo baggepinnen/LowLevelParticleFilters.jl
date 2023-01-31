@@ -77,21 +77,21 @@ measurement(kf::AbstractUnscentedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 
 
-function predict!(ukf::UnscentedKalmanFilter, u, p = parameters(ukf), t::Integer = index(ukf))
-    @unpack dynamics,measurement,x,xs,R,R1 = ukf
+function predict!(ukf::UnscentedKalmanFilter, u, p = parameters(ukf), t::Integer = index(ukf); R1 = get_mat(ukf.R1, ukf.x, u, p, t))
+    @unpack dynamics,measurement,x,xs,R = ukf
     ns = length(xs)
     sigmapoints!(xs,x,R) # TODO: these are calculated in the update step
     for i in eachindex(xs)
         xs[i] = dynamics(xs[i], u, p, t)
     end
     x .= mean(xs)
-    R .= symmetrize(cov(xs)) + get_mat(R1, x, u, p, t)
+    R .= symmetrize(cov(xs)) + R1
     ukf.t[] += 1
 end
 
 
-function correct!(ukf::UnscentedKalmanFilter, u, y, p=parameters(ukf), t::Integer = index(ukf))
-    @unpack measurement,x,xs,R,R1,R2 = ukf
+function correct!(ukf::UnscentedKalmanFilter, u, y, p=parameters(ukf), t::Integer = index(ukf); R2 = get_mat(ukf.R2, ukf.x, u, p, t))
+    @unpack measurement,x,xs,R,R1 = ukf
     n = size(R1,1)
     p = size(R2,1)
     ns = length(xs)
@@ -107,7 +107,7 @@ function correct!(ukf::UnscentedKalmanFilter, u, y, p=parameters(ukf), t::Intege
         C  += ca
     end
     e   = y .- ym
-    S   = symmetrize(cov(ys)) + get_mat(R2, x, u, p, t) # cov of y
+    S   = symmetrize(cov(ys)) + R2 # cov of y
     Sᵪ  = cholesky(S)
     K   = (C./ns)/Sᵪ # ns normalization to make it a covariance matrix
     x .+= K*e
@@ -240,8 +240,8 @@ end
 calc_xz(ukf::DAEUnscentedKalmanFilter, args...) = 
     calc_xz(ukf.get_x_z, ukf.build_xz, ukf.g, args...)
 
-function predict!(ukf::DAEUnscentedKalmanFilter, u, p = parameters(ukf), t::Integer = index(ukf))
-    @unpack dynamics,measurement,x,xs,xz,xzs,R,R1,g,build_xz,get_x_z = ukf
+function predict!(ukf::DAEUnscentedKalmanFilter, u, p = parameters(ukf), t::Integer = index(ukf); R1 = get_mat(ukf.R1, ukf.x, u, p, t))
+    @unpack dynamics,measurement,x,xs,xz,xzs,R,g,build_xz,get_x_z = ukf
     ns = length(xs)
     sigmapoints!(xs,x,R) # generate only for x
     if ukf.threads
@@ -265,8 +265,8 @@ function predict!(ukf::DAEUnscentedKalmanFilter, u, p = parameters(ukf), t::Inte
     ukf.t[] += 1
 end
 
-function correct!(ukf::DAEUnscentedKalmanFilter, u, y, p = parameters(ukf), t::Integer = index(ukf))
-    @unpack measurement,x,xs,xz,xzs,R,R1,R2,g,get_x_z,build_xz  = ukf
+function correct!(ukf::DAEUnscentedKalmanFilter, u, y, p = parameters(ukf), t::Integer = index(ukf); R2 = get_mat(ukf.R2, ukf.x, u, p, t))
+    @unpack measurement,x,xs,xz,xzs,R,R1,g,get_x_z,build_xz  = ukf
     n = size(R1,1)
     p = size(R2,1)
     ns = length(xs)
@@ -286,7 +286,7 @@ function correct!(ukf::DAEUnscentedKalmanFilter, u, y, p = parameters(ukf), t::I
         C  += ca
     end
     e   = y .- ym
-    S   = symmetrize(cov(ys)) + get_mat(R2, x, u, p, t) # cov of y
+    S   = symmetrize(cov(ys)) + R2 # cov of y
     Sᵪ = cholesky(S)
     K   = (C./ns)/Sᵪ # ns normalization to make it a covariance matrix
     x .+= K*e
