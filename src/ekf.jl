@@ -50,7 +50,7 @@ function correct!(kf::AbstractExtendedKalmanFilter, u, y, p = parameters(kf), t:
     x .+= vec(K*e)
     R  .= symmetrize((I - K*C)*R) # WARNING against I .- A
     ll = logpdf(MvNormal(PDMat(S, Sᵪ)), e)[]# - 1/2*logdet(S) # logdet is included in logpdf
-    ll, e
+    (; ll, e, S, Sᵪ, K)
 end
 
 
