@@ -208,6 +208,8 @@ The UKF takes the same arguments as a regular [`KalmanFilter`](@ref), but the ma
 ```@example lingauss
 ukf = UnscentedKalmanFilter(dynamics, measurement, cov(df), cov(dg), MvNormal([1.,1.]), nu=m, ny=p)
 ```
+!!! info
+    If your function `dynamics` describes a continuous-time ODE, do not forget to **discretize** it before passing it to the UKF. See [Discretization](@ref) for more information.
 
 ## UKF for DAE systems
 See the docstring for [`DAEUnscentedKalmanFilter`](@ref) or the [test file](https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/test/test_ukf.jl). This filter is modeled after
@@ -226,6 +228,9 @@ ExtendedKalmanFilter(kf, dynamics, measurement)
 ```
 where `kf` is a standard [`KalmanFilter`](@ref) from which the covariance properties are taken.
 
+!!! info
+    If your function `dynamics` describes a continuous-time ODE, do not forget to **discretize** it before passing it to the UKF. See [Discretization](@ref) for more information.
+
 
 # AdvancedParticleFilter
 The [`AdvancedParticleFilter`](@ref) works very much like the [`ParticleFilter`](@ref), but admits more flexibility in its noise models.
@@ -237,7 +242,7 @@ The function `dynamics` must have a method signature like below. It must provide
 using Random
 const rng = Random.Xoshiro()
 function dynamics(x, u, p, t, noise=false) # It's important that this defaults to false
-    x = A*x .+ B*u # A simple dynamics model
+    x = A*x .+ B*u # A simple linear dynamics model in discrete time
     if noise
         x += rand(rng, df) # it's faster to supply your own rng
     end
