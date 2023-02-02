@@ -4,11 +4,11 @@ abstract type AbstractFilteringSolution end
     KalmanFilteringSolution{Tx,Txt,TR,TRt,Tll} <: AbstractFilteringSolution
 
 # Fields
-- `x`: predictions
-- `xt`: filtered estimates
-- `R`: predicted covariance matrices
-- `Rt`: filter covariances
-- `ll`: loglik
+- `x`: predictions ``x(t+1|t)``
+- `xt`: filtered estimates ``x(t|t)``
+- `R`: predicted covariance matrices ``R(t+1|t)``
+- `Rt`: filter covariances ``R(t|t)``
+- `ll`: loglikelihood
 """
 struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll} <: AbstractFilteringSolution
     f::F
