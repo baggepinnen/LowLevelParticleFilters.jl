@@ -67,7 +67,7 @@ end
 Calculate the sum of squared errors ``\\sum dot(e, λ, e)``.
 - `λ`: May be a weighting matrix.
 """
-function sse(f::AbstractFilter, u, y, p=parameters(pf), λ=1)
+function sse(f::AbstractFilter, u, y, p=parameters(f), λ=1)
     reset!(f)
     ll = sum(zip(u, y)) do (u,y)
         ll, e = f(u,y,p)
