@@ -93,10 +93,10 @@ end
 function correct!(ukf::UnscentedKalmanFilter, u, y, p=parameters(ukf), t::Integer = index(ukf); R2 = get_mat(ukf.R2, ukf.x, u, p, t))
     @unpack measurement,x,xs,R,R1 = ukf
     n = size(R1,1)
-    p = size(R2,1)
+    m = size(R2,1)
     ns = length(xs)
     sigmapoints!(xs,x,R) # Update sigmapoints here since untransformed points required
-    C = @SMatrix zeros(n,p)
+    C = @SMatrix zeros(n,m)
     ys = map(xs) do x
         measurement(x, u, p, t)
     end
