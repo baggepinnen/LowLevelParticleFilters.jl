@@ -7,20 +7,38 @@ end
 
 """
     ExtendedKalmanFilter(kf, dynamics, measurement)
+    ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(Matrix(R1)); nu::Int, p = SciMLBase.NullParameters(), α = 1.0, check = true)
 
 A nonlinear state estimator propagating uncertainty using linearization.
 
-An extended Kalman filter takes a standard Kalman filter as well as dynamics and measurement functions. The filter will linearize the dynamics using ForwardDiff.
+The constructor to the extended Kalman filter takes dynamics and measurement functions, and either covariance matrices, or a [`KalmanFilter`](@ref). If the former constructor is used, the number of inputs to the system dynamics, `nu`, must be explicitly provided with a keyword argument.
+
+The filter will internally linearize the dynamics using ForwardDiff.
+
 The dynamics and measurement function are on the following form
 ```
-x' = dynamics(x, u, p, t) + w
-y  = measurement(x, u, p, t) + e
+x(t+1) = dynamics(x, u, p, t) + w
+y      = measurement(x, u, p, t) + e
 ```
 where `w ~ N(0, R1)`, `e ~ N(0, R2)` and `x(0) ~ d0`
 
-See also [`UnscentedKalmanFilter`](@ref) which is typically more accurate than `ExtendedKalmanFilter`. See [`KalmanFilter`](@ref) for detailed instructions on how to set up the Kalman filter `kf`.
+See also [`UnscentedKalmanFilter`](@ref) which is typically more accurate than `ExtendedKalmanFilter`. See [`KalmanFilter`](@ref) for detailed instructions on how to set up a Kalman filter `kf`.
 """
 ExtendedKalmanFilter
+
+function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(Matrix(R1)); nu::Int, p = SciMLBase.NullParameters(), α = 1.0, check = true)
+    nx = size(R1,1)
+    T = eltype(R1)
+    x = zeros(T, nx)
+    u = zeros(T, nu)
+    t = one(T)
+    A = ForwardDiff.jacobian(x->dynamics(x,u,p,t), x)
+    B = ForwardDiff.jacobian(u->dynamics(x,u,p,t), u)
+    C = ForwardDiff.jacobian(x->measurement(x,u,p,t), x)
+    D = ForwardDiff.jacobian(u->measurement(x,u,p,t), u)
+    kf = KalmanFilter(A,B,C,D,R1,R2,d0; p, α, check)
+    return ExtendedKalmanFilter(kf, dynamics, measurement)
+end
 
 function Base.getproperty(ekf::EKF, s::Symbol) where EKF <: AbstractExtendedKalmanFilter
     s ∈ fieldnames(EKF) && return getfield(ekf, s)
