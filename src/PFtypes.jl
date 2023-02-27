@@ -1,7 +1,7 @@
 
 abstract type AbstractParticleFilter <: AbstractFilter end
 
-import SciMLBase.SymbolicIndexingInterface: parameters
+import SymbolicIndexingInterface: parameters
 
 function parameters(f::AbstractFilter)
     hasproperty(f, :p) ? getproperty(f, :p) : SciMLBase.NullParameters()
