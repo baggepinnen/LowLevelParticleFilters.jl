@@ -21,6 +21,11 @@ d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
 du = MvNormal(m,1) # Control input distribution
 kf = KalmanFilter(A, B, C, 0, 0.001I(n), I(p), d0, α=1.01)
 ekf = LLPF.ExtendedKalmanFilter(kf, dynamics, measurement)
+ekf2 = LLPF.ExtendedKalmanFilter(dynamics, measurement, 0.001I(n), I(p), d0, α=1.01, nu=m)
+@test ekf2.kf.R1 == ekf.kf.R1
+@test ekf2.kf.R2 == ekf.kf.R2
+@test ekf2.kf.d0 == ekf.kf.d0
+
 x,u,y = LLPF.simulate(kf,T,du)
 
 @test kf.nx == n
