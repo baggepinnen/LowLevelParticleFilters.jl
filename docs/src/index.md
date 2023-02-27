@@ -222,10 +222,13 @@ See the docstring for [`DAEUnscentedKalmanFilter`](@ref) or the [test file](http
 # Extended Kalman Filter
 The [`ExtendedKalmanFilter`](@ref) ([EKF](https://en.wikipedia.org/wiki/Extended_Kalman_filter)) is similar to the UKF, but propagates Gaussian distributions by linearizing the dynamics and using the formulas for linear systems similar to the standard Kalman filter. This can be slightly faster than the UKF (not always), but also less accurate for strongly nonlinear systems. The linearization is performed automatically using ForwardDiff.jl. In general, the UKF is recommended over the EKF unless the EKF is faster and computational performance is the top priority.
 
-The EKF has the following signature
+The EKF constructor has the following two signatures
 ```julia
+ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(Matrix(R1)); nu::Int, p = SciMLBase.NullParameters(), α = 1.0, check = true)
 ExtendedKalmanFilter(kf, dynamics, measurement)
 ```
+The first constructor takes all the arguments required to initialize the extended Kalman filter, while the second one takes an already defined standard Kalman filter. using the first constructor, the user must provide the number of inputs to the system, `nu`.
+
 where `kf` is a standard [`KalmanFilter`](@ref) from which the covariance properties are taken.
 
 !!! info
