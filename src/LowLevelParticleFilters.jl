@@ -6,6 +6,8 @@ export KalmanFilter, UnscentedKalmanFilter, DAEUnscentedKalmanFilter, ExtendedKa
 
 export densityplot, debugplot, commandplot
 
+using StatsAPI
+import StatsAPI: weights, predict!
 using StatsBase, Parameters, Lazy, Random, LinearAlgebra, Printf, LoopVectorization
 import PDMats # To extend some methods on static arrays
 import PDMats: PDMat
