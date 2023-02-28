@@ -1,5 +1,6 @@
 using LowLevelParticleFilters, ForwardDiff, Distributions
 const LLPF = LowLevelParticleFilters
+using ControlSystemsBase
 
 n = 2   # Dimension of state
 m = 1   # Dimension of input
@@ -20,6 +21,16 @@ T = 5000 # Number of time steps
 d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
 du = MvNormal(m,1) # Control input distribution
 kf = KalmanFilter(A, B, C, 0, 0.001I(n), I(p), d0, α=1.01)
+
+kf2 = KalmanFilter(ss(A, B, C, 0, 1), 0.001I(n), I(p), d0, α=1.01)
+@test kf2.A == kf.A
+@test kf2.B == kf.B
+@test kf2.C == kf.C
+@test all(iszero, kf2.D)
+@test kf2.R1 == kf.R1
+@test kf2.R2 == kf.R2
+@test kf2.d0 == kf.d0
+
 ekf = LLPF.ExtendedKalmanFilter(kf, dynamics, measurement)
 ekf2 = LLPF.ExtendedKalmanFilter(dynamics, measurement, 0.001I(n), I(p), d0, α=1.01, nu=m)
 @test ekf2.kf.R1 == ekf.kf.R1
