@@ -187,7 +187,10 @@ ẋ = f(x, z, u, p, t) # Differential equations
 0 = g(x, z, u, p, t) # Algebraic equations
 y = h(x, z, u, p, t) # Measurements
 ```
-the measurements may be functions of both differential states `x` and algebraic variables `z`. Note, the actual dynamcis and measurement functions stored in the internal `ukf` should have signatures `(xz, u, p, t)`, i.e., they take the combined state containing both `x` and `z` in a single vector as dictated by the function `build_xz`. It is only the function `g` that is assumed to actually have the signature `g(x,z,u,p,t)`.
+the measurements may be functions of both differential states `x` and algebraic variables `z`.
+Please note, the actual dynamics and measurement functions stored in the internal `ukf` should have signatures `(xz, u, p, t)`, i.e.,
+they take the combined state containing both `x` and `z` in a single vector as dictated by the function `build_xz`.
+It is only the function `g` that is assumed to actually have the signature `g(x,z,u,p,t)`.
 """
 function DAEUnscentedKalmanFilter(ukf; g, get_x_z, build_xz, xz0, nu::Int, threads::Bool=false)
     T = eltype(ukf.xs[1])
