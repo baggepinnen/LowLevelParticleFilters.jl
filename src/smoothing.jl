@@ -1,6 +1,7 @@
 
 """
     xT,RT,ll = smooth(kf::KalmanFilter, u::Vector, y::Vector, p=parameters(kf))
+    xT,RT,ll = smooth(kf::ExtendedKalmanFilter, u::Vector, y::Vector, p=parameters(kf))
 
 Returns smoothed estimates of state `x` and covariance `R` given all input output data `u,y`
 """

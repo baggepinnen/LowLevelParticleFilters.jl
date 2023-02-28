@@ -22,7 +22,7 @@ Y = x + randn(T)
 plot([Y x], lab=["Measurement" "True state to be tracked"], c=[1 :purple])
 ```
 
-## Simple kalman filtering
+## Simple Kalman filtering
 
 We will use a Kalman filter to perform the filtering. The model is a double integrator, i.e., a constant-acceleration model. The state vector is thus $x = [p, v]^T$, where $p$ is the position and $v$ is the velocity. When designing a Kalman filter, we need to specify the noise covariances $R_1$ and $R_2$. While it's often easy to measure the covariance of the measurement noise, ``R_2``, it can be quite difficult to know ahead of time what the dynamics noise covariance, ``R_1``, should be. In this example, we will use an adaptive filter, where we will increase the dynamics noise covariance if the filter prediction error is too large. However, we first run the filter twice, once with a large ``R_1`` and once with a small ``R_1`` to illustrate the difference.
 
