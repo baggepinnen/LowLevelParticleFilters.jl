@@ -39,6 +39,9 @@ include("ekf.jl")
 
 index(f::AbstractFilter) = f.t[]
 
+if !isdefined(Base, :get_extension) # Backwards compat
+    include("../ext/LowLevelParticleFiltersControlSystemsBaseExt.jl")
+end
 
 using Requires
 function __init__()
