@@ -195,7 +195,10 @@ This may look complicated, but it still has a single tuning parameter only, ``\s
 
 
 ## Putting it all together
-We will now try to put the learnings from above together, applied to a slightly more complicated example. This time, we will consider a double-mass model, where two masses are connected by a spring and a damper, and an input force can be applied to one of the masses. The model, without disturbances, is given by
+We will now try to put the learnings from above together, applied to a slightly more complicated example. This time, we will consider a double-mass model, where two masses are connected by a spring and a damper, and an input force can be applied to one of the masses.
+![double-mass system](double_mass.png)
+
+The model, without disturbances, is given by
 ```math
 \begin{aligned}
 \dot x &= \begin{bmatrix}
@@ -210,7 +213,7 @@ where ``x = [p_1, v_1, p_2, v_2]`` is the state vector, ``u`` is the input force
 
 What disturbances could act on such a system? One could imagine a friction force acting on the masses, indeed, most systems with moving parts are subject to friction. Friction is often modeled as a low-frequency disturbance, in particular Coulomb friction. The Coulomb friction is constant as long as the velocity does not cross zero, at which point it changes sign. We thus adopt an integrating model of this disturbance.
 
-To model the fact that we are slightly uncertain about the dynamics of the flexible transmission, we could model a disturbance force acting on the spring. This could account for an uncertainty in a linear spring constant, but also model the fact that the spring is not perfectly linear, i.e., it might be a *stiffening spring* or contain some *backlash* etc. The question is, what frequency properties should we attribute to this disturbance? Backlash is typically a low-frequency disturbance, but uncertainties in the stiffness properties of the spring would likely affect higher frequencies as well. We thus let this disturbance have a flat-spectrum and omit an model of its frequency properties.
+To model the fact that we are slightly uncertain about the dynamics of the flexible transmission, we could model a disturbance force acting on the spring. This could account for an uncertainty in a linear spring constant, but also model the fact that the transmission is not perfectly linear, i.e., it might be a *stiffening spring* or contain some *backlash* etc. The question is, what frequency properties should we attribute to this disturbance? Backlash is typically a low-frequency disturbance, but uncertainties in the stiffness properties of the spring would likely affect higher frequencies as well. We thus let this disturbance have a flat spectrum and omit a model of its frequency properties.
 
 With the friction disturbance ``w_f`` and the spring disturbance ``w_s``, we can write the model as
 
