@@ -77,7 +77,7 @@ measurement(kf::AbstractUnscentedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 
 
-function predict!(ukf::UnscentedKalmanFilter, u, p = parameters(ukf), t::Integer = index(ukf); R1 = get_mat(ukf.R1, ukf.x, u, p, t))
+function predict!(ukf::UnscentedKalmanFilter, u, p = parameters(ukf), t::Real = index(ukf); R1 = get_mat(ukf.R1, ukf.x, u, p, t))
     @unpack dynamics,measurement,x,xs,R = ukf
     ns = length(xs)
     sigmapoints!(xs,x,R) # TODO: these are calculated in the update step
@@ -90,7 +90,7 @@ function predict!(ukf::UnscentedKalmanFilter, u, p = parameters(ukf), t::Integer
 end
 
 
-function correct!(ukf::UnscentedKalmanFilter, u, y, p=parameters(ukf), t::Integer = index(ukf); R2 = get_mat(ukf.R2, ukf.x, u, p, t))
+function correct!(ukf::UnscentedKalmanFilter, u, y, p=parameters(ukf), t::Real = index(ukf); R2 = get_mat(ukf.R2, ukf.x, u, p, t))
     @unpack measurement,x,xs,R,R1 = ukf
     n = size(R1,1)
     m = size(R2,1)
