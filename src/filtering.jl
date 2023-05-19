@@ -331,10 +331,10 @@ function simulate(f::AbstractFilter,u,p=parameters(f); dynamics_noise=true)
     x,u,y
 end
 
-function rollout(f, x0::AbstractVector, u, p=nothing)
+function rollout(f, x0::AbstractVector, u, p=nothing; Ts=1)
     x = [x0]
     for (i,u) in enumerate(u)
-        push!(x, f(x[end], u, p, i))
+        push!(x, f(x[end], u, p, i*Ts))
     end
     x
 end
