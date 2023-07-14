@@ -21,16 +21,17 @@ struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll} <: AbstractFilteringSo
     ll::Tll
 end
 
-@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true)
+@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, name = "")
+    isempty(name) || (name = name*" ")
     nx, nu, ny = length(sol.x[1]), length(sol.u[1]), length(sol.y[1])
     layout --> nx*(plotx || plotxt) + plotu*nu + ploty*ny
     plotx && @series begin
-        label --> ["x$(i)(t|t-1)" for i in 1:nx] |> permutedims
+        label --> ["$(name)x$(i)(t|t-1)" for i in 1:nx] |> permutedims
         subplot --> (1:nx)'
         timevec, reduce(hcat, sol.x)'
     end
     plotxt && @series begin
-        label --> ["x$(i)(t|t)" for i in 1:nx] |> permutedims
+        label --> ["$(name)x$(i)(t|t)" for i in 1:nx] |> permutedims
         subplot --> (1:nx)'
         timevec, reduce(hcat, sol.xt)'
     end

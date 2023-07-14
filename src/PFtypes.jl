@@ -6,7 +6,6 @@ import SymbolicIndexingInterface: parameters
 function parameters(f::AbstractFilter)
     hasproperty(f, :p) ? getproperty(f, :p) : SciMLBase.NullParameters()
 end
-parameters(f) = SciMLBase.NullParameters()
 
 struct PFstate{PT<:AbstractArray, FT<:AbstractFloat}
     x::Vector{PT}
