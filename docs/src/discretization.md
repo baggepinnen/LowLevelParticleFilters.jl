@@ -22,7 +22,7 @@ A linear system on the form
 \dot{x}(t) = Ax(t) + Bu(t)\\
 y(t) = Cx(t) + Du(t)
 ```
-can be discretized using [`ControlSystems.c2d`](https://juliacontrol.github.io/ControlSystems.jl/latest/lib/synthesis/#ControlSystems.c2d), which defaults to a zero-order hold discretization. See the example below for more info.
+can be discretized using [`ControlSystems.c2d`](https://juliacontrol.github.io/ControlSystems.jl/stable/lib/synthesis/#ControlSystemsBase.c2d-Tuple{AbstractStateSpace{%3C:Continuous},%20AbstractMatrix,%20Real}), which defaults to a zero-order hold discretization. See the example below for more info.
 
 ## Covariance matrices
 Covariance matrices for continuous-time noise processes can be discretized using
