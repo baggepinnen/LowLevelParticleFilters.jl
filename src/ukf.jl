@@ -182,10 +182,12 @@ Mandela, Rengaswamy, Narasimhan
 
 # Assumptions
 - The DAE dynamics is index 1 and can be written on the form 
-```
-ẋ = f(x, z, u, p, t) # Differential equations
-0 = g(x, z, u, p, t) # Algebraic equations
-y = h(x, z, u, p, t) # Measurements
+```math
+\\begin{aligned}
+ẋ &= f(x, z, u, p, t) \\quad &\\text{Differential equations}\\
+0 &= g(x, z, u, p, t) \\quad &\\text{Algebraic equations}\\
+y &= h(x, z, u, p, t) \\quad &\\text{Measurements}
+\\begin{aligned}
 ```
 the measurements may be functions of both differential states `x` and algebraic variables `z`.
 Please note, the actual dynamics and measurement functions stored in the internal `ukf` should have signatures `(xz, u, p, t)`, i.e.,
@@ -216,7 +218,10 @@ function sample_state(kf::DAEUnscentedKalmanFilter, p=parameters(kf); noise=true
 end
 function sample_state(kf::DAEUnscentedKalmanFilter, x, u, p, t; noise=true)
     @unpack get_x_z, build_xz, xz, g, dynamics, R1 = kf
-    xh = get_x_z(dynamics(x,u,p,t))[1] .+ noise .* rand(MvNormal(Matrix(get_mat(R1, x, u, p, t))))
+    xzp = dynamics(x,u,p,t)
+    noise || return xzp
+    xh = get_x_z(xzp)[1]
+    xh += rand(MvNormal(Matrix(get_mat(R1, x, u, p, t))))
     calc_xz(get_x_z, build_xz, g, xz, u, p, t, xh)
 end
 
