@@ -123,7 +123,7 @@ xzp = dynamics(xz0,u0,0,0)
 ukf0 = UnscentedKalmanFilter(dynamics, measurement, 0.0001eye(nx), 0.01eye(ny), d0; ny, nu)
 threads = false
 for threads = (false, true)
-    ukf  = LowLevelParticleFilters.DAEUnscentedKalmanFilter(ukf0; g, get_x_z, build_xz, xz0, nu=nu, threads)
+    local ukf  = LowLevelParticleFilters.DAEUnscentedKalmanFilter(ukf0; g, get_x_z, build_xz, xz0, nu=nu, threads)
 
     let u0 = zeros(nu)
         xzp = LowLevelParticleFilters.calc_xz(ukf, xz0, u0, 0, 0)
