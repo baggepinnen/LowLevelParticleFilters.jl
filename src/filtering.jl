@@ -276,10 +276,18 @@ end
 """
     x,ll = mean_trajectory(pf, u::Vector{Vector}, y::Vector{Vector}, p=parameters(pf))
 
-This Function resets the particle filter to the initial state distribution upon start
+This method resets the particle filter to the initial state distribution upon start
 """
 mean_trajectory(pf, u::Vector, y::Vector) = reduce_trajectory(pf, u::Vector, y::Vector, weighted_mean)
 mode_trajectory(pf, u::Vector, y::Vector) = reduce_trajectory(pf, u::Vector, y::Vector, mode)
+
+"""
+    mean_trajectory(sol::ParticleFilteringSolution)
+    mean_trajectory(x::AbstractMatrix, we::AbstractMatrix)
+
+Compute the weighted mean along the trajectory of a particle-filter solution. Returns a matrix of size `T × nx`.
+If `x` and `we` are supplied, the weights are expected to be in the original space (not log space).
+"""
 mean_trajectory(sol::ParticleFilteringSolution) = mean_trajectory(sol.x, sol.we)
 mode_trajectory(sol::ParticleFilteringSolution) = mode_trajectory(sol.x, sol.we)
 

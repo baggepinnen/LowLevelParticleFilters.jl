@@ -56,12 +56,12 @@ end
     ParticleFilteringSolution{F, Tu, Ty, Tx, Tw, Twe, Tll} <: AbstractFilteringSolution
 
 # Fields:
-- `f`: Filter
+- `f`: The filter used to produce the solution.
 - `u`: Input
 - `y`: Output / measurements
-- `x`: Particles
-- `w`: Weights (log space)
-- `we`: Weights (exponentiated)
+- `x`: Particles, the size of this array is `(N,T)`, where `N` is the number of particles and `T` is the number of time steps. Each element represents a weighted state hypothesis with weight given by `we`.
+- `w`: Weights (log space). These are used for internal computations.
+- `we`: Weights (exponentiated / original space). These are the ones to use to compute weighted means etc., they sum to one for each time step.
 - `ll`: Log likelihood
 """
 struct ParticleFilteringSolution{F,Tu,Ty,Tx,Tw,Twe,Tll} <: AbstractFilteringSolution
