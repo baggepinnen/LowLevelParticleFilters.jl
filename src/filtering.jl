@@ -280,6 +280,8 @@ This Function resets the particle filter to the initial state distribution upon 
 """
 mean_trajectory(pf, u::Vector, y::Vector) = reduce_trajectory(pf, u::Vector, y::Vector, weighted_mean)
 mode_trajectory(pf, u::Vector, y::Vector) = reduce_trajectory(pf, u::Vector, y::Vector, mode)
+mean_trajectory(sol::ParticleFilteringSolution) = mean_trajectory(sol.x, sol.we)
+mode_trajectory(sol::ParticleFilteringSolution) = mode_trajectory(sol.x, sol.we)
 
 function reduce_trajectory(pf, u::Vector, y::Vector, f::F, p=parameters(pf)) where F
     reset!(pf)
