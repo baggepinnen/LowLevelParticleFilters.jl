@@ -31,6 +31,7 @@ PFstate(N::Integer) = PFstate([zeros(N)],[zeros(N)],fill(-log(N), N),fill(1/N, N
     resampling_strategy::RST = ResampleSystematic
     rng::RNGT = Xoshiro()
     p::P = SciMLBase.NullParameters()
+    threads::Bool = false
 end
 
 struct AuxiliaryParticleFilter{T<:AbstractParticleFilter} <: AbstractParticleFilter
@@ -45,9 +46,18 @@ Takes exactly the same arguments as [`ParticleFilter`](@ref), or an instance of 
 AuxiliaryParticleFilter(args...;kwargs...) = AuxiliaryParticleFilter(ParticleFilter(args...;kwargs...))
 
 """
-    ParticleFilter(num_particles, dynamics, measurement, dynamics_density, measurement_density, initial_density; p = SciMLBase.NullParameters())
+    ParticleFilter(N::Integer, dynamics, measurement, dynamics_density, measurement_density, initial_density; threads = false, p = SciMLBase.NullParameters(), kwargs...)
+
 
 See the docs for more information: https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/#Particle-filter-1
+
+# Arguments:
+- `N`: Number of particles
+- `dynamics`: A discrete-time dynamics function `(x, u, p, t) -> x⁺`
+- `measurement`: A measurement function `(x, u, p, t) -> y`
+- `dynamics_density`: A probability-density function for additive noise in the dynamics. Use [`AdvancedParticleFilter`](@ref) for non-additive noise.
+- `measurement_density`: A probability-density function for additive measurement noise. Use [`AdvancedParticleFilter`](@ref) for non-additive noise.
+- `initial_density`: Distribution of the initial state.
 """
 function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density; kwargs...)
     xprev = Vector{SVector{length(initial_density),eltype(initial_density)}}([rand(initial_density) for n=1:N])
@@ -55,7 +65,6 @@ function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, d
     w = fill(log(1/N), N)
     we = fill(1/N, N)
     s = PFstate(x,xprev,w,we,Ref(0.), collect(1:N), zeros(N),Ref(1))
-
 
     ParticleFilter(; state = s, dynamics, measurement,
     dynamics_density, measurement_density,
@@ -166,9 +175,20 @@ end
 
 
 """
-    AdvancedParticleFilter(Nparticles, dynamics, measurement, measurement_likelihood, dynamics_density, initial_density; p = SciMLBase.NullParameters(), threads = false, kwargs...)
+    AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, measurement_likelihood, dynamics_density, initial_density; p = SciMLBase.NullParameters(), threads = false, kwargs...)
+
+This type represents a standard particle filter but affords extra flexibility compared to the [`ParticleFilter`](@ref) type, e.g., non-additive noise in the dynamics and measurement functions.
 
 See the docs for more information: https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/#AdvancedParticleFilter-1
+
+# Arguments:
+- `N`: Number of particles
+- `dynamics`: A discrete-time dynamics function `(x, u, p, t, noise=false) -> x⁺`. It's important that the `noise` argument defaults to `false`.
+- `measurement`: A measurement function `(x, u, p, t, noise=false) -> y`. It's important that the `noise` argument defaults to `false`.
+- `measurement_likelihood`: A function `(x, u, y, p, t)->logl` to evaluate the log-likelihood of a measurement.
+- `dynamics_density`: This field is not used by the advanced filter and can be set to `nothing`.
+- `initial_density`: The distribution of the initial state.
+- `threads`: use threads to propagate particles in parallel. Only activate this if your dynamics is thread-safe. `SeeToDee.SimpleColloc` is not thread-safe by default due to the use of internal caches, but `SeeToDee.Rk4` is.
 """
 function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, measurement_likelihood, dynamics_density, initial_density; kwargs...)
     r1 = rand(initial_density)
@@ -211,12 +231,27 @@ Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilte
     x
 end
 
-Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilter, u, p, t::Int, noise::Union{Bool, Nothing}=true)
+Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilter, u, p, t::Int, noise::Nothing)
     f = pf.dynamics
     x,xp = particles(pf), state(pf).xprev
-    if noise === nothing
+    if pf.threads
         @batch for i = eachindex(x)
             @inbounds x[i] = f(xp[i], u, p, t)
+        end
+    else
+        @batch for i = eachindex(x)
+            @inbounds x[i] = f(xp[i], u, p, t)
+        end
+    end
+    x
+end
+
+Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilter, u, p, t::Int, noise::Bool=true)
+    f = pf.dynamics
+    x,xp = particles(pf), state(pf).xprev
+    if pf.threads
+        @batch for i = eachindex(x)
+            @inbounds x[i] = f(xp[i], u, p, t, noise)
         end
     else
         @batch for i = eachindex(x)

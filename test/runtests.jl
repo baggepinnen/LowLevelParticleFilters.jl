@@ -267,6 +267,7 @@ end
     du = mvnormal(2,1)            # Control input distribution
 
     # Define random linenar state-space system
+    Random.seed!(0)
     A = SMatrix{n,n}([0.99 0.1; 0 0.2])
     B = @SMatrix randn(n,m)
     C = SMatrix{p,p}(eye(p))
@@ -280,13 +281,23 @@ end
     T     = 200 # Number of time steps
     N     = 500
     Random.seed!(0)
-    apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0)
+    apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0, threads=false)
     x,u,y = LowLevelParticleFilters.simulate(apf,T,du) # Simuate trajectory using the model in the filter
     x,u,y = tosvec.((x,u,y))
     @time resapf,ll = mean_trajectory(apf, u, y)
     
     norm(mean(x))
-    norm(mean(x .- resapf))
+    @test norm(mean(x .- resapf)) < 5
+
+    # With threads
+    Random.seed!(0)
+    apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0, threads=true)
+    x,u,y = LowLevelParticleFilters.simulate(apf,T,du) # Simuate trajectory using the model in the filter
+    x,u,y = tosvec.((x,u,y))
+    @time resapf,ll = mean_trajectory(apf, u, y)
+    
+    norm(mean(x))
+    @test norm(mean(x .- resapf)) < 5
     
 end
 
