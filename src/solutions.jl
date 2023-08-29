@@ -81,7 +81,7 @@ end
 
 td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
 
-@recipe function plot(sol::ParticleFilteringSolution; nbinsy=30, xreal=nothing, dim=nothing)
+@recipe function plot(sol::ParticleFilteringSolution; nbinsy=30, xreal=nothing, dim=nothing, ploty=true)
     if dim === nothing || dim === (:)
         (; f,x,w,u,y) = sol
         p = parameters(f)
@@ -97,7 +97,7 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
         vx = vec(x)
         background_color --> :black
 
-        layout := D+P
+        layout := D+P*ploty
         label := ""
         markercolor --> :cyan
         title --> reshape([["State $d" for d = 1:D];["Measurement $d" for d = 1:P]], 1, :)
@@ -111,21 +111,23 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
             end
             xreal === nothing || @series begin
                 seriestype := :scatter
-                1:T, getindex.(xreal,d)
+                1:T, (xreal isa AbstractVector{<:AbstractArray} ? getindex.(xreal,d) : xreal[:, d]) # Handle both vec of vec and matrix
             end
         end
-        yhat = measurement(f).(x, permutedims(u), Ref(p), (1:T)') |> vec
-        for d = 1:P
-            subplot := d+D
-            @series begin
-                seriestype := :histogram2d
-                bins --> (0.5:1:T+0.5,nbinsy)
-                weights --> w
-                repeat((1:T)' .-0.5,N)[:], vec(getindex.(yhat,d))
-            end
-            @series begin
-                seriestype := :scatter
-                1:T, getindex.(y,d)
+        if ploty
+            yhat = measurement(f).(x, permutedims(u), Ref(p), (1:T)') |> vec
+            for d = 1:P
+                subplot := d+D
+                @series begin
+                    seriestype := :histogram2d
+                    bins --> (0.5:1:T+0.5,nbinsy)
+                    weights --> w
+                    repeat((1:T)' .-0.5,N)[:], vec(getindex.(yhat,d))
+                end
+                @series begin
+                    seriestype := :scatter
+                    1:T, getindex.(y,d)
+                end
             end
         end
     else
@@ -151,7 +153,7 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
             end
             xreal === nothing || @series begin
                 seriestype := :scatter
-                1:T, getindex.(xreal,d)
+                1:T, (xreal isa AbstractVector{<:AbstractArray} ? getindex.(xreal,d) : xreal[:, d]) # Handle both vec of vec and matrix
             end
         else
             d -= D

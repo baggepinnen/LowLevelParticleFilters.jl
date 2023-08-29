@@ -161,11 +161,12 @@ end
     resampling_strategy::RST = ResampleSystematic
     rng::RNGT = Xoshiro()
     p::P = SciMLBase.NullParameters()
+    threads::Bool = false
 end
 
 
 """
-    AdvancedParticleFilter(Nparticles, dynamics, measurement, measurement_likelihood, dynamics_density, initial_density; p = SciMLBase.NullParameters(), kwargs...)
+    AdvancedParticleFilter(Nparticles, dynamics, measurement, measurement_likelihood, dynamics_density, initial_density; p = SciMLBase.NullParameters(), threads = false, kwargs...)
 
 See the docs for more information: https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/#AdvancedParticleFilter-1
 """
@@ -198,8 +199,14 @@ Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilte
     f = dynamics(pf)
     s = state(pf)
     x,xp = s.x, s.xprev
-    @batch for i = eachindex(x)
-        @inbounds x[i] = f(xp[j[i]], u, p, t, noise) # TODO: lots of allocations here
+    if pf.threads
+        @batch for i = eachindex(x)
+            @inbounds x[i] = f(xp[j[i]], u, p, t, noise) # TODO: lots of allocations here
+        end
+    else
+        for i = eachindex(x)
+            @inbounds x[i] = f(xp[j[i]], u, p, t, noise) 
+        end
     end
     x
 end
