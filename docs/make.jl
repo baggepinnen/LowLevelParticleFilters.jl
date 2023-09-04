@@ -19,6 +19,7 @@ makedocs(
             "Advanced tutorials" => [
                   "Kalman-filter tutorial" => "adaptive_kalmanfilter.md",
                   "Particle-filter tutorial" => "beetle_example.md",
+                  "State estimation for DAE systems" => "dae.md",
             ],
             "API" => "api.md",
       ],

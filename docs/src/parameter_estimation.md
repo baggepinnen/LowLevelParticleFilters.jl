@@ -151,6 +151,7 @@ plot!(thetalls[:,3], subplot=3)
 In this example, we'll show how to perform parameter estimation by treating a parameter as a state. This method can not only estimate constant parameters, but also **time-varying parameters**. The system we will consider is a quadruple tank, where two upper tanks feed into two lower tanks. The outlet for tank 1 can vary in size, simulating, e.g., that something partially blocks the outlet. We start by defining the dynamics on a form that changes the outlet area ``a_1`` at time ``t=500``:
 ```@example paramest
 using LowLevelParticleFilters
+using SeeToDee
 using Distributions
 using StaticArrays
 using Plots, LinearAlgebra
@@ -182,10 +183,10 @@ ny = 2 # number of measured outputs
 Ts = 1 # sample time
 nothing # hide
 ```
-We then define a measurement function, we measure the levels of tanks 1 and 2, and discretize the continuous-time dynamics using a Runge-Kutta 4 integrator [`LowLevelParticleFilters.rk4`](@ref):
+We then define a measurement function, we measure the levels of tanks 1 and 2, and discretize the continuous-time dynamics using a Runge-Kutta 4 integrator [`SeeToDee.Rk4`](https://baggepinnen.github.io/SeeToDee.jl/dev/api/#SeeToDee.Rk4):
 ```@example paramest
 measurement(x,u,p,t) = SA[x[1], x[2]]
-discrete_dynamics = LowLevelParticleFilters.rk4(quadtank, Ts, supersample=2)
+discrete_dynamics = SeeToDee.Rk4(quadtank, Ts, supersample=2)
 nothing # hide
 ```
 
@@ -228,7 +229,7 @@ function quadtank_paramest(h, u, p, t)
     ]
 end
 
-discrete_dynamics_params = LowLevelParticleFilters.rk4(quadtank_paramest, Ts, supersample=2)
+discrete_dynamics_params = SeeToDee.Rk4(quadtank_paramest, Ts, supersample=2)
 nothing # hide
 ```
 
@@ -275,7 +276,7 @@ function quadtank(h, u, p, t)
     ]
 end
 
-discrete_dynamics = LowLevelParticleFilters.rk4(quadtank, Ts, supersample=2)
+discrete_dynamics = SeeToDee.Rk4(quadtank, Ts, supersample=2)
 p_true = [0.5, 1.6, 1.6, 4.9, 0.03, 0.2]
 nothing # hide
 ```
