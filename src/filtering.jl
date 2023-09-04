@@ -328,14 +328,10 @@ function simulate(f::AbstractFilter, T::Int, du::Distribution, p=parameters(f); 
     simulate(f, u, p; dynamics_noise, measurement_noise, sample_initially)
 end
 
-function simulate(f::AbstractFilter,u,p=parameters(f); dynamics_noise=true, measurement_noise=true, sample_initially=false)
+function simulate(f::AbstractFilter,u,p=parameters(f); dynamics_noise=true, measurement_noise=true, sample_initial=false)
     y = similar(u)
     x = similar(u)
-    if sample_initially
-        x[1] = sample_state(f, p; noise=true)
-    else
-        x[1] = sample_state(f, p; noise=false)
-    end
+    x[1] = sample_state(f, p; noise=sample_initial)
     T = length(u)
     for t = 1:T-1
         y[t] = sample_measurement(f,x[t], u[t], p, t; noise=measurement_noise)
