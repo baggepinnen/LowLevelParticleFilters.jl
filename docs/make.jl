@@ -19,6 +19,8 @@ makedocs(
             "Advanced tutorials" => [
                   "Kalman-filter tutorial" => "adaptive_kalmanfilter.md",
                   "Particle-filter tutorial" => "beetle_example.md",
+                  "Disturbance modeling and noise tuning" => "noise_tuning.md",
+                  "State estimation for DAE systems" => "dae.md",
             ],
             "API" => "api.md",
       ],
