@@ -36,18 +36,21 @@ p = 2 # Dinemsion of measurements, we can measure the x and the y, so also two
 dgσ = 1 # the deviation of the measurement noise distribution
 dvσ = 0.3#0.8 # the deviation of the dynamics noise distribution
 ϕσ = 0.5
-const switch_prob = 0.03
-const dg = MvNormal(@SVector(zeros(p)), dgσ^2) # Measurement noise Distribution
+switch_prob = 0.03
+dg = MvNormal(@SVector(zeros(p)), dgσ^2) # Measurement noise Distribution
 # const df = MvNormal(@SVector(zeros(n)), [1e-1, 1e-1, dvσ^2, ϕσ^2]) # Dynamics noise Distribution NOTE: MvNormal wants a variance, not std
-const df = LowLevelParticleFilters.TupleProduct((Normal.(0,[1e-1, 1e-1, dvσ, ϕσ])...,Binomial(1,switch_prob)))
-const df2 = LowLevelParticleFilters.TupleProduct((Normal.(0,[1e-1, 1e-1, dvσ, ϕσ])...,))#Binomial(1,switch_prob)))
+df = LowLevelParticleFilters.TupleProduct((Normal.(0,[1e-1, 1e-1, dvσ, ϕσ])...,Binomial(1,switch_prob)))
+df2 = LowLevelParticleFilters.TupleProduct((Normal.(0,[1e-1, 1e-1, dvσ, ϕσ])...,))#Binomial(1,switch_prob)))
 # const df = Product(Normal.(0,[1e-1, 1e-1, dvσ, ϕσ]))#;Binomial(1,switch_prob)])
 y = tosvec(collect(eachrow(xyt[:,1:2])))
-const d0 = MvNormal(SVector(y[1]..., 0.5, atan((y[2]-y[1])...), 0), [3.,3,2,2,0])
+d0 = MvNormal(SVector(y[1]..., 0.5, atan((y[2]-y[1])...), 0), [3.,3,2,2,0])
+
+params = (; switch_prob, dg, df, df2) # Package parameters into a parameter tuple to be accessed in the dynamics functions
 
 const noisevec = zeros(5)
 
 @inline function dynamics(s,u,p,t,noise=false)
+    (; switch_prob, df) = p
     # current states
     m = mode(s)
     v = vel(s)
@@ -67,9 +70,9 @@ const noisevec = zeros(5)
     SVector{5,Float64}(p⁺[1], p⁺[2], v⁺, a⁺, m⁺) # all next states
 end
 function measurement_likelihood(s,u,y,p,t)
-    logpdf(dg, pos(s)-y) # A simple linear measurement model with normal additive noise
+    logpdf(p.dg, pos(s)-y) # A simple linear measurement model with normal additive noise
 end
-@inline measurement(s,u,p,t,noise=false) = s[SVector(1,2)] + noise*rand(dg) # We observer the position coordinates with the measurement
+@inline measurement(s,u,p,t,noise=false) = s[SVector(1,2)] + noise*rand(p.dg) # We observer the position coordinates with the measurement
 
 
 
@@ -79,7 +82,7 @@ p = 2 # Dinemsion of measurements, we can measure the x and the y, so also two
 
 
 u = zeros(length(y))
-pf = AuxiliaryParticleFilter(AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0))
+pf = AuxiliaryParticleFilter(AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0; p=params))
 T = length(y)
 sol=forward_trajectory(pf,u[1:T],y[1:T])
 (; x,w,we,ll) = sol
