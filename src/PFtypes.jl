@@ -38,6 +38,8 @@ struct AuxiliaryParticleFilter{T<:AbstractParticleFilter} <: AbstractParticleFil
     pf::T
 end
 
+parameters(pf::AuxiliaryParticleFilter) = parameters(pf.pf)
+
 """
     AuxiliaryParticleFilter(args...; kwargs...)
 

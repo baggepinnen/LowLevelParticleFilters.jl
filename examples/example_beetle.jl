@@ -17,7 +17,7 @@
 
 using DelimitedFiles
 # path = download("https://vision-group-file-sharing.s3.amazonaws.com/Data%20backup%20and%20storage/Yakir/track.csv?X[…]460738cad19bd24e7fa6f10375c5b65b234857fa5b99ea2")
-path = "/home/fredrikb/Downloads/track.csv"
+path = joinpath(@__DIR__, "../docs/track.csv")
 xyt = readdlm(path)
 ##
 
@@ -85,6 +85,7 @@ sol=forward_trajectory(pf,u[1:T],y[1:T])
 (; x,w,we,ll) = sol
 @show ll
 plot(sol, markerstrokecolor=:auto, m=(2,0.5))
+isinteractive() && display(current())
 ##
 # xh,ll = mean_trajectory(pf,u,y)
 # xh = vecvec_to_mat(xh)
@@ -128,66 +129,7 @@ plot!(sbt[1,:,:]', subplot=2, lab="", l=(:black,0.2))
 plot!(sbt[2,:,:]', subplot=2, lab="", l=(:black,0.2))
 plot!(sbt[3,:,:]', subplot=3, lab="", l=(:blue,0.2))
 plot!(identity.(sbt[4,:,:]'), subplot=4, lab="", l=(:orange,0.2))
+isinteractive() && display(current())
 ##
 plot(xh[:,5], lab="Filtering")
 plot!(to1series(sbt[5,:,:]')..., lab="Smoothing", title="Mode trajectories", l=(:black,0.2))
-
-
-## PMMH
-
-N = 500
-d0 = MvNormal(SVector(y[1]..., log(0.5), atan((y[2]-y[1])...)), [3.,3,2,2])
-function filter_from_parameters(θ, pf=nothing)
-    dvσ, ϕσ, dgσ = exp.(θ)
-    dg = MvNormal(@SVector(zeros(p)), dgσ^2)
-    df = MvNormal(@SVector(zeros(n)), [1e-6, 1e-6, dvσ^2, ϕσ^2])
-    pf === nothing && (return ParticleFilter(N, dynamics, measurement, df,dg, d0))
-    ParticleFilter(pf.state, dynamics, measurement, df,dg, d0)
-end
-
-priors = [Normal(1,2),Normal(1,2),Normal(1,2)]
-ll     = log_likelihood_fun(filter_from_parameters,priors,u,y)
-θ₀ = log.([0.7,0.8,1.]) # Starting point
-
-draw = θ -> θ .+ 0.01randn(3)
-burnin = 40
-@time theta, lls = metropolis(ll, 300, θ₀, draw) # Run PMMH for 2000  iterations, takes about half a minute on my laptop
-thetam = reduce(hcat, theta)'#[burnin+1:end,:] # Build a matrix of the output (was vecofvec)
-histogram(exp.(thetam), layout=4); plot!(lls, subplot=4) # Visualize
-
-
-
-##
-# debugplot(pf,u,y,runall=false)
-commandplot(pf,u,y)
-
-
-# function LowLevelParticleFilters.smooth(pf::Union{AdvancedParticleFilter, AuxiliaryParticleFilter{<:AdvancedParticleFilter}}, M, u, y)
-#     T = length(y)
-#     N = num_particles(pf)
-#     f = LowLevelParticleFilters.dynamics(pf)
-#     xf,wf,wef,ll = forward_trajectory(pf, u, y)
-#     @assert M <= N "Must extend cache size of bins and j to allow this"
-#     xb = Array{particletype(pf)}(undef,M,T)
-#     j = LowLevelParticleFilters.resample(LowLevelParticleFilters.ResampleSystematic, wef[:,T], M)
-#     for i = 1:M
-#         xb[i,T] = xf[j[i], T]
-#     end
-#     wb = Vector{Float64}(undef,N)
-#     df = dynamics_density(pf)
-#     bin = Binomial(1,switch_prob)
-#     inds = SVector(1,2,3,4)
-#     @inbounds for t = T-1:-1:1
-#         for m = 1:M
-#             for n = 1:N
-#                 x1 = f(xf[n,t],u[t],t)
-#                 switch = mode(x1) != mode(xb[m,t+1])
-#                 wb[n] = wf[n,t] + logpdf(df, x1[inds], xb[m,t+1][inds],t) + logpdf(bin, switch)*(1-mode(xb[m,t+1])) # only add switch pdf if previous mode was 0
-#             end
-#             i = LowLevelParticleFilters.draw_one_categorical(pf,wb)
-#             xb[m,t] = xf[i, t]
-#         end
-#         # @show tset
-#     end
-#     return xb,ll
-# end

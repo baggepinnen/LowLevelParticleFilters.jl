@@ -318,10 +318,15 @@ end
 
 @testset "example_quadtank" begin
     @info "Testing example_quadtank"
-    include("../src/example_quadtank.jl")
+    include("../examples/example_quadtank.jl")
 end
 
 @testset "example_lineargaussian" begin
     @info "testing example_lineargaussian"
-    include("../src/example_lineargaussian.jl")
+    include("../examples/example_lineargaussian.jl")
+end
+
+@testset "example_beetle" begin
+    @info "testing example_beetle"
+    include("../examples/example_beetle.jl")
 end
