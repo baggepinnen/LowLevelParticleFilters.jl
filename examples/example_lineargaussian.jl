@@ -12,23 +12,25 @@ nu = 2   # Dimension of input
 ny = 2   # Dimension of measurements
 N = 500 # Number of particles
 
-const dg = MvNormal(Diagonal(ones(ny)))          # Measurement noise Distribution
-const df = MvNormal(Diagonal(ones(nx)))          # Dynamics noise Distribution
-const dx0 = MvNormal(randn(nx),2.0^2*I)   # Initial state Distribution
+dg = MvNormal(Diagonal(ones(ny)))          # Measurement noise Distribution
+df = MvNormal(Diagonal(ones(nx)))          # Dynamics noise Distribution
+dx0 = MvNormal(randn(nx),2.0^2*I)   # Initial state Distribution
 
 # Define random linear state-space system
 Tr = randn(nx,nx)
-const A_lg = SMatrix{nx,nx}(Tr*diagm(0=>LinRange(0.5,0.95,nx))/Tr)
-const B_lg = @SMatrix randn(nx,nu)
-const C_lg = @SMatrix randn(ny,nx)
+A_lg = SMatrix{nx,nx}(Tr*diagm(0=>LinRange(0.5,0.95,nx))/Tr)
+B_lg = @SMatrix randn(nx,nu)
+C_lg = @SMatrix randn(ny,nx)
+
+params = (; dg, df, dx0, A_lg, B_lg, C_lg)
 
 # The following two functions are required by the filter
-dynamics(x,u,p,t) = A_lg*x .+ B_lg*u
-measurement(x,u,p,t) = C_lg*x
+dynamics(x,u,p,t) = p.A_lg*x .+ p.B_lg*u
+measurement(x,u,p,t) = p.C_lg*x
 vecvec_to_mat(x) = copy(reduce(hcat, x)') # Helper function
 
 # We are now ready to define and use a filter
-pf = ParticleFilter(N, dynamics, measurement, df, dg, dx0)
+pf = ParticleFilter(N, dynamics, measurement, df, dg, dx0, p=params)
 xs,u,y = simulate(pf,200,df) # We can simulate the model that the pf represents
 pf(u[1], y[1]) # Perform one filtering step using input u and measurement y
 particles(pf) # Query the filter for particles, try weights(pf) or expweights(pf) as well
@@ -50,7 +52,7 @@ plot(sol, xreal=xs)
 N     = 2000 # Number of particles
 T     = 200 # Number of time steps
 M     = 100 # Number of smoothed backwards trajectories
-pf    = ParticleFilter(N, dynamics, measurement, df, dg, dx0)
+pf    = ParticleFilter(N, dynamics, measurement, df, dg, dx0, p=params)
 du    = MvNormal(Diagonal(ones(2))) # Control input distribution
 x,u,y = simulate(pf,T,du) # Simulate trajectory using the model in the filter
 tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
@@ -77,7 +79,7 @@ scatter!(xbt[2,:,:]', subplot=2, m=(1,:black, 0.5), lab="")
 
 eye(n) = Matrix{Float64}(I,n,n)
 kf     = KalmanFilter(A_lg, B_lg, C_lg, 0, eye(nx), eye(ny), MvNormal(Diagonal([1.,1.])))
-ukf    = UnscentedKalmanFilter(dynamics, measurement, eye(nx), eye(ny), MvNormal(Diagonal([1.,1.])); nu, ny)
+ukf    = UnscentedKalmanFilter(dynamics, measurement, eye(nx), eye(ny), MvNormal(Diagonal([1.,1.])); nu, ny, p=params)
 sol = forward_trajectory(kf, u, y) 
 xT,R,lls = smooth(kf, u, y) # Smoothed state, smoothed cov, loglik
 # It can also be called in a loop like the `pf` above
@@ -116,7 +118,7 @@ debugplot(pf,u[1:20],y[1:20], runall=true, xreal=x[1:20])
 svec = exp10.(LinRange(-1.5,1.5,60))
 llspf = map(svec) do s
     df = MvNormal(Diagonal(fill(s^2, nx)))
-    pfs = ParticleFilter(2000, dynamics, measurement, df, dg, dx0)
+    pfs = ParticleFilter(2000, dynamics, measurement, df, dg, dx0; p=params)
     loglik(pfs,u,y)
 end
 plot( svec, llspf,
@@ -157,12 +159,13 @@ filter_from_parameters(θ, pf = nothing) = ParticleFilter(
     measurement,
     MvNormal(Diagonal(fill(exp(θ[1]), nx))),
     MvNormal(Diagonal(fill(exp(θ[2]), ny))),
-    dx0,
+    dx0;
+    p=params,
 )
 # The call to `exp` on the parameters is so that we can define log-normal priors
 priors = [Normal(0,2),Normal(0,2)]
 # Now we call the function `log_likelihood_fun` that returns a function to be minimized
-ll = log_likelihood_fun(filter_from_parameters,priors,u,y,0)
+ll = log_likelihood_fun(filter_from_parameters,priors,u,y,params)
 # Since this is a low-dimensional problem, we can plot the LL on a 2d-grid
 function meshgrid(a,b)
     grid_a = [i for i in a, j in b]
@@ -198,11 +201,12 @@ filter_from_parameters(θ, pf = nothing) = AuxiliaryParticleFilter(
     measurement,
     MvNormal(Diagonal(fill(exp(θ[1])^2, nx))),
     MvNormal(Diagonal(fill(exp(θ[2])^2, ny))),
-    dx0,
+    dx0;
+    p=params,
 )
 # The call to `exp` on the parameters is so that we can define log-normal priors
 priors = [Normal(0,2),Normal(0,2)]
-ll     = log_likelihood_fun(filter_from_parameters,priors,u,y,0)
+ll     = log_likelihood_fun(filter_from_parameters,priors,u,y,params)
 θ₀     = log.([1.,1.]) # Starting point
 # We also need to define a function that suggests a new point from the "proposal distribution". This can be pretty much anything, but it has to be symmetric since I was lazy and simplified an equation.
 draw   = θ -> θ .+ rand(MvNormal(Diagonal(0.05^2 * ones(2))))
@@ -226,21 +230,21 @@ histogram(exp.(thetam), layout=(3,1)); plot!(lls[burnin+1:end], subplot=3) # Vis
 using Random
 const rng = Random.Xoshiro()
 function dynamics(x,u,p,t,noise=false) # It's important that this defaults to false
-    x = A_lg*x .+ B_lg*u # A simple dynamics model
+    x = p.A_lg*x .+ p.B_lg*u # A simple dynamics model
     if noise
-        x += rand(rng, df) # it's faster to supply your own rng
+        x += rand(rng, p.df) # it's faster to supply your own rng
     end
     x
 end
 # The `measurement_likelihood` function must have a method accepting state, measurement and time, and returning the log-likelihood of the measurement given the state, a simple example below:
 function measurement_likelihood(x,u,y,p,t)
-    logpdf(dg, C*x-y) # A simple linear measurement model with normal additive noise
+    logpdf(p.dg, p.C_lg*x-y) # A simple linear measurement model with normal additive noise
 end
 # This gives you very high flexibility. The noise model in either function can, for instance, be a function of the state, something that is not possible for the simple `ParticleFilter`
 # To be able to simulate the `AdvancedParticleFilter` like we did with the simple filter above, the `measurement` method with the signature `measurement(x,u,t,noise=false)` must be available and return a sample measurement given state (and possibly time). For our example measurement model above, this would look like this
-measurement(x,u,p,t,noise=false) = C*x + noise*rand(rng, dg)
+measurement(x,u,p,t,noise=false) = p.C_lg*x + noise*rand(rng, p.dg)
 # We now create the `AdvancedParticleFilter` and use it in the same way as the other filters:
-apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, dx0)
+apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, dx0; p=params)
 sol = forward_trajectory(apf, u, y)
 # plot(sol, xreal=x)
 
