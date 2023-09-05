@@ -67,13 +67,41 @@ end
 
 Calculate the sum of squared errors ``\\sum dot(e, λ, e)``.
 - `λ`: May be a weighting matrix. A commonly used metric is `λ = Diagonal(1 ./ (mag.^2))`, where `mag` is a vector of the "typical magnitude" of each output.
+
+See also [`prediction_errors!`](@ref) which returns the prediction errors themselves rather than their sum of squares (for use with Gauss-Newton style optimization).
 """
 function sse(f::AbstractFilter, u, y, p=parameters(f), λ=1)
     reset!(f)
-    ll = sum(zip(u, y)) do (u,y)
+    sum(zip(u, y)) do (u,y)
         ll, e = f(u,y,p)
         dot(e, λ, e)
     end
+end
+
+"""
+    prediction_errors!(res, f::AbstractFilter, u, y, p = parameters(f), λ = 1)
+
+Calculate the prediction errors and store the result in `res`. Similar to [`sse`](@ref), this funciton is useful for sum-of-squares optimization. In contrast to `sse`, this function returns the residuals themselves rather than their sum of squares. This is useful for Gauss-Newton style optimizers, such as [LeastSquaresOptim.LevenbergMarquardt](https://github.com/matthieugomez/LeastSquaresOptim.jl).
+
+# Arguments:
+- `res`: A vector of length `ny*length(y)`. Note, for each datapoint in `u` and `u`, there are `ny` outputs, and thus `ny` residuals.
+- `f`: Any filter
+- `λ`: A weighting factor to minimize `dot(e, λ, e`). A commonly used metric is `λ = Diagonal(1 ./ (mag.^2))`, where `mag` is a vector of the "typical magnitude" of each output. Internally, the square root of `W = sqrt(λ)` is calculated so that the residuals stored in `res` are `W*e`.
+
+See example in [Solving using Gauss-Newton optimization](@ref).
+"""
+function prediction_errors!(res, f::AbstractFilter, u, y, p=parameters(f), λ=1)
+    reset!(f)
+    W = sqrt(λ)
+    ny = f.ny
+    length(u)*ny == length(y)*ny == length(res) || error("The residual vector must be of length ny*length(data) (there is one residual per output for each datapoint)")
+    inds = 1:ny
+    for (i, (u,y)) in enumerate(zip(u, y))
+        ll, e = f(u,y,p)
+        @views mul!(res[inds], W, e)
+        inds = inds .+ ny
+    end
+    res
 end
 
 
@@ -84,7 +112,7 @@ Calculate loglikelihood for entire sequences `u,y`
 """
 function loglik(f::AbstractFilter,u,y,p=parameters(f))
     reset!(f)
-    ll = sum(x->f(x[1],x[2],p)[1], zip(u, y))
+    sum(x->f(x[1],x[2],p)[1], zip(u, y))
 end
 
 function loglik(pf::AuxiliaryParticleFilter,u,y,p=parameters(pf))
