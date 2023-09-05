@@ -83,6 +83,7 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
     @testset "End to end" begin
         @info "testing End to end"
         eye(n) = Matrix{Float64}(I,n,n)
+        Random.seed!(0)
 
         # Define random linenar state-space system
         n = 2   # Dimension of state
