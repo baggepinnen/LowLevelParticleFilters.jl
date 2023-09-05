@@ -1,9 +1,9 @@
 # Parameter Estimation
 State estimation is an integral part of many parameter-estimation methods. Below, we will illustrate several different methods of performing parameter estimation. We can roughly divide the methods into two camps
 1. Methods that optimize prediction error or likelihood by tweaking model parameters.
-2. Methods that add the parameters to be estimated as states in the model and estimate them using standard state estimation. 
+2. Methods that add the parameters to be estimated as state variables in the model and estimate them using standard state estimation. 
 
-From the first camp, we provide som basic functionality for maximum likelihood estimation and MAP estimation, described below. An example of 2), joint state and parameter estimation, is provided in [Joint state and parameter estimation](@ref).
+From the first camp, we provide som basic functionality for maximum-likelihood estimation and MAP estimation, described below. An example of 2), joint state and parameter estimation, is provided in [Joint state and parameter estimation](@ref).
 
 
 ## Maximum-likelihood estimation
@@ -169,7 +169,7 @@ function quadtank(h,u,p,t)
 
     ssqrt(x) = √(max(x, zero(x)) + 1e-3) # For numerical robustness at x = 0
     
-    xd = SA[
+    SA[
         -a1/A1 * ssqrt(2g*h[1]) + a3/A1*ssqrt(2g*h[3]) +     γ1*k1/A1 * u[1]
         -a2/A2 * ssqrt(2g*h[2]) + a4/A2*ssqrt(2g*h[4]) +     γ2*k2/A2 * u[2]
         -a3/A3*ssqrt(2g*h[3])                          + (1-γ2)*k2/A3 * u[2]
@@ -220,7 +220,7 @@ function quadtank_paramest(h, u, p, t)
 
     ssqrt(x) = √(max(x, zero(x)) + 1e-3) # For numerical robustness at x = 0
     
-    xd = SA[
+    SA[
         -a1/A1 * ssqrt(2g*h[1]) + a3/A1*ssqrt(2g*h[3]) +     γ1*k1/A1 * u[1]
         -a2/A2 * ssqrt(2g*h[2]) + a4/A2*ssqrt(2g*h[4]) +     γ2*k2/A2 * u[2]
         -a3/A3*ssqrt(2g*h[3])                          + (1-γ2)*k2/A3 * u[2]
@@ -255,7 +255,7 @@ We may ask ourselves, what's the difference between a parameter and a state vari
 Abrupt changes to the dynamics like in the example above can happen in practice, for instance, due to equipment failure or change of operating mode. This can be treated as a scenario with time-varying parameters that are continuously estimated. 
 
 ## Using an optimizer
-Maximum-likelihood or prediction-error estimation is straight-forward by simply differentiating through the state estimator using automatic differentiation. In this example, we will continue the example from above, but now estimate all the parameters of the quad-tank process. This time, they will not vary with time.
+Maximum-likelihood or prediction-error estimation is straight-forward by simply calling a gradient-based optimizer with gradients provided by differentiating through the state estimator using automatic differentiation. In this example, we will continue the example from above, but now estimate all the parameters of the quad-tank process. This time, they will not vary with time. We will first use a standard optimization algorithm from [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl) to minimize the cost function based on the prediction error, and then use a Gauss-Newton optimizer.
 
 We now define the dynamics function such that it takes its parameters from the `p` input argument. We also define a variable `p_true` that contains the true values that we will use to simulate some estimation data
 ```@example paramest
@@ -309,7 +309,7 @@ x0 = [2, 2, 3, 3]
 
 function cost(p::Vector{T}) where T
     kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), R1); ny, nu)
-    LowLevelParticleFilters.sse(kf, u, y, p)
+    LowLevelParticleFilters.sse(kf, u, y, p) # Sum of squared prediction errors
 end
 nothing # hide
 ```
@@ -317,7 +317,10 @@ We generate a random initial guess for the estimation problem
 ```@example paramest
 p_guess = p_true .+  0.1*p_true .* randn(length(p_true))
 ```
-and solve it using Optim
+
+
+### Solving using Optim
+We first minimize the cost using the BFGS optimization algorithm from [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl)
 ```@example paramest
 using Optim
 res = Optim.optimize(
@@ -330,7 +333,7 @@ res = Optim.optimize(
         iterations = 100,
         time_limit = 30,
     ),
-    autodiff = :forward,
+    autodiff = :forward, # Indicate that we want to use forward-mode AD to derive gradients
 )
 ```
 
@@ -344,6 +347,27 @@ and ended with
 p_opt = res.minimizer
 norm(p_true - p_opt) / norm(p_true)
 ```
+
+
+### Solving using Gauss-Newton optimization
+Below, we optimize the sum of squared residuals again, but this time we do it using a Gauss-Newton style algorithm (Levenberg Marquardt). These algorithms want the entire residual vector rather than the sum of squares of the residuals, so we define an alternative "cost function" called `residuals` that calls the lower-level function [`LowLevelParticleFilters.prediction_errors!`](@ref)
+```@example paramest
+using LeastSquaresOptim
+
+function residuals!(res, p::Vector{T}) where T
+    kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), R1); ny, nu)
+    LowLevelParticleFilters.prediction_errors!(res, kf, u, y, p) 
+end
+
+res_gn = optimize!(LeastSquaresProblem(x = copy(p_guess), f! = residuals!, output_length = length(y)*ny, autodiff = :forward), LevenbergMarquardt())
+
+p_opt_gn = res_gn.minimizer
+norm(p_true - p_opt_gn) / norm(p_true)
+```
+
+Gauss-Newton algorithms are often more efficient at sum-of-squares minimization than the more generic BFGS optimizer.
+
+### Identifiability
 There is no guarantee that we will recover the true parameters for this system, especially not if the input excitation is poor, but we will generally find parameters that results in a good predictor for the system (this is after all what we're optimizing for). A tool like [StructuralIdentifiability.jl](https://github.com/SciML/StructuralIdentifiability.jl) may be used to determine the identifiability of parameters and states, something that for this system could look like
 ```julia
 using StructuralIdentifiability
