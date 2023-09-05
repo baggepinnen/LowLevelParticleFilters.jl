@@ -359,7 +359,7 @@ function residuals!(res, p::Vector{T}) where T
     LowLevelParticleFilters.prediction_errors!(res, kf, u, y, p) 
 end
 
-res_gn = optimize!(LeastSquaresProblem(x = p_guess, f! = residuals!, output_length = length(y)*ny, autodiff = :forward), LevenbergMarquardt())
+res_gn = optimize!(LeastSquaresProblem(x = copy(p_guess), f! = residuals!, output_length = length(y)*ny, autodiff = :forward), LevenbergMarquardt())
 
 p_opt_gn = res_gn.minimizer
 norm(p_true - p_opt_gn) / norm(p_true)

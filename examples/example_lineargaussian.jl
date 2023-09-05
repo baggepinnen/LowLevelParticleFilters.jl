@@ -288,15 +288,15 @@ function run_test()
         for (Ni,N) = enumerate(particle_count)
             montecarlo_runs = 2*maximum(particle_count)*maximum(time_steps) ÷ T ÷ N
             E = sum(1:montecarlo_runs) do mc_run
-                pf = ParticleFilter(N, dynamics, measurement, df, dg, dx0) # Create filter
+                pf = ParticleFilter(N, dynamics, measurement, df, dg, dx0; p=params) # Create filter
                 u = @SVector randn(2)
                 x = SVector{2,Float64}(rand(rng, dx0))
-                y = SVector{2,Float64}(sample_measurement(pf,x,u,0,1))
+                y = SVector{2,Float64}(sample_measurement(pf,x,u,params,1))
                 error = 0.0
                 @inbounds for t = 1:T-1
                     pf(u, y) # Update the particle filter
-                    x = dynamics(x,u,0,t) + SVector{2,Float64}(rand(rng, df)) # Simulate the true dynamics and add some noise
-                    y = SVector{2,Float64}(sample_measurement(pf,x,u,0,t)) # Simulate a measuerment
+                    x = dynamics(x,u,params,t) + SVector{2,Float64}(rand(rng, df)) # Simulate the true dynamics and add some noise
+                    y = SVector{2,Float64}(sample_measurement(pf,x,u,params,t)) # Simulate a measuerment
                     u = @SVector randn(2) # draw a random control input
                     error += sum(abs2,x-weighted_mean(pf))
                 end # t
