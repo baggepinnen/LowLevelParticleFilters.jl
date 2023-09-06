@@ -80,7 +80,7 @@ dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 function predict!(ukf::UnscentedKalmanFilter, u, p = parameters(ukf), t::Real = index(ukf); R1 = get_mat(ukf.R1, ukf.x, u, p, t))
     @unpack dynamics,measurement,x,xs,R = ukf
     ns = length(xs)
-    sigmapoints!(xs,x,R) # TODO: these are calculated in the update step
+    sigmapoints!(xs,eltype(xs)(x),R) # TODO: these are calculated in the update step
     for i in eachindex(xs)
         xs[i] = dynamics(xs[i], u, p, t)
     end
@@ -95,7 +95,7 @@ function correct!(ukf::UnscentedKalmanFilter, u, y, p=parameters(ukf), t::Real =
     n = size(R1,1)
     m = size(R2,1)
     ns = length(xs)
-    sigmapoints!(xs,x,R) # Update sigmapoints here since untransformed points required
+    sigmapoints!(xs,eltype(xs)(x),R) # Update sigmapoints here since untransformed points required
     C = @SMatrix zeros(n,m)
     ys = map(xs) do x
         measurement(x, u, p, t)
