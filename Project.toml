@@ -36,6 +36,7 @@ LowLevelParticleFiltersControlSystemsBaseExt = "ControlSystemsBase"
 
 [compat]
 ControlSystemsBase = "1"
+DelimitedFiles = "1"
 Distributions = "0.21.10, 0.22, 0.23, 0.24, 0.25"
 ForwardDiff = "0.10"
 Lazy = "<0.15, 0.15"
