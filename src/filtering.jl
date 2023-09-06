@@ -337,7 +337,7 @@ function simulate(f::AbstractFilter,u,p=parameters(f); dynamics_noise=true, meas
         y[t] = sample_measurement(f,x[t], u[t], p, t; noise=measurement_noise)
         x[t+1] = sample_state(f, x[t], u[t], p, t; noise=dynamics_noise)
     end
-    y[T] = sample_measurement(f,x[T], u[T], p, T)
+    y[T] = sample_measurement(f,x[T], u[T], p, T; noise=measurement_noise)
     x,u,y
 end
 

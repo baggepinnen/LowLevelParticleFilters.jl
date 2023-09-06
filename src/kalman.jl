@@ -86,8 +86,13 @@ function dynamics(kf::AbstractKalmanFilter)
     (x,u,p,t) -> get_mat(kf.A, x, u, p, t)*x + get_mat(kf.B, x, u, p, t)*u
 end
 
-function reset!(kf::AbstractKalmanFilter)
-    kf.x .= Vector(kf.d0.μ)
+"""
+    reset!(kf::AbstractKalmanFilter; x0)
+
+Reset the initial distribution of the state. Optionally, a new mean vector `x0` can be provided.
+"""
+function reset!(kf::AbstractKalmanFilter; x0 = kf.d0.μ)
+    kf.x .= Vector(x0)
     kf.R .= copy(Matrix(kf.d0.Σ))
     kf.t[] = 1
 end
