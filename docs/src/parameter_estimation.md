@@ -402,8 +402,9 @@ Dict{Nemo.fmpq_mpoly, Bool} with 15 entries:
   h1  => 1
   A1  => 0
   a2  => 0
-  ```
-  indicating that we can not hope to resolve all of the parameters. However, using appropriate regularization from prior information, we might still recover a lot of information about the system. Regularization could easily be added to the function `cost` above, e.g., using a penalty like `(p-p_guess)'Γ*(p-p_guess)` for some matrix ``\Gamma``, to indicate our confidence in the initial guess.
+```
+
+indicating that we can not hope to resolve all of the parameters. However, using appropriate regularization from prior information, we might still recover a lot of information about the system. Regularization could easily be added to the function `cost` above, e.g., using a penalty like `(p-p_guess)'Γ*(p-p_guess)` for some matrix ``\Gamma``, to indicate our confidence in the initial guess.
 
 ## Video
 An example of parameter estimation by using an optimizer to optimize the likelihood of an [`UnscentedKalmanFilter`](@ref) is available here

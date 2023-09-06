@@ -217,7 +217,7 @@ See the docstring for [`DAEUnscentedKalmanFilter`](@ref) or the [test file](http
 > Ravi K. Mandela, Raghunathan Rengaswamy, Shankar Narasimhan
 
 !!! warning
-    This filter is still considered experimental and subject to change without respecting semantic versioning. Use at your own risk.
+    This filter is still considered experimental and subject to change without respecting semantic versioning. Use at your own risk. The [`AdvancedParticleFilter`](@ref) also supports DAE systems, see [this tutorial](https://juliahub.com/ui/Notebooks/fredrik-carlson2/controlsystems/dae_stateest.jl).
 
 # Extended Kalman Filter
 The [`ExtendedKalmanFilter`](@ref) ([EKF](https://en.wikipedia.org/wiki/Extended_Kalman_filter)) is similar to the UKF, but propagates Gaussian distributions by linearizing the dynamics and using the formulas for linear systems similar to the standard Kalman filter. This can be slightly faster than the UKF (not always), but also less accurate for strongly nonlinear systems. The linearization is performed automatically using ForwardDiff.jl. In general, the UKF is recommended over the EKF unless the EKF is faster and computational performance is the top priority.
@@ -288,6 +288,8 @@ apfa = AuxiliaryParticleFilter(apf)
 sol = forward_trajectory(apfa, u, y, p)
 plot(sol, dim=1, xreal=x) # Same as above, but only plots a single dimension
 ```
+
+See the tutorials section for more advanced examples, including state estimation for DAE (Differential-Algebraic Equation) systems.
 
 
 # Troubleshooting and tuning
