@@ -124,6 +124,46 @@ end
 end
 
 
+function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf))
+    # ref: "Unscented Rauch–Tung–Striebel Smoother" Simo Särkkä
+    (; x,xt,R,Rt,ll) = sol
+    T            = length(y)
+    xT           = similar(xt)
+    RT           = similar(Rt)
+    xT[end]      = xt[end]      |> copy
+    RT[end]      = Rt[end]      |> copy
+    ny = kf.ny
+    nx = length(x[1])
+    xi = 1:nx
+    for t = T-1:-1:1
+        m = xt[t]
+        m̃ = [m; 0*m]
+        P̃ = cat(Rt[t], get_mat(kf.R1, xt[t], u[t], p, t), dims=(1,2))
+        X̃ = sigmapoints(m̃, P̃)
+        X̃⁻ = map(X̃) do xq
+            kf.dynamics(xq[xi], u[t], p, t) + xq[nx+1:end]
+        end
+        m⁻ = mean(X̃⁻)
+        P⁻ = @SMatrix zeros(nx,nx)
+        for i in eachindex(X̃⁻)
+            e = (X̃⁻[i] - m⁻)
+            P⁻ += e*e'
+        end
+        ns = length(X̃⁻)
+        P⁻ = P⁻ ./ ns
+        C = @SMatrix zeros(nx,ny)
+        for i in eachindex(X̃⁻)
+            C += (X̃[i][xi] - m)*(X̃⁻[i][xi] - m⁻)'
+        end
+        C = C ./ ns
+        D = C / cholesky(P⁻)
+        xT[t] = m + D*(xT[t+1]-m⁻[xi])
+        RT[t] = Rt[t] + symmetrize(D*(RT[t+1] .- P⁻)*D')
+    end
+    xT,RT,ll
+end
+
+
 ## DAE UKF
 #= 
 Nonlinear State Estimation of Differential Algebraic Systems
