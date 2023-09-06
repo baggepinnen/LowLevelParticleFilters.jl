@@ -5,11 +5,9 @@
 
 Returns smoothed estimates of state `x` and covariance `R` given all input output data `u,y`
 """
-function smooth(kf::KalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf))
-    reset!(kf)
-    T            = length(y)
-    sol = forward_trajectory(kf, u, y, p)
+function smooth(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf))
     (; x,xt,R,Rt,ll) = sol
+    T            = length(y)
     xT           = similar(xt)
     RT           = similar(Rt)
     xT[end]      = xt[end]      |> copy
@@ -20,6 +18,12 @@ function smooth(kf::KalmanFilter, u::AbstractVector, y::AbstractVector, p=parame
         RT[t] = Rt[t] .+ symmetrize(C*(RT[t+1] .- R[t+1])*C')
     end
     xT,RT,ll
+end
+
+function smooth(kf::KalmanFilter, args...)
+    reset!(kf)
+    sol = forward_trajectory(kf, args...)
+    smooth(sol, kf, args...)
 end
 
 function smooth(pf::AbstractParticleFilter, M, u, y, p=parameters(pf))
