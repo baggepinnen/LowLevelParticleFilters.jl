@@ -26,7 +26,7 @@ function quadtank(h,u,p,t)
 end
 
 nu = 2 # number of control inputs
-nx = 4 # number of states
+nx = 4 # number of state variables
 ny = 2 # number of measured outputs
 Ts = 1 # sample time
 measurement(x,u,p,t) = SA[x[1], x[2]]
@@ -43,7 +43,7 @@ y = measurement.(x, u, 0, 0)
 y = [y .+ 0.01randn(ny) for y in y]
 
 plot(
-    plot(reduce(hcat, x)', title="States"),
+    plot(reduce(hcat, x)', title="State"),
     plot(reduce(hcat, u)', title="Inputs")
 )
 

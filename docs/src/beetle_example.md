@@ -54,7 +54,7 @@ nothing # hide
 We now define the dynamics, since we use the advanced filter, we include the `noise=false` argument. The dynamics is directly defined in discrete time.
 ```@example beetle
 @inline function dynamics(s,u,p,t,noise=false)
-    # current states
+    # current state
     m = mode(s)
     v = vel(s)
     a = ϕ(s)
@@ -65,12 +65,12 @@ We now define the dynamics, since we use the advanced filter, we include the `no
     else
         y_noise, x_noise, v_noise, ϕ_noise = 0.,0.,0.,0.
     end
-    # next states
+    # next state
     v⁺ = max(0.999v + v_noise, 0.0)
     m⁺ = Float64(m == 0 ? rand() < switch_prob : true)
     a⁺ = a + (ϕ_noise*(1 + m*10))/(1 + v) # next state velocity is used here
     p⁺ = p + SVector(y_noise, x_noise) + SVector(sincos(a))*v # current angle but next velocity
-    SVector{5,Float64}(p⁺[1], p⁺[2], v⁺, a⁺, m⁺) # all next states
+    SVector{5,Float64}(p⁺[1], p⁺[2], v⁺, a⁺, m⁺) # all next state
 end
 function measurement_likelihood(s,u,y,p,t)
     logpdf(dg, pos(s)-y) # A simple linear measurement model with normal additive noise
@@ -88,7 +88,7 @@ sol = forward_trajectory(pf,u[1:T],y[1:T])
 (; x,w,we,ll) = sol
 plot(sol, markerstrokecolor=:auto, m=(2,0.5), format=:png)
 ```
-We can clearly see when the beetle switched mode (state 5). This corresponds well to annotations provided by a biologist and is the fundamental question we want to answer with the filtering procedure.
+We can clearly see when the beetle switched mode (state variable 5). This corresponds well to annotations provided by a biologist and is the fundamental question we want to answer with the filtering procedure.
 
 We can plot the mean of the filtered trajectory as well
 ```@example beetle
@@ -106,7 +106,7 @@ to1series(y) = to1series(1:size(y,1),y)
 fig1 = plot(xh[:,1],xh[:,2], c=:blue, lab="estimate", legend=:bottomleft)
 plot!(xyt[:,1],xyt[:,2], c=:red, lab="measurement")
 ```
-as well as the angle state (we subsample the particles to not get sluggish plots)
+as well as the angle state variable (we subsample the particles to not get sluggish plots)
 ```@example beetle
 fig2 = scatter(to1series(ϕ.(x)'[:,1:5:end])..., m=(:black, 0.03, 2), lab="", size=(500,300), format=:png)
 plot!(identity.(xh[:,4]), lab="Filtered angle", legend=:topleft, ylims=(-30, 70))
@@ -134,7 +134,7 @@ We can also visualize the mode state
 plot(xh[:,5], lab="Filtering")
 plot!(to1series(sbt[5,:,:]')..., lab="Smoothing", title="Mode trajectories", l=(:black,0.2))
 ```
-also this state indicate that it's hard to tell what state the beetle is during filtering, but obvious with hindsight (smoothing). The mode switch occurs when the filtering distribution of the angle becomes drastically wider, indicating that increased dynamics noise is required in order to describe the motion of the beetle.
+also this state variable indicates that it's hard to tell what state the beetle is in during filtering, but obvious with hindsight (smoothing). The mode switch occurs when the filtering distribution of the angle becomes drastically wider, indicating that increased dynamics noise is required in order to describe the motion of the beetle.
 
 ## Summary
-This example has demonstrated filtering and smoothing in an advanced application that includes manual control over noise, mixed continuous and discrete states.
+This example has demonstrated filtering and smoothing in an advanced application that includes manual control over noise, mixed continuous and discrete state.

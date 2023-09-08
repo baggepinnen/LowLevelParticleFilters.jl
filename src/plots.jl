@@ -5,9 +5,9 @@ using .Plots
     pdata = pplot(pf, y, pdata; kwargs...)
 
 To be called inside a particle filter, plots either particle density (`density=true`) or individual particles (`density=false`) \n
-Will plot all the real states in `xindices` as well as the expected vs real measurements of `yindices`.
+Will plot all the real state variables in `xindices` as well as the expected vs real measurements of `yindices`.
 # Arguments:
-- `x`: `Vector{Vector}(N)`. The states for each particle where `N` number of Particles
+- `x`: `Vector{Vector}(N)`. The states of each particle where `N` number of Particles
 - `w`: `Vector(N)`. weight of each particle
 - `y`: `Vector{Vector}(T)`. All true outputs. `T` is total number of time steps (will only use index `t`)
 - `yhat`: `Vector{Vector}(N)` The expected output per particle. `N` number of Particles
@@ -18,7 +18,7 @@ Will plot all the real states in `xindices` as well as the expected vs real meas
 - `pdata`: Persistant data for plotting. Set to `nothing` in first call and pdata on remaining \n
 - `density = true` To only plot the particle trajectories, set (`leftonly=false`)\n
 - `leftonly = true`: only plot the left column\n
-- `xindices = 1:n_states`\n
+- `xindices = 1:n_state`\n
 - `yindices = 1:n_measurements`\n
 Returns: `pdata`
 """
