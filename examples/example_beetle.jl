@@ -51,7 +51,7 @@ const noisevec = zeros(5)
 
 @inline function dynamics(s,u,p,t,noise=false)
     (; switch_prob, df) = p
-    # current states
+    # current state
     m = mode(s)
     v = vel(s)
     a = ϕ(s)
@@ -62,12 +62,12 @@ const noisevec = zeros(5)
     else
         y_noise, x_noise, v_noise, ϕ_noise = 0.,0.,0.,0.
     end
-    # next states
+    # next state
     v⁺ = max(0.999v + v_noise, 0.0)
     m⁺ = Float64(m == 0 ? rand() < switch_prob : true)
     a⁺ = a + (ϕ_noise*(1 + m*10))/(1 + v) # next state velocity is used here
     p⁺ = p + SVector(y_noise, x_noise) + SVector(sincos(a))*v # current angle but next velocity
-    SVector{5,Float64}(p⁺[1], p⁺[2], v⁺, a⁺, m⁺) # all next states
+    SVector{5,Float64}(p⁺[1], p⁺[2], v⁺, a⁺, m⁺) # all next state variables
 end
 function measurement_likelihood(s,u,y,p,t)
     logpdf(p.dg, pos(s)-y) # A simple linear measurement model with normal additive noise
