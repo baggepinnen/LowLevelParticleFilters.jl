@@ -3,7 +3,7 @@ State estimation is an integral part of many parameter-estimation methods. Below
 1. Methods that optimize prediction error or likelihood by tweaking model parameters.
 2. Methods that add the parameters to be estimated as state variables in the model and estimate them using standard state estimation. 
 
-From the first camp, we provide som basic functionality for maximum-likelihood estimation and MAP estimation, described below. An example of 2), joint state and parameter estimation, is provided in [Joint state and parameter estimation](@ref).
+From the first camp, we provide som basic functionality for maximum-likelihood estimation and MAP estimation, described below. An example of (2), joint state and parameter estimation, is provided in [Joint state and parameter estimation](@ref).
 
 
 ## Maximum-likelihood estimation
@@ -148,7 +148,7 @@ plot!(thetalls[:,3], subplot=3)
 ```
 
 ## Joint state and parameter estimation
-In this example, we'll show how to perform parameter estimation by treating a parameter as a state. This method can not only estimate constant parameters, but also **time-varying parameters**. The system we will consider is a quadruple tank, where two upper tanks feed into two lower tanks. The outlet for tank 1 can vary in size, simulating, e.g., that something partially blocks the outlet. We start by defining the dynamics on a form that changes the outlet area ``a_1`` at time ``t=500``:
+In this example, we'll show how to perform parameter estimation by treating a parameter as a state variable. This method can not only estimate constant parameters, but also **time-varying parameters**. The system we will consider is a quadruple tank, where two upper tanks feed into two lower tanks. The outlet for tank 1 can vary in size, simulating, e.g., that something partially blocks the outlet. We start by defining the dynamics on a form that changes the outlet area ``a_1`` at time ``t=500``:
 ```@example paramest
 using LowLevelParticleFilters
 using SeeToDee
@@ -178,7 +178,7 @@ function quadtank(h,u,p,t)
 end
 
 nu = 2 # number of control inputs
-nx = 4 # number of states
+nx = 4 # number of state variables
 ny = 2 # number of measured outputs
 Ts = 1 # sample time
 nothing # hide
@@ -202,7 +202,7 @@ y = measurement.(x, u, 0, 0)
 y = [y .+ 0.01randn(ny) for y in y]
 
 plot(
-    plot(reduce(hcat, x)', title="States"),
+    plot(reduce(hcat, x)', title="State"),
     plot(reduce(hcat, u)', title="Inputs")
 )
 ```
@@ -250,12 +250,12 @@ as we can see, the correct value of the parameter is quickly found (``x_5``), an
 
 If adaptive parameter estimation is coupled with a model-based controller, we get an adaptive controller! Note: the state that corresponds to the estimated parameter is typically not controllable, a fact that may require some special care for some control methods.
 
-We may ask ourselves, what's the difference between a parameter and a state variable if we can add parameters as states? Typically, parameters do not vary with time, and if they do, they vary significantly slower than the states. State variables also have dynamics associate with them, whereas we often have no idea about how the parameters vary other than that they vary slowly.
+We may ask ourselves, what's the difference between a parameter and a state variable if we can add parameters as state variables? Typically, parameters do not vary with time, and if they do, they vary significantly slower than the state variables. State variables also have dynamics associate with them, whereas we often have no idea about how the parameters vary other than that they vary slowly.
 
 Abrupt changes to the dynamics like in the example above can happen in practice, for instance, due to equipment failure or change of operating mode. This can be treated as a scenario with time-varying parameters that are continuously estimated. 
 
 ## Using an optimizer
-Maximum-likelihood or prediction-error estimation is straight-forward by simply calling a gradient-based optimizer with gradients provided by differentiating through the state estimator using automatic differentiation. In this example, we will continue the example from above, but now estimate all the parameters of the quad-tank process. This time, they will not vary with time. We will first use a standard optimization algorithm from [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl) to minimize the cost function based on the prediction error, and then use a Gauss-Newton optimizer.
+The state estimators in this package are all statistically motivated and thus compute things like the likelihood of the data as a by-product of the estimation. Maximum-likelihood or prediction-error estimation is thus very straight-forward by simply calling a gradient-based optimizer with gradients provided by differentiating through the state estimator using automatic differentiation. In this example, we will continue the example from above, but now estimate all the parameters of the quad-tank process. This time, they will not vary with time. We will first use a standard optimization algorithm from [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl) to minimize the cost function based on the prediction error, and then use a Gauss-Newton optimizer.
 
 We now define the dynamics function such that it takes its parameters from the `p` input argument. We also define a variable `p_true` that contains the true values that we will use to simulate some estimation data
 ```@example paramest
@@ -268,7 +268,7 @@ function quadtank(h, u, p, t)
 
     ssqrt(x) = √(max(x, zero(x)) + 1e-3) # For numerical robustness at x = 0
     
-    xd = SA[
+    SA[
         -a1/A1 * ssqrt(2g*h[1]) + a3/A1*ssqrt(2g*h[3]) +     γ1*k1/A1 * u[1]
         -a2/A2 * ssqrt(2g*h[2]) + a4/A2*ssqrt(2g*h[4]) +     γ2*k2/A2 * u[2]
         -a3/A3*ssqrt(2g*h[3])                          + (1-γ2)*k2/A3 * u[2]
@@ -276,7 +276,7 @@ function quadtank(h, u, p, t)
     ]
 end
 
-discrete_dynamics = SeeToDee.Rk4(quadtank, Ts, supersample=2)
+discrete_dynamics = SeeToDee.Rk4(quadtank, Ts, supersample=2) # Discretize the dynamics using a 4:th order Runge-Kutta integrator
 p_true = [0.5, 1.6, 1.6, 4.9, 0.03, 0.2]
 nothing # hide
 ```
@@ -294,7 +294,7 @@ y = measurement.(x, u, 0, 0)
 y = [y .+ 0.01randn(ny) for y in y]
 
 plot(
-    plot(reduce(hcat, x)', title="States"),
+    plot(reduce(hcat, x)', title="State"),
     plot(reduce(hcat, u)', title="Inputs")
 )
 ```
@@ -365,10 +365,10 @@ p_opt_gn = res_gn.minimizer
 norm(p_true - p_opt_gn) / norm(p_true)
 ```
 
-Gauss-Newton algorithms are often more efficient at sum-of-squares minimization than the more generic BFGS optimizer.
+Gauss-Newton algorithms are often more efficient at sum-of-squares minimization than the more generic BFGS optimizer. This form of Gauss-Newton optimization of prediction errors is also available through [ControlSystemIdentification.jl](https://baggepinnen.github.io/ControlSystemIdentification.jl/dev/nonlinear/#Identification-of-nonlinear-models), which uses this package undernath the hood.
 
 ### Identifiability
-There is no guarantee that we will recover the true parameters for this system, especially not if the input excitation is poor, but we will generally find parameters that results in a good predictor for the system (this is after all what we're optimizing for). A tool like [StructuralIdentifiability.jl](https://github.com/SciML/StructuralIdentifiability.jl) may be used to determine the identifiability of parameters and states, something that for this system could look like
+There is no guarantee that we will recover the true parameters for this system, especially not if the input excitation is poor, but we will generally find parameters that results in a good predictor for the system (this is after all what we're optimizing for). A tool like [StructuralIdentifiability.jl](https://github.com/SciML/StructuralIdentifiability.jl) may be used to determine the identifiability of parameters and state variables, something that for this system could look like
 ```julia
 using StructuralIdentifiability
 
