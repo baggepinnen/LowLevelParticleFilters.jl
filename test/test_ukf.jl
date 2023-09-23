@@ -71,9 +71,9 @@ norm(mean(x .- resukf.xt))
 xT,RT,ll = smooth(resukf, ukf, u, y)
 @test norm(mean(x .- xT)) < norm(mean(x .- resukf.xt)) # Test ukf smoothing better than ukf filtering
 
-plot(reduce(hcat, x)', lab="true", layout=2)
-plot!(reduce(hcat, resukf.xt)', lab="Filter")
-plot!(reduce(hcat, xT)', lab="Smoothed")
+# plot(reduce(hcat, x)', lab="true", layout=2)
+# plot!(reduce(hcat, resukf.xt)', lab="Filter")
+# plot!(reduce(hcat, xT)', lab="Smoothed")
 
 
 ## DAE UKF =====================================================================

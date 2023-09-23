@@ -375,8 +375,8 @@ using StructuralIdentifiability
 ode = @ODEmodel(
     h1'(t) = -a1/A1 * h1(t) + a3/A1*h3(t) +     gam*k1/A1 * u1(t),
     h2'(t) = -a2/A2 * h2(t) + a4/A2*h4(t) +     gam*k2/A2 * u2(t),
-    h3'(t) = -a3/A3*h3(t)                          + (1-gam)*k2/A3 * u2(t),
-    h4'(t) = -a4/A4*h4(t)                          + (1-gam)*k1/A4 * u1(t),
+    h3'(t) = -a3/A3*h3(t)                 + (1-gam)*k2/A3 * u2(t),
+    h4'(t) = -a4/A4*h4(t)                 + (1-gam)*k1/A4 * u1(t),
 	y1(t) = h1(t),
     y2(t) = h2(t),
 )

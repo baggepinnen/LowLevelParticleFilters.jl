@@ -8,5 +8,5 @@ Modules = [LowLevelParticleFilters]
 Private = false
 ```
 ```@docs
-LowLevelParticleFilters.rk4
+LowLevelParticleFilters.prediction_errors!
 ```

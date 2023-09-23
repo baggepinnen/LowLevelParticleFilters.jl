@@ -4,9 +4,10 @@ This package operates exclusively on discrete-time dynamics, and dynamics descri
 
 ## Nonlinear ODEs
 
-Continuous-time dynamics functions on the form `(x,u,p,t) -> ẋ` can be discretized (integrated) using the function [`LowLevelParticleFilters.rk4`](@ref), e.g.,
+Continuous-time dynamics functions on the form `(x,u,p,t) -> ẋ` can be discretized (integrated) using the function [`SeeToDee.Rk4`](https://baggepinnen.github.io/SeeToDee.jl/dev/api/#SeeToDee.Rk4), e.g.,
 ```julia
-discrete_dynamics = LowLevelParticleFilters.rk4(continuous_dynamics, sampletime; supersample=1)
+using SeeToDee
+discrete_dynamics = SeeToDee.Rk4(continuous_dynamics, sampletime; supersample=1)
 ```
 where the integer `supersample` determines the number of RK4 steps that is taken internally for each change of the control signal (1 is often sufficient and is the default). The returned function `discrete_dynamics` is on the form `(x,u,p,t) -> x⁺`.
 
@@ -53,7 +54,7 @@ where ``N = B`` are both equal to `[0, 1]`, indicating that the noise ``w(t)`` e
 We start by defining the system that takes ``u`` as an input and discretize that with a sample time of ``T_s = 0.1``.
 
 ```@example samplecov
-using ControlSystems
+using ControlSystemsBase
 A = [0 1; 0 0]
 B = [0; 1;;]
 C = [1 0]

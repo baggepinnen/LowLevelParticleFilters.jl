@@ -24,6 +24,7 @@ makedocs(
             "API" => "api.md",
       ],
       format = Documenter.HTML(prettyurls = haskey(ENV, "CI")),
+      warnonly = [:docs_block, :missing_docs, :cross_references],
 ) # Due to lots of plots, this will just have to be run on my local machine
 
 deploydocs(
