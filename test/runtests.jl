@@ -162,6 +162,14 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
         # plot!(reduce(hcat,xT)')
 
 
+        sqkf   = SqKalmanFilter(A_test, B_test, C_test, 0, 0.01eye(n), eye(p), d0)
+        sqksol = forward_trajectory(sqkf, u, y)
+        @test ksol.x ≈ sqksol.x
+        @test ksol.xt ≈ sqksol.xt
+        @test ksol.R ≈ sqksol.R
+        @test ksol.Rt ≈ sqksol.Rt
+
+
 
         svec = exp10.(LinRange(-1,2,22))
         llspf = map(svec) do s
