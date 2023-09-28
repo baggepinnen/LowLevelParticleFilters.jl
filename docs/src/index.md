@@ -19,6 +19,7 @@ Depending on the nature of ``f`` and ``g``, the best method of estimating the st
 ## Estimator types
 We provide a number of filter types
 - [`KalmanFilter`](@ref). A standard Kalman filter. Is restricted to linear dynamics (possibly time varying) and Gaussian noise.
+- [`SqKalmanFilter`](@ref). A standard Kalman filter on square-root form (slightly slower but more numerically stable with ill-conditioned covariance).
 - [`ExtendedKalmanFilter`](@ref): For nonlinear systems, the EKF runs a regular Kalman filter on linearized dynamics. Uses ForwardDiff.jl for linearization. The noise model must be Gaussian.
 - [`UnscentedKalmanFilter`](@ref): The Unscented Kalman filter often performs slightly better than the Extended Kalman filter but may be slightly more computationally expensive. The UKF handles nonlinear dynamics and measurement model, but still requires an additive Gaussian noise model and assumes all posterior distributions are Gaussian, i.e., can not handle multi-modal posteriors.
 - [`ParticleFilter`](@ref): The particle filter is a nonlinear estimator. This version of the particle filter is simple to use and assumes that both dynamics noise and measurement noise are additive. Particle filters handle multi-modal posteriors.

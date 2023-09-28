@@ -169,6 +169,8 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
         @test ksol.R ≈ sqksol.R
         @test ksol.Rt ≈ sqksol.Rt
 
+        @test_nowarn simulate(sqkf, T, du)
+
 
 
         svec = exp10.(LinRange(-1,2,22))

@@ -96,9 +96,9 @@ function predict!(kf::SqKalmanFilter, u, p=parameters(kf), t::Real = index(kf); 
     Bt = get_mat(B, x, u, p, t)
     x .= At*x .+ Bt*u |> vec
     if kf.α == 1
-        R .= UpperTriangular(qr([R*At';R1]).R)
+        R .= UpperTriangular(qr!([R*At';R1]).R)
     else
-        R .= UpperTriangular(qr([sqrt(kf.α)*R*At';R1]).R) # symmetrize(kf.α*At*R*At') + R1
+        R .= UpperTriangular(qr!([sqrt(kf.α)*R*At';R1]).R) # symmetrize(kf.α*At*R*At') + R1
     end
     kf.t[] += 1
 end
@@ -124,7 +124,7 @@ function correct!(kf::SqKalmanFilter, u, y, p=parameters(kf), t::Real = index(kf
     end
     K   = ((R'*(R*Ct'))/S)/(S')
     x .+= K*e
-    R .= UpperTriangular(qr([R*(I - K*Ct)';R2*K']).R) 
+    R .= UpperTriangular(qr!([R*(I - K*Ct)';R2*K']).R) 
     SS = S'S
     Sᵪ = Cholesky(S0, 'U', 0)
     ll = logpdf(MvNormal(PDMat(SS, Sᵪ)), e)# - 1/2*logdet(S) # logdet is included in logpdf
