@@ -72,7 +72,7 @@ end
 Calculate the sum of squared errors ``\\sum dot(e, λ, e)``.
 - `λ`: May be a weighting matrix. A commonly used metric is `λ = Diagonal(1 ./ (mag.^2))`, where `mag` is a vector of the "typical magnitude" of each output.
 
-See also [`prediction_errors!`](@ref) which returns the prediction errors themselves rather than their sum of squares (for use with Gauss-Newton style optimization).
+See also [`LowLevelParticleFilters.prediction_errors!`](@ref) which returns the prediction errors themselves rather than their sum of squares (for use with Gauss-Newton style optimization).
 """
 function sse(f::AbstractFilter, u, y, p=parameters(f), λ=1)
     reset!(f)
