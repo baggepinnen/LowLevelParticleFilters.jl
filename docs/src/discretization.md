@@ -20,13 +20,15 @@ where the integer `supersample` determines the number of RK4 steps that is taken
 ## Linear systems
 A linear system on the form 
 ```math
-\dot{x}(t) = Ax(t) + Bu(t)\\
-y(t) = Cx(t) + Du(t)
+\begin{aligned}
+\dot{x}(t) &= Ax(t) + Bu(t)\\
+y(t) &= Cx(t) + Du(t)
+\end{aligned}
 ```
-can be discretized using [`ControlSystems.c2d`](https://juliacontrol.github.io/ControlSystems.jl/stable/lib/synthesis/#ControlSystemsBase.c2d-Tuple{AbstractStateSpace{%3C:Continuous},%20AbstractMatrix,%20Real}), which defaults to a zero-order hold discretization. See the example below for more info.
+can be discretized using [`ControlSystems.c2d`](https://juliacontrol.github.io/ControlSystems.jl/stable/lib/synthesis/#ControlSystemsBase.c2d), which defaults to a zero-order hold discretization. See the example below for more info.
 
 ## Covariance matrices
-Covariance matrices for continuous-time noise processes can be discretized using
+Covariance matrices for continuous-time noise processes can also be discretized using [`ControlSystems.c2d`](https://juliacontrol.github.io/ControlSystems.jl/stable/lib/synthesis/#ControlSystemsBase.c2d-Tuple{AbstractStateSpace{%3C:Continuous},%20AbstractMatrix,%20Real})
 ```julia
 using ControlSystemIdentification
 R1d = c2d(sys::StateSpace{<:Discrete}, R1::Matrix)
@@ -46,8 +48,10 @@ The method used comes from theorem 5 in the reference below.
 ## Example
 The following example will discretize a linear double integrator system. Double integrators arise when the position of an object is controlled by a force, i.e., when Newtons second law ``f = ma`` governs the dynamics. The system can be written on the form
 ```math
-\dot x(t) = Ax(t) + Bu(t) + Nw(t)\\
-y(t) = Cx(t) + e(t)
+\begin{aligned}
+\dot x(t) &= Ax(t) + Bu(t) + Nw(t)\\
+y(t) &= Cx(t) + e(t)
+\end{aligned}
 ```
 where ``N = B`` are both equal to `[0, 1]`, indicating that the noise ``w(t)`` enters like a force (this could be for instance due to air resistance or friction).
 

@@ -5,8 +5,17 @@
 
 This is a library for *state estimation*, that is, given measurements ``y(t)`` from a dynamical system, estimate the state vector ``x(t)``. Throughout, we assume dynamics on the form
 ```math
-x(t+1) = f(x(t), u(t), p, t, w(t))\\
-y(t) = g(x(t), u(t), p, t, e(t))
+\begin{aligned}
+x(t+1) &= f(x(t), u(t), p, t, w(t))\\
+y(t) &= g(x(t), u(t), p, t, e(t))
+\end{aligned}
+```
+or the linear version
+```math
+\begin{aligned}
+x(t+1) &= Ax(t) + Bu(t) + w(t)\\
+y(t) &= Cx(t) + Du(t) + e(t)
+\end{aligned}
 ```
 where ``x`` is the state vector, ``u`` an input, ``p`` some form of parameters, ``t`` is the time and ``w,e`` are disturbances (noise). Throughout the documentation, we often call the function ``f`` `dynamics` and the function ``g`` `measurement`.
 
@@ -152,8 +161,10 @@ scatter!(xbt[2, 1:downsample:end, :]', subplot=2, m=(1,:black, 0.5), lab="")
 # Kalman filter
 The [`KalmanFilter`](@ref) ([wiki](https://en.wikipedia.org/wiki/Kalman_filter)) assumes that ``f`` and ``g`` are linear functions, i.e., that they can be written on the form
 ```math
-x(t+1) = Ax(t) + Bu(t) + w(t)\\
-y(t) = Cx(t) + Du(t) + e(t)
+\begin{aligned}
+x(t+1) &= Ax(t) + Bu(t) + w(t)\\
+y(t) &= Cx(t) + Du(t) + e(t)
+\end{aligned}
 ```
 for some matrices ``A,B,C,D`` where ``w \sim N(0, R_1)`` and ``e \sim N(0, R_2)`` are zero mean and Gaussian. The Kalman filter represents the posterior distributions over ``x`` by the mean and a covariance matrix. The magic behind the Kalman filter is that linear transformations of Gaussian distributions remain Gaussian, and we thus have a very efficient way of representing them.
 
