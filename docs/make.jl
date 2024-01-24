@@ -16,8 +16,9 @@ makedocs(
             "Parameter estimation" => "parameter_estimation.md",
             "Benchmark" => "benchmark.md",
             "High-performance distributions" => "distributions.md",
-            "Advanced tutorials" => [
-                  "Kalman-filter tutorial" => "adaptive_kalmanfilter.md",
+            "Tutorials" => [
+                  "Kalman-filter tutorial with LowLevelParticleFilters" => "adaptive_kalmanfilter.md",
+                  "Noise tuning and disturbance modeling for Kalman filtering" => "noisetuning.md",
                   "Particle-filter tutorial" => "beetle_example.md",
                   "State estimation for DAE systems" => "dae.md",
             ],
