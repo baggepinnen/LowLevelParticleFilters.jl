@@ -211,6 +211,9 @@ plot!(xbm', lab="pf smooth")
 plot!(vecvec_to_mat(x), lab="true")
 ```
 
+## Kalman filter tuning tutorial
+The tutorial ["How to tune a Kalman filter"](https://juliahub.com/pluto/editor.html?id=ad9ecbf9-bf83-45e7-bbe8-d2e5194f2240) details how to figure out appropriate covariance matrices for the Kalman filter, as well as how to add disturbance models to the system model.
+
 
 # Unscented Kalman Filter
 

@@ -38,6 +38,9 @@ For maximum performance, provide statically sized matrices from StaticArrays.jl
 ```math
 R(t+1|t) = α AR(t)A^T + R_1
 ```
+
+# Tutorials on Kalman filtering
+The tutorial ["How to tune a Kalman filter"](https://juliahub.com/pluto/editor.html?id=ad9ecbf9-bf83-45e7-bbe8-d2e5194f2240) details how to figure out appropriate covariance matrices for the Kalman filter, as well as how to add disturbance models to the system model. See also the [tutorial in the documentation](https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/adaptive_kalmanfilter/)
 """
 function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(Matrix(R1)); p = SciMLBase.NullParameters(), α = 1.0, check = true)
     α ≥ 1 || @warn "α should be > 1 for exponential forgetting. An α < 1 will lead to exponential loss of adaptation over time."
