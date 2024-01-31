@@ -21,7 +21,7 @@ function MonteCarloMeasurements.Particles(x::AbstractMatrix{<:AbstractVector},we
     ## Perform resampling so that all particles have the same weight
     choices = map(LowLevelParticleFilters.resample, eachcol(we))
     for j in 1:size(xp,2), i in 1:size(xp,1)
-        xp[i,j].particles .= xp[i,j].particles[choices[j]]
+        xp[i,j].particles .= xp[i,j].particles[choices[i]]
     end
     xp
 end
