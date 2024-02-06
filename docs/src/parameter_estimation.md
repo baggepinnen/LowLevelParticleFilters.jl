@@ -7,9 +7,12 @@ From the first camp, we provide som basic functionality for maximum-likelihood e
 
 
 ## Maximum-likelihood estimation
-Filters calculate the likelihood and prediction errors while performing filtering, this can be used to perform maximum likelihood estimation or prediction-error minimization. One can estimate all kinds of parameters using this method, in the example below, we will estimate the noise covariance. We may for example plot likelihood as function of the variance of the dynamics noise like this
+Filters calculate the likelihood and prediction errors while performing filtering, this can be used to perform maximum likelihood estimation or prediction-error minimization. One can estimate all kinds of parameters using this method, in the example below, we will estimate the noise covariance. We may for example plot likelihood as function of the variance of the dynamics noise like this:
 
-```@setup ml_map
+
+### Generate data by simulation
+This simulates the same linear system as on the index page of the documentation
+```@example ml_map
 using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions, Plots
 nx = 2   # Dimension of state
 nu = 2   # Dimension of input
@@ -31,6 +34,7 @@ pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 xs,u,y = simulate(pf,300,df)
 ```
 
+### Compute likelihood for various values of the parameters
 ```@example ml_map
 p = nothing
 svec = exp10.(LinRange(-0.8, 1.2, 60))
