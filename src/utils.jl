@@ -14,8 +14,8 @@ function logsumexp!(w,we,maxw=Ref(zero(eltype(w))))::eltype(w)
     s    = sum_all_but(we,maxind) # s = ∑wₑ-1
     we .*= 1/(s+1)
     w  .-= log1p(s)
-    maxw[] += offset
-    log1p(s) + maxw[] - log(length(w))
+    maxw[] = offset
+    log1p(s) + maxw[] #- log(length(w))
 end
 
 # function logsumexp!(w,we)::eltype(w)

@@ -40,7 +40,7 @@ p = nothing
 svec = exp10.(LinRange(-0.8, 1.2, 60))
 llspf = map(svec) do s
     df = MvNormal(nx,s)
-    pfs = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
+    pfs = ParticleFilter(N, dynamics, measurement, df, dg, d0)
     loglik(pfs, u, y, p)
 end
 plot( svec, llspf,
@@ -65,7 +65,7 @@ plot!(svec, llskf, yscale=:identity, xscale=:log10, lab="Kalman", c=:red)
 vline!([svec[findmax(llskf)[2]]], l=(:dash,:red), primary=false)
 ```
 
-the result can be quite noisy due to the stochastic nature of particle filtering. The particle filter likelihood never reaches as high as for the Kalman filter which is optimal for the linear example system we are simulating here. For maximum-likelihood estimation, the [`AuxiliaryParticleFilter`](@ref) is typically more accurate than the standard [`ParticleFilter`](@ref)
+the result can be quite noisy due to the stochastic nature of particle filtering. The particle filter likelihood agrees with the Kalman-filter estimate, which is optimal for the linear example system we are simulating here, apart for when the noise variance is small. Due to particle depletion, particle filters often struggle when dynamics-noise is too small. This problem is mitigated by using a greater number of particles, or simply by not using a too small covariance.
 
 ## MAP estimation
 In this example, we will estimate the variance of the noises in the dynamics and the measurement functions.
