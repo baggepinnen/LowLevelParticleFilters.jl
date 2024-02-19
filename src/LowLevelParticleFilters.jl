@@ -17,7 +17,6 @@ using RecipesBase
 using ForwardDiff
 using SimpleNonlinearSolve
 using Polyester
-using SymbolicIndexingInterface
 using SeeToDee
 
 using SciMLBase
