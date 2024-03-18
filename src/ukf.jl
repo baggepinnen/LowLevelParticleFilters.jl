@@ -41,17 +41,18 @@ abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
     ny::Int
     nu::Int
     p::P
+    early_noise::Bool = false
 end
 
 
 """
-    UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0=MvNormal(Matrix(R1)); p = SciMLBase.NullParameters(), ny, nu)
+    UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0=MvNormal(Matrix(R1)); p = SciMLBase.NullParameters(), ny, nu, early_noise=false)
 
 A nonlinear state estimator propagating uncertainty using the unscented transform.
 
 The dynamics and measurement function are on the following form
 ```
-x' = dynamics(x, u, p, t) + w
+x⁺ = dynamics(x, u, p, t) + w
 y  = measurement(x, u, p, t) + e
 ```
 where `w ~ N(0, R1)`, `e ~ N(0, R2)` and `x(0) ~ d0`
@@ -64,14 +65,26 @@ Rfun(x, u, p, t) -> R
 For maximum performance, provide statically sized matrices from StaticArrays.jl
 
 `ny, nu` indicate the number of outputs and inputs.
+
+If `early_noise = true`, the dynamics noise model is changed to `w` entering *before* the dynamics propagation, i.e.,
+```
+x⁺ = dynamics(x + w, u, p, t)
+```
+This is occasionally useful when `dynamics` is respecting constraints on the state space, such as `x ≥ 0`, which could be violated by standard additive noise model. For a linear system, this changes the standard Lyapunov function for the covariance propagation from ``R^+ = ARA^T + R_1`` to ``R^+ = ARA^T + AR_1 A^T``, so `R1` is likely to require a different tuning when using this option.
 """
-function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)); p = SciMLBase.NullParameters(), nu::Int, ny::Int)
+function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)); p = SciMLBase.NullParameters(), nu::Int, ny::Int, early_noise=false)
     xs = sigmapoints(mean(d0), cov(d0))
-    UnscentedKalmanFilter(dynamics,measurement,R1,R2, d0, xs, Vector(d0.μ), Matrix(d0.Σ), Ref(1), ny, nu, p)
+    UnscentedKalmanFilter(dynamics,measurement,R1,R2, d0, xs, Vector(d0.μ), Matrix(d0.Σ), Ref(1), ny, nu, p, early_noise)
 end
 
 sample_state(kf::AbstractUnscentedKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
-sample_state(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf); noise=true) = kf.dynamics(x,u,p,t) .+ noise.*rand(MvNormal(Matrix(get_mat(kf.R1, x, u, p, t))))
+function sample_state(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf); noise=true)
+    if kf.early_noise
+        kf.dynamics(x .+ noise.*rand(MvNormal(Matrix(get_mat(kf.R1, x, u, p, t)))),u,p,t)
+    else
+        kf.dynamics(x,u,p,t) .+ noise.*rand(MvNormal(Matrix(get_mat(kf.R1, x, u, p, t))))
+    end
+end
 sample_measurement(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf); noise=true) = kf.measurement(x, u, p, t) .+ noise.*rand(MvNormal(Matrix(get_mat(kf.R2, x, u, p, t))))
 measurement(kf::AbstractUnscentedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
@@ -79,13 +92,18 @@ dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 
 function predict!(ukf::UnscentedKalmanFilter, u, p = parameters(ukf), t::Real = index(ukf); R1 = get_mat(ukf.R1, ukf.x, u, p, t))
     @unpack dynamics,measurement,x,xs,R = ukf
-    ns = length(xs)
+    if ukf.early_noise
+        R .+= R1
+    end
     sigmapoints!(xs,eltype(xs)(x),R) # TODO: these are calculated in the update step
     for i in eachindex(xs)
         xs[i] = dynamics(xs[i], u, p, t)
     end
     x .= mean(xs)
-    R .= symmetrize(cov(xs)) + R1
+    R .= symmetrize(cov(xs))
+    if !ukf.early_noise
+        R .+= R1
+    end
     ukf.t[] += 1
 end
 
@@ -141,7 +159,11 @@ function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter, u::Abst
         P̃ = cat(Rt[t], get_mat(kf.R1, xt[t], u[t], p, t), dims=(1,2))
         X̃ = sigmapoints(m̃, P̃)
         X̃⁻ = map(X̃) do xq
-            kf.dynamics(xq[xi], u[t], p, t) + xq[nx+1:end]
+            if kf.early_noise
+                kf.dynamics(xq[xi] + xq[nx+1:end], u[t], p, t)
+            else
+                kf.dynamics(xq[xi], u[t], p, t) + xq[nx+1:end]
+            end
         end
         m⁻ = mean(X̃⁻)
         P⁻ = @SMatrix zeros(nx,nx)
