@@ -151,6 +151,37 @@ histogram(exp.(thetalls[:,1:2]), layout=3)
 plot!(thetalls[:,3], subplot=3)
 ```
 
+### Bayesian inference using  DynamicHMC.jl
+The following snippet of code performs the same estimation as above, but uses the much more sophisticated HMC sampler in [DynamicHMC.jl](https://www.tamaspapp.eu/DynamicHMC.jl/stable/worked_example/) rather than the PMMH sampler above. This package requires the log-likelihood function to be wrapped in a custom struct that implements the `LogDensityProblems` interface, which is done below. We also indicate that we want to use ForwardDiff.jl to compute the gradients for fast sampling.
+```julia
+using DynamicHMC, LogDensityProblemsAD, ForwardDiff, LogDensityProblems, LinearAlgebra
+
+struct LogTargetDensity{F}
+    ll::F
+    dim::Int
+end
+LogDensityProblems.logdensity(p::LogTargetDensity, θ) = p.ll(θ)
+LogDensityProblems.dimension(p::LogTargetDensity) = p.dim
+LogDensityProblems.capabilities(::Type{LogTargetDensity}) = LogDensityProblems.LogDensityOrder{0}()
+
+function filter_from_parameters(θ, pf = nothing)
+    T = eltype(θ)
+    KalmanFilter(A, B, C, 0, exp(θ[1])^2*eye(nx), exp(θ[2])^2*eye(ny), MvNormal(T.(d0.μ), d0.Σ)) # It's important that the distribution of the initial state has the same element type as the parameters. DynamicHMC will use Dual numbers for differentiation, hence, we make sure that d0 has `eltype(d0) = eltype(θ)`
+end
+ll = log_likelihood_fun(filter_from_parameters, priors, u, y, p)
+
+D = length(θ₀)
+ℓπ = LogTargetDensity(ll, D)
+∇P = ADgradient(:ForwardDiff, ℓπ)
+
+results = mcmc_with_warmup(Random.default_rng(), ∇P, 3000)
+DynamicHMC.Diagnostics.summarize_tree_statistics(results.tree_statistics)
+lls = [ts.π for ts in results.tree_statistics]
+
+histogram(exp.(results.posterior_matrix)', layout=(3,1), lab=["R1" "R2"])
+plot!(lls, subplot=3, lab="log likelihood") # Visualize
+```
+
 ## Joint state and parameter estimation
 In this example, we'll show how to perform parameter estimation by treating a parameter as a state variable. This method can not only estimate constant parameters, but also **time-varying parameters**. The system we will consider is a quadruple tank, where two upper tanks feed into two lower tanks. The outlet for tank 1 can vary in size, simulating, e.g., that something partially blocks the outlet. We start by defining the dynamics on a form that changes the outlet area ``a_1`` at time ``t=500``:
 ```@example paramest
@@ -422,3 +453,5 @@ Estimation of time-varying parameters:
 ```@raw html
 <iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/zJcOPPLqv4A?si=XCvpo3WD-4U3PJ2S" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 ```
+
+
