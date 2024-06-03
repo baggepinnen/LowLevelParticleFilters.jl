@@ -164,7 +164,7 @@ end
     dynamics::FT
     measurement::GT
     measurement_likelihood::GLT
-    dynamics_density::FDT = Normal()
+    dynamics_density::FDT = MissingDistribution()
     initial_density::IDT
     resample_threshold::Float64 = 0.5
     resampling_strategy::RST = ResampleSystematic
@@ -201,8 +201,8 @@ function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Fun
     initial_density, kwargs...)
 end
 
-# Constructor without dynamics_density which is not used
-AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, measurement_likelihood, initial_density; kwargs...) = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, Normal(), initial_density; kwargs...)
+# Constructor without dynamics_density which is not used except for in smoothing
+AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, measurement_likelihood, initial_density; kwargs...) = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, MissingDistribution(), initial_density; kwargs...)
 
 
 Base.@propagate_inbounds function measurement_equation!(pf::AbstractParticleFilter, u, y, p, t, w = weights(pf))

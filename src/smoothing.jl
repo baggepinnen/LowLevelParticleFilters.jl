@@ -43,6 +43,7 @@ function smooth(pf::AbstractParticleFilter, xf, wf, wef, ll, M, u, y, p=paramete
     N = num_particles(pf)
     f = dynamics(pf)
     df = dynamics_density(pf)
+    df isa MissingDistribution && error("In order to perform smoothing, you must provide a noise density for the dynamics. Use the constructor `AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, dynamics_density, initial_density; kwargs...)` to do this")
     @assert M <= N "Must extend cache size of bins and j to allow this"
     xb = Array{particletype(pf)}(undef,M,T)
     j = resample(ResampleSystematic, wef[:,T], M)

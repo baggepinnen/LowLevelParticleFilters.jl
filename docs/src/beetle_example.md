@@ -82,7 +82,7 @@ nothing # hide
 In this example, we have no control inputs, we thus define a vector of only zeros. We then solve the forward filtering problem and plot the results.
 ```@example beetle
 u = zeros(length(y))
-pf = AuxiliaryParticleFilter(AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, d0))
+pf = AuxiliaryParticleFilter(AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0))
 T = length(y)
 sol = forward_trajectory(pf,u[1:T],y[1:T])
 (; x,w,we,ll) = sol
@@ -108,8 +108,8 @@ plot!(xyt[:,1],xyt[:,2], c=:red, lab="measurement")
 ```
 as well as the angle state variable (we subsample the particles to not get sluggish plots)
 ```@example beetle
-fig2 = scatter(to1series(ϕ.(x)'[:,1:5:end])..., m=(:black, 0.03, 2), lab="", size=(500,300), format=:png)
-plot!(identity.(xh[:,4]), lab="Filtered angle", legend=:topleft, ylims=(-30, 70))
+fig2 = scatter(to1series(ϕ.(x)'[:,1:5:end])..., m=(:black, 0.03, 2), lab="", size=(500,300), format=:png, dpi=100)
+plot!(identity.(xh[:,4]), lab="Filtered angle", legend=:topleft, ylims=(-30, 70), format=:png)
 ```
 The particle plot above indicate that the posterior is multimodal. This phenomenon arises due to the simple model that uses an angle that is allowed to leave the interval ``0-2\pi` rad. In this example, we are not interested in the angle, but rather when the beetle switches mode. The filtering distribution above gives a hint at when this happens, but we will not plot the mode trajectory until we have explored smoothing as well.
 

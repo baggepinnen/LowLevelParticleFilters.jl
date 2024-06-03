@@ -115,6 +115,8 @@ Mixed value support indicates that the distribution is a mix of continuous and d
 """
 struct Mixed <: ValueSupport end
 
+struct MissingDistribution <: MultivariateDistribution{Mixed} end
+
 """
     TupleProduct(v::NTuple{N,UnivariateDistribution})
 
