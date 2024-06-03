@@ -164,7 +164,7 @@ end
     dynamics::FT
     measurement::GT
     measurement_likelihood::GLT
-    dynamics_density::FDT = Normal()
+    dynamics_density::FDT = MissingDistribution()
     initial_density::IDT
     resample_threshold::Float64 = 0.5
     resampling_strategy::RST = ResampleSystematic
@@ -175,7 +175,7 @@ end
 
 
 """
-    AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, measurement_likelihood, dynamics_density, initial_density; p = SciMLBase.NullParameters(), threads = false, kwargs...)
+    AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, measurement_likelihood, initial_density; p = SciMLBase.NullParameters(), threads = false, kwargs...)
 
 This type represents a standard particle filter but affords extra flexibility compared to the [`ParticleFilter`](@ref) type, e.g., non-additive noise in the dynamics and measurement functions.
 
@@ -186,7 +186,6 @@ See the docs for more information: https://baggepinnen.github.io/LowLevelParticl
 - `dynamics`: A discrete-time dynamics function `(x, u, p, t, noise=false) -> x⁺`. It's important that the `noise` argument defaults to `false`.
 - `measurement`: A measurement function `(x, u, p, t, noise=false) -> y`. It's important that the `noise` argument defaults to `false`.
 - `measurement_likelihood`: A function `(x, u, y, p, t)->logl` to evaluate the log-likelihood of a measurement.
-- `dynamics_density`: This field is not used by the advanced filter and can be set to `nothing`.
 - `initial_density`: The distribution of the initial state.
 - `threads`: use threads to propagate particles in parallel. Only activate this if your dynamics is thread-safe. `SeeToDee.SimpleColloc` is not thread-safe by default due to the use of internal caches, but `SeeToDee.Rk4` is.
 """
@@ -201,6 +200,9 @@ function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Fun
     AdvancedParticleFilter(; state = s, dynamics, measurement, measurement_likelihood, dynamics_density,
     initial_density, kwargs...)
 end
+
+# Constructor without dynamics_density which is not used except for in smoothing
+AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, measurement_likelihood, initial_density; kwargs...) = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, MissingDistribution(), initial_density; kwargs...)
 
 
 Base.@propagate_inbounds function measurement_equation!(pf::AbstractParticleFilter, u, y, p, t, w = weights(pf))

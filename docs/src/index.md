@@ -289,7 +289,7 @@ nothing # hide
 We now create the [`AdvancedParticleFilter`](@ref) and use it in the same way as the other filters:
 
 ```@example lingauss
-apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0)
+apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, d0)
 sol = forward_trajectory(apf, u, y, p)
 ```
 
