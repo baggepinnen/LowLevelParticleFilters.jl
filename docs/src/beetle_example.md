@@ -82,7 +82,7 @@ nothing # hide
 In this example, we have no control inputs, we thus define a vector of only zeros. We then solve the forward filtering problem and plot the results.
 ```@example beetle
 u = zeros(length(y))
-pf = AuxiliaryParticleFilter(AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0))
+pf = AuxiliaryParticleFilter(AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, d0))
 T = length(y)
 sol = forward_trajectory(pf,u[1:T],y[1:T])
 (; x,w,we,ll) = sol
