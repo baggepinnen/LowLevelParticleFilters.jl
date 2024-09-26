@@ -75,6 +75,15 @@ xT,RT,ll = smooth(resukf, ukf, u, y)
 # plot!(reduce(hcat, resukf.xt)', lab="Filter")
 # plot!(reduce(hcat, xT)', lab="Smoothed")
 
+## Custom type for u
+dynamics(x,u::NamedTuple,p,t) = A*x .+ B*[u.a; u.b]
+unt = reinterpret(@NamedTuple{a::Float64, b::Float64}, u)
+resukfnt = forward_trajectory(ukf, unt, y)
+@test resukf.xt ≈ resukfnt.xt
+xTnt,RTnt,llnt = smooth(resukfnt, ukf, unt, y)
+@test xT ≈ xTnt
+@test RT ≈ RTnt
+@test ll ≈ llnt
 
 ## DAE UKF =====================================================================
 "A pendulum in DAE form"
