@@ -64,6 +64,12 @@ Rfun(x, u, p, t) -> R
 For maximum performance, provide statically sized matrices from StaticArrays.jl
 
 `ny, nu` indicate the number of outputs and inputs.
+
+# Custom type of `u`
+The input `u` may be of any type, e.g., a named tuple or a custom struct.
+The `u` provided in the input data is passed directly to the dynamics and measurement functions,
+so as long as the type is compatible with the dynamics it will work out.
+The one exception where this will not work is when calling `simulate`, which assumes that `u` is an array.
 """
 function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)); p = SciMLBase.NullParameters(), nu::Int, ny::Int)
     xs = sigmapoints(mean(d0), cov(d0))
