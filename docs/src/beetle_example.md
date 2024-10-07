@@ -68,8 +68,8 @@ We now define the dynamics, since we use the advanced filter, we include the `no
     # next state
     v⁺ = max(0.999v + v_noise, 0.0)
     m⁺ = Float64(m == 0 ? rand() < switch_prob : true)
-    a⁺ = a + (ϕ_noise*(1 + m*10))/(1 + v) # next state velocity is used here
-    p⁺ = p + SVector(y_noise, x_noise) + SVector(sincos(a))*v # current angle but next velocity
+    a⁺ = a + (ϕ_noise*(1 + m*10))/(1 + v⁺) # next state velocity is used here
+    p⁺ = p + SVector(y_noise, x_noise) + SVector(sincos(a))*v⁺ # current angle but next velocity
     SVector{5,Float64}(p⁺[1], p⁺[2], v⁺, a⁺, m⁺) # all next state
 end
 function measurement_likelihood(s,u,y,p,t)
@@ -109,7 +109,7 @@ plot!(xyt[:,1],xyt[:,2], c=:red, lab="measurement")
 as well as the angle state variable (we subsample the particles to not get sluggish plots)
 ```@example beetle
 fig2 = scatter(to1series(ϕ.(x)'[:,1:5:end])..., m=(:black, 0.03, 2), lab="", size=(500,300), format=:png)
-plot!(identity.(xh[:,4]), lab="Filtered angle", legend=:topleft, ylims=(-30, 70))
+plot!(identity.(xh[:,4]), lab="Filtered angle", legend=:topleft, ylims=(-30, 70), format=:png)
 ```
 The particle plot above indicate that the posterior is multimodal. This phenomenon arises due to the simple model that uses an angle that is allowed to leave the interval ``0-2\pi` rad. In this example, we are not interested in the angle, but rather when the beetle switches mode. The filtering distribution above gives a hint at when this happens, but we will not plot the mode trajectory until we have explored smoothing as well.
 
@@ -124,7 +124,7 @@ plot!(fig1, sbm[1,:],sbm[2,:], lab="xs")
 ```
 
 ```@example beetle
-plot!(fig2, identity.(sbm'[:,4]), lab="smoothed")
+plot!(fig2, identity.(sbm'[:,4]), lab="smoothed", format=:png)
 ```
 We see that the smoothed trajectory may look very different from the filter trajectory. This is an indication that it's hard to tell what state the beetle is currently in, but easier to look back and tell what state the beetle must have been in at a historical point. 
 
