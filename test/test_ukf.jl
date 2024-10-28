@@ -77,7 +77,7 @@ xT,RT,ll = smooth(resukf, ukf, u, y)
 # plot!(reduce(hcat, xT)', lab="Smoothed")
 
 ## Custom type for u
-dynamics(x,u::NamedTuple,p,t) = A*x .+ B*[u.a; u.b]
+dynamics(x,u::NamedTuple,p,t) = _A*x .+ _B*[u.a; u.b]
 unt = reinterpret(@NamedTuple{a::Float64, b::Float64}, u)
 resukfnt = forward_trajectory(ukf, unt, y)
 @test resukf.xt ≈ resukfnt.xt
