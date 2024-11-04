@@ -3,10 +3,14 @@
 
 Return a vector of (2n+1) static vectors, where `n` is the length of `m`, representing sigma points with mean `m` and covariance `Σ`.
 """
-function sigmapoints(m, Σ)
+@inline function sigmapoints(m, Σ; static = true)
     T = promote_type(eltype(m), eltype(Σ))
     n = max(length(m), size(Σ,1))
-    xs = [@SVector zeros(T, n) for _ in 1:(2n+1)]
+    if static
+        xs = [@SVector zeros(T, n) for _ in 1:(2n+1)]
+    else
+        xs = [zeros(T, n) for _ in 1:(2n+1)]
+    end
     sigmapoints!(xs,m,Σ)
 end
 
@@ -72,7 +76,7 @@ so as long as the type is compatible with the dynamics it will work out.
 The one exception where this will not work is when calling `simulate`, which assumes that `u` is an array.
 """
 function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)); p = SciMLBase.NullParameters(), nu::Int, ny::Int)
-    xs = sigmapoints(mean(d0), cov(d0))
+    xs = sigmapoints(mean(d0), cov(d0), static = !has_ip(dynamics))
     UnscentedKalmanFilter(dynamics,measurement,R1,R2, d0, xs, Vector(d0.μ), Matrix(d0.Σ), Ref(1), ny, nu, p)
 end
 
@@ -82,29 +86,46 @@ sample_measurement(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=
 measurement(kf::AbstractUnscentedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 
+#                                x(k+1)          x            u             p           t
+@inline has_ip(fun) = hasmethod(fun, (AbstractArray,AbstractArray,AbstractArray,AbstractArray,Real))
 
 function predict!(ukf::UnscentedKalmanFilter, u, p = parameters(ukf), t::Real = index(ukf); R1 = get_mat(ukf.R1, ukf.x, u, p, t))
     @unpack dynamics,measurement,x,xs,R = ukf
     ns = length(xs)
-    sigmapoints!(xs,eltype(xs)(x),R) # TODO: these are calculated in the update step
-    for i in eachindex(xs)
-        xs[i] = dynamics(xs[i], u, p, t)
+    sigmapoints!(xs,eltype(xs)(x),R)
+    if has_ip(dynamics)
+        xp = similar(xs[1])
+        for i in eachindex(xs)
+            xp .= 0
+            dynamics(xp, xs[i], u, p, t)
+            xs[i] .= xp
+        end
+    else
+        for i in eachindex(xs)
+            xs[i] = dynamics(xs[i], u, p, t)
+        end
     end
     x .= mean(xs)
-    R .= symmetrize(cov(xs)) + R1
+    R .= symmetrize(cov(xs)) .+ R1
     ukf.t[] += 1
 end
 
 
 function correct!(ukf::UnscentedKalmanFilter, u, y, p=parameters(ukf), t::Real = index(ukf); R2 = get_mat(ukf.R2, ukf.x, u, p, t))
     @unpack measurement,x,xs,R,R1 = ukf
-    n = size(R1,1)
-    m = size(R2,1)
+    n = length(xs[1])
+    m = length(y)
     ns = length(xs)
     sigmapoints!(xs,eltype(xs)(x),R) # Update sigmapoints here since untransformed points required
     C = @SMatrix zeros(n,m)
     ys = map(xs) do x
-        measurement(x, u, p, t)
+        if has_ip(measurement)
+            yi = zeros(promote_type(eltype(x), eltype(u)), m)
+            measurement(yi, x, u, p, t)
+            yi
+        else
+            measurement(x, u, p, t)
+        end
     end
     ym = mean(ys)
     @inbounds for i in eachindex(ys) # Cross cov between x and y

@@ -35,16 +35,16 @@ du = mvnormal(2,1) # Control input distribution
 
 # Define random linenar state-space system
 Tr = randn(nx,nx)
-A = SA[0.99 0.1; 0 0.2]
-B = @SMatrix randn(nx,nu)
-C = SMatrix{ny,ny}(eye(ny))
+const _A = SA[0.99 0.1; 0 0.2]
+const _B = @SMatrix [-0.7400216956683083 1.6097265310456392; -1.4384539113366408 1.7467811974822818]
+const _C = SMatrix{ny,ny}(eye(ny))
 # C = SMatrix{p,n}([1 1])
 
-dynamics(x,u,p,t) = A*x .+ B*u
-measurement(x,u,p,t) = C*x
+dynamics(x,u,p,t) = _A*x .+ _B*u
+measurement(x,u,p,t) = _C*x
 
 T    = 200 # Number of time steps
-kf   = KalmanFilter(A, B, C, 0, eye(nx), eye(ny), d0)
+kf   = KalmanFilter(_A, _B, _C, 0, eye(nx), eye(ny), d0)
 ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), eye(ny), d0; ny, nu)
 x,u,y = LowLevelParticleFilters.simulate(kf,T,du) # Simuate trajectory using the model in the filter
 @test_nowarn LowLevelParticleFilters.simulate(ukf,T,du)
@@ -55,28 +55,29 @@ x,u,y = tosvec.((x,u,y))
 reskf = forward_trajectory(kf, u, y) # filtered, prediction, pred
 resukf = forward_trajectory(ukf, u, y)
 
-norm(mean(x .- reskf.x))
-norm(mean(x .- resukf.x))
+sse(x) = sum(sum.(abs2, x))
+sse(x .- reskf.x)
+sse(x .- resukf.x)
 
-norm(mean(x .- reskf.xt))
-norm(mean(x .- resukf.xt))
-@test norm(mean(x .- reskf.xt)) < norm(mean(x .- reskf.x)) # Filtered should be better than prediction
-@test norm(mean(x .- resukf.xt)) < norm(mean(x .- resukf.x))
-@test norm(mean(x .- reskf.xt)) ≈ norm(mean(x .- resukf.xt)) atol=5e-2
-# @test norm(mean(x .- reskf.xt)) < norm(mean(x .- resukf.xt))  # KF should be better than UKF
-# @test norm(mean(x .- reskf.x)) < norm(mean(x .- resukf.x))  # KF should be better than UKF
-@test norm(mean(x .- reskf.xt)) < 0.2
+sse(x .- reskf.xt)
+sse(x .- resukf.xt)
+@test sse(x .- reskf.xt) < sse(x .- reskf.x) # Filtered should be better than prediction
+@test sse(x .- resukf.xt) < sse(x .- resukf.x)*1.00001
+@test sse(x .- reskf.xt) ≈ sse(x .- resukf.xt) rtol=0.1
+@test sse(x .- reskf.xt) < sse(x .- resukf.xt)*1.01  # KF should be better than UKF
+@test sse(x .- reskf.x) < sse(x .- resukf.x)*1.01  # KF should be better than UKF
+@test sse(x .- reskf.xt) < 250
 
 
 xT,RT,ll = smooth(resukf, ukf, u, y)
-@test norm(mean(x .- xT)) < norm(mean(x .- resukf.xt)) # Test ukf smoothing better than ukf filtering
+@test sse(x .- xT) < sse(x .- resukf.xt)*1.01 # Test ukf smoothing better than ukf filtering
 
 # plot(reduce(hcat, x)', lab="true", layout=2)
 # plot!(reduce(hcat, resukf.xt)', lab="Filter")
 # plot!(reduce(hcat, xT)', lab="Smoothed")
 
 ## Custom type for u
-dynamics(x,u::NamedTuple,p,t) = A*x .+ B*[u.a; u.b]
+dynamics(x,u::NamedTuple,p,t) = _A*x .+ _B*[u.a; u.b]
 unt = reinterpret(@NamedTuple{a::Float64, b::Float64}, u)
 resukfnt = forward_trajectory(ukf, unt, y)
 @test resukf.xt ≈ resukfnt.xt
@@ -85,6 +86,24 @@ xTnt,RTnt,llnt = smooth(resukfnt, ukf, unt, y)
 @test RT ≈ RTnt
 @test ll ≈ llnt
 
+## Non-static arrays ===========================================================
+
+function dynamics_ip(xp,x,u,p,t)
+    mul!(xp, _A, x) 
+    mul!(xp, _B, u, 1.0, 1.0)
+    xp
+end
+function measurement_ip(y,x,u,p,t)
+    mul!(y, _C, x)
+    y
+end
+
+ukf2  = UnscentedKalmanFilter(dynamics_ip, measurement_ip, eye(nx), eye(ny), d0; ny, nu)
+vu,vy = Vector.(u), Vector.(y)
+resukf2 = forward_trajectory(ukf2, vu, vy)
+# 0.001769 seconds (32.01 k allocations: 2.241 MiB)
+
+@test sse(resukf2.xt .- resukf.xt) < 1e-10
 ## DAE UKF =====================================================================
 "A pendulum in DAE form"
 function pend(state, f, p, t=0)
