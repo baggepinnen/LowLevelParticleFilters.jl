@@ -150,7 +150,7 @@ function correct!(ukf::UnscentedKalmanFilter{<: Any, MT}, u, y, p=parameters(ukf
     sigmapoints!(xs,eltype(xs)(x),R) # Update sigmapoints here since untransformed points required
     C = @SMatrix zeros(n,m)
     for i = eachindex(xs,ys)
-        if has_ip(MT)
+        if has_ip(measurement)
             measurement(ys[i], xs[i], u, p, t)
         else
             ys[i] = measurement(xs[i], u, p, t)
