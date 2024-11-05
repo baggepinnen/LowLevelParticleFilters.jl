@@ -32,13 +32,14 @@ end
 
 abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
 
-@with_kw struct UnscentedKalmanFilter{DT,MT,R1T,R2T,D0T,VT,XT,RT,P} <: AbstractUnscentedKalmanFilter
+@with_kw mutable struct UnscentedKalmanFilter{DT,MT,R1T,R2T,D0T,VT,YVT,XT,RT,P} <: AbstractUnscentedKalmanFilter
     dynamics::DT
     measurement::MT
     R1::R1T
     R2::R2T
     d0::D0T
     xs::Vector{VT}
+    ys::Vector{YVT}
     x::XT
     R::RT
     t::Base.RefValue{Int} = Ref(1)
@@ -77,7 +78,14 @@ The one exception where this will not work is when calling `simulate`, which ass
 """
 function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)); p = SciMLBase.NullParameters(), nu::Int, ny::Int)
     xs = sigmapoints(mean(d0), cov(d0), static = !has_ip(dynamics))
-    UnscentedKalmanFilter(dynamics,measurement,R1,R2, d0, xs, Vector(d0.μ), Matrix(d0.Σ), Ref(1), ny, nu, p)
+    if has_ip(measurement)
+        ys = [zeros(promote_type(eltype(xs[1]), eltype(d0)), ny) for _ in 1:length(xs)]
+    else
+        ys = [@SVector zeros(promote_type(eltype(xs[1]), eltype(d0)), ny) for _ in 1:length(xs)]
+    end
+    R = typeof(R1)(d0.Σ)
+    x0 = d0.μ
+    UnscentedKalmanFilter(dynamics,measurement,R1,R2, d0, xs, ys, x0, R, Ref(1), ny, nu, p)
 end
 
 sample_state(kf::AbstractUnscentedKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
@@ -105,41 +113,66 @@ function predict!(ukf::UnscentedKalmanFilter, u, p = parameters(ukf), t::Real = 
             xs[i] = dynamics(xs[i], u, p, t)
         end
     end
-    x .= mean(xs)
-    R .= symmetrize(cov(xs)) .+ R1
+    ukf.x = safe_mean(xs)
+    ukf.R = symmetrize(safe_cov(xs)) .+ R1
     ukf.t[] += 1
 end
 
+# The functions below are JET-safe from dynamic dispatch if called with static arrays
+safe_mean(xs) = mean(xs)
+function safe_mean(xs::Vector{<:SVector})
+    m = xs[1]
+    for i = 2:length(xs)
+        m += xs[i]
+    end
+    m ./ length(xs)
+end
+
+safe_cov(xs) = cov(xs)
+function safe_cov(xs::Vector{<:SVector})
+    m = safe_mean(xs)
+    P = 0 .* m*m'
+    for i in eachindex(xs)
+        e = xs[i] .- m
+        P += e*e'
+    end
+    c = P ./ (length(xs) - 1)
+    c
+end
+
+
 
 function correct!(ukf::UnscentedKalmanFilter, u, y, p=parameters(ukf), t::Real = index(ukf); R2 = get_mat(ukf.R2, ukf.x, u, p, t))
-    @unpack measurement,x,xs,R,R1 = ukf
+    @unpack measurement,x,xs,ys,R,R1 = ukf
     n = length(xs[1])
     m = length(y)
     ns = length(xs)
     sigmapoints!(xs,eltype(xs)(x),R) # Update sigmapoints here since untransformed points required
     C = @SMatrix zeros(n,m)
-    ys = map(xs) do x
+    for i = eachindex(xs,ys)
         if has_ip(measurement)
-            yi = zeros(promote_type(eltype(x), eltype(u)), m)
-            measurement(yi, x, u, p, t)
-            yi
+            measurement(ys[i], xs[i], u, p, t)
         else
-            measurement(x, u, p, t)
+            ys[i] = measurement(xs[i], u, p, t)
         end
     end
-    ym = mean(ys)
+    ym = safe_mean(ys)
     @inbounds for i in eachindex(ys) # Cross cov between x and y
         d   = ys[i]-ym
         ca  = (xs[i]-x)*d'
         C  += ca
     end
     e   = y .- ym
-    S   = symmetrize(cov(ys)) + R2 # cov of y
+    S   = symmetrize(safe_cov(ys)) + R2 # cov of y
     Sᵪ  = cholesky(S)
     K   = (C./ns)/Sᵪ # ns normalization to make it a covariance matrix
-    x .+= K*e
+    ukf.x += K*e
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized
-    RmKSKT!(R, K, S)
+    if R isa SMatrix
+        ukf.R = symmetrize(R - K*S*K')
+    else
+        RmKSKT!(R, K, S)
+    end
     ll = logpdf(MvNormal(PDMat(S,Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf
     (; ll, e, S, Sᵪ, K)
 end
@@ -274,6 +307,11 @@ function Base.getproperty(ukf::DAEUnscentedKalmanFilter, s::Symbol)
     getproperty(getfield(ukf, :ukf), s) # Forward to inner filter
 end
 
+function Base.setproperty!(ukf::DAEUnscentedKalmanFilter, s::Symbol, val)
+    s ∈ fieldnames(typeof(ukf)) && return setproperty!(ukf, s, val)
+    setproperty!(getfield(ukf, :ukf), s, val) # Forward to inner filter
+end
+
 Base.propertynames(ukf::DAEUnscentedKalmanFilter) = (fieldnames(typeof(ukf))..., propertynames(getfield(ukf, :ukf))...)
 
 state(ukf::DAEUnscentedKalmanFilter) = ukf.xz
@@ -334,9 +372,9 @@ function predict!(ukf::DAEUnscentedKalmanFilter, u, p = parameters(ukf), t::Inte
             xs[i],_ = get_x_z(xzs[i])
         end
     end
-    x .= mean(xs) # xz or xs here? Answer: Covariance is associated only with x
+    ukf.x = mean(xs) # xz or xs here? Answer: Covariance is associated only with x
     xz .= calc_xz(ukf, xz, u, p, t, x)
-    R .= symmetrize(cov(xs)) + get_mat(R1, x, u, p, t)
+    ukf.R = symmetrize(cov(xs)) + get_mat(R1, x, u, p, t)
     ukf.t[] += 1
 end
 
@@ -364,10 +402,14 @@ function correct!(ukf::DAEUnscentedKalmanFilter, u, y, p = parameters(ukf), t::I
     S   = symmetrize(cov(ys)) + R2 # cov of y
     Sᵪ = cholesky(S)
     K   = (C./ns)/Sᵪ # ns normalization to make it a covariance matrix
-    x .+= K*e
+    ukf.x += K*e
     xz .= calc_xz(ukf, xz, u, p, t, x)
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized
-    RmKSKT!(R, K, S)
+    if R isa SMatrix
+        ukf.R = symmetrize(R - K*S*K')
+    else
+        RmKSKT!(R, K, S)
+    end
     ll = logpdf(MvNormal(PDMat(S,Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf
     (; ll, e, S, Sᵪ, K)
 end

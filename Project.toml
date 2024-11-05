@@ -59,10 +59,11 @@ julia = "1.7"
 
 [extras]
 ControlSystemsBase = "aaaaaaaa-a6ca-5380-bf3e-84a91bcd477e"
+JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 MonteCarloMeasurements = "0987c9cc-fe09-11e8-30f0-b96dd679fdca"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["ControlSystemsBase", "MonteCarloMeasurements", "Optim", "Test", "Plots"]
+test = ["ControlSystemsBase", "JET", "MonteCarloMeasurements", "Optim", "Test", "Plots"]
