@@ -83,8 +83,8 @@ function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)
     else
         ys = [@SVector zeros(promote_type(eltype(xs[1]), eltype(d0)), ny) for _ in 1:length(xs)]
     end
-    R = typeof(R1)(d0.Σ)
-    x0 = d0.μ
+    R = convert_cov_type(R1, d0.Σ)
+    x0 = convert_x0_type(d0.μ)
     UnscentedKalmanFilter(dynamics,measurement,R1,R2, d0, xs, ys, x0, R, Ref(1), ny, nu, p)
 end
 
@@ -97,11 +97,11 @@ dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 #                                x(k+1)          x            u             p           t
 @inline has_ip(fun) = hasmethod(fun, (AbstractArray,AbstractArray,AbstractArray,AbstractArray,Real))
 
-function predict!(ukf::UnscentedKalmanFilter, u, p = parameters(ukf), t::Real = index(ukf); R1 = get_mat(ukf.R1, ukf.x, u, p, t))
+function predict!(ukf::UnscentedKalmanFilter{DT}, u, p = parameters(ukf), t::Real = index(ukf); R1 = get_mat(ukf.R1, ukf.x, u, p, t)) where DT
     @unpack dynamics,measurement,x,xs,R = ukf
     ns = length(xs)
     sigmapoints!(xs,eltype(xs)(x),R)
-    if has_ip(dynamics)
+    if has_ip(DT)
         xp = similar(xs[1])
         for i in eachindex(xs)
             xp .= 0
@@ -142,7 +142,7 @@ end
 
 
 
-function correct!(ukf::UnscentedKalmanFilter, u, y, p=parameters(ukf), t::Real = index(ukf); R2 = get_mat(ukf.R2, ukf.x, u, p, t))
+function correct!(ukf::UnscentedKalmanFilter{<: Any, MT}, u, y, p=parameters(ukf), t::Real = index(ukf); R2 = get_mat(ukf.R2, ukf.x, u, p, t)) where MT
     @unpack measurement,x,xs,ys,R,R1 = ukf
     n = length(xs[1])
     m = length(y)
@@ -150,7 +150,7 @@ function correct!(ukf::UnscentedKalmanFilter, u, y, p=parameters(ukf), t::Real =
     sigmapoints!(xs,eltype(xs)(x),R) # Update sigmapoints here since untransformed points required
     C = @SMatrix zeros(n,m)
     for i = eachindex(xs,ys)
-        if has_ip(measurement)
+        if has_ip(MT)
             measurement(ys[i], xs[i], u, p, t)
         else
             ys[i] = measurement(xs[i], u, p, t)

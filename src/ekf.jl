@@ -45,6 +45,11 @@ function Base.getproperty(ekf::EKF, s::Symbol) where EKF <: AbstractExtendedKalm
     return getproperty(getfield(ekf, :kf), s)
 end
 
+function Base.setproperty!(ekf::ExtendedKalmanFilter, s::Symbol, val)
+    s ∈ fieldnames(typeof(ekf)) && return setproperty!(ekf, s, val)
+    setproperty!(getfield(ekf, :kf), s, val) # Forward to inner filter
+end
+
 function Base.propertynames(ekf::EKF, private::Bool=false) where EKF <: AbstractExtendedKalmanFilter
     return (fieldnames(EKF)..., propertynames(ekf.kf, private)...)
 end

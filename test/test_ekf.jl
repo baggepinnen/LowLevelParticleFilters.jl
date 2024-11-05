@@ -1,6 +1,7 @@
 using LowLevelParticleFilters, ForwardDiff, Distributions
 const LLPF = LowLevelParticleFilters
 using ControlSystemsBase
+using StaticArrays, LinearAlgebra, Test
 
 n = 2   # Dimension of state
 m = 1   # Dimension of input
