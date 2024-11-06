@@ -18,7 +18,7 @@ makedocs(
             "Discretization" => "discretization.md",
             "Parameter estimation" => "parameter_estimation.md",
             "Benchmark" => "benchmark.md",
-            "High-performance distributions" => "distributions.md",
+            "Performance tips" => "distributions.md",
             "Tutorials" => [
                   "Kalman-filter tutorial with LowLevelParticleFilters" => "adaptive_kalmanfilter.md",
                   "Noise tuning and disturbance modeling for Kalman filtering" => "noisetuning.md",

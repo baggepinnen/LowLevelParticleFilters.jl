@@ -136,9 +136,9 @@ pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 du    = MvNormal(m,1)     # Control input distribution
 x,u,y = simulate(pf,T,du) # Simulate trajectory using the model in the filter
 tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
-x,u,y = tosvec.((x,u,y))
+x,u,y = tosvec.((x,u,y)) # It's good for performance to use StaticArrays to the extent possible
 
-xb,ll = smooth(pf, M, u, y) # Sample smooting particles
+xb,ll = smooth(pf, M, u, y) # Sample smoothing particles
 xbm   = smoothed_mean(xb)   # Calculate the mean of smoothing trajectories
 xbc   = smoothed_cov(xb)    # And covariance
 xbt   = smoothed_trajs(xb)  # Get smoothing trajectories
