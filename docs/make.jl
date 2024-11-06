@@ -1,7 +1,10 @@
-ENV["GKSwstype"] = 322 # workaround for gr segfault on GH actions
+ENV["GKSwstype"] = 100 # workaround for gr segfault on GH actions
+# ENV["GKS_WSTYPE"] = 100 # workaround for gr segfault on GH actions
 using Documenter, LowLevelParticleFilters
 
-using Plots
+ENV["JULIA_DEBUG"]=Documenter # Enable this for debugging
+
+using Plots, DisplayAs
 gr(format=:png)
 
 

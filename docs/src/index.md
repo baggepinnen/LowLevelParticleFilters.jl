@@ -57,6 +57,7 @@ Defining a particle filter is straightforward, one must define the distribution 
 
 ```@example lingauss
 using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions, Plots
+using DisplayAs # hide
 ```
 
 Define problem
@@ -113,6 +114,7 @@ If you want to perform filtering using vectors of inputs and measurements, try a
 sol = forward_trajectory(pf, u, y) # Filter whole vectors of signals
 x̂,ll = mean_trajectory(pf, u, y)
 plot(sol, xreal=xs, markersize=2)
+DisplayAs.PNG(Plots.current()) # hide
 ```
 `u` ad `y` are then assumed to be vectors of vectors. StaticArrays is recommended for maximum performance.
 
@@ -153,6 +155,7 @@ downsample = 5
 plot(vecvec_to_mat(x), l=(4,), layout=(2,1), show=false)
 scatter!(xbt[1, 1:downsample:end, :]', subplot=1, show=false, m=(1,:black, 0.5), lab="")
 scatter!(xbt[2, 1:downsample:end, :]', subplot=2, m=(1,:black, 0.5), lab="")
+DisplayAs.PNG(Plots.current()) # hide
 ```
 
 
@@ -295,6 +298,7 @@ sol = forward_trajectory(apf, u, y, p)
 
 ```@example lingauss
 plot(sol, xreal=x)
+DisplayAs.PNG(Plots.current()) # hide
 ```
 We can even use this type as an AuxiliaryParticleFilter
 
@@ -302,6 +306,7 @@ We can even use this type as an AuxiliaryParticleFilter
 apfa = AuxiliaryParticleFilter(apf)
 sol = forward_trajectory(apfa, u, y, p)
 plot(sol, dim=1, xreal=x) # Same as above, but only plots a single dimension
+DisplayAs.PNG(Plots.current()) # hide
 ```
 
 See the tutorials section for more advanced examples, including state estimation for DAE (Differential-Algebraic Equation) systems.
