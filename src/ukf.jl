@@ -94,14 +94,14 @@ sample_measurement(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=
 measurement(kf::AbstractUnscentedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 
-#                                x(k+1)          x            u             p           t
-@inline has_ip(fun) = hasmethod(fun, (AbstractArray,AbstractArray,AbstractArray,AbstractArray,Real))
+#                                        x(k+1)          x            u             p           t
+@inline has_ip(fun) = hasmethod(fun, Tuple{AbstractArray,AbstractArray,AbstractArray,AbstractArray,Real})
 
 function predict!(ukf::UnscentedKalmanFilter{DT}, u, p = parameters(ukf), t::Real = index(ukf); R1 = get_mat(ukf.R1, ukf.x, u, p, t)) where DT
     @unpack dynamics,measurement,x,xs,R = ukf
     ns = length(xs)
     sigmapoints!(xs,eltype(xs)(x),R)
-    if has_ip(DT)
+    if has_ip(dynamics)
         xp = similar(xs[1])
         for i in eachindex(xs)
             xp .= 0
