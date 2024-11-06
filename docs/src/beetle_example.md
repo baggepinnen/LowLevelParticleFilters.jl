@@ -19,6 +19,7 @@ The beetle further has two "modes", one where it's moving towards a goal, and on
 We load a single experiment from file for the purpose of this example (in practice, there may be hundreds of experiments)
 ```@example beetle
 using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions, Plots, Random
+using DisplayAs # hide
 using DelimitedFiles
 path = "../track.csv"
 xyt = readdlm(path)
@@ -86,7 +87,8 @@ pf = AuxiliaryParticleFilter(AdvancedParticleFilter(N, dynamics, measurement, me
 T = length(y)
 sol = forward_trajectory(pf,u[1:T],y[1:T])
 (; x,w,we,ll) = sol
-plot(sol, markerstrokecolor=:auto, m=(2,0.5), format=:png)
+plot(sol, markerstrokecolor=:auto, m=(2,0.5))
+DisplayAs.PNG(Plots.current()) # hide
 ```
 We can clearly see when the beetle switched mode (state variable 5). This corresponds well to annotations provided by a biologist and is the fundamental question we want to answer with the filtering procedure.
 
@@ -108,23 +110,25 @@ plot!(xyt[:,1],xyt[:,2], c=:red, lab="measurement")
 ```
 as well as the angle state variable (we subsample the particles to not get sluggish plots)
 ```@example beetle
-fig2 = scatter(to1series(ϕ.(x)'[:,1:5:end])..., m=(:black, 0.03, 2), lab="", size=(500,300), format=:png)
-plot!(identity.(xh[:,4]), lab="Filtered angle", legend=:topleft, ylims=(-30, 70), format=:png)
+fig2 = scatter(to1series(ϕ.(x)'[:,1:2:end])..., m=(:black, 0.03, 2), lab="", size=(500,300))
+plot!(identity.(xh[:,4]), lab="Filtered angle", legend=:topleft, ylims=(-30, 70))
+DisplayAs.PNG(fig2) # hide
 ```
-The particle plot above indicate that the posterior is multimodal. This phenomenon arises due to the simple model that uses an angle that is allowed to leave the interval ``0-2\pi` rad. In this example, we are not interested in the angle, but rather when the beetle switches mode. The filtering distribution above gives a hint at when this happens, but we will not plot the mode trajectory until we have explored smoothing as well.
+The particle plot above indicate that the posterior is multimodal. This phenomenon arises due to the simple model that uses an angle that is allowed to leave the interval ``0-2π`` rad. In this example, we are not interested in the angle, but rather when the beetle switches mode. The filtering distribution above gives a hint at when this happens, but we will not plot the mode trajectory until we have explored smoothing as well.
 
 ## Smoothing
 The filtering results above does not use all the available information when trying to figure out the state trajectory. To do this, we may call a smoother. We use a particle smoother and compute 10 smoothing trajectories.
 ```@example beetle
 M = 10 # Number of smoothing trajectories, NOTE: if this is set higher, the result will be better at the expense of linear scaling of the computational cost.
-sb,ll = smooth(pf, M, u, y) # Sample smooting particles (b for backward-trajectory)
+sb,ll = smooth(pf, M, u, y) # Sample smoothing particles (b for backward-trajectory)
 sbm = smoothed_mean(sb)     # Calculate the mean of smoothing trajectories
 sbt = smoothed_trajs(sb)    # Get smoothing trajectories
 plot!(fig1, sbm[1,:],sbm[2,:], lab="xs")
 ```
 
 ```@example beetle
-plot!(fig2, identity.(sbm'[:,4]), lab="smoothed", format=:png)
+plot!(fig2, identity.(sbm'[:,4]), lab="smoothed")
+DisplayAs.PNG(fig2) # hide
 ```
 We see that the smoothed trajectory may look very different from the filter trajectory. This is an indication that it's hard to tell what state the beetle is currently in, but easier to look back and tell what state the beetle must have been in at a historical point. 
 
