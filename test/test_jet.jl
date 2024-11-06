@@ -57,8 +57,7 @@ skf  = SqKalmanFilter(_A, _B, _C, 0, eye(nx), eye(ny), d0)
 ## Test allocations ============================================================
 forward_trajectory(kf, u, y) 
 a = @allocations forward_trajectory(kf, u, y) 
-@test a <= 15
-
+@test a <= 15 # Allocations occur when the arrays are allocated for saving the data, the important thing is that the number of allocations do not grow with the length of the trajectory (T = 200)
 
 forward_trajectory(ukf, u, y) 
 a = @allocations forward_trajectory(ukf, u, y) 
@@ -68,6 +67,3 @@ forward_trajectory(skf, u, y)
 a = @allocations forward_trajectory(skf, u, y)
 
 @test a <= 50 # was 7 on julia v1.10.6
-
-
-## Test differentiability ======================================================

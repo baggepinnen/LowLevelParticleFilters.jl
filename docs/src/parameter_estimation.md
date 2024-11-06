@@ -271,9 +271,9 @@ nothing # hide
 We then define a nonlinear state estimator, we will use the [`UnscentedKalmanFilter`](@ref), and solve the filtering problem. We start by an initial state estimate ``x_0`` that is slightly off for the parameter ``a_1``
 ```@example paramest
 nx = 5
-R1 = SMatrix{nx,nx}(Diagonal([0.1, 0.1, 0.1, 0.1, 0.0001]))
+R1 = SMatrix{nx,nx}(Diagonal([0.1, 0.1, 0.1, 0.1, 0.0001])) # Use of StaticArrays is generally good for performance
 R2 = SMatrix{ny,ny}(Diagonal((1e-2)^2 * ones(ny)))
-x0 = SA[2, 2, 3, 3, 0.02]
+x0 = SA[2, 2, 3, 3, 0.02] # The SA prefix makes the array static, which is good for performance
 
 kf = UnscentedKalmanFilter(discrete_dynamics_params, measurement, R1, R2, MvNormal(x0, R1); ny, nu)
 
@@ -323,7 +323,7 @@ t = 0:Ts:1000
 u1 = vcat.(0.25 .* sign.(sin.(2pi/Tperiod .* (t ./ 40).^2)) .+ 0.25)
 u2 = vcat.(0.25 .* sign.(sin.(2pi/Tperiod .* (t ./ 40).^2 .+ pi/2)) .+ 0.25)
 u  = SVector{nu}.(vcat.(u1,u2))
-x0 = SA[2.0,2,3,3]
+x0 = SA[2.0,2,3,3] # Initial condition, static array for performance
 x = LowLevelParticleFilters.rollout(discrete_dynamics, x0, u, p_true)[1:end-1]
 y = measurement.(x, u, 0, 0)
 y = [y .+ 0.01 .* randn.() for y in y]
@@ -335,10 +335,10 @@ plot(
 ```
 
 
-This time, we define a cost function for the optimizer to optimize, we'll use the sum of squared errors (`sse`). It's important to define the UKF with an initial state distribution with the same element type as the parameter vector so that automatic differentiation through the state estimator works, hence the explicit casting `T.(x0)` and `T.(R1)`.
+This time, we define a cost function for the optimizer to optimize, we'll use the sum of squared errors (`sse`). It's important to define the UKF with an initial state distribution with the same element type as the parameter vector so that automatic differentiation through the state estimator works, hence the explicit casting `T.(x0)` and `T.(R1)`. We also make sure to use StaticArrays for the covariance matrices and the initial condition for performance reasons (optional).
 ```@example paramest
 nx = 4
-R1 = SMatrix{nx,nx}(Diagonal([0.1, 0.1, 0.1, 0.1]))
+R1 = SMatrix{nx,nx}(Diagonal([0.1, 0.1, 0.1, 0.1])) # Use of StaticArrays is generally good for performance
 R2 = SMatrix{ny,ny}(Diagonal((1e-2)^2 * ones(ny)))
 x0 = SA[2.0, 2, 3, 3]
 
