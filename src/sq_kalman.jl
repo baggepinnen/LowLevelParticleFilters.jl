@@ -1,4 +1,4 @@
-@with_kw struct SqKalmanFilter{AT,BT,CT,DT,R1T,R2T,R2DT,D0T,XT,RT,P,αT} <: AbstractKalmanFilter
+@with_kw mutable struct SqKalmanFilter{AT,BT,CT,DT,R1T,R2T,R2DT,D0T,XT,RT,P,αT} <: AbstractKalmanFilter
     A::AT
     B::BT
     C::CT
@@ -48,9 +48,14 @@ function SqKalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(Matrix(R1)); p = SciMLBase.Nul
     if check
         maximum(abs, eigvals(A isa SMatrix ? Matrix(A) : A)) ≥ 2 && @warn "The dynamics matrix A has eigenvalues with absolute value ≥ 2. This is either a highly unstable system, or you have forgotten to discretize a continuous-time model. If you are sure that the system is provided in discrete time, you can disable this warning by setting check=false." maxlog=1
     end
+    R = UpperTriangular(convert_cov_type(R1, cholesky(d0.Σ).U))
     R1 = cholesky(R1).U
     R2 = cholesky(R2).U
-    SqKalmanFilter(A,B,C,D,R1,R2,MvNormal(Matrix(R2'R2)), d0, Vector(d0.μ), UpperTriangular(Matrix(cholesky(d0.Σ).U)), Ref(1), p, α)
+    
+    R2d = convert_cov_type(R2, R2'R2)
+    x0 = convert_x0_type(d0.μ)
+
+    SqKalmanFilter(A,B,C,D,R1,R2,R2d, d0, x0, R, Ref(1), p, α)
 end
 
 
@@ -80,8 +85,8 @@ covtype(kf::SqKalmanFilter) = typeof(kf.R.data)
 Reset the initial distribution of the state. Optionally, a new mean vector `x0` can be provided.
 """
 function reset!(kf::SqKalmanFilter; x0 = kf.d0.μ)
-    kf.x .= Vector(x0)
-    kf.R .= cholesky(kf.d0.Σ).U
+    kf.x = convert_x0_type(x0)
+    kf.R = UpperTriangular(convert_cov_type(kf.R1, cholesky(kf.d0.Σ).U))
     kf.t[] = 1
 end
 
@@ -94,11 +99,21 @@ function predict!(kf::SqKalmanFilter, u, p=parameters(kf), t::Real = index(kf); 
     @unpack A,B,x,R = kf
     At = get_mat(A, x, u, p, t)
     Bt = get_mat(B, x, u, p, t)
-    x .= At*x .+ Bt*u |> vec
+    kf.x = At*x .+ Bt*u |> vec
     if kf.α == 1
-        R .= UpperTriangular(qr!([R*At';R1]).R)
+        M1 = [R*At';R1]
+        if R.data isa SMatrix
+            kf.R = UpperTriangular(qr(M1).R)
+        else
+            kf.R = UpperTriangular(qr!(M1).R)
+        end
     else
-        R .= UpperTriangular(qr!([sqrt(kf.α)*R*At';R1]).R) # symmetrize(kf.α*At*R*At') + R1
+        M = [sqrt(kf.α)*R*At';R1]
+        if R.data isa SMatrix
+            kf.R = UpperTriangular(qr(M).R) # symmetrize(kf.α*At*R*At') + R1
+        else
+            kf.R = UpperTriangular(qr!(M).R) # symmetrize(kf.α*At*R*At') + R1
+        end
     end
     kf.t[] += 1
 end
@@ -115,16 +130,21 @@ function correct!(kf::SqKalmanFilter, u, y, p=parameters(kf), t::Real = index(kf
     Dt = get_mat(D, x, u, p, t)
     e   = y .- Ct*x
     if !iszero(D)
-        e .-= Dt*u
+        e -= Dt*u
     end
     S0 = qr([R*Ct';R2]).R
     S = UpperTriangular(S0)
-    if det(S) < 0 # Cheap for triangular matrices
-        @. S0 = -S0 # To avoid log(negative) in logpdf
+    if any(<(0), @view(S0[diagind(S0)])) || det(S) < 0 # Cheap for triangular matrices
+        S0 = -S0 # To avoid log(negative) in logpdf
     end
     K   = ((R'*(R*Ct'))/S)/(S')
-    x .+= K*e
-    R .= UpperTriangular(qr!([R*(I - K*Ct)';R2*K']).R) 
+    kf.x += K*e
+    M = [R*(I - K*Ct)';R2*K']
+    if R.data isa SMatrix
+        kf.R = UpperTriangular(qr(M).R)
+    else
+        kf.R = UpperTriangular(qr!(M).R)
+    end
     SS = S'S
     Sᵪ = Cholesky(S0, 'U', 0)
     ll = logpdf(MvNormal(PDMat(SS, Sᵪ)), e)# - 1/2*logdet(S) # logdet is included in logpdf

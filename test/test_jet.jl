@@ -33,7 +33,7 @@ x,u,y = tosvec.((x,u,y))
 @report_call predict!(kf, u[1])
 
 @test_opt correct!(kf, u[1], y[1])
-@report_call predict!(kf, u[1])
+@report_call correct!(kf, u[1], y[1])
 
 ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), eye(ny), d0; ny, nu)
 @test ukf.R1 isa SMatrix{2, 2, Float64, 4}
@@ -41,10 +41,20 @@ ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), eye(ny), d0; ny, nu
 @report_call predict!(ukf, u[1])
 
 @test_opt correct!(ukf, u[1], y[1])
-@report_call predict!(ukf, u[1])
+@report_call correct!(ukf, u[1], y[1])
 
 
-## Test allocations
+skf  = SqKalmanFilter(_A, _B, _C, 0, eye(nx), eye(ny), d0)
+@test skf.R1.data isa SMatrix{2, 2, Float64, 4}
+@test_opt predict!(skf, u[1])
+@report_call predict!(skf, u[1])
+
+@test_opt correct!(skf, u[1], y[1])
+@report_call correct!(skf, u[1], y[1])
+
+
+
+## Test allocations ============================================================
 forward_trajectory(kf, u, y) 
 a = @allocations forward_trajectory(kf, u, y) 
 @test a <= 15
@@ -53,3 +63,11 @@ a = @allocations forward_trajectory(kf, u, y)
 forward_trajectory(ukf, u, y) 
 a = @allocations forward_trajectory(ukf, u, y) 
 @test a <= 15
+
+forward_trajectory(skf, u, y)
+a = @allocations forward_trajectory(skf, u, y)
+
+@test a <= 50 # was 7 on julia v1.10.6
+
+
+## Test differentiability ======================================================
