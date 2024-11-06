@@ -262,6 +262,10 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
 end
 
 
+@testset "jet" begin
+    @info "Testing jet"
+    include("test_jet.jl")
+end
 
 
 @testset "Advanced filters" begin

@@ -21,7 +21,7 @@ N = 2000 # Number of particles
 
 const dg = MvNormal(ny,1.0)          # Measurement noise Distribution
 const df = MvNormal(nx,1.0)          # Dynamics noise Distribution
-const d0 = MvNormal(randn(nx),2.0)   # Initial state Distribution
+const d0 = MvNormal(@SVector(randn(nx)),2.0)   # Initial state Distribution
 
 const A = SA[1 0.1; 0 1]
 const B = @SMatrix [0.0 0.1; 1 0.1]
@@ -56,7 +56,7 @@ the correct value for the simulated data is 1 (the simulated system is the same 
 We can do the same with a Kalman filter
 
 ```@example ml_map
-eye(n) = Matrix{Float64}(I,n,n)
+eye(n) = SMatrix{n,n}(1.0I(n))
 llskf = map(svec) do s
     kfs = KalmanFilter(A, B, C, 0, s^2*eye(nx), eye(ny), d0)
     loglik(kfs, u, y, p)
@@ -230,11 +230,11 @@ We simulate the system using the `rollout` function and add some noise to the me
 Tperiod = 200
 t = 0:Ts:1000
 u = vcat.(0.25 .* sign.(sin.(2pi/Tperiod .* t)) .+ 0.25)
-u = vcat.(u,u)
+u = SVector{nu}.(vcat.(u,u))
 x0 = Float64[2,2,3,3]
 x = LowLevelParticleFilters.rollout(discrete_dynamics, x0, u)[1:end-1]
 y = measurement.(x, u, 0, 0)
-y = [y .+ 0.01randn(ny) for y in y]
+y = [y .+ 0.01.*randn.() for y in y]
 
 plot(
     plot(reduce(hcat, x)', title="State"),
@@ -271,9 +271,9 @@ nothing # hide
 We then define a nonlinear state estimator, we will use the [`UnscentedKalmanFilter`](@ref), and solve the filtering problem. We start by an initial state estimate ``x_0`` that is slightly off for the parameter ``a_1``
 ```@example paramest
 nx = 5
-R1 = Diagonal([0.1, 0.1, 0.1, 0.1, 0.0001])
-R2 = Diagonal((1e-2)^2 * ones(ny))
-x0 = [2, 2, 3, 3, 0.02]
+R1 = SMatrix{nx,nx}(Diagonal([0.1, 0.1, 0.1, 0.1, 0.0001]))
+R2 = SMatrix{ny,ny}(Diagonal((1e-2)^2 * ones(ny)))
+x0 = SA[2, 2, 3, 3, 0.02]
 
 kf = UnscentedKalmanFilter(discrete_dynamics_params, measurement, R1, R2, MvNormal(x0, R1); ny, nu)
 
@@ -322,11 +322,11 @@ Tperiod = 200
 t = 0:Ts:1000
 u1 = vcat.(0.25 .* sign.(sin.(2pi/Tperiod .* (t ./ 40).^2)) .+ 0.25)
 u2 = vcat.(0.25 .* sign.(sin.(2pi/Tperiod .* (t ./ 40).^2 .+ pi/2)) .+ 0.25)
-u  = vcat.(u1,u2)
-x0 = Float64[2,2,3,3]
+u  = SVector{nu}.(vcat.(u1,u2))
+x0 = SA[2.0,2,3,3]
 x = LowLevelParticleFilters.rollout(discrete_dynamics, x0, u, p_true)[1:end-1]
 y = measurement.(x, u, 0, 0)
-y = [y .+ 0.01randn(ny) for y in y]
+y = [y .+ 0.01 .* randn.() for y in y]
 
 plot(
     plot(reduce(hcat, x)', title="State"),
@@ -335,15 +335,15 @@ plot(
 ```
 
 
-This time, we define a cost function for the optimizer to optimize, we'll use the sum of squared errors (`sse`). It's important to define the UKF with an initial state distribution with the same element type as the parameter vector so that automatic differentiation through the state estimator works, hence the explicit casting `T.(x0)`.
+This time, we define a cost function for the optimizer to optimize, we'll use the sum of squared errors (`sse`). It's important to define the UKF with an initial state distribution with the same element type as the parameter vector so that automatic differentiation through the state estimator works, hence the explicit casting `T.(x0)` and `T.(R1)`.
 ```@example paramest
 nx = 4
-R1 = Diagonal([0.1, 0.1, 0.1, 0.1])
-R2 = Diagonal((1e-2)^2 * ones(ny))
-x0 = [2, 2, 3, 3]
+R1 = SMatrix{nx,nx}(Diagonal([0.1, 0.1, 0.1, 0.1]))
+R2 = SMatrix{ny,ny}(Diagonal((1e-2)^2 * ones(ny)))
+x0 = SA[2.0, 2, 3, 3]
 
 function cost(p::Vector{T}) where T
-    kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), R1); ny, nu)
+    kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), T.(R1)); ny, nu)
     LowLevelParticleFilters.sse(kf, u, y, p) # Sum of squared prediction errors
 end
 nothing # hide
@@ -390,7 +390,7 @@ Below, we optimize the sum of squared residuals again, but this time we do it us
 using LeastSquaresOptim
 
 function residuals!(res, p::Vector{T}) where T
-    kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), R1); ny, nu)
+    kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), T.(R1)); ny, nu)
     LowLevelParticleFilters.prediction_errors!(res, kf, u, y, p) 
 end
 

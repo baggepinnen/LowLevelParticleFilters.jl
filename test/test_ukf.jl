@@ -25,12 +25,12 @@ X = reduce(hcat, xs)
 
 ## Standard UKF
 
-eye(n) = Matrix{Float64}(I,n,n)
+eye(n) = SMatrix{n,n}(1.0I(n))
 nx = 2 # Dinemsion of state
 nu = 2 # Dinemsion of input
 ny = 2 # Dinemsion of measurements
 
-d0 = mvnormal(randn(nx),2.0)   # Initial state Distribution
+d0 = mvnormal(@SVector(randn(nx)),2.0)   # Initial state Distribution
 du = mvnormal(2,1) # Control input distribution
 
 # Define random linenar state-space system

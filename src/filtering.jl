@@ -45,11 +45,13 @@ function predict!(kf::AbstractKalmanFilter, u, p=parameters(kf), t::Real = index
     @unpack A,B,x,R = kf
     At = get_mat(A, x, u, p, t)
     Bt = get_mat(B, x, u, p, t)
-    x .= At*x .+ Bt*u |> vec
+    kf.x = At*x .+ Bt*u |> vec
     if kf.α == 1
-        R .= symmetrize(At*R*At') + R1
+        Ru = symmetrize(At*R*At')
+        kf.R = Ru + R1
     else
-        R .= symmetrize(kf.α*At*R*At') + R1
+        Ru = symmetrize(kf.α*At*R*At')
+        kf.R = Ru + R1
     end
     kf.t[] += 1
 end
@@ -81,13 +83,13 @@ function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Real = in
     Dt = get_mat(D, x, u, p, t)
     e   = y .- Ct*x
     if !iszero(D)
-        e .-= Dt*u
+        e -= Dt*u
     end
     S   = symmetrize(Ct*R*Ct') + R2
     Sᵪ  = cholesky(S)
     K   = (R*Ct')/Sᵪ
-    x .+= K*e
-    R  .= symmetrize((I - K*Ct)*R) # WARNING against I .- A
+    kf.x += K*e
+    kf.R  = symmetrize((I - K*Ct)*R) # WARNING against I .- A
     ll = logpdf(MvNormal(PDMat(S, Sᵪ)), e)# - 1/2*logdet(S) # logdet is included in logpdf
     (; ll, e, S, Sᵪ, K)
 end

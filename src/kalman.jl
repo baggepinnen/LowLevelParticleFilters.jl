@@ -1,6 +1,26 @@
 abstract type AbstractKalmanFilter <: AbstractFilter end
 
-@with_kw struct KalmanFilter{AT,BT,CT,DT,R1T,R2T,R2DT,D0T,XT,RT,P,αT} <: AbstractKalmanFilter
+function convert_cov_type(R1, R)
+    if R isa SMatrix || R isa Matrix
+        return R
+    elseif R1 isa SMatrix
+        return SMatrix{size(R1,1),size(R1,2)}(R)
+    elseif R1 isa Matrix
+        return Matrix(R)
+    else
+        return Matrix(R)
+    end
+end
+
+function convert_x0_type(μ)
+    if μ isa Vector || μ isa SVector
+        return μ
+    else
+        return Vector(μ)
+    end
+end
+
+@with_kw mutable struct KalmanFilter{AT,BT,CT,DT,R1T,R2T,R2DT,D0T,XT,RT,P,αT} <: AbstractKalmanFilter
     A::AT
     B::BT
     C::CT
@@ -47,7 +67,9 @@ function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(Matrix(R1)); p = SciMLBase.NullP
     if check
         maximum(abs, eigvals(A isa SMatrix ? Matrix(A) : A)) ≥ 2 && @warn "The dynamics matrix A has eigenvalues with absolute value ≥ 2. This is either a highly unstable system, or you have forgotten to discretize a continuous-time model. If you are sure that the system is provided in discrete time, you can disable this warning by setting check=false." maxlog=1
     end
-    KalmanFilter(A,B,C,D,R1,R2,MvNormal(Matrix(R2)), d0, Vector(d0.μ), Matrix(d0.Σ), Ref(1), p, α)
+    R = convert_cov_type(R1, d0.Σ)
+    x0 = convert_x0_type(d0.μ)
+    KalmanFilter(A,B,C,D,R1,R2,MvNormal(Matrix(R2)), d0, x0, R, Ref(1), p, α)
 end
 
 function Base.propertynames(kf::KF, private::Bool=false) where KF <: AbstractKalmanFilter
@@ -95,7 +117,7 @@ end
 Reset the initial distribution of the state. Optionally, a new mean vector `x0` can be provided.
 """
 function reset!(kf::AbstractKalmanFilter; x0 = kf.d0.μ)
-    kf.x .= Vector(x0)
-    kf.R .= copy(Matrix(kf.d0.Σ))
+    kf.x = convert_x0_type(x0)
+    kf.R = convert_cov_type(kf.R1, kf.d0.Σ)# typeof(kf.R1)(kf.d0.Σ)
     kf.t[] = 1
 end
