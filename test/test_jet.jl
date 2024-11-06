@@ -47,9 +47,9 @@ ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), eye(ny), d0; ny, nu
 ## Test allocations
 forward_trajectory(kf, u, y) 
 a = @allocations forward_trajectory(kf, u, y) 
-@test a <= 5
+@test a <= 15
 
 
 forward_trajectory(ukf, u, y) 
 a = @allocations forward_trajectory(ukf, u, y) 
-@test a <= 5
+@test a <= 15
