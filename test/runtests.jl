@@ -267,6 +267,11 @@ end
     include("test_jet.jl")
 end
 
+@testset "diff" begin
+    @info "Testing diff"
+    include("test_diff.jl")
+end
+
 
 @testset "Advanced filters" begin
     @info "testing Advanced filters"

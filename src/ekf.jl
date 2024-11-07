@@ -28,6 +28,7 @@ ExtendedKalmanFilter
 
 function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(Matrix(R1)); nu::Int, p = SciMLBase.NullParameters(), α = 1.0, check = true)
     nx = size(R1,1)
+    ny = size(R2,1)
     T = eltype(R1)
     if R1 isa SMatrix
         x = @SVector zeros(T, nx)
@@ -40,7 +41,7 @@ function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(Matrix(R1
     A = ForwardDiff.jacobian(x->dynamics(x,u,p,t), x)
     B = ForwardDiff.jacobian(u->dynamics(x,u,p,t), u)
     C = ForwardDiff.jacobian(x->measurement(x,u,p,t), x)
-    D = ForwardDiff.jacobian(u->measurement(x,u,p,t), u)
+    D = zeros(ny, nu) # This one is never needed
     kf = KalmanFilter(A,B,C,D,R1,R2,d0; p, α, check)
     return ExtendedKalmanFilter(kf, dynamics, measurement)
 end
