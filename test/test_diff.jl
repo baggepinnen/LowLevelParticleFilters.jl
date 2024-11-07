@@ -36,6 +36,7 @@ function costfun1(p::AbstractArray{T}) where T
 
     d0 = MvNormal(@SVector(zeros(T, nx)),T(1.0))   # Initial state Distribution
 
+    kf  = KalmanFilter(_A, _B, _C, 0, R1, eye(ny), d0)
     ukf = UnscentedKalmanFilter(dynamics, measurement, R1, eye(ny), d0; ny, nu)
     skf = SqKalmanFilter(_A, _B, _C, 0, R1, eye(ny), d0)
     ekf = ExtendedKalmanFilter(dynamics, measurement, R1, eye(ny), d0; nu, check=false)
@@ -51,7 +52,7 @@ function costfun1(p::AbstractArray{T}) where T
     out
 end
 
-@test_nowarn ForwardDiff.gradient(costfun1, [1.0])
+@test_nowarn g1 = ForwardDiff.gradient(costfun1, [1.0])
 
 # Test differentiability w.r.t. R2
 function costfun2(p::AbstractArray{T}) where T
@@ -60,6 +61,7 @@ function costfun2(p::AbstractArray{T}) where T
 
     d0 = MvNormal(@SVector(zeros(T, nx)),T(1.0))   # Initial state Distribution
 
+    kf  = KalmanFilter(_A, _B, _C, 0, R1, R2, d0)
     ukf = UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0; ny, nu)
     skf = SqKalmanFilter(_A, _B, _C, 0, R1, R2, d0)
     ekf = ExtendedKalmanFilter(dynamics, measurement, R1, R2, d0; nu, check=false)
@@ -75,7 +77,7 @@ function costfun2(p::AbstractArray{T}) where T
     out
 end
 
-@test_nowarn ForwardDiff.gradient(costfun2, [1.0])
+@test_nowarn g2 = ForwardDiff.gradient(costfun2, [1.0])
 
 ## Test differentiability w.r.t. p in dynamics
 
@@ -91,7 +93,7 @@ function costfun3(p::AbstractArray{T}) where T
     ukf = UnscentedKalmanFilter(dynamics3, measurement3, R1, R2, d0; ny, nu, p)
     ekf = ExtendedKalmanFilter(dynamics3, measurement3, R1, R2, d0; nu, check=false, p)
 
-    filters = [kf, ukf, skf, ekf]
+    filters = [ukf, ekf]
     out = zero(T)
     for filter in filters
         predict!(filter, u[1])
@@ -102,4 +104,17 @@ function costfun3(p::AbstractArray{T}) where T
     out
 end
 
-@test_nowarn ForwardDiff.gradient(costfun3, [0.0])
+@test_nowarn g3 = ForwardDiff.gradient(costfun3, [1.0])
+
+
+## 
+# using DifferentiationInterface, Enzyme
+# backend = AutoEnzyme()
+# NOTE: these all segfault
+# g1_e = DifferentiationInterface.gradient(costfun1, backend, [1.0]) 
+# g2_e = DifferentiationInterface.gradient(costfun2, backend, [1.0])
+# g3_e = DifferentiationInterface.gradient(costfun3, backend, [1.0])
+
+# @test g1 ≈ g1_e
+# @test g2 ≈ g2_e
+# @test g3 ≈ g3_e
