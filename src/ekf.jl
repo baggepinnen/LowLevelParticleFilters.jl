@@ -29,8 +29,13 @@ ExtendedKalmanFilter
 function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(Matrix(R1)); nu::Int, p = SciMLBase.NullParameters(), α = 1.0, check = true)
     nx = size(R1,1)
     T = eltype(R1)
-    x = zeros(T, nx)
-    u = zeros(T, nu)
+    if R1 isa SMatrix
+        x = @SVector zeros(T, nx)
+        u = @SVector zeros(T, nu)
+    else
+        x = zeros(T, nx)
+        u = zeros(T, nu)
+    end
     t = one(T)
     A = ForwardDiff.jacobian(x->dynamics(x,u,p,t), x)
     B = ForwardDiff.jacobian(u->dynamics(x,u,p,t), u)
@@ -55,16 +60,16 @@ function Base.propertynames(ekf::EKF, private::Bool=false) where EKF <: Abstract
 end
 
 
-function predict!(kf::AbstractExtendedKalmanFilter, u, p = parameters(kf), t::Integer = index(kf); R1 = get_mat(kf.R1, kf.x, u, p, t))
+function predict!(kf::AbstractExtendedKalmanFilter, u, p = parameters(kf), t::Integer = index(kf); R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α)
     @unpack x,R = kf
     A = ForwardDiff.jacobian(x->kf.dynamics(x,u,p,t), x)
-    x .= kf.dynamics(x, u, p, t)
-    if kf.α == 1
-        R .= symmetrize(A*R*A') + R1
+    kf.x = kf.dynamics(x, u, p, t)
+    if α == 1
+        kf.R = symmetrize(A*R*A') + R1
     else
-        R .= symmetrize(kf.α*A*R*A') + R1
+        kf.R = symmetrize(α*A*R*A') + R1
     end
-    kf.t[] += 1
+    kf.t += 1
 end
 
 function correct!(kf::AbstractExtendedKalmanFilter, u, y, p = parameters(kf), t::Integer = index(kf); R2 = get_mat(kf.R2, kf.x, u, p, t))
@@ -74,8 +79,8 @@ function correct!(kf::AbstractExtendedKalmanFilter, u, y, p = parameters(kf), t:
     S   = symmetrize(C*R*C') + R2
     Sᵪ  = cholesky(S)
     K   = (R*C')/Sᵪ
-    x .+= vec(K*e)
-    R  .= symmetrize((I - K*C)*R) # WARNING against I .- A
+    kf.x += vec(K*e)
+    kf.R  = symmetrize((I - K*C)*R) # WARNING against I .- A
     ll = logpdf(MvNormal(PDMat(S, Sᵪ)), e)[]# - 1/2*logdet(S) # logdet is included in logpdf
     (; ll, e, S, Sᵪ, K)
 end

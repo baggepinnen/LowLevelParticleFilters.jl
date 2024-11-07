@@ -9,7 +9,7 @@
     d0::D0T
     x::XT
     R::RT
-    t::Base.RefValue{Int} = Ref(1)
+    t::Int = 1
     p::P = SciMLBase.NullParameters()
     α::αT = 1.0
 end
@@ -55,7 +55,7 @@ function SqKalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(Matrix(R1)); p = SciMLBase.Nul
     R2d = convert_cov_type(R2, R2'R2)
     x0 = convert_x0_type(d0.μ)
 
-    SqKalmanFilter(A,B,C,D,R1,R2,R2d, d0, x0, R, Ref(1), p, α)
+    SqKalmanFilter(A,B,C,D,R1,R2,R2d, d0, x0, R, 1, p, α)
 end
 
 
@@ -87,7 +87,7 @@ Reset the initial distribution of the state. Optionally, a new mean vector `x0` 
 function reset!(kf::SqKalmanFilter; x0 = kf.d0.μ)
     kf.x = convert_x0_type(x0)
     kf.R = UpperTriangular(convert_cov_type(kf.R1, cholesky(kf.d0.Σ).U))
-    kf.t[] = 1
+    kf.t = 1
 end
 
 """
@@ -115,7 +115,7 @@ function predict!(kf::SqKalmanFilter, u, p=parameters(kf), t::Real = index(kf); 
             kf.R = UpperTriangular(qr!(M).R) # symmetrize(kf.α*At*R*At') + R1
         end
     end
-    kf.t[] += 1
+    kf.t += 1
 end
 
 
