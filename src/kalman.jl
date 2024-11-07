@@ -31,7 +31,7 @@ end
     d0::D0T
     x::XT
     R::RT
-    t::Base.RefValue{Int} = Ref(1)
+    t::Int = 1
     p::P = SciMLBase.NullParameters()
     α::αT = 1.0
 end
@@ -69,7 +69,7 @@ function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(Matrix(R1)); p = SciMLBase.NullP
     end
     R = convert_cov_type(R1, d0.Σ)
     x0 = convert_x0_type(d0.μ)
-    KalmanFilter(A,B,C,D,R1,R2,MvNormal(Matrix(R2)), d0, x0, R, Ref(1), p, α)
+    KalmanFilter(A,B,C,D,R1,R2,MvNormal(Matrix(R2)), d0, x0, R, 1, p, α)
 end
 
 function Base.propertynames(kf::KF, private::Bool=false) where KF <: AbstractKalmanFilter
@@ -119,5 +119,5 @@ Reset the initial distribution of the state. Optionally, a new mean vector `x0` 
 function reset!(kf::AbstractKalmanFilter; x0 = kf.d0.μ)
     kf.x = convert_x0_type(x0)
     kf.R = convert_cov_type(kf.R1, kf.d0.Σ)# typeof(kf.R1)(kf.d0.Σ)
-    kf.t[] = 1
+    kf.t = 1
 end

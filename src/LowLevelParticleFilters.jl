@@ -38,7 +38,7 @@ include("plotting.jl")
 include("ekf.jl")
 include("sq_kalman.jl")
 
-index(f::AbstractFilter) = f.t[]
+index(f::AbstractFilter) = f.t
 
 if !isdefined(Base, :get_extension) # Backwards compat
     include("../ext/LowLevelParticleFiltersControlSystemsBaseExt.jl")

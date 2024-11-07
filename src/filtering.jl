@@ -53,7 +53,7 @@ function predict!(kf::AbstractKalmanFilter, u, p=parameters(kf), t::Real = index
         Ru = symmetrize(α*At*R*At')
         kf.R = Ru + R1
     end
-    kf.t[] += 1
+    kf.t += 1
 end
 
 @inline function symmetrize(x::SArray)

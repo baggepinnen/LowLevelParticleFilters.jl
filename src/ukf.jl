@@ -42,7 +42,7 @@ abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
     ys::Vector{YVT}
     x::XT
     R::RT
-    t::Base.RefValue{Int} = Ref(1)
+    t::Int = 1
     ny::Int
     nu::Int
     p::P
@@ -85,7 +85,7 @@ function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)
     end
     R = convert_cov_type(R1, d0.Σ)
     x0 = convert_x0_type(d0.μ)
-    UnscentedKalmanFilter(dynamics,measurement,R1,R2, d0, xs, ys, x0, R, Ref(1), ny, nu, p)
+    UnscentedKalmanFilter(dynamics,measurement,R1,R2, d0, xs, ys, x0, R, 1, ny, nu, p)
 end
 
 sample_state(kf::AbstractUnscentedKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
@@ -115,7 +115,7 @@ function predict!(ukf::UnscentedKalmanFilter{DT}, u, p = parameters(ukf), t::Rea
     end
     ukf.x = safe_mean(xs)
     ukf.R = symmetrize(safe_cov(xs)) .+ R1
-    ukf.t[] += 1
+    ukf.t += 1
 end
 
 # The functions below are JET-safe from dynamic dispatch if called with static arrays
@@ -375,7 +375,7 @@ function predict!(ukf::DAEUnscentedKalmanFilter, u, p = parameters(ukf), t::Inte
     ukf.x = mean(xs) # xz or xs here? Answer: Covariance is associated only with x
     xz .= calc_xz(ukf, xz, u, p, t, x)
     ukf.R = symmetrize(cov(xs)) + get_mat(R1, x, u, p, t)
-    ukf.t[] += 1
+    ukf.t += 1
 end
 
 function correct!(ukf::DAEUnscentedKalmanFilter, u, y, p = parameters(ukf), t::Integer = index(ukf); R2 = get_mat(ukf.R2, ukf.x, u, p, t))

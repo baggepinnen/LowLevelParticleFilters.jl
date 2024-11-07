@@ -53,6 +53,15 @@ skf  = SqKalmanFilter(_A, _B, _C, 0, eye(nx), eye(ny), d0)
 @report_call correct!(skf, u[1], y[1])
 
 
+ekf = ExtendedKalmanFilter(dynamics, measurement, eye(nx), eye(ny), d0; nu)
+@test ekf.kf.R1 isa SMatrix{2, 2, Float64, 4}
+@test_opt predict!(ekf, u[1])
+@report_call predict!(ekf, u[1])
+
+@test_opt correct!(ekf, u[1], y[1])
+@report_call correct!(ekf, u[1], y[1])
+
+
 
 ## Test allocations ============================================================
 forward_trajectory(kf, u, y) 
@@ -67,3 +76,7 @@ forward_trajectory(skf, u, y)
 a = @allocations forward_trajectory(skf, u, y)
 
 @test a <= 50 # was 7 on julia v1.10.6
+
+forward_trajectory(ekf, u, y)
+a = @allocations forward_trajectory(ekf, u, y)
+@test a <= 15
