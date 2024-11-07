@@ -207,7 +207,7 @@ Base.@propagate_inbounds function measurement_equation!(pf::AbstractParticleFilt
     g = measurement_likelihood(pf)
     any(ismissing.(y)) && return w
     x = particles(pf)
-    @batch for i = 1:num_particles(pf)
+    for i = 1:num_particles(pf)
         @inbounds w[i] += g(x[i], u, y, p, t)
     end
     w
@@ -220,9 +220,9 @@ Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilte
     s = state(pf)
     x,xp = s.x, s.xprev
     if pf.threads
-        @batch for i = eachindex(x)
-            @inbounds x[i] = f(xp[j[i]], u, p, t, noise) # TODO: lots of allocations here
-        end
+        # @batch for i = eachindex(x)
+        #     @inbounds x[i] = f(xp[j[i]], u, p, t, noise) # TODO: lots of allocations here
+        # end
     else
         for i = eachindex(x)
             @inbounds x[i] = f(xp[j[i]], u, p, t, noise) 
@@ -235,11 +235,11 @@ Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilte
     f = pf.dynamics
     x,xp = particles(pf), state(pf).xprev
     if pf.threads
-        @batch for i = eachindex(x)
-            @inbounds x[i] = f(xp[i], u, p, t)
-        end
+        # @batch for i = eachindex(x)
+        #     @inbounds x[i] = f(xp[i], u, p, t)
+        # end
     else
-        @batch for i = eachindex(x)
+        for i = eachindex(x)
             @inbounds x[i] = f(xp[i], u, p, t)
         end
     end
@@ -250,11 +250,11 @@ Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilte
     f = pf.dynamics
     x,xp = particles(pf), state(pf).xprev
     if pf.threads
-        @batch for i = eachindex(x)
-            @inbounds x[i] = f(xp[i], u, p, t, noise)
-        end
+        # @batch for i = eachindex(x)
+        #     @inbounds x[i] = f(xp[i], u, p, t, noise)
+        # end
     else
-        @batch for i = eachindex(x)
+        for i = eachindex(x)
             @inbounds x[i] = f(xp[i], u, p, t, noise)
         end
     end
