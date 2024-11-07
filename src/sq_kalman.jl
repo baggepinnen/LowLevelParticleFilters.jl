@@ -91,16 +91,16 @@ function reset!(kf::SqKalmanFilter; x0 = kf.d0.μ)
 end
 
 """
-    predict!(kf::SqKalmanFilter, u, p = parameters(kf), t::Real = index(kf); R1 = get_mat(kf.R1, kf.x, u, p, t))
+    predict!(kf::SqKalmanFilter, u, p = parameters(kf), t::Real = index(kf); R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α)
 
 For the square-root Kalman filter, a custom provided `R1` must be the upper triangular Cholesky factor of the covariance matrix of the process noise.
 """
-function predict!(kf::SqKalmanFilter, u, p=parameters(kf), t::Real = index(kf); R1 = get_mat(kf.R1, kf.x, u, p, t))
+function predict!(kf::SqKalmanFilter, u, p=parameters(kf), t::Real = index(kf); R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α)
     @unpack A,B,x,R = kf
     At = get_mat(A, x, u, p, t)
     Bt = get_mat(B, x, u, p, t)
     kf.x = At*x .+ Bt*u |> vec
-    if kf.α == 1
+    if α == 1
         M1 = [R*At';R1]
         if R.data isa SMatrix
             kf.R = UpperTriangular(qr(M1).R)
@@ -108,11 +108,11 @@ function predict!(kf::SqKalmanFilter, u, p=parameters(kf), t::Real = index(kf); 
             kf.R = UpperTriangular(qr!(M1).R)
         end
     else
-        M = [sqrt(kf.α)*R*At';R1]
+        M = [sqrt(α)*R*At';R1]
         if R.data isa SMatrix
-            kf.R = UpperTriangular(qr(M).R) # symmetrize(kf.α*At*R*At') + R1
+            kf.R = UpperTriangular(qr(M).R) # symmetrize(α*At*R*At') + R1
         else
-            kf.R = UpperTriangular(qr!(M).R) # symmetrize(kf.α*At*R*At') + R1
+            kf.R = UpperTriangular(qr!(M).R) # symmetrize(α*At*R*At') + R1
         end
     end
     kf.t[] += 1
