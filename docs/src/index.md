@@ -91,7 +91,7 @@ measurement(x,u,p,t) = C*x
 vecvec_to_mat(x) = copy(reduce(hcat, x)') # Helper function
 nothing # hide
 ```
-the parameter `p` can be anything, and is often optional. If `p` is not provided when performing operations on filters, any `p` stored in the filter objects (if supported) is used. The default if none is provided and none is stored in the filter is `p = SciMLBase.NullParameters()`.
+the parameter `p` can be anything, and is often optional. If `p` is not provided when performing operations on filters, any `p` stored in the filter objects (if supported) is used. The default if none is provided and none is stored in the filter is `p = LowLevelParticleFilters.NullParameters()`.
 
 We are now ready to define and use a filter
 
@@ -242,7 +242,7 @@ The [`ExtendedKalmanFilter`](@ref) ([EKF](https://en.wikipedia.org/wiki/Extended
 
 The EKF constructor has the following two signatures
 ```julia
-ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(Matrix(R1)); nu::Int, p = SciMLBase.NullParameters(), α = 1.0, check = true)
+ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(Matrix(R1)); nu::Int, p = LowLevelParticleFilters.NullParameters(), α = 1.0, check = true)
 ExtendedKalmanFilter(kf, dynamics, measurement)
 ```
 The first constructor takes all the arguments required to initialize the extended Kalman filter, while the second one takes an already defined standard Kalman filter. using the first constructor, the user must provide the number of inputs to the system, `nu`.

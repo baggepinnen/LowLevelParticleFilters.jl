@@ -7,7 +7,7 @@ end
 
 """
     ExtendedKalmanFilter(kf, dynamics, measurement)
-    ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(Matrix(R1)); nu::Int, p = SciMLBase.NullParameters(), α = 1.0, check = true)
+    ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(Matrix(R1)); nu::Int, p = NullParameters(), α = 1.0, check = true)
 
 A nonlinear state estimator propagating uncertainty using linearization.
 
@@ -26,7 +26,7 @@ See also [`UnscentedKalmanFilter`](@ref) which is typically more accurate than `
 """
 ExtendedKalmanFilter
 
-function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(Matrix(R1)); nu::Int, p = SciMLBase.NullParameters(), α = 1.0, check = true)
+function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(Matrix(R1)); nu::Int, p = NullParameters(), α = 1.0, check = true)
     nx = size(R1,1)
     ny = size(R2,1)
     T = eltype(R1)

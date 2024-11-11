@@ -15,11 +15,10 @@ using StaticArrays
 using Distributions
 using RecipesBase
 using ForwardDiff
-using SimpleNonlinearSolve
 using Polyester
-using SeeToDee
 
-using SciMLBase
+# using SciMLBase
+struct NullParameters end
 
 abstract type ResamplingStrategy end
 struct ResampleSystematic <: ResamplingStrategy end

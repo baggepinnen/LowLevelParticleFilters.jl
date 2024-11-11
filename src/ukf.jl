@@ -50,7 +50,7 @@ end
 
 
 """
-    UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0=MvNormal(Matrix(R1)); p = SciMLBase.NullParameters(), ny, nu)
+    UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0=MvNormal(Matrix(R1)); p = NullParameters(), ny, nu)
 
 A nonlinear state estimator propagating uncertainty using the unscented transform.
 
@@ -76,7 +76,7 @@ The `u` provided in the input data is passed directly to the dynamics and measur
 so as long as the type is compatible with the dynamics it will work out.
 The one exception where this will not work is when calling `simulate`, which assumes that `u` is an array.
 """
-function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)); p = SciMLBase.NullParameters(), nu::Int, ny::Int)
+function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)); p = NullParameters(), nu::Int, ny::Int)
     xs = sigmapoints(mean(d0), cov(d0), static = !has_ip(dynamics))
     if has_ip(measurement)
         ys = [zeros(promote_type(eltype(xs[1]), eltype(d0)), ny) for _ in 1:length(xs)]

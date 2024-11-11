@@ -2,7 +2,7 @@
 abstract type AbstractParticleFilter <: AbstractFilter end
 
 function parameters(f::AbstractFilter)
-    hasproperty(f, :p) ? getproperty(f, :p) : SciMLBase.NullParameters()
+    hasproperty(f, :p) ? getproperty(f, :p) : NullParameters()
 end
 
 struct PFstate{PT<:AbstractArray, FT<:AbstractFloat}
@@ -28,7 +28,7 @@ PFstate(N::Integer) = PFstate([zeros(N)],[zeros(N)],fill(-log(N), N),fill(1/N, N
     resample_threshold::Float64 = 0.1
     resampling_strategy::RST = ResampleSystematic
     rng::RNGT = Xoshiro()
-    p::P = SciMLBase.NullParameters()
+    p::P = NullParameters()
     threads::Bool = false
 end
 
@@ -46,7 +46,7 @@ Takes exactly the same arguments as [`ParticleFilter`](@ref), or an instance of 
 AuxiliaryParticleFilter(args...;kwargs...) = AuxiliaryParticleFilter(ParticleFilter(args...;kwargs...))
 
 """
-    ParticleFilter(N::Integer, dynamics, measurement, dynamics_density, measurement_density, initial_density; threads = false, p = SciMLBase.NullParameters(), kwargs...)
+    ParticleFilter(N::Integer, dynamics, measurement, dynamics_density, measurement_density, initial_density; threads = false, p = NullParameters(), kwargs...)
 
 
 See the docs for more information: https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/#Particle-filter-1
@@ -169,13 +169,13 @@ end
     resample_threshold::Float64 = 0.5
     resampling_strategy::RST = ResampleSystematic
     rng::RNGT = Xoshiro()
-    p::P = SciMLBase.NullParameters()
+    p::P = NullParameters()
     threads::Bool = false
 end
 
 
 """
-    AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, measurement_likelihood, dynamics_density, initial_density; p = SciMLBase.NullParameters(), threads = false, kwargs...)
+    AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Function, measurement_likelihood, dynamics_density, initial_density; p = NullParameters(), threads = false, kwargs...)
 
 This type represents a standard particle filter but affords extra flexibility compared to the [`ParticleFilter`](@ref) type, e.g., non-additive noise in the dynamics and measurement functions.
 
