@@ -28,9 +28,11 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [weakdeps]
 ControlSystemsBase = "aaaaaaaa-a6ca-5380-bf3e-84a91bcd477e"
+MonteCarloMeasurements = "0987c9cc-fe09-11e8-30f0-b96dd679fdca"
 
 [extensions]
 LowLevelParticleFiltersControlSystemsBaseExt = "ControlSystemsBase"
+LowLevelParticleFiltersMonteCarloMeasurementsExt = "MonteCarloMeasurements"
 
 [compat]
 ControlSystemsBase = "1"
