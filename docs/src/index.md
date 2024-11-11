@@ -91,7 +91,7 @@ measurement(x,u,p,t) = C*x
 vecvec_to_mat(x) = copy(reduce(hcat, x)') # Helper function
 nothing # hide
 ```
-the parameter `p` can be anything, and is often optional. If `p` is not provided when performing operations on filters, any `p` stored in the filter objects (if supported) is used. The default if none is provided and none is stored in the filter is `p = SciMLBase.NullParameters()`.
+the parameter `p` can be anything, and is often optional. If `p` is not provided when performing operations on filters, any `p` stored in the filter objects (if supported) is used. The default if none is provided and none is stored in the filter is `p = LowLevelParticleFilters.NullParameters()`.
 
 We are now ready to define and use a filter
 
@@ -229,20 +229,13 @@ ukf = UnscentedKalmanFilter(dynamics, measurement, cov(df), cov(dg), MvNormal([1
 !!! info
     If your function `dynamics` describes a continuous-time ODE, do not forget to **discretize** it before passing it to the UKF. See [Discretization](@ref) for more information.
 
-## UKF for DAE systems
-See the docstring for [`DAEUnscentedKalmanFilter`](@ref) or the [test file](https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/test/test_ukf.jl). This filter is modeled after
-> "Nonlinear State Estimation of Differential Algebraic Systems"
-> Ravi K. Mandela, Raghunathan Rengaswamy, Shankar Narasimhan
-
-!!! warning
-    This filter is still considered experimental and subject to change without respecting semantic versioning. Use at your own risk. The [`AdvancedParticleFilter`](@ref) also supports DAE systems, see [this tutorial](https://juliahub.com/ui/Notebooks/fredrik-carlson2/controlsystems/dae_stateest.jl).
 
 # Extended Kalman Filter
 The [`ExtendedKalmanFilter`](@ref) ([EKF](https://en.wikipedia.org/wiki/Extended_Kalman_filter)) is similar to the UKF, but propagates Gaussian distributions by linearizing the dynamics and using the formulas for linear systems similar to the standard Kalman filter. This can be slightly faster than the UKF (not always), but also less accurate for strongly nonlinear systems. The linearization is performed automatically using ForwardDiff.jl. In general, the UKF is recommended over the EKF unless the EKF is faster and computational performance is the top priority.
 
 The EKF constructor has the following two signatures
 ```julia
-ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(Matrix(R1)); nu::Int, p = SciMLBase.NullParameters(), α = 1.0, check = true)
+ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(Matrix(R1)); nu::Int, p = LowLevelParticleFilters.NullParameters(), α = 1.0, check = true)
 ExtendedKalmanFilter(kf, dynamics, measurement)
 ```
 The first constructor takes all the arguments required to initialize the extended Kalman filter, while the second one takes an already defined standard Kalman filter. using the first constructor, the user must provide the number of inputs to the system, `nu`.

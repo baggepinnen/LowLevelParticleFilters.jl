@@ -1,7 +1,8 @@
 using LowLevelParticleFilters
 using Distributions
 using StaticArrays
-using Plots, LinearAlgebra
+using Plots, LinearAlgebra, SeeToDee, Test
+using Optim
 
 ## Nonlinear quadtank
 function quadtank(h,u,p,t)
@@ -31,7 +32,7 @@ ny = 2 # number of measured outputs
 Ts = 1 # sample time
 measurement(x,u,p,t) = SA[x[1], x[2]]
 
-discrete_dynamics = LowLevelParticleFilters.rk4(quadtank, Ts, supersample=2)
+discrete_dynamics = SeeToDee.Rk4(quadtank, Ts, supersample=2)
 
 Tperiod = 200
 t = 0:Ts:1000
@@ -69,7 +70,7 @@ function quadtank_params(h,u,p,t)
     ]
 end
 
-discrete_dynamics_params = LowLevelParticleFilters.rk4(quadtank_params, Ts, supersample=2)
+discrete_dynamics_params = SeeToDee.Rk4(quadtank_params, Ts, supersample=2)
 
 nx = 5
 R1 = Diagonal([0.1, 0.1, 0.1, 0.1, 0.0001])
@@ -104,7 +105,7 @@ function quadtank(h, u, p, t)
     ]
 end
 
-discrete_dynamics = LowLevelParticleFilters.rk4(quadtank, Ts, supersample=2)
+discrete_dynamics = SeeToDee.Rk4(quadtank, Ts, supersample=2)
 p_true = [0.5, 1.6, 1.6, 4.9, 0.03, 0.2]
 
 Tperiod = 200
