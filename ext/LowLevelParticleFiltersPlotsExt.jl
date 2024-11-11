@@ -1,6 +1,8 @@
 module LowLevelParticleFiltersPlotsExt
 using LowLevelParticleFilters
+using LowLevelParticleFilters: AbstractFilter
 using Plots
+using Printf
 
 
 function pplot(pf::AbstractFilter, u, y, p, args...; kwargs...)
