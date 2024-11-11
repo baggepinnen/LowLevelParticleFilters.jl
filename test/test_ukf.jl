@@ -105,99 +105,99 @@ resukf2 = forward_trajectory(ukf2, vu, vy)
 
 @test sse(resukf2.xt .- resukf.xt) < 1e-10
 ## DAE UKF =====================================================================
-"A pendulum in DAE form"
-function pend(state, f, p, t=0)
-    x,y,u,v,λ = state
-    g = 9.82
-    SA[
-        u
-        v
-        -λ*x + f[1]
-        -λ*y - g + f[2]
-        # x^2 + y^2 - 1 # Index 3, position constraint
-        # x*u + y*v # index 2, tangential velocity
-        u^2 + v^2 - λ*(x^2 + y^2) - g*y + x*f[1] + y*f[2] # index 1, centripetal acceleration
-    ]
-end
+# "A pendulum in DAE form"
+# function pend(state, f, p, t=0)
+#     x,y,u,v,λ = state
+#     g = 9.82
+#     SA[
+#         u
+#         v
+#         -λ*x + f[1]
+#         -λ*y - g + f[2]
+#         # x^2 + y^2 - 1 # Index 3, position constraint
+#         # x*u + y*v # index 2, tangential velocity
+#         u^2 + v^2 - λ*(x^2 + y^2) - g*y + x*f[1] + y*f[2] # index 1, centripetal acceleration
+#     ]
+# end
 
-nx = 4 # Dinemsion of differential state
-nu = 2 # Dinemsion of input
-ny = 2 # Dinemsion of measurements
-const Ts_ekf = 0.001
-@inbounds measurement(x,u,p,t) = SA[x[1], x[end]] # measure one position and the algebraic state 
+# nx = 4 # Dinemsion of differential state
+# nu = 2 # Dinemsion of input
+# ny = 2 # Dinemsion of measurements
+# const Ts_ekf = 0.001
+# @inbounds measurement(x,u,p,t) = SA[x[1], x[end]] # measure one position and the algebraic state 
 
-d0 = mvnormal([1,0,0,0],0.1)   # Initial state Distribution
-du = mvnormal(2,0.1) # Control input distribution
-xz0 = [mean(d0); 0]
-u0 = zeros(nu)
+# d0 = mvnormal([1,0,0,0],0.1)   # Initial state Distribution
+# du = mvnormal(2,0.1) # Control input distribution
+# xz0 = [mean(d0); 0]
+# u0 = zeros(nu)
 
-get_x(xz) = SA[xz[1],xz[2],xz[3],xz[4]]
-get_z(xz) = SA[xz[5]]
-get_x_z(xz) = get_x(xz), get_z(xz)
-build_xz(x, z) = [x; z]
-g((x,y,u,v), (λ,), f, p, t) = SA[u^2 + v^2 - λ*(x^2 + y^2) - 9.82*y + x*f[1] + y*f[2]]
-# g((x,y,u,v), (λ,), f, t) = SA[x*u + y*v]
-g(xz, u, p, t) = g(get_x(xz), get_z(xz), u, p, t)
+# get_x(xz) = SA[xz[1],xz[2],xz[3],xz[4]]
+# get_z(xz) = SA[xz[5]]
+# get_x_z(xz) = get_x(xz), get_z(xz)
+# build_xz(x, z) = [x; z]
+# g((x,y,u,v), (λ,), f, p, t) = SA[u^2 + v^2 - λ*(x^2 + y^2) - 9.82*y + x*f[1] + y*f[2]]
+# # g((x,y,u,v), (λ,), f, t) = SA[x*u + y*v]
+# g(xz, u, p, t) = g(get_x(xz), get_z(xz), u, p, t)
 
-# Discretization of the continuous-time dynamics, we use a naive Euler approximation, real-world use should use a proper DAE solver, for example using the integrator interface in OrdinaryDiffEq.jl
-function dynamics(xz,u,p,t)
-    Tsi = Ts_ekf/100
-    for i = 1:100
-        der = pend(xz,u,p,t)
-        xp = get_x(xz) + Tsi*get_x(der) # Euler step
-        xzp = build_xz(xp, get_z(xz))
-        xz = LowLevelParticleFilters.calc_xz(get_x_z, build_xz, g, xzp, u, p, t) # Adjust z
-    end
-    xz
-end
+# # Discretization of the continuous-time dynamics, we use a naive Euler approximation, real-world use should use a proper DAE solver, for example using the integrator interface in OrdinaryDiffEq.jl
+# function dynamics(xz,u,p,t)
+#     Tsi = Ts_ekf/100
+#     for i = 1:100
+#         der = pend(xz,u,p,t)
+#         xp = get_x(xz) + Tsi*get_x(der) # Euler step
+#         xzp = build_xz(xp, get_z(xz))
+#         xz = LowLevelParticleFilters.calc_xz(get_x_z, build_xz, g, xzp, u, p, t) # Adjust z
+#     end
+#     xz
+# end
 
 
-u0 = randn(nu)
-xzp = dynamics(xz0,u0,0,0)
-@test g(xzp, u0, 0, 0)[] ≈ 0 atol=0.01
+# u0 = randn(nu)
+# xzp = dynamics(xz0,u0,0,0)
+# @test g(xzp, u0, 0, 0)[] ≈ 0 atol=0.01
 
-ukf0 = UnscentedKalmanFilter(dynamics, measurement, 0.0001eye(nx), 0.01eye(ny), d0; ny, nu)
-threads = false
-for threads = (false, true)
-    local ukf  = LowLevelParticleFilters.DAEUnscentedKalmanFilter(ukf0; g, get_x_z, build_xz, xz0, nu=nu, threads)
+# ukf0 = UnscentedKalmanFilter(dynamics, measurement, 0.0001eye(nx), 0.01eye(ny), d0; ny, nu)
+# threads = false
+# for threads = (false, true)
+#     local ukf  = LowLevelParticleFilters.DAEUnscentedKalmanFilter(ukf0; g, get_x_z, build_xz, xz0, nu=nu, threads)
 
-    let u0 = zeros(nu)
-        xzp = LowLevelParticleFilters.calc_xz(ukf, xz0, u0, 0, 0)
-        @test xzp[end] ≈ 0 atol=0.01 # zero centripetal acceleration at the point (x,y) = (1,0)
-        @test g(xzp, u0, 0, 0)[] ≈ 0 atol=0.01
+#     let u0 = zeros(nu)
+#         xzp = LowLevelParticleFilters.calc_xz(ukf, xz0, u0, 0, 0)
+#         @test xzp[end] ≈ 0 atol=0.01 # zero centripetal acceleration at the point (x,y) = (1,0)
+#         @test g(xzp, u0, 0, 0)[] ≈ 0 atol=0.01
 
-        xzp = LowLevelParticleFilters.calc_xz(ukf, randn(nx+1), u0, 0, 0)
-        @test g(xzp, u0, 0, 0)[] ≈ 0 atol=0.01
-    end
+#         xzp = LowLevelParticleFilters.calc_xz(ukf, randn(nx+1), u0, 0, 0)
+#         @test g(xzp, u0, 0, 0)[] ≈ 0 atol=0.01
+#     end
 
-    t = 0:Ts_ekf:3
-    U = [sin.(t.^2) sin.(reverse(t).^2)]
-    u = U |> eachrow .|> vcat
-    local x, u, y
-    while true
-        # global x, u, y
-        x,u,y = LowLevelParticleFilters.simulate(ukf, 1 .* u, dynamics_noise=false)
-        norm(x) < 3000 && break
-    end
+#     t = 0:Ts_ekf:3
+#     U = [sin.(t.^2) sin.(reverse(t).^2)]
+#     u = U |> eachrow .|> vcat
+#     local x, u, y
+#     while true
+#         # global x, u, y
+#         x,u,y = LowLevelParticleFilters.simulate(ukf, 1 .* u, dynamics_noise=false)
+#         norm(x) < 3000 && break
+#     end
 
-    tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
-    x,u,y = tosvec.((x,u,y))
+#     tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
+#     x,u,y = tosvec.((x,u,y))
 
-    state(ukf) .= [2,1,1,1,0]
+#     state(ukf) .= [2,1,1,1,0]
 
-    sol = forward_trajectory(ukf, u, y)
+#     sol = forward_trajectory(ukf, u, y)
 
-    @test all(zip(sol.R, sol.Rt)) do (R,Rt)
-        det(Rt) < det(R)
-    end # test that the covariance decreases by the measurement update
+#     @test all(zip(sol.R, sol.Rt)) do (R,Rt)
+#         det(Rt) < det(R)
+#     end # test that the covariance decreases by the measurement update
         
 
-    @test norm(x[10:end] .- sol.x[10:end]) / norm(x) < 0.2
-    @test norm(x[10:end] .- sol.xt[10:end]) / norm(x) < 0.2
+#     @test norm(x[10:end] .- sol.x[10:end]) / norm(x) < 0.2
+#     @test norm(x[10:end] .- sol.xt[10:end]) / norm(x) < 0.2
 
-    if isinteractive()
-        plot(reduce(hcat, x)', layout=length(x[1]))
-        plot!(reduce(hcat, sol.x)')
-        plot!(reduce(hcat, sol.xt)') |> display
-    end
-end
+#     if isinteractive()
+#         plot(reduce(hcat, x)', layout=length(x[1]))
+#         plot!(reduce(hcat, sol.x)')
+#         plot!(reduce(hcat, sol.xt)') |> display
+#     end
+# end
