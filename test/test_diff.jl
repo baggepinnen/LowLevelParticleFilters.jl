@@ -52,7 +52,7 @@ function costfun1(p::AbstractArray{T}) where T
     out
 end
 
-@test_nowarn g1 = ForwardDiff.gradient(costfun1, [1.0])
+g1 = ForwardDiff.gradient(costfun1, [1.0])
 
 # Test differentiability w.r.t. R2
 function costfun2(p::AbstractArray{T}) where T
@@ -77,7 +77,7 @@ function costfun2(p::AbstractArray{T}) where T
     out
 end
 
-@test_nowarn g2 = ForwardDiff.gradient(costfun2, [1.0])
+g2 = ForwardDiff.gradient(costfun2, [1.0])
 
 ## Test differentiability w.r.t. p in dynamics
 
@@ -104,13 +104,21 @@ function costfun3(p::AbstractArray{T}) where T
     out
 end
 
-@test_nowarn g3 = ForwardDiff.gradient(costfun3, [1.0])
+g3 = ForwardDiff.gradient(costfun3, [1.0])
 
 
 ## 
-# using DifferentiationInterface, Enzyme
+# using DifferentiationInterface
+
+# using Enzyme # NOTE: these all segfault
 # backend = AutoEnzyme()
-# NOTE: these all segfault
+
+# using Zygote # Cannot handle ukf due to mutation, cannot handle logpdf due to who knows what
+# backend = AutoZygote()
+
+# using ReverseDiff # Works for 1,2 and 3 for UKF only
+# backend = AutoReverseDiff()
+
 # g1_e = DifferentiationInterface.gradient(costfun1, backend, [1.0]) 
 # g2_e = DifferentiationInterface.gradient(costfun2, backend, [1.0])
 # g3_e = DifferentiationInterface.gradient(costfun3, backend, [1.0])
