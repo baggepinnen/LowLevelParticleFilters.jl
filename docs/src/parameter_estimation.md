@@ -165,8 +165,12 @@ LogDensityProblems.dimension(p::LogTargetDensity) = p.dim
 LogDensityProblems.capabilities(::Type{LogTargetDensity}) = LogDensityProblems.LogDensityOrder{0}()
 
 function filter_from_parameters(θ, pf = nothing)
+    # It's important that the distribution of the initial state has the same
+    # element type as the parameters. DynamicHMC will use Dual numbers for differentiation,
+    # hence, we make sure that d0 has `eltype(d0) = eltype(θ)`
     T = eltype(θ)
-    KalmanFilter(A, B, C, 0, exp(θ[1])^2*eye(nx), exp(θ[2])^2*eye(ny), MvNormal(T.(d0.μ), d0.Σ)) # It's important that the distribution of the initial state has the same element type as the parameters. DynamicHMC will use Dual numbers for differentiation, hence, we make sure that d0 has `eltype(d0) = eltype(θ)`
+    d0 = MvNormal(T.(d0.μ), T.(d0.Σ))
+    KalmanFilter(A, B, C, 0, exp(θ[1])^2*eye(nx), exp(θ[2])^2*eye(ny), d0) 
 end
 ll = log_likelihood_fun(filter_from_parameters, priors, u, y, p)
 
