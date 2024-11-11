@@ -5,13 +5,13 @@ using Plots
 using Printf
 
 
-function pplot(pf::AbstractFilter, u, y, p, args...; kwargs...)
+function LowLevelParticleFilters.pplot(pf::AbstractFilter, u, y, p, args...; kwargs...)
     s = state(pf)
     t = s.t[]
     pplot(s.x, s.we, u, y, LowLevelParticleFilters.measurement(pf).(s.x, Ref(u[t]), Ref(p), t), s.j, t, args...; xprev=s.xprev, kwargs...) 
 end
 
-function pplot(x, w, u, y, yhat, a, t, pdata; xreal=nothing, xprev=nothing,  density = true, leftonly = true, xindices = 1:length(x[1]), yindices = 1:length(y[1]), lowpass=0.9)
+function LowLevelParticleFilters.pplot(x, w, u, y, yhat, a, t, pdata; xreal=nothing, xprev=nothing,  density = true, leftonly = true, xindices = 1:length(x[1]), yindices = 1:length(y[1]), lowpass=0.9)
 
 
     (t == 1 || t % 35 == 0) &&  @printf "Time     Surviving    Effective nbr of particles\n--------------------------------------------------------------\n"
@@ -61,7 +61,7 @@ function pplot(x, w, u, y, yhat, a, t, pdata; xreal=nothing, xprev=nothing,  den
 end
 
 
-function commandplot(f)
+function LowLevelParticleFilters.commandplot(f)
     res = f(nothing)
     display(res[1])
     while true
@@ -87,7 +87,7 @@ end
 
 
 
-function commandplot(pf, u, y, p=parameters(pf); kwargs...)
+function LowLevelParticleFilters.commandplot(pf, u, y, p=parameters(pf); kwargs...)
     # pdata = nothing
     reset!(pf)
     pfp = pf isa AuxiliaryParticleFilter ? pf.pf : pf
@@ -101,7 +101,7 @@ end
 
 
 
-function debugplot(pf, u, y, p=parameters(pf); runall=false, kwargs...)
+function LowLevelParticleFilters.debugplot(pf, u, y, p=parameters(pf); runall=false, kwargs...)
     pdata = nothing
     reset!(pf)
     pfp = pf isa AuxiliaryParticleFilter ? pf.pf : pf
