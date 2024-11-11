@@ -1,27 +1,8 @@
-using .Plots
+module LowLevelParticleFiltersPlotsExt
+using LowLevelParticleFilters
+using Plots
 
-"""
-    pdata = pplot(x, w, y, yhat, a, t, pdata; kwargs...)
-    pdata = pplot(pf, y, pdata; kwargs...)
 
-To be called inside a particle filter, plots either particle density (`density=true`) or individual particles (`density=false`) \n
-Will plot all the real state variables in `xindices` as well as the expected vs real measurements of `yindices`.
-# Arguments:
-- `x`: `Vector{Vector}(N)`. The states of each particle where `N` number of Particles
-- `w`: `Vector(N)`. weight of each particle
-- `y`: `Vector{Vector}(T)`. All true outputs. `T` is total number of time steps (will only use index `t`)
-- `yhat`: `Vector{Vector}(N)` The expected output per particle. `N` number of Particles
-- `a`, `Vector(N)`, reorderng of particles (e.g. `1:N`)
-- `t`, Current time step
-- `xreal`: `Vector{Vector}(T)`. All true states if available. `T` is total number of time steps (will only use index `t`)
-- `xprev`: Same as `x`, but for previous time step, only used when `!density` to show states origins
-- `pdata`: Persistant data for plotting. Set to `nothing` in first call and pdata on remaining \n
-- `density = true` To only plot the particle trajectories, set (`leftonly=false`)\n
-- `leftonly = true`: only plot the left column\n
-- `xindices = 1:n_state`\n
-- `yindices = 1:n_measurements`\n
-Returns: `pdata`
-"""
 function pplot(pf::AbstractFilter, u, y, p, args...; kwargs...)
     s = state(pf)
     t = s.t[]
@@ -103,14 +84,7 @@ function commandplot(f)
 end
 
 
-"""
-    commandplot(pf, u, y, p=parameters(pf); kwargs...)
 
-Produce a helpful plot. For customization options (`kwargs...`), see `?pplot`.
-After each time step, a command from the user is requested.
-- q: quit
-- s n: step `n` steps
-"""
 function commandplot(pf, u, y, p=parameters(pf); kwargs...)
     # pdata = nothing
     reset!(pf)
@@ -124,14 +98,7 @@ function commandplot(pf, u, y, p=parameters(pf); kwargs...)
 end
 
 
-"""
-    debugplot(pf, u, y, p=parameters(pf); runall=false, kwargs...)
 
-Produce a helpful plot. For customization options (`kwargs...`), see `?pplot`.
-- ` runall=false:` if true, runs all time steps befor displaying (faster), if false, displays the plot after each time step.
-
-The generated plot becomes quite heavy. Initially, try limiting your input to 100 time steps to verify that it doesn't crash.
-"""
 function debugplot(pf, u, y, p=parameters(pf); runall=false, kwargs...)
     pdata = nothing
     reset!(pf)
@@ -143,4 +110,6 @@ function debugplot(pf, u, y, p=parameters(pf); runall=false, kwargs...)
         runall || display(pdata[1])
     end
     display(pdata[1])
+end
+
 end
