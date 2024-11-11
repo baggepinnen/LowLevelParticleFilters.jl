@@ -1,6 +1,6 @@
 module LowLevelParticleFiltersPlotsExt
 using LowLevelParticleFilters
-using LowLevelParticleFilters: AbstractFilter
+using LowLevelParticleFilters: AbstractFilter, parameters
 using Plots
 using Printf
 
