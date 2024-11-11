@@ -1,5 +1,6 @@
 module LowLevelParticleFiltersMonteCarloMeasurementsExt
 
+import LowLevelParticleFilters, MonteCarloMeasurements
 import LowLevelParticleFilters.simulate
 import MonteCarloMeasurements: Particles
 
