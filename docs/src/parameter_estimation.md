@@ -151,10 +151,10 @@ histogram(exp.(thetalls[:,1:2]), layout=3)
 plot!(thetalls[:,3], subplot=3)
 ```
 
-### Bayesian inference using  DynamicHMC.jl
+## Bayesian inference using  DynamicHMC.jl
 The following snippet of code performs the same estimation as above, but uses the much more sophisticated HMC sampler in [DynamicHMC.jl](https://www.tamaspapp.eu/DynamicHMC.jl/stable/worked_example/) rather than the PMMH sampler above. This package requires the log-likelihood function to be wrapped in a custom struct that implements the `LogDensityProblems` interface, which is done below. We also indicate that we want to use ForwardDiff.jl to compute the gradients for fast sampling.
 ```julia
-using DynamicHMC, LogDensityProblemsAD, ForwardDiff, LogDensityProblems, LinearAlgebra
+using DynamicHMC, LogDensityProblemsAD, ForwardDiff, LogDensityProblems, LinearAlgebra, Random
 
 struct LogTargetDensity{F}
     ll::F
