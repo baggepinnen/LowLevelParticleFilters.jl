@@ -1,6 +1,6 @@
 module LowLevelParticleFiltersPlotsExt
 using LowLevelParticleFilters
-using LowLevelParticleFilters: AbstractFilter, parameters
+using LowLevelParticleFilters: AbstractFilter, parameters, pplot
 using Plots
 using Printf
 
@@ -8,7 +8,7 @@ using Printf
 function LowLevelParticleFilters.pplot(pf::AbstractFilter, u, y, p, args...; kwargs...)
     s = state(pf)
     t = s.t[]
-    pplot(s.x, s.we, u, y, LowLevelParticleFilters.measurement(pf).(s.x, Ref(u[t]), Ref(p), t), s.j, t, args...; xprev=s.xprev, kwargs...) 
+    LowLevelParticleFilters.pplot(s.x, s.we, u, y, LowLevelParticleFilters.measurement(pf).(s.x, Ref(u[t]), Ref(p), t), s.j, t, args...; xprev=s.xprev, kwargs...) 
 end
 
 function LowLevelParticleFilters.pplot(x, w, u, y, yhat, a, t, pdata; xreal=nothing, xprev=nothing,  density = true, leftonly = true, xindices = 1:length(x[1]), yindices = 1:length(y[1]), lowpass=0.9)
@@ -92,7 +92,7 @@ function LowLevelParticleFilters.commandplot(pf, u, y, p=parameters(pf); kwargs.
     reset!(pf)
     pfp = pf isa AuxiliaryParticleFilter ? pf.pf : pf
     commandplot() do pdata
-        pdata = pplot(pfp, u, y, p, pdata; kwargs...)
+        pdata = LowLevelParticleFilters.pplot(pfp, u, y, p, pdata; kwargs...)
         t = index(pf)
         LowLevelParticleFilters.update!(pf,u[t],y[t],p)
         pdata
@@ -106,7 +106,7 @@ function LowLevelParticleFilters.debugplot(pf, u, y, p=parameters(pf); runall=fa
     reset!(pf)
     pfp = pf isa AuxiliaryParticleFilter ? pf.pf : pf
     for i = 1:length(y)
-        pdata = pplot(pfp, u, y, p, pdata; kwargs...)
+        pdata = LowLevelParticleFilters.pplot(pfp, u, y, p, pdata; kwargs...)
         t = index(pf)
         LowLevelParticleFilters.update!(pf,u[t],y[t], p)
         runall || display(pdata[1])
