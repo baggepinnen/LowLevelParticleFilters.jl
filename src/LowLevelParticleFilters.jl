@@ -47,8 +47,6 @@ end
 using Requires
 function __init__()
     @require Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80" include("plots.jl")
-    @require MonteCarloMeasurements = "0987c9cc-fe09-11e8-30f0-b96dd679fdca" include("mcm.jl")
-    # @require NonlinearSolve = "8913a72c-1f9b-4ce2-8d82-65094dcecaec" include("dae_ukf.jl")
 end
 
 end # module
