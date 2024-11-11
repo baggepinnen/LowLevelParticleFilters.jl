@@ -1,11 +1,10 @@
-@with_kw mutable struct SqKalmanFilter{AT,BT,CT,DT,R1T,R2T,R2DT,D0T,XT,RT,P,αT} <: AbstractKalmanFilter
+@with_kw mutable struct SqKalmanFilter{AT,BT,CT,DT,R1T,R2T,D0T,XT,RT,P,αT} <: AbstractKalmanFilter
     A::AT
     B::BT
     C::CT
     D::DT
     R1::R1T
     R2::R2T
-    R2d::R2DT
     d0::D0T
     x::XT
     R::RT
@@ -52,10 +51,9 @@ function SqKalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(Matrix(R1)); p = SciMLBase.Nul
     R1 = cholesky(R1).U
     R2 = cholesky(R2).U
     
-    R2d = convert_cov_type(R2, R2'R2)
     x0 = convert_x0_type(d0.μ)
 
-    SqKalmanFilter(A,B,C,D,R1,R2,R2d, d0, x0, R, 1, p, α)
+    SqKalmanFilter(A,B,C,D,R1,R2, d0, x0, R, 1, p, α)
 end
 
 

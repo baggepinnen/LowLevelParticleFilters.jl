@@ -20,14 +20,13 @@ function convert_x0_type(μ)
     end
 end
 
-@with_kw mutable struct KalmanFilter{AT,BT,CT,DT,R1T,R2T,R2DT,D0T,XT,RT,P,αT} <: AbstractKalmanFilter
+@with_kw mutable struct KalmanFilter{AT,BT,CT,DT,R1T,R2T,D0T,XT,RT,P,αT} <: AbstractKalmanFilter
     A::AT
     B::BT
     C::CT
     D::DT
     R1::R1T
     R2::R2T
-    R2d::R2DT
     d0::D0T
     x::XT
     R::RT
@@ -69,7 +68,7 @@ function KalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(Matrix(R1)); p = SciMLBase.NullP
     end
     R = convert_cov_type(R1, d0.Σ)
     x0 = convert_x0_type(d0.μ)
-    KalmanFilter(A,B,C,D,R1,R2,MvNormal(Matrix(R2)), d0, x0, R, 1, p, α)
+    KalmanFilter(A,B,C,D,R1,R2, d0, x0, R, 1, p, α)
 end
 
 function Base.propertynames(kf::KF, private::Bool=false) where KF <: AbstractKalmanFilter
