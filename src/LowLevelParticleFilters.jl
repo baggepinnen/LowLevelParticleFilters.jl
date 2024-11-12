@@ -12,7 +12,7 @@ using StatsBase, Parameters, Lazy, Random, LinearAlgebra, Printf, LoopVectorizat
 import PDMats # To extend some methods on static arrays
 import PDMats: PDMat
 using StaticArrays
-using Distributions
+using Statistics
 using RecipesBase
 using ForwardDiff
 using Polyester

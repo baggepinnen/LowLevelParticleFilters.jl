@@ -9,6 +9,13 @@ Random.seed!(0)
 mvnormal(d::Int, σ::Real) = MvNormal(LinearAlgebra.Diagonal(fill(float(σ) ^ 2, d)))
 mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
 
+S = [1 0.2; 0.2 2]
+d = LowLevelParticleFilters.SimpleMvNormal(randn(2), S)
+@test cov(d) == S
+r = [rand(d) for i = 1:10000]
+r = reduce(hcat, r)
+@test cov(r, dims=2) ≈ S atol = 0.1
+
 @testset "LowLevelParticleFilters" begin
     @info "testing LowLevelParticleFilters"
     @testset "logsumexp" begin
@@ -65,7 +72,7 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
         x = @SVector ones(2)
         d = mvnormal(2,2)
         @test logpdf(d,x) == logpdf(d,Vector(x))
-        d = Product([Normal(0,2), Normal(0,2)])
+        d = product_distribution([Normal(0,2), Normal(0,2)])
         @test logpdf(d,x) == logpdf(d,Vector(x))
 
         dt = LowLevelParticleFilters.TupleProduct((Normal(0,2), Normal(0,2)))
@@ -173,7 +180,7 @@ mvnormal(μ::AbstractVector{<:Real}, σ::Real) = MvNormal(μ, float(σ) ^ 2 * I)
 
 
 
-        svec = exp10.(LinRange(-1,2,22))
+        svec = exp10.(LinRange(-2,1,22))
         llspf = map(svec) do s
             df = mvnormal(n,s)
             pfs = ParticleFilter(N, dynamics, measurement, df, dg, d0)

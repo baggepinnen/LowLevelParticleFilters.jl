@@ -9,10 +9,13 @@ ny = 1   # Dimension of measurements
 
 
 # Define random linenar state-space system
-A = SA[0.97043   -0.097368
-             0.09736    0.970437]
-B = SA[0.1; 0;;]
-C = SA[0 1.0]
+A = SA[1 0.1
+             0 1]
+B = SA[0.0; 1;;]
+C = SA[1 0.0]
+
+R1 = LLPF.double_integrator_covariance(0.1) + 1e-6I
+R2 = 1e-3I(1)
 
 dynamics(x,u,p,t) = A*x .+ B*u
 measurement(x,u,p,t) = C*x
@@ -21,9 +24,9 @@ T = 5000 # Number of time steps
 
 d0 = MvNormal(randn(nx),2.0)   # Initial state Distribution
 du = MvNormal(nu,1) # Control input distribution
-kf = KalmanFilter(A, B, C, 0, 0.001I(nx), I(ny), d0, α=1.01)
+kf = KalmanFilter(A, B, C, 0, R1, R2, d0, α=1.01)
 
-kf2 = KalmanFilter(ss(A, B, C, 0, 1), 0.001I(nx), I(ny), d0, α=1.01)
+kf2 = KalmanFilter(ss(A, B, C, 0, 1), R1, R2, d0, α=1.01)
 @test kf2.A == kf.A
 @test kf2.B == kf.B
 @test kf2.C == kf.C
@@ -33,8 +36,8 @@ kf2 = KalmanFilter(ss(A, B, C, 0, 1), 0.001I(nx), I(ny), d0, α=1.01)
 @test kf2.d0 == kf.d0
 
 ekf = LLPF.ExtendedKalmanFilter(kf, dynamics, measurement)
-ekf2 = LLPF.ExtendedKalmanFilter(dynamics, measurement, 0.001I(nx), I(ny), d0, α=1.01, nu=nu)
-ukf = LLPF.UnscentedKalmanFilter(dynamics, measurement, 0.001I(nx), I(ny), d0, nu=nu, ny=ny)
+ekf2 = LLPF.ExtendedKalmanFilter(dynamics, measurement, R1, R2, d0, α=1.01, nu=nu)
+ukf = LLPF.UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0, nu=nu, ny=ny)
 @test ekf2.kf.R1 == ekf.kf.R1
 @test ekf2.kf.R2 == ekf.kf.R2
 @test ekf2.kf.d0 == ekf.kf.d0
@@ -86,14 +89,13 @@ xT,RT,ll = smooth(ekf, u, y)
 
 
 ## Compare all
-kf = KalmanFilter(A, B, C, 0, 0.001I(nx), I(ny), d0)
+kf = KalmanFilter(A, B, C, 0, R1, R2, d0)
 ekf = LLPF.ExtendedKalmanFilter(kf, dynamics, measurement)
-ukf = LLPF.UnscentedKalmanFilter(dynamics, measurement, 0.001I(nx), I(ny), d0, nu=nu, ny=ny)
+ukf = LLPF.UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0, nu=nu, ny=ny)
 
-# x,u,y = LLPF.simulate(kf,10,du)
+x,u,y = LLPF.simulate(kf,20,du)
 
-u = [[-0.22972228297593472], [-0.7873642798704794], [0.7746976713162768], [-1.0677876347753752], [0.08952267711395145], [0.8071581234808373], [1.4628138971331086], [-0.5790514589219693], [0.5824671460456585], [0.9108480524305639]]
-y = [[0.6858353350069983], [0.6561596665457351], [1.2423246627002342], [1.5839820173900971], [1.106666174890956], [1.562505325618183], [0.8821829329012782], [0.5652381762379538], [0.835880750271578], [0.8804822291334177]]
+
 
 sol = forward_trajectory(kf, u, y)
 sol2 = forward_trajectory(ekf, u, y)
@@ -117,9 +119,9 @@ xT2,RT2,ll2 = smooth(sol2, ekf, u, y)
 xT3,RT3,ll3 = smooth(sol3, ukf, u, y)
 
 
-plot(reduce(hcat, x)', lab="true", layout=2)
-plot!(reduce(hcat, sol.xt)', lab="Filter")
-plot!(reduce(hcat, xT)', lab="Smoothed")
+# plot(reduce(hcat, x)', lab="true", layout=2)
+# plot!(reduce(hcat, sol.xt)', lab="Filter")
+# plot!(reduce(hcat, xT)', lab="Smoothed")
 
 @test reduce(hcat, xT) ≈ reduce(hcat, xT2)
 @test reduce(hcat, RT) ≈ reduce(hcat, RT2)
@@ -149,8 +151,8 @@ plot!(reduce(hcat, xT)', lab="Smoothed")
 
 
 
-plot(reduce(hcat, vec.(sol.Rt))', lab="Filter", layout=4)
-plot!(reduce(hcat, vec.(RT))', lab="Smoothed")
+# plot(reduce(hcat, vec.(sol.Rt))', lab="Filter", layout=4)
+# plot!(reduce(hcat, vec.(RT))', lab="Smoothed")
 
 
 ##

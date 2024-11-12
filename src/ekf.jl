@@ -26,7 +26,7 @@ See also [`UnscentedKalmanFilter`](@ref) which is typically more accurate than `
 """
 ExtendedKalmanFilter
 
-function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(Matrix(R1)); nu::Int, p = NullParameters(), α = 1.0, check = true)
+function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Matrix(R1)); nu::Int, p = NullParameters(), α = 1.0, check = true)
     nx = size(R1,1)
     ny = size(R2,1)
     T = eltype(R1)
@@ -82,15 +82,13 @@ function correct!(kf::AbstractExtendedKalmanFilter, u, y, p = parameters(kf), t:
     K   = (R*C')/Sᵪ
     kf.x += vec(K*e)
     kf.R  = symmetrize((I - K*C)*R) # WARNING against I .- A
-    ll = logpdf(MvNormal(PDMat(S, Sᵪ)), e)[]# - 1/2*logdet(S) # logdet is included in logpdf
+    ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), e)[]# - 1/2*logdet(S) # logdet is included in logpdf
     (; ll, e, S, Sᵪ, K)
 end
 
 
-function smooth(kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf))
-    reset!(kf)
+function smooth(sol, kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf))
     T            = length(y)
-    sol = forward_trajectory(kf, u, y, p)
     (; x,xt,R,Rt,ll) = sol
     xT           = similar(xt)
     RT           = similar(Rt)
@@ -105,8 +103,15 @@ function smooth(kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::Abstract
     xT,RT,ll
 end
 
+
+function smooth(kf::AbstractExtendedKalmanFilter, args...)
+    reset!(kf)
+    sol = forward_trajectory(kf, args...)
+    smooth(sol, kf, args...)
+end
+
 sample_state(kf::AbstractExtendedKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
-sample_state(kf::AbstractExtendedKalmanFilter, x, u, p, t; noise=true) = kf.dynamics(x, u, p, t) .+ noise*rand(MvNormal(get_mat(kf.R1, x, u, p, t)))
-sample_measurement(kf::AbstractExtendedKalmanFilter, x, u, p, t; noise=true) = kf.measurement(x, u, p, t) .+ noise*rand(MvNormal(get_mat(kf.R2, x, u, p, t)))
+sample_state(kf::AbstractExtendedKalmanFilter, x, u, p, t; noise=true) = kf.dynamics(x, u, p, t) .+ noise*rand(SimpleMvNormal(get_mat(kf.R1, x, u, p, t)))
+sample_measurement(kf::AbstractExtendedKalmanFilter, x, u, p, t; noise=true) = kf.measurement(x, u, p, t) .+ noise*rand(SimpleMvNormal(get_mat(kf.R2, x, u, p, t)))
 measurement(kf::AbstractExtendedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractExtendedKalmanFilter) = kf.dynamics

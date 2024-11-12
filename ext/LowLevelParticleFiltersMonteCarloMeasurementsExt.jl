@@ -7,8 +7,8 @@ import MonteCarloMeasurements: Particles
 # From simulation result to particles
 vv2m(x) = copy(reduce(hcat, x)')
 
-function LowLevelParticleFilters.simulate(pf, n, du, p, Npart::Int)
-    sims = map(_->vv2m.(simulate(pf, n, du, p)), 1:Npart)
+function LowLevelParticleFilters.simulate(pf, n::Int, du, p, Npart::Int)
+    sims = map(_->vv2m.(LowLevelParticleFilters.simulate(pf, n, du, p)), 1:Npart)
     ns = length(sims[1]) # number of time series, usually x,u,y
     ntuple(ns) do s
         xes = getindex.(sims,s)
