@@ -63,7 +63,7 @@ If `check = true (default)` the function will check that the eigenvalues of `A` 
 # Tutorials on Kalman filtering
 The tutorial ["How to tune a Kalman filter"](https://juliahub.com/pluto/editor.html?id=ad9ecbf9-bf83-45e7-bbe8-d2e5194f2240) details how to figure out appropriate covariance matrices for the Kalman filter, as well as how to add disturbance models to the system model. See also the [tutorial in the documentation](https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/adaptive_kalmanfilter/)
 """
-function KalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(Matrix(R1)); p = NullParameters(), α = 1.0, check = true)
+function KalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(R1); p = NullParameters(), α = 1.0, check = true)
     if check
         α ≥ 1 || @warn "α should be > 1 for exponential forgetting. An α < 1 will lead to exponential loss of adaptation over time."
         maximum(abs, eigvals(A isa SMatrix ? Matrix(A) : A)) ≥ 2 && @warn "The dynamics matrix A has eigenvalues with absolute value ≥ 2. This is either a highly unstable system, or you have forgotten to discretize a continuous-time model. If you are sure that the system is provided in discrete time, you can disable this warning by setting check=false." maxlog=1
