@@ -96,19 +96,19 @@ end
 Base.@propagate_inbounds function measurement_equation!(pf::ParticleFilter, u, y, p, t, w = pf.state.w, d=measurement_density(pf))
     x,g = particles(pf), measurement(pf)
     any(ismissing, y) && return w
-    if d isa UnivariateDistribution && length(y) == 1
+    # if length(d) == 1 && length(y) == 1
+    #     for i = 1:num_particles(pf)
+    #         w[i] += extended_logpdf(d, (y-g(x[i],u,p,t))[1])
+    #     end
+    # else
         for i = 1:num_particles(pf)
-            w[i] += logpdf(d, (y-g(x[i],u,p,t))[1])
+            w[i] += extended_logpdf(d, y-g(x[i],u,p,t))
         end
-    else
-        for i = 1:num_particles(pf)
-            w[i] += logpdf(d, y-g(x[i],u,p,t))
-        end
-    end
+    # end
     w
 end
 
-Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u,j::Vector{Int}, p, t::Int, d::Union{Nothing, Distributions.Sampleable}=pf.dynamics_density)
+Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u,j::Vector{Int}, p, t::Int, d=pf.dynamics_density)
     f = dynamics(pf)
     s = state(pf)
     x,xp = s.x, s.xprev
@@ -127,17 +127,6 @@ Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u,j::V
     x
 end
 
-Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter, u, p, t::Int, d::Distributions.Sampleable=pf.dynamics_density)
-    f = pf.dynamics
-    x,xp = pf.state.x, pf.state.xprev
-    VecT = eltype(pf.state.x)
-    D = length(VecT)
-    noise = zeros(D)
-    for i = eachindex(x)
-        x[i] =  f(xp[i], u, p, t) + VecT(rand!(pf.rng, d, noise))
-    end
-    x
-end
 
 
 # AUX =================================================================================
@@ -164,7 +153,7 @@ end
     dynamics::FT
     measurement::GT
     measurement_likelihood::GLT
-    dynamics_density::FDT = Normal()
+    dynamics_density::FDT = SimpleMvNormal()
     initial_density::IDT
     resample_threshold::Float64 = 0.5
     resampling_strategy::RST = ResampleSystematic

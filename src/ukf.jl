@@ -76,7 +76,7 @@ The `u` provided in the input data is passed directly to the dynamics and measur
 so as long as the type is compatible with the dynamics it will work out.
 The one exception where this will not work is when calling `simulate`, which assumes that `u` is an array.
 """
-function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)); p = NullParameters(), nu::Int, ny::Int)
+function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=SimpleMvNormal(R1); p = NullParameters(), nu::Int, ny::Int)
     xs = sigmapoints(mean(d0), cov(d0), static = !has_ip(dynamics))
     if has_ip(measurement)
         ys = [zeros(promote_type(eltype(xs[1]), eltype(d0)), ny) for _ in 1:length(xs)]
@@ -89,8 +89,8 @@ function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=MvNormal(Matrix(R1)
 end
 
 sample_state(kf::AbstractUnscentedKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
-sample_state(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf); noise=true) = kf.dynamics(x,u,p,t) .+ noise.*rand(MvNormal(Matrix(get_mat(kf.R1, x, u, p, t))))
-sample_measurement(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf); noise=true) = kf.measurement(x, u, p, t) .+ noise.*rand(MvNormal(Matrix(get_mat(kf.R2, x, u, p, t))))
+sample_state(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf); noise=true) = kf.dynamics(x,u,p,t) .+ noise.*rand(SimpleMvNormal(get_mat(kf.R1, x, u, p, t)))
+sample_measurement(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf); noise=true) = kf.measurement(x, u, p, t) .+ noise.*rand(SimpleMvNormal(get_mat(kf.R2, x, u, p, t)))
 measurement(kf::AbstractUnscentedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 
@@ -165,7 +165,7 @@ function correct!(ukf::UnscentedKalmanFilter{<: Any, MT}, u, y, p=parameters(ukf
     e   = y .- ym
     S   = symmetrize(safe_cov(ys)) + R2 # cov of y
     Sᵪ  = cholesky(S)
-    K   = (C./ns)/Sᵪ # ns normalization to make it a covariance matrix
+    K   = (C./(ns-1))/Sᵪ # ns normalization to make it a covariance matrix
     ukf.x += K*e
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized
     if R isa SMatrix
@@ -173,7 +173,7 @@ function correct!(ukf::UnscentedKalmanFilter{<: Any, MT}, u, y, p=parameters(ukf
     else
         RmKSKT!(R, K, S)
     end
-    ll = logpdf(MvNormal(PDMat(S,Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf
+    ll = extended_logpdf(SimpleMvNormal(PDMat(S,Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf
     (; ll, e, S, Sᵪ, K)
 end
 
@@ -209,9 +209,9 @@ function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter, u::Abst
             e = (X̃⁻[i] - m⁻)
             P⁻ += e*e'
         end
-        ns = length(X̃⁻)
+        ns = length(X̃⁻)-1
         P⁻ = P⁻ ./ ns
-        C = @SMatrix zeros(nx,ny)
+        C = @SMatrix zeros(nx,nx)
         for i in eachindex(X̃⁻)
             C += (X̃[i][xi] - m)*(X̃⁻[i][xi] - m⁻)'
         end
@@ -326,7 +326,7 @@ y = h(x, z)
 #     xzp = dynamics(x,u,p,t)
 #     noise || return xzp
 #     xh = get_x_z(xzp)[1]
-#     xh += rand(MvNormal(Matrix(get_mat(R1, x, u, p, t))))
+#     xh += rand(SimpleMvNormal(Matrix(get_mat(R1, x, u, p, t))))
 #     calc_xz(get_x_z, build_xz, g, xz, u, p, t, xh)
 # end
 
@@ -410,6 +410,6 @@ y = h(x, z)
 #     else
 #         RmKSKT!(R, K, S)
 #     end
-#     ll = logpdf(MvNormal(PDMat(S,Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf
+#     ll = extended_logpdf(SimpleMvNormal(PDMat(S,Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf
 #     (; ll, e, S, Sᵪ, K)
 # end

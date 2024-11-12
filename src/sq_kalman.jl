@@ -42,7 +42,7 @@ R(t+1|t) = α AR(t)A^T + R_1
 
 Ref: "A Square-Root Kalman Filter Using Only QR Decompositions", Kevin Tracy https://arxiv.org/abs/2208.06452
 """
-function SqKalmanFilter(A,B,C,D,R1,R2,d0=MvNormal(Matrix(R1)); p = NullParameters(), α = 1.0, check = true)
+function SqKalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(Matrix(R1)); p = NullParameters(), α = 1.0, check = true)
     α ≥ 1 || @warn "α should be > 1 for exponential forgetting. An α < 1 will lead to exponential loss of adaptation over time."
     if check
         maximum(abs, eigvals(A isa SMatrix ? Matrix(A) : A)) ≥ 2 && @warn "The dynamics matrix A has eigenvalues with absolute value ≥ 2. This is either a highly unstable system, or you have forgotten to discretize a continuous-time model. If you are sure that the system is provided in discrete time, you can disable this warning by setting check=false." maxlog=1
@@ -145,6 +145,6 @@ function correct!(kf::SqKalmanFilter, u, y, p=parameters(kf), t::Real = index(kf
     end
     SS = S'S
     Sᵪ = Cholesky(S0, 'U', 0)
-    ll = logpdf(MvNormal(PDMat(SS, Sᵪ)), e)# - 1/2*logdet(S) # logdet is included in logpdf
+    ll = extended_logpdf(SimpleMvNormal(PDMat(SS, Sᵪ)), e)# - 1/2*logdet(S) # logdet is included in logpdf
     (; ll, e, SS, Sᵪ, K)
 end

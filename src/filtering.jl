@@ -90,7 +90,7 @@ function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Real = in
     K   = (R*Ct')/Sᵪ
     kf.x += K*e
     kf.R  = symmetrize((I - K*Ct)*R) # WARNING against I .- A
-    ll = logpdf(MvNormal(PDMat(S, Sᵪ)), e)# - 1/2*logdet(S) # logdet is included in logpdf
+    ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), e)# - 1/2*logdet(S) # logdet is included in logpdf
     (; ll, e, S, Sᵪ, K)
 end
 
@@ -193,10 +193,10 @@ end
 Run a Kalman filter forward
 
 Returns a KalmanFilteringSolution: with the following
-- `x`: predictions
-- `xt`: filtered estimates
-- `R`: predicted covariance matrices
-- `Rt`: filter covariances
+- `x`: predictions ``x(t|t-1)``
+- `xt`: filtered estimates ``x(t|t)``
+- `R`: predicted covariance matrices ``R(t|t-1)``
+- `Rt`: filter covariances ``R(t|t)``
 - `ll`: loglik
 
 `sol` can be plotted
@@ -327,7 +327,7 @@ A simulation can be considered a draw from the prior distribution over the evolu
 
 If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurements.jl) is loaded, the argument `N::Int` can be supplied, in which case `N` simulations are done and the result is returned in the form of `Vector{MonteCarloMeasurements.Particles}`.
 """
-function simulate(f::AbstractFilter, T::Int, du::Distribution, p=parameters(f); dynamics_noise=true, measurement_noise=true, sample_initial=false)
+function simulate(f::AbstractFilter, T::Int, du, p=parameters(f); dynamics_noise=true, measurement_noise=true, sample_initial=false)
     u = [rand(du) for t=1:T]
     simulate(f, u, p; dynamics_noise, measurement_noise, sample_initial)
 end

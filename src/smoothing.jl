@@ -55,7 +55,7 @@ function smooth(pf::AbstractParticleFilter, xf, wf, wef, ll, M, u, y, p=paramete
         # tset = Set{Int}()
         for m = 1:M
             for n = 1:N
-                wb[n] = wf[n,t] + logpdf(df, xb[m,t+1], f(xf[n,t],u[t],p,t), t)
+                wb[n] = wf[n,t] + extended_logpdf(df, xb[m,t+1], f(xf[n,t],u[t],p,t), t)
             end
             i = draw_one_categorical(pf,wb)
             # push!(tset, i)
@@ -130,13 +130,13 @@ end
 
 returns function θ -> p(y|θ)p(θ)
 """
-function log_likelihood_fun(filter_from_parameters,priors::Vector{<:Distribution},u,y, p)
+function log_likelihood_fun(filter_from_parameters,priors::AbstractVector,u,y, p)
     n = numargs(filter_from_parameters)
     pf = nothing
     function (θ)
         pf === nothing && (pf = filter_from_parameters(θ))
         length(θ) == length(priors) || throw(ArgumentError("Input must have same length as priors"))
-        ll = sum(i->logpdf(priors[i], θ[i]), eachindex(priors))
+        ll = sum(i->extended_logpdf(priors[i], θ[i]), eachindex(priors))
         isfinite(ll) || return eltype(θ)(-Inf)
         pf = filter_from_parameters(θ,pf)
         ll + loglik(pf,u,y,p)
@@ -145,7 +145,7 @@ end
 
 function naive_sampler(θ₀)
     !any(iszero.(θ₀)) || throw(ArgumentError("Naive sampler does not work if initial parameter vector contains zeros (it was going to return θ -> θ .+ rand(MvNormal(0.1abs.(θ₀))), but that is not a good ideas if θ₀ is zero."))
-    θ -> θ .+ rand(MvNormal(0.1abs.(θ₀)))
+    θ -> θ .+ rand(SimpleMvNormal(0.1abs.(θ₀)))
 end
 
 """

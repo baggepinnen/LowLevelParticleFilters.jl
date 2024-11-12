@@ -43,9 +43,11 @@ const _C = SMatrix{ny,ny}(eye(ny))
 dynamics(x,u,p,t) = _A*x .+ _B*u
 measurement(x,u,p,t) = _C*x
 
+R2 = eye(ny)
+
 T    = 200 # Number of time steps
-kf   = KalmanFilter(_A, _B, _C, 0, eye(nx), eye(ny), d0)
-ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), eye(ny), d0; ny, nu)
+kf   = KalmanFilter(_A, _B, _C, 0, eye(nx), R2, d0)
+ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), R2, d0; ny, nu)
 x,u,y = LowLevelParticleFilters.simulate(kf,T,du) # Simuate trajectory using the model in the filter
 @test_nowarn LowLevelParticleFilters.simulate(ukf,T,du)
 tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
@@ -68,9 +70,17 @@ sse(x .- resukf.xt)
 @test sse(x .- reskf.x) < sse(x .- resukf.x)*1.01  # KF should be better than UKF
 @test sse(x .- reskf.xt) < 250
 
+@test reskf.ll ≈ resukf.ll rtol=1e-2
 
-xT,RT,ll = smooth(resukf, ukf, u, y)
-@test sse(x .- xT) < sse(x .- resukf.xt)*1.01 # Test ukf smoothing better than ukf filtering
+
+xT,RT,ll = smooth(reskf, kf, u, y)
+xT2,RT2,ll2 = smooth(resukf, ukf, u, y)
+@test sse(x .- xT) < sse(x .- reskf.xt)*1.01 # Test ukf smoothing better than ukf filtering
+@test sse(x .- xT2) < sse(x .- resukf.xt)*1.01
+
+# plot(reduce(hcat, vec.(reskf.Rt))', lab="Filter", layout=4)
+# plot!(reduce(hcat, vec.(RT))', lab="Smoothed")
+
 
 # plot(reduce(hcat, x)', lab="true", layout=2)
 # plot!(reduce(hcat, resukf.xt)', lab="Filter")
@@ -98,7 +108,7 @@ function measurement_ip(y,x,u,p,t)
     y
 end
 
-ukf2  = UnscentedKalmanFilter(dynamics_ip, measurement_ip, eye(nx), eye(ny), d0; ny, nu)
+ukf2  = UnscentedKalmanFilter(dynamics_ip, measurement_ip, eye(nx), R2, d0; ny, nu)
 vu,vy = Vector.(u), Vector.(y)
 resukf2 = forward_trajectory(ukf2, vu, vy)
 # 0.001769 seconds (32.01 k allocations: 2.241 MiB)

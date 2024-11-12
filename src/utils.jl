@@ -99,68 +99,12 @@ end
 
 # Make distributions faster for static arrays
 
-@inline Base.:(-)(x::StaticArray, ::Distributions.Zeros) = x
-@inline Base.:(-)(::Distributions.Zeros, x::StaticArray) = -x
-@inline Distributions.logpdf(d::Distribution,x,xp,t) = logpdf(d,x-xp)
-@inline Distributions.sqmahal(d::MvNormal, x::StaticArray) = Distributions.invquad(d.Σ, x - d.μ)
 @inline PDMats.invquad(a::PDMats.ScalMat, x::StaticVector) = dot(x,x) / a.value
 @inline PDMats.invquad(a::PDMats.PDMat, x::StaticVector) = dot(x, a \ x) # \ not implemented
 @inline Base.:(\)(a::PDMats.PDMat, x::StaticVector) = a.chol \ x
 @inline PDMats.invquad(a::PDMats.PDiagMat, x::StaticVector) = PDMats.wsumsq(1 ./ a.diag, x)
 
-
-
-"""
-Mixed value support indicates that the distribution is a mix of continuous and discrete dimensions.
-"""
-struct Mixed <: ValueSupport end
-
-"""
-    TupleProduct(v::NTuple{N,UnivariateDistribution})
-
-Create a product distribution where the individual distributions are stored in a tuple. Supports mixed/hybrid Continuous and Discrete distributions
-"""
-struct TupleProduct{N,S,V<:NTuple{N,UnivariateDistribution}} <: MultivariateDistribution{S}
-    v::V
-    function TupleProduct(v::V) where {N,V<:NTuple{N,UnivariateDistribution}}
-        all(Distributions.value_support(typeof(d)) == Discrete for d in v) &&
-            return new{N,Discrete,V}(v)
-        all(Distributions.value_support(typeof(d)) == Continuous for d in v) &&
-            return new{N,Continuous,V}(v)
-        return new{N,Mixed,V}(v)
-    end
-end
-TupleProduct(d::Distribution...) = TupleProduct(d)
-Base.length(d::TupleProduct{N}) where N = N
-# Distributions._rand!(rng::AbstractRNG, d::TupleProduct, x::AbstractVector{<:Real}) =     broadcast!(dn->rand(rng, dn), x, d.v)
-
-@generated function Distributions._rand!(rng::AbstractRNG, d::TupleProduct{N}, x::AbstractVector{<:Real}) where N
-    quote
-        Base.Cartesian.@nexprs $N i->(x[i] = rand(rng, d.v[i]))
-        x
-    end
-end
-
-@generated function Distributions._logpdf(d::TupleProduct{N}, x::AbstractVector{<:Real}) where N
-    :(Base.Cartesian.@ncall $N Base.:+ i->logpdf(d.v[i], x[i]))
-end
-
-# To make it a bit faster also for the regular Product
-@generated function Distributions._logpdf(d::Product, x::StaticVector{N}{<:Real}) where N
-    :(Base.Cartesian.@ncall $N Base.:+ i->logpdf(d.v[i], x[i]))
-end
-
-Distributions.mean(d::TupleProduct) = vcat(mean.(d.v)...)
-Distributions.var(d::TupleProduct) = vcat(var.(d.v)...)
-Distributions.cov(d::TupleProduct) = Diagonal(var(d))
-Distributions.entropy(d::TupleProduct) = sum(entropy, d.v)
-Base.extrema(d::TupleProduct) = minimum.(d.v), maximum.(d.v)
-
-@generated function Random.rand(rng::AbstractRNG, d::TupleProduct{N}) where N
-    quote
-        SVector(Base.Cartesian.@ntuple $N i->(rand(rng, d.v[i])))
-    end
-end
+function TupleProduct end
 
 """
     C = double_integrator_covariance(h, σ=1)
@@ -192,3 +136,28 @@ function rk4(f::F, Ts0; supersample::Integer = 1) where {F}
         end
     end
 end
+
+## 
+
+struct SimpleMvNormal{M,S}
+    μ::M
+    Σ::S
+end
+
+SimpleMvNormal(Σ::AbstractMatrix) = SimpleMvNormal(@SVector(zeros(size(Σ,1))), Σ)
+
+# We define this new function extended_logpdf and overload that for Distributions.jl in the extension
+extended_logpdf(d::SimpleMvNormal, x) = mvnormal_c0(d) - PDMats.invquad(d.Σ, x .- d.μ)/2
+const log2π = log(2π)
+function mvnormal_c0(d::SimpleMvNormal)
+    ldcd = logdet(d.Σ)
+    return - (length(d) * oftype(ldcd, log2π) + ldcd) / 2
+end
+
+
+Base.rand(rng::AbstractRNG, d::SimpleMvNormal) = d.μ + cholesky(d.Σ).L*randn(rng, length(d.μ))
+Base.length(d::SimpleMvNormal) = length(d.μ)
+Base.eltype(d::SimpleMvNormal) = eltype(d.μ)
+
+Statistics.mean(d::SimpleMvNormal) = d.μ
+Statistics.cov(d::SimpleMvNormal) = d.Σ
