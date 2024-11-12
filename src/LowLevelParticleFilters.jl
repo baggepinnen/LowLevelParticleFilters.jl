@@ -8,14 +8,13 @@ export densityplot, debugplot, commandplot
 
 using StatsAPI
 import StatsAPI: weights, predict!
-using StatsBase, Parameters, Lazy, Random, LinearAlgebra, Printf, LoopVectorization
+using StatsBase, Parameters, Lazy, Random, LinearAlgebra, Printf
 import PDMats # To extend some methods on static arrays
 import PDMats: PDMat
 using StaticArrays
 using Statistics
 using RecipesBase
 using ForwardDiff
-using Polyester
 
 # using SciMLBase
 struct NullParameters end
