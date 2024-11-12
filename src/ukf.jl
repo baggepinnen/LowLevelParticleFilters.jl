@@ -935,7 +935,6 @@ y = h(x, z)
 4. calc new covariance matrix
 =#
 
-# abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
 
 # @with_kw struct DAEUnscentedKalmanFilter{DT,MT,R1T,R2T,D0T,VT,XT,RT,P,G,GXZ,BXZ,XZT,VZT} <: AbstractUnscentedKalmanFilter
 #     ukf::UnscentedKalmanFilter{DT,MT,R1T,R2T,D0T,VT,XT,RT,P}

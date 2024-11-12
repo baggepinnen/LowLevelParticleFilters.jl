@@ -226,14 +226,8 @@ The main step of [`correct!`](@ref) for [`AdvancedParticleFilter`](@ref). This f
 Base.@propagate_inbounds function measurement_equation!(pf::AbstractParticleFilter, u, y, p, t, w = weights(pf); g = measurement_likelihood(pf))
     any(ismissing.(y)) && return w
     x = particles(pf)
-    if pf.threads
-        Threads.@threads :static for i = 1:num_particles(pf)
-            @inbounds w[i] += g(x[i], u, y, p, t)
-        end
-    else
-        for i = 1:num_particles(pf)
-            @inbounds w[i] += g(x[i], u, y, p, t)
-        end
+    for i = 1:num_particles(pf)
+        @inbounds w[i] += g(x[i], u, y, p, t)
     end
     w
 end
