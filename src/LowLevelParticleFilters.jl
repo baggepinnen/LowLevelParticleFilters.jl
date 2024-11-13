@@ -16,6 +16,7 @@ using Statistics
 using RecipesBase
 using ForwardDiff
 using Polyester
+using MaybeInplace
 
 # using SciMLBase
 struct NullParameters end
