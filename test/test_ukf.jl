@@ -114,6 +114,29 @@ resukf2 = forward_trajectory(ukf2, vu, vy)
 # 0.001769 seconds (32.01 k allocations: 2.241 MiB)
 
 @test sse(resukf2.xt .- resukf.xt) < 1e-10
+
+
+
+## Augmented dynamics
+dynamics_w(x,u,p,t,w) = _A*x .+ _B*u .+ w
+ukfw  = UnscentedKalmanFilter{false,false,true,false}(dynamics_w, measurement, eye(nx), R2, d0; ny, nu)
+resukfw = forward_trajectory(ukfw, u, y)
+@test reduce(hcat, resukfw.xt) ≈ reduce(hcat, resukf.xt) atol=1e-6
+@test reduce(hcat, resukfw.x) ≈ reduce(hcat, resukf.x) atol=1e-6
+@test reduce(hcat, resukfw.R) ≈ reduce(hcat, resukf.R) atol=1e-6
+@test reduce(hcat, resukfw.Rt) ≈ reduce(hcat, resukf.Rt) atol=1e-6
+@test resukfw.ll ≈ resukf.ll rtol=1e-6
+
+
+measurement_v(x,u,p,t,v) = _C*x .+ v
+ukfv  = UnscentedKalmanFilter{false,false,false,true}(dynamics, measurement_v, eye(nx), R2, d0; ny, nu)
+resukfv = forward_trajectory(ukfv, u, y)
+@test reduce(hcat, resukfv.xt) ≈ reduce(hcat, resukf.xt) atol=1e-6
+@test reduce(hcat, resukfv.x) ≈ reduce(hcat, resukf.x) atol=1e-6
+@test reduce(hcat, resukfv.R) ≈ reduce(hcat, resukf.R) atol=1e-6
+@test reduce(hcat, resukfv.Rt) ≈ reduce(hcat, resukf.Rt) atol=1e-6
+@test resukfv.ll ≈ resukf.ll rtol=1e-6
+
 ## DAE UKF =====================================================================
 # "A pendulum in DAE form"
 # function pend(state, f, p, t=0)

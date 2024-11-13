@@ -32,14 +32,20 @@ end
 
 abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
 
-@with_kw mutable struct UnscentedKalmanFilter{DT,MT,R1T,R2T,D0T,VT,YVT,XT,RT,P} <: AbstractUnscentedKalmanFilter
+@with_kw mutable struct UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,R2T,D0T,XD,XD0,XM,Y,XT,RT,P} <: AbstractUnscentedKalmanFilter
     dynamics::DT
     measurement::MT
     R1::R1T
     R2::R2T
     d0::D0T
-    xs::Vector{VT}
-    ys::Vector{YVT}
+    "Sigma points after dynamics update"
+    xsd::Vector{XD}
+    "Sigma points before dynamics update"
+    xsd0::Vector{XD0}
+    "Sigma points before measurement update"
+    xsm::Vector{XM}
+    "Sigma points after measurement update"
+    ys::Vector{Y}
     x::XT
     R::RT
     t::Int = 1
@@ -54,12 +60,16 @@ end
 
 A nonlinear state estimator propagating uncertainty using the unscented transform.
 
-The dynamics and measurement function are on the following form
+The dynamics and measurement function are on _either_ of the following forms
 ```
 x' = dynamics(x, u, p, t) + w
 y  = measurement(x, u, p, t) + e
 ```
-where `w ~ N(0, R1)`, `e ~ N(0, R2)` and `x(0) ~ d0`
+```
+x' = dynamics(x, u, p, t, w)
+y  = measurement(x, u, p, t, e)
+```
+where `w ~ N(0, R1)`, `e ~ N(0, R2)` and `x(0) ~ d0`. The former (default) assums that the noise is additive and added _after_ the dynamics and measurement updates, while the latter assumes that the dynamics functions take an additional argument corresponding to the noise term. The latter form (sometimes refered to as the "augmented" form) is useful when the noise is multiplicative or when the noise is added _before_ the dynamics and measurement updates. See "Augmented UKF" below for more details on how to use this form.
 
 The matrices `R1, R2` can be time varying such that, e.g., `R1[:, :, t]` contains the ``R_1`` matrix at time index `t`.
 They can also be given as functions on the form
@@ -75,17 +85,68 @@ The input `u` may be of any type, e.g., a named tuple or a custom struct.
 The `u` provided in the input data is passed directly to the dynamics and measurement functions,
 so as long as the type is compatible with the dynamics it will work out.
 The one exception where this will not work is when calling `simulate`, which assumes that `u` is an array.
+
+# Augmented UKF
+If the noise is not additive, one may use the augmented form of the UKF. In this form, the dynamics functions take additional input arguments that correspond to the noise terms. To enable this form, the typed constructor
+```
+UnscentedKalmanFilter{inplace_dynamics,inplace_measurement,augmented_dynamics,augmnented_measurement}(...)
+```
+is used, where the Boolean type parameters have the following meaning
+- `inplace_dynamics`: If `true`, the dynamics function operates in-place, i.e., it modifies the first argument in `dynamics(dx, x, u, p, t)`. Default is `false`.
+- `inplace_measurement`: If `true`, the measurement function operates in-place, i.e., it modifies the first argument in `measurement(y, x, u, p, t)`. Default is `false`.
+- `augmented_dynamics`: If `true` the dynamics function is augmented with an additional noise input `w`, i.e., `dynamics(x, u, p, t, w)`. Default is `false`.
+- `augmnented_measurement`: If `true` the measurement function is agumented with an additional noise input `e`, i.e., `measurement(x, u, p, t, e)`. Default is `false`.
+
+Use of augmented dynamics incurs extra computational cost. The number of sigma points used is `2L+1` where `L` is the length of the augmented state vector. Without augmentation, `L = nx`, with augmentation `L = nx + nw` and `L = nx + ne` for dynamics and measurement, respectively.
 """
-function UnscentedKalmanFilter(dynamics,measurement,R1,R2,d0=SimpleMvNormal(R1); p = NullParameters(), nu::Int, ny::Int)
-    xs = sigmapoints(mean(d0), cov(d0), static = !has_ip(dynamics))
-    if has_ip(measurement)
-        ys = [zeros(promote_type(eltype(xs[1]), eltype(d0)), ny) for _ in 1:length(xs)]
+function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics,measurement,R1,R2,d0=SimpleMvNormal(R1); p = NullParameters(), nu::Int, ny::Int) where {IPD,IPM,AUGD,AUGM}
+    nx = length(d0)
+    nw = size(R1, 1) # nw may be smaller than nx for augmented dynamics
+    ne = size(R2, 1)
+    T = promote_type(eltype(d0), eltype(R1), eltype(R2))
+    if AUGD
+        L = nx + nw
+        xsd0 = [@SVector zeros(T, nx+nw) for _ in 1:2L+1]
+        if IPD
+            xsd = [zeros(T, nx) for _ in 1:2L+1]
+        else
+            xsd = [@SVector zeros(T, nx) for _ in 1:2L+1]
+        end
     else
-        ys = [@SVector zeros(promote_type(eltype(xs[1]), eltype(d0)), ny) for _ in 1:length(xs)]
+        L = nx
+        xsd0 = [@SVector zeros(T, nx) for _ in 1:2L+1]
+        if IPD
+            xsd = Vector.(xsd0)
+        else
+            xsd = xsd0
+        end
+    end
+    if AUGM
+        L = nx + ne
+        xsm = [@SVector zeros(T, nx+ne) for _ in 1:2L+1]
+    else
+        L = nx
+        xsm = [@SVector zeros(T, nx) for _ in 1:2L+1]
+    end
+    if IPM
+        ys = [zeros(T, ny) for _ in 1:2L+1]
+    else
+        ys = [@SVector zeros(T, ny) for _ in 1:2L+1]
     end
     R = convert_cov_type(R1, d0.Σ)
     x0 = convert_x0_type(d0.μ)
-    UnscentedKalmanFilter(dynamics,measurement,R1,R2, d0, xs, ys, x0, R, 1, ny, nu, p)
+    UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM, typeof(dynamics), typeof(measurement), typeof(R1), typeof(R2), typeof(d0),
+        typeof(xsd[1]), typeof(xsd0[1]), typeof(xsm[1]), typeof(ys[1]),
+        typeof(x0), typeof(R), typeof(p)}(
+            dynamics,measurement,R1,R2, d0, xsd,xsd0,xsm,ys, x0, R, 1, ny, nu, p)
+end
+
+function UnscentedKalmanFilter(dynamics,measurement,args...;kwargs...)
+    IPD = has_ip(dynamics)
+    IPM = has_ip(measurement)
+    AUGD = false
+    AUGM = false
+    UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics,measurement,args...;kwargs...)
 end
 
 sample_state(kf::AbstractUnscentedKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
@@ -97,24 +158,44 @@ dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 #                                        x(k+1)          x            u             p           t
 @inline has_ip(fun) = hasmethod(fun, Tuple{AbstractArray,AbstractArray,AbstractArray,AbstractArray,Real})
 
-function predict!(ukf::UnscentedKalmanFilter{DT}, u, p = parameters(ukf), t::Real = index(ukf); R1 = get_mat(ukf.R1, ukf.x, u, p, t)) where DT
-    @unpack dynamics,measurement,x,xs,R = ukf
-    ns = length(xs)
-    sigmapoints!(xs,eltype(xs)(x),R)
-    if has_ip(dynamics)
-        xp = similar(xs[1])
-        for i in eachindex(xs)
+function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = parameters(ukf), t::Real = index(ukf); R1 = get_mat(ukf.R1, ukf.x, u, p, t)) where {IPD,IPM,AUGD,AUGM}
+    @unpack dynamics,measurement,x,xsd,xsd0,R = ukf
+    xtyped = eltype(xsd)(x)
+    nx = length(x)
+    nw = size(R1, 1) # nw may be smaller than nx for augmented dynamics
+    if AUGD
+        xinds = 1:nx
+        winds = nx+1:nx+nw
+        m = [xtyped; 0*R1[:, 1]]
+        S = cat(R, R1, dims=(1,2))
+        sigmapoints!(xsd0,m,S)
+    else
+        sigmapoints!(xsd0,xtyped,R)
+    end
+    if IPD
+        AUGD && error("IPD and AUGD not yet supported")
+        xp = similar(xsd[1])
+        for i in eachindex(xsd)
             xp .= 0
-            dynamics(xp, xs[i], u, p, t)
-            xs[i] .= xp
+            dynamics(xp, xsd0[i], u, p, t)
+            xsd[i] .= xp
         end
     else
-        for i in eachindex(xs)
-            xs[i] = dynamics(xs[i], u, p, t)
+        for i in eachindex(xsd)
+            if AUGD
+                xsd[i] = dynamics(xsd0[i][xinds], u, p, t, xsd0[i][winds])
+            else
+                xsd[i] = dynamics(xsd0[i], u, p, t)
+            end
         end
     end
-    ukf.x = safe_mean(xs)
-    ukf.R = symmetrize(safe_cov(xs)) .+ R1
+    if AUGD
+        ukf.x = safe_mean(xsd)[xinds]
+        @bangbang ukf.R .= symmetrize(safe_cov(xsd)[xinds,xinds]) # TODO: optimize
+    else
+        ukf.x = safe_mean(xsd)
+        @bangbang ukf.R .= symmetrize(safe_cov(xsd)) .+ R1
+    end
     ukf.t += 1
 end
 
@@ -142,28 +223,51 @@ end
 
 
 
-function correct!(ukf::UnscentedKalmanFilter{<: Any, MT}, u, y, p=parameters(ukf), t::Real = index(ukf); R2 = get_mat(ukf.R2, ukf.x, u, p, t)) where MT
-    @unpack measurement,x,xs,ys,R,R1 = ukf
-    n = length(xs[1])
-    m = length(y)
-    ns = length(xs)
-    sigmapoints!(xs,eltype(xs)(x),R) # Update sigmapoints here since untransformed points required
-    C = @SMatrix zeros(n,m)
-    for i = eachindex(xs,ys)
-        if has_ip(measurement)
-            measurement(ys[i], xs[i], u, p, t)
+function correct!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y, p=parameters(ukf), t::Real = index(ukf); R2 = get_mat(ukf.R2, ukf.x, u, p, t)) where {IPD,IPM,AUGD,AUGM}
+    @unpack measurement,x,xsm,ys,R,R1 = ukf
+    nx = length(x)
+    L = length(xsm[1])
+    nv = size(R2, 1)
+    ny = length(y)
+    ns = length(xsm)
+    if AUGM
+        xinds = 1:nx
+        vinds = nx+1:nx+nv
+        xm = [x; 0*R2[:, 1]]
+        S = cat(R, R2, dims=(1,2))
+        sigmapoints!(xsm,xm,S)
+    else
+        xm = x
+        sigmapoints!(xsm,eltype(xsm)(x),R) # Update sigmapoints here since untransformed points required
+    end
+    for i = eachindex(xsm,ys)
+        if IPM
+            measurement(ys[i], xsm[i], u, p, t)
         else
-            ys[i] = measurement(xs[i], u, p, t)
+            if AUGM
+                ys[i] = measurement(xsm[i][xinds], u, p, t, xsm[i][vinds])
+            else
+                ys[i] = measurement(xsm[i], u, p, t)
+            end
         end
     end
     ym = safe_mean(ys)
+    C = @SMatrix zeros(nx,ny)
     @inbounds for i in eachindex(ys) # Cross cov between x and y
         d   = ys[i]-ym
-        ca  = (xs[i]-x)*d'
+        if AUGM
+            ca  = (xsm[i][xinds]-x)*d'
+        else
+            ca  = (xsm[i]-x)*d'
+        end
         C  += ca
     end
     e   = y .- ym
-    S   = symmetrize(safe_cov(ys)) + R2 # cov of y
+    if AUGM
+        S   = symmetrize(safe_cov(ys))
+    else
+        S   = symmetrize(safe_cov(ys)) + R2 # cov of y
+    end
     Sᵪ  = cholesky(S)
     K   = (C./(ns-1))/Sᵪ # ns normalization to make it a covariance matrix
     ukf.x += K*e
@@ -184,7 +288,7 @@ end
 end
 
 
-function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf))
+function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u::AbstractVector, y::AbstractVector, p=parameters(kf)) where {IPD,IPM,AUGD,AUGM}
     # ref: "Unscented Rauch–Tung–Striebel Smoother" Simo Särkkä
     (; x,xt,R,Rt,ll) = sol
     T            = length(y)
@@ -201,7 +305,23 @@ function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter, u::Abst
         P̃ = cat(Rt[t], get_mat(kf.R1, xt[t], u[t], p, t), dims=(1,2))
         X̃ = sigmapoints(m̃, P̃)
         X̃⁻ = map(X̃) do xq
-            kf.dynamics(xq[xi], u[t], p, t) + xq[nx+1:end]
+            if AUGD
+                if IPD
+                    xd = similar(xq[xi]) .= 0
+                    kf.dynamics(xd, xq[xi], u[t], p, t, xq[nx+1:end])
+                    xd
+                else
+                    kf.dynamics(xq[xi], u[t], p, t, xq[nx+1:end])
+                end
+            else
+                if IPD
+                    xd = similar(xq) .= 0
+                    kf.dynamics(xd, xq[xi], u[t], p, t) + xq[nx+1:end]
+                    xd
+                else
+                    kf.dynamics(xq[xi], u[t], p, t) + xq[nx+1:end]
+                end
+            end
         end
         m⁻ = mean(X̃⁻)
         P⁻ = @SMatrix zeros(nx,nx)
