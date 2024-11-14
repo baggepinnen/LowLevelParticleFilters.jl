@@ -219,9 +219,9 @@ The tutorial ["How to tune a Kalman filter"](https://juliahub.com/pluto/editor.h
 
 # Unscented Kalman Filter
 
-The [`UnscentedKalmanFilter`](@ref) represents posterior distributions over ``x`` as Gaussian distributions, but propagate them through a nonlinear function ``f`` by a deterministic sampling of a small number of particles called *sigma points* (this is referred to as the [*unscented transform*](https://en.wikipedia.org/wiki/Unscented_transform)). This UKF thus handles nonlinear functions ``f,g``, but only Gaussian disturbances and unimodal posteriors.
+The [`UnscentedKalmanFilter`](@ref) represents posterior distributions over ``x`` as Gaussian distributions, but propagate them through a nonlinear function ``f`` by a deterministic sampling of a small number of particles called *sigma points* (this is referred to as the [*unscented transform*](https://en.wikipedia.org/wiki/Unscented_transform)). This UKF thus handles nonlinear functions ``f,g``, but only Gaussian disturbances and unimodal posteriors. The UKF will _by default_ treat the noise as additive, but by using the _augmented UKF_ form, non-additive noise may be handled as well. See the docstring of [`UnscentedKalmanFilter`](@ref) for more details.
 
-The UKF takes the same arguments as a regular [`KalmanFilter`](@ref), but the matrices defining the dynamics are replaced by two functions, `dynamics` and `measurement`, working in the same way as for the `ParticleFilter` above.
+The UKF takes the same arguments as a regular [`KalmanFilter`](@ref), but the matrices defining the dynamics are replaced by two functions, `dynamics` and `measurement`, working in the same way as for the `ParticleFilter` above (unless the augmented form is used).
 ```@example lingauss
 ukf = UnscentedKalmanFilter(dynamics, measurement, cov(df), cov(dg), MvNormal([1.,1.]), nu=m, ny=p)
 ```
@@ -311,17 +311,15 @@ Tuning a particle filter can be quite the challenge. To assist with this, we pro
 debugplot(pf,u[1:20],y[1:20], runall=true, xreal=x[1:20])
 ```
 
-
-
 The plot displays all states and all measurements. The heatmap in the background represents the weighted particle distributions per time step. For the measurement sequences, the heatmap represent the distributions of predicted measurements. The blue dots corresponds to measured values. In this case, we simulated the data and we had access to states as well, if we do not have that, just omit `xreal`.
 You can also manually step through the time-series using
 - `commandplot(pf,u,y; kwargs...)`
 For options to the debug plots, see `?pplot`.
 
 
+## Tuning noise parameters through optimization
+See examples in [Parameter Estimation](@ref).
 
-
-Something seems to be off with this figure as the hottest spot is not really where we would expect it
-
-Optimization of the log likelihood can be done by, e.g., global/black box methods, see [BlackBoxOptim.jl](https://github.com/robertfeldt/BlackBoxOptim.jl), see examples in [Parameter Estimation](@ref). Standard tricks apply, such as performing the parameter search in log-space etc.
+## Tuning through simulation
+It is possible to sample from the Bayesian model implied by a filter and its parameters by calling the function [`simulate`](@ref). A simple tuning strategy is to adjust the noise parameters such that a simulation looks "similar" to the data, i.e., the data must not be too unlikely under the model.
 
