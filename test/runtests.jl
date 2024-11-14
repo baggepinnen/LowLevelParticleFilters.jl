@@ -87,6 +87,15 @@ r = reduce(hcat, r)
     end
 
 
+    @testset "rk4" begin
+        @info "Testing rk4"
+        fun = (x,u,p,t)->[-1]
+        dfun = LowLevelParticleFilters.rk4(fun, 1)
+        @test dfun([1],1,1,1) ≈ [0]
+        @test dfun([0],1,1,1) ≈ [-1]
+    end
+
+
     @testset "End to end" begin
         @info "testing End to end"
         eye(n) = Matrix{Float64}(I,n,n)
@@ -128,6 +137,9 @@ r = reduce(hcat, r)
         parts = Particles(sol.x,sol.we)
         @test size(parts) == (T,n)
         @test length(parts[1].particles) == N
+        WM = weighted_mean(sol.x, sol.we)
+        @test length(WM) == T
+        @test WM[1] ≈ weighted_mean(sol.x[:, 1], sol.we[:, 1])
 
         xm = reduce(hcat,x)
         tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
@@ -212,10 +224,21 @@ r = reduce(hcat, r)
             θ₀ = log.([1.1,1.1]) # Starting point
             # We also need to define a function that suggests a new point from the "proposal distribution". This can be pretty much anything, but it has to be symmetric since I was lazy and simplified an equation.
             draw = θ -> θ .+ rand(MvNormal(Diagonal(0.1^2*ones(2))))
-            burnin = 200
             theta, lls = metropolis(ll, 20, θ₀, draw)
             theta, lls = metropolis(ll, 20, θ₀) # Default draw
+            thetalls = LowLevelParticleFilters.metropolis_threaded(2, ll, 22, θ₀, nthreads=2) # Default draw
+            @test size(thetalls) == (2*20,3) # 2 parameters + ll
+        end
 
+        @testset "prediction_errors" begin
+            @info "Testing prediction_errors"
+            res1 = zeros(length(y[1])*length(y))
+            LowLevelParticleFilters.prediction_errors!(res1, sqkf, u, y)
+
+            res2 = zeros(length(y[1])*length(y))
+            LowLevelParticleFilters.prediction_errors!(res2, kf, u, y)
+
+            @test res1 ≈ res2
         end
 
     end

@@ -180,8 +180,7 @@ function predict!(pf::AuxiliaryParticleFilter{<:AdvancedParticleFilter},u, y, p=
 end
 
 
-(kf::KalmanFilter)(u, y, p=parameters(kf), t = index(kf)) =  update!(kf, u, y, p, t)
-(kf::AbstractUnscentedKalmanFilter)(u, y, p = parameters(kf), t = index(kf)) =  update!(kf, u, y, p, t)
+(kf::AbstractKalmanFilter)(u, y, p = parameters(kf), t = index(kf)) =  update!(kf, u, y, p, t)
 (pf::ParticleFilter)(u, y, p = parameters(pf), t = index(pf)) =  update!(pf, u, y, p, t)
 (pf::AuxiliaryParticleFilter)(u, y, y1, p = parameters(pf), t = index(pf)) =  update!(pf, u, y, y1, p, t)
 (pf::AdvancedParticleFilter)(u, y, p = parameters(pf), t = index(pf)) =  update!(pf, u, y, p, t)
@@ -361,7 +360,7 @@ end
 Calculated weighted mean of particle trajectories. `we` are expweights.
 """
 function weighted_mean(x,we::AbstractVector)
-    @assert sum(we) ≈ 1
+    @assert sum(we) ≈ 1 "Weights must sum to one, did you pass log weights instead of exp weights?"
     xh = zeros(size(x[1]))
     @inbounds @simd  for i = eachindex(x)
         xh .+= x[i].*we[i]
