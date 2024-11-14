@@ -191,16 +191,18 @@ r = reduce(hcat, r)
         @test_nowarn simulate(sqkf, T, du)
 
 
+        kf   = KalmanFilter(A_test, B_test, C_test, 0, 0.01eye(n), eye(p), d0)
+        x,u,y = LowLevelParticleFilters.simulate(kf,2000,du)
 
-        svec = exp10.(LinRange(-2,1,22))
+        svec = exp10.(LinRange(-2,0,11))
         llspf = map(svec) do s
-            df = mvnormal(n,s)
+            df = MvNormal(@SVector(zeros(n)),s^2*eye(n))
             pfs = ParticleFilter(N, dynamics, measurement, df, dg, d0)
             loglik(pfs,u,y)
         end
 
         llspfa = map(svec) do s
-            df = mvnormal(n,s)
+            df = MvNormal(@SVector(zeros(n)),s^2*eye(n))
             pfs = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
             loglik(pfs,u,y)
         end
@@ -209,7 +211,17 @@ r = reduce(hcat, r)
             kfs = KalmanFilter(A_test, B_test, C_test, 0, s^2*eye(n), eye(p), d0)
             loglik(kfs,u,y)
         end
-        # plot(svec, [llspf llspfa llskf], xscale=:log10, lab=["PF" "APF" "KF"])
+        plot(svec, [llspf llspfa llskf], xscale=:log10, lab=["PF" "APF" "KF"])
+        vline!([0.1])
+
+        m,mi = findmax(llspf)
+        @test 5 ≤ mi ≤ 7
+
+        m,mi = findmax(llspfa)
+        @test_broken 5 ≤ mi ≤ 7
+
+        m,mi = findmax(llskf)
+        @test 5 ≤ mi ≤ 7
 
         @testset "Metropolis" begin
             @info "testing Metropolis"
