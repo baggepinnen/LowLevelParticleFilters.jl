@@ -139,7 +139,12 @@ function log_likelihood_fun(filter_from_parameters,priors::AbstractVector,u,y, p
         ll = sum(i->extended_logpdf(priors[i], θ[i]), eachindex(priors))
         isfinite(ll) || return eltype(θ)(-Inf)
         pf = filter_from_parameters(θ,pf)
-        ll + loglik(pf,u,y,p)
+        try
+            return ll + loglik(pf,u,y,p)
+        catch
+            return eltype(θ)(-Inf)
+        end
+
     end
 end
 

@@ -3,7 +3,7 @@ abstract type AbstractKalmanFilter <: AbstractFilter end
 function convert_cov_type(R1, R)
     if R isa SMatrix || R isa Matrix
         return R
-    elseif R1 isa SMatrix
+    elseif R1 isa SMatrix && size(R) == size(R1)
         return SMatrix{size(R1,1),size(R1,2)}(R)
     elseif R1 isa Matrix
         return Matrix(R)
