@@ -149,8 +149,8 @@ function log_likelihood_fun(filter_from_parameters,priors::AbstractVector,u,y, p
 end
 
 function naive_sampler(θ₀)
-    !any(iszero.(θ₀)) || throw(ArgumentError("Naive sampler does not work if initial parameter vector contains zeros (it was going to return θ -> θ .+ rand(MvNormal(0.1abs.(θ₀))), but that is not a good ideas if θ₀ is zero."))
-    θ -> θ .+ rand(SimpleMvNormal(0.1abs.(θ₀)))
+    any(iszero,θ₀) && throw(ArgumentError("Naive sampler does not work if initial parameter vector contains zeros (it was going to return θ -> θ .+ rand(MvNormal(0.1abs.(θ₀))), but that is not a good idea if θ₀ is zero."))
+    θ -> θ .+ rand(SimpleMvNormal(0*θ₀, Diagonal(0.1abs.(θ₀))))
 end
 
 """

@@ -209,11 +209,12 @@ r = reduce(hcat, r)
             # The call to `exp` on the parameters is so that we can define log-normal priors
             priors = [Normal(1,2),Normal(1,2)]
             ll     = log_likelihood_fun(filter_from_parameters,priors,u,y,0)
-            θ₀ = log.([1.,1.]) # Starting point
+            θ₀ = log.([1.1,1.1]) # Starting point
             # We also need to define a function that suggests a new point from the "proposal distribution". This can be pretty much anything, but it has to be symmetric since I was lazy and simplified an equation.
             draw = θ -> θ .+ rand(MvNormal(Diagonal(0.1^2*ones(2))))
             burnin = 200
             theta, lls = metropolis(ll, 20, θ₀, draw)
+            theta, lls = metropolis(ll, 20, θ₀) # Default draw
 
         end
 
