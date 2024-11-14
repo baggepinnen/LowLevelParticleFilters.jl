@@ -96,6 +96,9 @@ xTnt,RTnt,llnt = smooth(resukfnt, ukf, unt, y)
 @test RT ≈ RTnt
 @test ll ≈ llnt
 
+predict!(ukf, u[1], y[1], reject=x->true)
+@test iszero(cov(ukf.xsd)) # we rejected all points so the covariance should be zero
+
 ## Non-static arrays ===========================================================
 
 function dynamics_ip(xp,x,u,p,t)

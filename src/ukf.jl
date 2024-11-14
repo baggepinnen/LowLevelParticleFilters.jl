@@ -32,7 +32,7 @@ end
 
 abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
 
-@with_kw mutable struct UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,R2T,D0T,XD,XD0,XM,Y,XT,RT,P} <: AbstractUnscentedKalmanFilter
+@with_kw mutable struct UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,R2T,D0T,XD,XD0,XM,Y,XT,RT,P,RJ} <: AbstractUnscentedKalmanFilter
     dynamics::DT
     measurement::MT
     R1::R1T
@@ -52,6 +52,7 @@ abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
     ny::Int
     nu::Int
     p::P
+    reject::RJ = nothing
 end
 
 
@@ -98,8 +99,11 @@ is used, where the Boolean type parameters have the following meaning
 - `augmnented_measurement`: If `true` the measurement function is agumented with an additional noise input `e`, i.e., `measurement(x, u, p, t, e)`. Default is `false`.
 
 Use of augmented dynamics incurs extra computational cost. The number of sigma points used is `2L+1` where `L` is the length of the augmented state vector. Without augmentation, `L = nx`, with augmentation `L = nx + nw` and `L = nx + ne` for dynamics and measurement, respectively.
+
+# Sigma-point rejection
+For problems with challenging dynamics, a mechanism for rejection of sigma points after the dynamics update is provided. A function `reject(x) -> Bool` can be provided through the keyword argument `reject` that returns `true` if a sigma point for ``x(t+1)`` should be rejected, e.g., if an instability or non-finite number is detected. A rejected point is replaced by the propagated mean point (the mean point cannot be rejected). This function may be provided either to the constructor of the UKF or passed to the [`predict!`](@ref) function.
 """
-function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics,measurement,R1,R2,d0=SimpleMvNormal(R1); p = NullParameters(), nu::Int, ny::Int) where {IPD,IPM,AUGD,AUGM}
+function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics,measurement,R1,R2,d0=SimpleMvNormal(R1); p = NullParameters(), nu::Int, ny::Int, reject=nothing) where {IPD,IPM,AUGD,AUGM}
     nx = length(d0)
     nw = size(R1, 1) # nw may be smaller than nx for augmented dynamics
     ne = size(R2, 1)
@@ -137,8 +141,8 @@ function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics,measurement,R1,R2,d0=
     x0 = convert_x0_type(d0.μ)
     UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM, typeof(dynamics), typeof(measurement), typeof(R1), typeof(R2), typeof(d0),
         typeof(xsd[1]), typeof(xsd0[1]), typeof(xsm[1]), typeof(ys[1]),
-        typeof(x0), typeof(R), typeof(p)}(
-            dynamics,measurement,R1,R2, d0, xsd,xsd0,xsm,ys, x0, R, 1, ny, nu, p)
+        typeof(x0), typeof(R), typeof(p), typeof(reject)}(
+            dynamics,measurement,R1,R2, d0, xsd,xsd0,xsm,ys, x0, R, 1, ny, nu, p, reject)
 end
 
 function UnscentedKalmanFilter(dynamics,measurement,args...;kwargs...)
@@ -158,7 +162,7 @@ dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 #                                        x(k+1)          x            u             p           t
 @inline has_ip(fun) = hasmethod(fun, Tuple{AbstractArray,AbstractArray,AbstractArray,AbstractArray,Real})
 
-function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = parameters(ukf), t::Real = index(ukf); R1 = get_mat(ukf.R1, ukf.x, u, p, t)) where {IPD,IPM,AUGD,AUGM}
+function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = parameters(ukf), t::Real = index(ukf); R1 = get_mat(ukf.R1, ukf.x, u, p, t), reject = ukf.reject) where {IPD,IPM,AUGD,AUGM}
     @unpack dynamics,measurement,x,xsd,xsd0,R = ukf
     xtyped = eltype(xsd)(x)
     nx = length(x)
@@ -186,6 +190,14 @@ function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = paramete
                 xsd[i] = dynamics(xsd0[i][xinds], u, p, t, xsd0[i][winds])
             else
                 xsd[i] = dynamics(xsd0[i], u, p, t)
+            end
+        end
+    end
+    if reject !== nothing
+        for i = 2:length(xsd)
+            if reject(xsd[i])
+                # @info "rejecting $(xsd[i]) at time $t"
+                @bangbang xsd[i] .= xsd[1]
             end
         end
     end
