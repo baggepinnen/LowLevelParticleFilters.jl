@@ -62,14 +62,14 @@ using DisplayAs # hide
 Define problem
 
 ```@example lingauss
-n = 2   # Dimension of state
-m = 1   # Dimension of input
-p = 1   # Dimension of measurements
-N = 500 # Number of particles
+nx = 2   # Dimension of state
+nu = 1   # Dimension of input
+ny = 1   # Dimension of measurements
+N = 500  # Number of particles
 
-const dg = MvNormal(p,0.2)          # Measurement noise Distribution
-const df = MvNormal(n,0.1)          # Dynamics noise Distribution
-const d0 = MvNormal(randn(n),2.0)   # Initial state Distribution
+const dg = MvNormal(ny,0.2)          # Measurement noise Distribution
+const df = MvNormal(nx,0.1)          # Dynamics noise Distribution
+const d0 = MvNormal(randn(nx),2.0)   # Initial state Distribution
 nothing # hide
 ```
 
@@ -100,7 +100,7 @@ pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 
 With the filter in hand, we can simulate from its dynamics and query some properties
 ```@example lingauss
-du = MvNormal(m,1.0)         # Random input distribution for simulation
+du = MvNormal(nu,1.0)         # Random input distribution for simulation
 xs,u,y = simulate(pf,200,du) # We can simulate the model that the pf represents
 pf(u[1], y[1])               # Perform one filtering step using input u and measurement y
 particles(pf)                # Query the filter for particles, try weights(pf) or expweights(pf) as well
@@ -132,7 +132,7 @@ N     = 2000 # Number of particles
 T     = 80   # Number of time steps
 M     = 100  # Number of smoothed backwards trajectories
 pf    = ParticleFilter(N, dynamics, measurement, df, dg, d0)
-du    = MvNormal(m,1)     # Control input distribution
+du    = MvNormal(nu,1)     # Control input distribution
 x,u,y = simulate(pf,T,du) # Simulate trajectory using the model in the filter
 tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
 x,u,y = tosvec.((x,u,y)) # It's good for performance to use StaticArrays to the extent possible
@@ -176,7 +176,7 @@ A Kalman filter is easily created using the constructor. Many of the functions d
 R1 = cov(df)
 R2 = cov(dg)
 kf = KalmanFilter(A, B, C, 0, R1, R2, d0)
-sol = forward_trajectory(kf, u, y) # filtered, prediction, pred cov, filter cov, loglik
+sol = forward_trajectory(kf, u, y) # sol contains filtered state, predictions, pred cov, filter cov, loglik
 nothing # hide
 ```
 
@@ -201,7 +201,7 @@ The numeric type used in the Kalman filter is determined from the mean of the in
 Kalman filters can also be used for smoothing 
 ```@example lingauss
 kf = KalmanFilter(A, B, C, 0, cov(df), cov(dg), d0)
-xT,R,lls = smooth(kf, u, y, p) # Smoothed state, smoothed cov, loglik
+xT,R,lls = smooth(kf, u, y) # Returns smoothed state, smoothed cov, loglik
 nothing # hide
 ```
 
@@ -223,7 +223,7 @@ The [`UnscentedKalmanFilter`](@ref) represents posterior distributions over ``x`
 
 The UKF takes the same arguments as a regular [`KalmanFilter`](@ref), but the matrices defining the dynamics are replaced by two functions, `dynamics` and `measurement`, working in the same way as for the `ParticleFilter` above (unless the augmented form is used).
 ```@example lingauss
-ukf = UnscentedKalmanFilter(dynamics, measurement, cov(df), cov(dg), MvNormal([1.,1.]), nu=m, ny=p)
+ukf = UnscentedKalmanFilter(dynamics, measurement, cov(df), cov(dg), MvNormal(SA[1.,1.]); nu=nu, ny=ny)
 ```
 !!! info
     If your function `dynamics` describes a continuous-time ODE, do not forget to **discretize** it before passing it to the UKF. See [Discretization](@ref) for more information.
@@ -234,7 +234,7 @@ The [`ExtendedKalmanFilter`](@ref) ([EKF](https://en.wikipedia.org/wiki/Extended
 
 The EKF constructor has the following two signatures
 ```julia
-ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(Matrix(R1)); nu::Int, p = LowLevelParticleFilters.NullParameters(), α = 1.0, check = true)
+ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(R1); nu::Int, p = LowLevelParticleFilters.NullParameters(), α = 1.0, check = true)
 ExtendedKalmanFilter(kf, dynamics, measurement)
 ```
 The first constructor takes all the arguments required to initialize the extended Kalman filter, while the second one takes an already defined standard Kalman filter. using the first constructor, the user must provide the number of inputs to the system, `nu`.
@@ -285,7 +285,7 @@ We now create the [`AdvancedParticleFilter`](@ref) and use it in the same way as
 
 ```@example lingauss
 apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0)
-sol = forward_trajectory(apf, u, y, p)
+sol = forward_trajectory(apf, u, y, ny)
 ```
 
 ```@example lingauss
@@ -296,7 +296,7 @@ We can even use this type as an AuxiliaryParticleFilter
 
 ```@example lingauss
 apfa = AuxiliaryParticleFilter(apf)
-sol = forward_trajectory(apfa, u, y, p)
+sol = forward_trajectory(apfa, u, y, ny)
 plot(sol, dim=1, xreal=x) # Same as above, but only plots a single dimension
 DisplayAs.PNG(Plots.current()) # hide
 ```
