@@ -144,8 +144,9 @@ struct SimpleMvNormal{M,S}
     Σ::S
 end
 
-SimpleMvNormal(Σ::SMatrix) = SimpleMvNormal(@SVector(zeros(size(Σ,1))), Σ)
+SimpleMvNormal(Σ::Union{SMatrix, PDMats.PDMat{<:Any, <:SMatrix}, Diagonal{<:Any, <:SVector}}) = SimpleMvNormal(@SVector(zeros(size(Σ,1))), Σ)
 SimpleMvNormal(Σ::AbstractMatrix) = SimpleMvNormal(zeros(size(Σ,1)), Σ)
+
 
 # We define this new function extended_logpdf and overload that for Distributions.jl in the extension
 extended_logpdf(d::SimpleMvNormal, x) = mvnormal_c0(d) - PDMats.invquad(d.Σ, x .- d.μ)/2
