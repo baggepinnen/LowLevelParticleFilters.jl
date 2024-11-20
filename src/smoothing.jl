@@ -85,7 +85,7 @@ end
 """
     prediction_errors!(res, f::AbstractFilter, u, y, p = parameters(f), λ = 1)
 
-Calculate the prediction errors and store the result in `res`. Similar to [`sse`](@ref), this funciton is useful for sum-of-squares optimization. In contrast to `sse`, this function returns the residuals themselves rather than their sum of squares. This is useful for Gauss-Newton style optimizers, such as [LeastSquaresOptim.LevenbergMarquardt](https://github.com/matthieugomez/LeastSquaresOptim.jl).
+Calculate the prediction errors and store the result in `res`. Similar to [`sse`](@ref), this function is useful for sum-of-squares optimization. In contrast to `sse`, this function returns the residuals themselves rather than their sum of squares. This is useful for Gauss-Newton style optimizers, such as [LeastSquaresOptim.LevenbergMarquardt](https://github.com/matthieugomez/LeastSquaresOptim.jl).
 
 # Arguments:
 - `res`: A vector of length `ny*length(y)`. Note, for each datapoint in `u` and `u`, there are `ny` outputs, and thus `ny` residuals.
@@ -112,7 +112,7 @@ end
 """
     ll = loglik(filter, u, y, p=parameters(filter))
 
-Calculate loglikelihood for entire sequences `u,y`
+Calculate log-likelihood for entire sequences `u,y`
 """
 function loglik(f::AbstractFilter,u,y,p=parameters(f))
     reset!(f)

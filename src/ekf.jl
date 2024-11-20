@@ -1,8 +1,10 @@
 abstract type AbstractExtendedKalmanFilter <: AbstractKalmanFilter end
-@with_kw struct ExtendedKalmanFilter{KF <: KalmanFilter, F, G} <: AbstractExtendedKalmanFilter
+@with_kw struct ExtendedKalmanFilter{KF <: KalmanFilter, F, G, A, C} <: AbstractExtendedKalmanFilter
     kf::KF
     dynamics::F
     measurement::G
+    Ajac::A
+    Cjac::C
 end
 
 """
@@ -13,7 +15,7 @@ A nonlinear state estimator propagating uncertainty using linearization.
 
 The constructor to the extended Kalman filter takes dynamics and measurement functions, and either covariance matrices, or a [`KalmanFilter`](@ref). If the former constructor is used, the number of inputs to the system dynamics, `nu`, must be explicitly provided with a keyword argument.
 
-The filter will internally linearize the dynamics using ForwardDiff.
+By default, the filter will internally linearize the dynamics using ForwardDiff. User provided Jacobian functions can be provided as keyword arguments `Ajac` and `Cjac`. These functions should have the signature `(x,u,p,t)::AbstractMatrix` where `x` is the state, `u` is the input, `p` is the parameters, and `t` is the time.
 
 The dynamics and measurement function are on the following form
 ```
@@ -26,7 +28,7 @@ See also [`UnscentedKalmanFilter`](@ref) which is typically more accurate than `
 """
 ExtendedKalmanFilter
 
-function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Matrix(R1)); nu::Int, p = NullParameters(), α = 1.0, check = true)
+function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Matrix(R1)); nu::Int, p = NullParameters(), α = 1.0, check = true, Ajac = nothing, Cjac = nothing)
     nx = size(R1,1)
     ny = size(R2,1)
     T = eltype(R1)
@@ -38,12 +40,28 @@ function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Mat
         u = zeros(T, nu)
     end
     t = one(T)
-    A = ForwardDiff.jacobian(x->dynamics(x,u,p,t), x)
-    B = ForwardDiff.jacobian(u->dynamics(x,u,p,t), u)
-    C = ForwardDiff.jacobian(x->measurement(x,u,p,t), x)
+    if Ajac === nothing
+        Ajac = (x,u,p,t) -> ForwardDiff.jacobian(x->dynamics(x,u,p,t), x)
+    end
+    if Cjac === nothing
+        Cjac = (x,u,p,t) -> ForwardDiff.jacobian(x->measurement(x,u,p,t), x)
+    end
+    A = Ajac(x,u,p,t)
+    B = zeros(nx, nu) # This one is never needed
+    C = Cjac(x,u,p,t)
     D = zeros(ny, nu) # This one is never needed
     kf = KalmanFilter(A,B,C,D,R1,R2,d0; p, α, check)
-    return ExtendedKalmanFilter(kf, dynamics, measurement)
+    return ExtendedKalmanFilter(kf, dynamics, measurement, Ajac, Cjac)
+end
+
+function ExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing, Cjac = nothing)
+    if Ajac === nothing
+        Ajac = (x,u,p,t) -> ForwardDiff.jacobian(x->dynamics(x,u,p,t), x)
+    end
+    if Cjac === nothing
+        Cjac = (x,u,p,t) -> ForwardDiff.jacobian(x->measurement(x,u,p,t), x)
+    end
+    return ExtendedKalmanFilter(kf, dynamics, measurement, Ajac, Cjac)
 end
 
 function Base.getproperty(ekf::EKF, s::Symbol) where EKF <: AbstractExtendedKalmanFilter
@@ -63,7 +81,7 @@ end
 
 function predict!(kf::AbstractExtendedKalmanFilter, u, p = parameters(kf), t::Integer = index(kf); R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α)
     @unpack x,R = kf
-    A = ForwardDiff.jacobian(x->kf.dynamics(x,u,p,t), x)
+    A = kf.Ajac(x, u, p, t)
     kf.x = kf.dynamics(x, u, p, t)
     if α == 1
         kf.R = symmetrize(A*R*A') + R1
@@ -75,8 +93,8 @@ end
 
 function correct!(kf::AbstractExtendedKalmanFilter, u, y, p = parameters(kf), t::Integer = index(kf); R2 = get_mat(kf.R2, kf.x, u, p, t))
     @unpack x,R = kf
-    C = ForwardDiff.jacobian(x->kf.measurement(x,u,p,t), x)
-    e  = y .- kf.measurement(x,u,p,t)
+    C   = kf.Cjac(x, u, p, t)
+    e   = y .- kf.measurement(x, u, p, t)
     S   = symmetrize(C*R*C') + R2
     Sᵪ  = cholesky(S)
     K   = (R*C')/Sᵪ
