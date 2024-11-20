@@ -131,6 +131,7 @@ function rk4(f::F, Ts0; supersample::Integer = 1) where {F}
                 f3 = f(x + Ts / 2 * f2, u, p, t + Ts / 2)
                 f4 = f(x + Ts * f3, u, p, t + Ts)
                 x += Ts / 6 * (f1 + 2 * f2 + 2 * f3 + f4)
+                t += Ts
             end
             return x
         end

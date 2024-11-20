@@ -14,17 +14,17 @@ function reset!(pf::AbstractParticleFilter)
 end
 
 @inline get_mat(A::Union{AbstractMatrix, Number},x,u,p,t) = A
-@inline get_mat(A::AbstractArray{<:Any, 3},x,u,p,t) = @view A[:,:,t]
+@inline get_mat(A::AbstractArray{<:Any, 3},x,u,p,t) = @view A[:,:,t+1]
 @inline get_mat(A::Function,x,u,p,t) = A(x,u,p,t)
 
 """
     get_mat(A::Union{AbstractMatrix, Number},x,u,p,t) = A
-    get_mat(A::AbstractArray{<:Any, 3},x,u,p,t) = A[:,:,t]
+    get_mat(A::AbstractArray{<:Any, 3},x,u,p,t) = A[:,:,t+1]
     get_mat(A::Function,x,u,p,t) = A(x,u,p,t)
 
 This is a helper function that makes it possible to supply any of
 - A matrix
-- A "time varying" matrix where time is in the last dimension
+- A "time varying" matrix where time is in the last dimension (the array will be indexed at `t+1` since `t` starts at 0)
 - A function of `x,u,p,t` that returns the matrix
 
 This is useful to implement things like
@@ -38,10 +38,10 @@ get_mat
     predict!(kf::AbstractKalmanFilter, u, p = parameters(kf), t::Integer = index(kf); R1, α = kf.α)
 
 Perform the prediction step (updating the state estimate to ``x(t+1|t)``).
-If `R1` stored in `kf` is a function `R1(x, u, p, t)`, this function is evaluated at the state *before* the prediciton is performed.
+If `R1` stored in `kf` is a function `R1(x, u, p, t)`, this function is evaluated at the state *before* the prediction is performed.
 The dynamics noise covariance matrix `R1` stored in `kf` can optionally be overridden by passing the argument `R1`, in this case `R1` must be a matrix.
 """
-function predict!(kf::AbstractKalmanFilter, u, p=parameters(kf), t::Real = index(kf); R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α)
+function predict!(kf::AbstractKalmanFilter, u, p=parameters(kf), t::Real = index(kf)*kf.Ts; R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α)
     @unpack A,B,x,R = kf
     At = get_mat(A, x, u, p, t)
     Bt = get_mat(B, x, u, p, t)
@@ -77,7 +77,7 @@ The correct step for a Kalman filter returns not only the log likelihood `ll` an
 If `R2` stored in `kf` is a function `R2(x, u, p, t)`, this function is evaluated at the state *before* the correction is performed.
 The measurement noise covariance matrix `R2` stored in the filter object can optionally be overridden by passing the argument `R2`, in this case `R2` must be a matrix.
 """
-function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Real = index(kf); R2 = get_mat(kf.R2, kf.x, u, p, t))
+function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Real = index(kf)*kf.Ts; R2 = get_mat(kf.R2, kf.x, u, p, t))
     @unpack C,D,x,R = kf
     Ct = get_mat(C, x, u, p, t)
     Dt = get_mat(D, x, u, p, t)
@@ -99,7 +99,7 @@ end
 
 Move filter state forward in time using dynamics equation and input vector `u`.
 """
-function predict!(pf, u, p = parameters(pf), t = index(pf))
+function predict!(pf, u, p = parameters(pf), t = index(pf)*pf.Ts)
     s = pf.state
     N = num_particles(s)
     if shouldresample(pf)
@@ -118,9 +118,9 @@ end
 """
     ll, e = correct!(f, u, y, p = parameters(f), t = index(f))
     
-Update state/covariance/weights based on measurement `y`,  returns loglikelihood and prediction error (the error is always 0 for particle filters).
+Update state/covariance/weights based on measurement `y`,  returns log-likelihood and prediction error (the error is always 0 for particle filters).
 """
-function correct!(pf, u, y, p = parameters(pf), t = index(pf))
+function correct!(pf, u, y, p = parameters(pf), t = index(pf)*pf.Ts)
     measurement_equation!(pf, u, y, p, t)
     ll = logsumexp!(state(pf))
     ll, 0
@@ -129,15 +129,15 @@ end
 """
     ll, e = update!(f::AbstractFilter, u, y, p = parameters(f), t = index(f))
 
-Perform one step of `predict!` and `correct!`, returns loglikelihood and prediction error
+Perform one step of `predict!` and `correct!`, returns log-likelihood and prediction error
 """
-function update!(f::AbstractFilter, u, y, p = parameters(f), t = index(f))
+function update!(f::AbstractFilter, u, y, p = parameters(f), t = index(f)*f.Ts)
     ll_e = correct!(f, u, y, p, t)
     predict!(f, u, p, t)
     ll_e
 end
 
-function update!(pf::AuxiliaryParticleFilter, u, y, y1, p = parameters(pf), t = index(pf))
+function update!(pf::AuxiliaryParticleFilter, u, y, y1, p = parameters(pf), t = index(pf)*pf.Ts)
     ll_e = correct!(pf, u, y, p, t)
     predict!(pf, u, y1, p, t)
     ll_e
@@ -145,7 +145,7 @@ end
 
 
 
-function predict!(pf::AuxiliaryParticleFilter, u, y1, p = parameters(pf), t = index(pf))
+function predict!(pf::AuxiliaryParticleFilter, u, y1, p = parameters(pf), t = index(pf)*pf.Ts)
     s = state(pf)
     propagate_particles!(pf.pf, u, p, t, nothing)# Propagate without noise
     λ  = s.we
@@ -163,7 +163,7 @@ function predict!(pf::AuxiliaryParticleFilter, u, y1, p = parameters(pf), t = in
 end
 
 
-function predict!(pf::AuxiliaryParticleFilter{<:AdvancedParticleFilter},u, y, p=parameters(pf), t = index(pf))
+function predict!(pf::AuxiliaryParticleFilter{<:AdvancedParticleFilter},u, y, p=parameters(pf), t = index(pf)*pf.Ts)
     s = state(pf)
     propagate_particles!(pf.pf, u, p, t, nothing)# Propagate without noise
     λ  = s.we
@@ -180,10 +180,10 @@ function predict!(pf::AuxiliaryParticleFilter{<:AdvancedParticleFilter},u, y, p=
 end
 
 
-(kf::AbstractKalmanFilter)(u, y, p = parameters(kf), t = index(kf)) =  update!(kf, u, y, p, t)
-(pf::ParticleFilter)(u, y, p = parameters(pf), t = index(pf)) =  update!(pf, u, y, p, t)
-(pf::AuxiliaryParticleFilter)(u, y, y1, p = parameters(pf), t = index(pf)) =  update!(pf, u, y, y1, p, t)
-(pf::AdvancedParticleFilter)(u, y, p = parameters(pf), t = index(pf)) =  update!(pf, u, y, p, t)
+(kf::AbstractKalmanFilter)(u, y, p = parameters(kf), t = index(kf)*kf.Ts) =  update!(kf, u, y, p, t)
+(pf::ParticleFilter)(u, y, p = parameters(pf), t = index(pf)*pf.Ts) =  update!(pf, u, y, p, t)
+(pf::AuxiliaryParticleFilter)(u, y, y1, p = parameters(pf), t = index(pf)*pf.Ts) =  update!(pf, u, y, y1, p, t)
+(pf::AdvancedParticleFilter)(u, y, p = parameters(pf), t = index(pf)*pf.Ts) =  update!(pf, u, y, p, t)
 
 
 """
@@ -212,12 +212,13 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
     Rt   = Array{covtype(kf)}(undef,T)
     ll   = zero(eltype(particletype(kf)))
     for t = 1:T
+        ti = (t-1)*kf.Ts
         x[t]  = state(kf)      |> copy
         R[t]  = covariance(kf) |> copy
-        ll   += correct!(kf, u[t], y[t], p, t)[1]
+        ll   += correct!(kf, u[t], y[t], p, ti)[1]
         xt[t] = state(kf)      |> copy
         Rt[t] = covariance(kf) |> copy
-        predict!(kf, u[t], p, t)
+        predict!(kf, u[t], p, ti)
     end
     KalmanFilteringSolution(kf,u,y,x,xt,R,Rt,ll)
 end
@@ -245,11 +246,12 @@ function forward_trajectory(pf, u::AbstractVector, y::AbstractVector, p=paramete
     we = Array{Float64}(undef,N,T)
     ll = 0.
     @inbounds for t = 1:T
-        ll += correct!(pf, u[t], y[t], p, t) |> first
+        ti = (t-1)*pf.Ts
+        ll += correct!(pf, u[t], y[t], p, ti) |> first
         x[:,t] .= particles(pf)
         w[:,t] .= weights(pf)
         we[:,t] .= expweights(pf)
-        predict!(pf, u[t], p, t)
+        predict!(pf, u[t], p, ti)
     end
     ParticleFilteringSolution(pf,u,y,x,w,we,ll)
 end
@@ -263,11 +265,12 @@ function forward_trajectory(pf::AuxiliaryParticleFilter, u::AbstractVector, y::A
     we = Array{Float64}(undef,N,T)
     ll = 0.
     @inbounds for t = 1:T
-        ll += correct!(pf, u[t], y[t], p, t) |> first
+        ti = (t-1)*pf.Ts
+        ll += correct!(pf, u[t], y[t], p, ti) |> first
         x[:,t] .= particles(pf)
         w[:,t] .= weights(pf)
         we[:,t] .= expweights(pf)
-        t < T && predict!(pf, u[t], y[t+1], p, t)
+        t < T && predict!(pf, u[t], y[t+1], p, ti)
     end
     ParticleFilteringSolution(pf,u,y,x,w,we,ll)
 end
@@ -297,10 +300,11 @@ function reduce_trajectory(pf, u::Vector, y::Vector, f::F, p=parameters(pf)) whe
     T = length(y)
     N = num_particles(pf)
     x = Array{particletype(pf)}(undef,T)
-    ll = correct!(pf,u[1],y[1],p,1) |> first
+    ll = correct!(pf,u[1],y[1],p,0) |> first
     x[1] = f(state(pf))
     for t = 2:T
-        ll += pf(u[t-1], y[t], p, t) |> first
+        ti = (t-1)*pf.Ts
+        ll += pf(u[t-1], y[t], p, ti) |> first
         x[t] = f(pf)
     end
     x,ll
@@ -338,14 +342,15 @@ function simulate(f::AbstractFilter,u,p=parameters(f); dynamics_noise=true, meas
     x[1] = sample_state(f, p; noise=sample_initial)
     T = length(u)
     for t = 1:T-1
-        y[t] = sample_measurement(f,x[t], u[t], p, t; noise=measurement_noise)
-        x[t+1] = sample_state(f, x[t], u[t], p, t; noise=dynamics_noise)
+        ti = (t-1)*f.Ts
+        y[t] = sample_measurement(f,x[t], u[t], p, ti; noise=measurement_noise)
+        x[t+1] = sample_state(f, x[t], u[t], p, ti; noise=dynamics_noise)
     end
-    y[T] = sample_measurement(f,x[T], u[T], p, T; noise=measurement_noise)
+    y[T] = sample_measurement(f,x[T], u[T], p, (T-1)*f.Ts; noise=measurement_noise)
     x,u,y
 end
 
-function rollout(f, x0::AbstractVector, u, p=nothing; Ts=1)
+function rollout(f, x0::AbstractVector, u, p=nothing; Ts=f.Ts)
     x = [x0]
     for (i,u) in enumerate(u)
         push!(x, f(x[end], u, p, i*Ts))

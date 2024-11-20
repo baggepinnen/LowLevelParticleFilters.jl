@@ -225,7 +225,7 @@ nothing # hide
 We then define a measurement function, we measure the levels of tanks 1 and 2, and discretize the continuous-time dynamics using a Runge-Kutta 4 integrator [`SeeToDee.Rk4`](https://baggepinnen.github.io/SeeToDee.jl/dev/api/#SeeToDee.Rk4):
 ```@example paramest
 measurement(x,u,p,t) = SA[x[1], x[2]]
-discrete_dynamics = SeeToDee.Rk4(quadtank, Ts, supersample=2)
+discrete_dynamics = SeeToDee.Rk4(quadtank, Ts)
 nothing # hide
 ```
 
@@ -268,7 +268,7 @@ function quadtank_paramest(h, u, p, t)
     ]
 end
 
-discrete_dynamics_params = SeeToDee.Rk4(quadtank_paramest, Ts, supersample=2)
+discrete_dynamics_params = SeeToDee.Rk4(quadtank_paramest, Ts)
 nothing # hide
 ```
 
@@ -279,7 +279,7 @@ R1 = SMatrix{nx,nx}(Diagonal([0.1, 0.1, 0.1, 0.1, 0.0001])) # Use of StaticArray
 R2 = SMatrix{ny,ny}(Diagonal((1e-2)^2 * ones(ny)))
 x0 = SA[2, 2, 3, 3, 0.02] # The SA prefix makes the array static, which is good for performance
 
-kf = UnscentedKalmanFilter(discrete_dynamics_params, measurement, R1, R2, MvNormal(x0, R1); ny, nu)
+kf = UnscentedKalmanFilter(discrete_dynamics_params, measurement, R1, R2, MvNormal(x0, R1); ny, nu, Ts)
 
 sol = forward_trajectory(kf, u, y)
 plot(sol, plotx=false, plotxt=true, plotu=false, ploty=true, legend=:bottomright)
@@ -315,7 +315,7 @@ function quadtank(h, u, p, t)
     ]
 end
 
-discrete_dynamics = SeeToDee.Rk4(quadtank, Ts, supersample=2) # Discretize the dynamics using a 4:th order Runge-Kutta integrator
+discrete_dynamics = SeeToDee.Rk4(quadtank, Ts) # Discretize the dynamics using a 4:th order Runge-Kutta integrator
 p_true = [0.5, 1.6, 1.6, 4.9, 0.03, 0.2]
 nothing # hide
 ```
@@ -347,7 +347,7 @@ R2 = SMatrix{ny,ny}(Diagonal((1e-2)^2 * ones(ny)))
 x0 = SA[2.0, 2, 3, 3]
 
 function cost(p::Vector{T}) where T
-    kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), T.(R1)); ny, nu)
+    kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), T.(R1)); ny, nu, Ts)
     LowLevelParticleFilters.sse(kf, u, y, p) # Sum of squared prediction errors
 end
 nothing # hide
@@ -394,7 +394,7 @@ Below, we optimize the sum of squared residuals again, but this time we do it us
 using LeastSquaresOptim
 
 function residuals!(res, p::Vector{T}) where T
-    kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), T.(R1)); ny, nu)
+    kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), T.(R1)); ny, nu, Ts)
     LowLevelParticleFilters.prediction_errors!(res, kf, u, y, p) 
 end
 

@@ -1,4 +1,4 @@
-@with_kw mutable struct SqKalmanFilter{AT,BT,CT,DT,R1T,R2T,D0T,XT,RT,P,αT} <: AbstractKalmanFilter
+@with_kw mutable struct SqKalmanFilter{AT,BT,CT,DT,R1T,R2T,D0T,XT,RT,TS,P,αT} <: AbstractKalmanFilter
     A::AT
     B::BT
     C::CT
@@ -8,7 +8,8 @@
     d0::D0T
     x::XT
     R::RT
-    t::Int = 1
+    t::Int = 0
+    Ts::TS = 1
     p::P = NullParameters()
     α::αT = 1.0
 end
@@ -42,7 +43,7 @@ R(t+1|t) = α AR(t)A^T + R_1
 
 Ref: "A Square-Root Kalman Filter Using Only QR Decompositions", Kevin Tracy https://arxiv.org/abs/2208.06452
 """
-function SqKalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(Matrix(R1)); p = NullParameters(), α = 1.0, check = true)
+function SqKalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(Matrix(R1)); p = NullParameters(), α = 1.0, check = true, Ts=1)
     α ≥ 1 || @warn "α should be > 1 for exponential forgetting. An α < 1 will lead to exponential loss of adaptation over time."
     if check
         maximum(abs, eigvals(A isa SMatrix ? Matrix(A) : A)) ≥ 2 && @warn "The dynamics matrix A has eigenvalues with absolute value ≥ 2. This is either a highly unstable system, or you have forgotten to discretize a continuous-time model. If you are sure that the system is provided in discrete time, you can disable this warning by setting check=false." maxlog=1
@@ -53,7 +54,7 @@ function SqKalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(Matrix(R1)); p = NullPar
     
     x0 = convert_x0_type(d0.μ)
 
-    SqKalmanFilter(A,B,C,D,R1,R2, d0, x0, R, 1, p, α)
+    SqKalmanFilter(A,B,C,D,R1,R2, d0, x0, R, 0, Ts, p, α)
 end
 
 
@@ -85,7 +86,7 @@ Reset the initial distribution of the state. Optionally, a new mean vector `x0` 
 function reset!(kf::SqKalmanFilter; x0 = kf.d0.μ)
     kf.x = convert_x0_type(x0)
     kf.R = UpperTriangular(convert_cov_type(kf.R1, cholesky(kf.d0.Σ).U))
-    kf.t = 1
+    kf.t = 0
 end
 
 """
@@ -93,7 +94,7 @@ end
 
 For the square-root Kalman filter, a custom provided `R1` must be the upper triangular Cholesky factor of the covariance matrix of the process noise.
 """
-function predict!(kf::SqKalmanFilter, u, p=parameters(kf), t::Real = index(kf); R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α)
+function predict!(kf::SqKalmanFilter, u, p=parameters(kf), t::Real = index(kf)*kf.Ts; R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α)
     @unpack A,B,x,R = kf
     At = get_mat(A, x, u, p, t)
     Bt = get_mat(B, x, u, p, t)
@@ -122,7 +123,7 @@ end
 
 For the square-root Kalman filter, a custom provided `R2` must be the upper triangular Cholesky factor of the covariance matrix of the measurement noise.
 """
-function correct!(kf::SqKalmanFilter, u, y, p=parameters(kf), t::Real = index(kf); R2 = get_mat(kf.R2, kf.x, u, p, t))
+function correct!(kf::SqKalmanFilter, u, y, p=parameters(kf), t::Real = index(kf)*kf.Ts; R2 = get_mat(kf.R2, kf.x, u, p, t))
     @unpack C,D,x,R = kf
     Ct = get_mat(C, x, u, p, t)
     Dt = get_mat(D, x, u, p, t)

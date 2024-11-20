@@ -13,7 +13,7 @@ function smooth(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractVecto
     xT[end]      = xt[end]      |> copy
     RT[end]      = Rt[end]      |> copy
     for t = T-1:-1:1
-        C     = Rt[t]*get_mat(kf.A, xT[t+1], u[t+1], p, t+1)'/R[t+1]
+        C     = Rt[t]*get_mat(kf.A, xT[t+1], u[t+1], p, (t+1-1)*kf.Ts)'/R[t+1]
         xT[t] = xt[t] .+ C*(xT[t+1] .- x[t+1])
         RT[t] = Rt[t] .+ symmetrize(C*(RT[t+1] .- R[t+1])*C')
     end
@@ -52,10 +52,11 @@ function smooth(pf::AbstractParticleFilter, xf, wf, wef, ll, M, u, y, p=paramete
     end
     wb = Vector{Float64}(undef,N)
     @inbounds for t = T-1:-1:1
+        ti = (t-1)*pf.Ts
         # tset = Set{Int}()
         for m = 1:M
             for n = 1:N
-                wb[n] = wf[n,t] + extended_logpdf(df, xb[m,t+1], f(xf[n,t],u[t],p,t), t)
+                wb[n] = wf[n,t] + extended_logpdf(df, xb[m,t+1], f(xf[n,t],u[t],p,ti), ti)
             end
             i = draw_one_categorical(pf,wb)
             # push!(tset, i)
@@ -121,8 +122,8 @@ end
 
 function loglik(pf::AuxiliaryParticleFilter,u,y,p=parameters(pf))
     reset!(pf)
-    ll = sum(t->pf(u[t],y[t],y[t+1],p,t)[1], 1:length(u)-1)
-    ll + pf.pf(u[end],y[end], p, length(u))[1]
+    ll = sum(t->pf(u[t],y[t],y[t+1],p,(t-1)*pf.Ts)[1], 1:length(u)-1)
+    ll + pf.pf(u[end],y[end], p, (length(u)-1)*pf.Ts)[1]
 end
 
 """

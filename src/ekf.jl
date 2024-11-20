@@ -28,7 +28,7 @@ See also [`UnscentedKalmanFilter`](@ref) which is typically more accurate than `
 """
 ExtendedKalmanFilter
 
-function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Matrix(R1)); nu::Int, p = NullParameters(), α = 1.0, check = true, Ajac = nothing, Cjac = nothing)
+function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Matrix(R1)); nu::Int, Ts = 1.0, p = NullParameters(), α = 1.0, check = true, Ajac = nothing, Cjac = nothing)
     nx = size(R1,1)
     ny = size(R2,1)
     T = eltype(R1)
@@ -50,7 +50,7 @@ function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Mat
     B = zeros(nx, nu) # This one is never needed
     C = Cjac(x,u,p,t)
     D = zeros(ny, nu) # This one is never needed
-    kf = KalmanFilter(A,B,C,D,R1,R2,d0; p, α, check)
+    kf = KalmanFilter(A,B,C,D,R1,R2,d0; Ts, p, α, check)
     return ExtendedKalmanFilter(kf, dynamics, measurement, Ajac, Cjac)
 end
 
@@ -79,7 +79,7 @@ function Base.propertynames(ekf::EKF, private::Bool=false) where EKF <: Abstract
 end
 
 
-function predict!(kf::AbstractExtendedKalmanFilter, u, p = parameters(kf), t::Integer = index(kf); R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α)
+function predict!(kf::AbstractExtendedKalmanFilter, u, p = parameters(kf), t::Real = index(kf)*kf.Ts; R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α)
     @unpack x,R = kf
     A = kf.Ajac(x, u, p, t)
     kf.x = kf.dynamics(x, u, p, t)
@@ -91,7 +91,7 @@ function predict!(kf::AbstractExtendedKalmanFilter, u, p = parameters(kf), t::In
     kf.t += 1
 end
 
-function correct!(kf::AbstractExtendedKalmanFilter, u, y, p = parameters(kf), t::Integer = index(kf); R2 = get_mat(kf.R2, kf.x, u, p, t))
+function correct!(kf::AbstractExtendedKalmanFilter, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(kf.R2, kf.x, u, p, t))
     @unpack x,R = kf
     C   = kf.Cjac(x, u, p, t)
     e   = y .- kf.measurement(x, u, p, t)
@@ -113,7 +113,7 @@ function smooth(sol, kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::Abs
     xT[end]      = xt[end]      |> copy
     RT[end]      = Rt[end]      |> copy
     for t = T-1:-1:1
-        A = ForwardDiff.jacobian(x->kf.dynamics(x,u[t+1],p,t+1), xT[t+1])
+        A = kf.Ajac(xT[t+1],u[t+1],p,((t+1)-1)*kf.Ts)
         C     = Rt[t]*A'/R[t+1]
         xT[t] = xt[t] .+ C*(xT[t+1] .- x[t+1])
         RT[t] = Rt[t] .+ symmetrize(C*(RT[t+1] .- R[t+1])*C')

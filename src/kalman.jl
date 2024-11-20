@@ -19,7 +19,7 @@ function convert_x0_type(μ)
     end
 end
 
-@with_kw mutable struct KalmanFilter{AT,BT,CT,DT,R1T,R2T,D0T,XT,RT,P,αT} <: AbstractKalmanFilter
+@with_kw mutable struct KalmanFilter{AT,BT,CT,DT,R1T,R2T,D0T,XT,RT,TS,P,αT} <: AbstractKalmanFilter
     A::AT
     B::BT
     C::CT
@@ -29,7 +29,8 @@ end
     d0::D0T
     x::XT
     R::RT
-    t::Int = 1
+    t::Int = 0
+    Ts::TS = 1
     p::P = NullParameters()
     α::αT = 1.0
 end
@@ -62,14 +63,14 @@ If `check = true (default)` the function will check that the eigenvalues of `A` 
 # Tutorials on Kalman filtering
 The tutorial ["How to tune a Kalman filter"](https://juliahub.com/pluto/editor.html?id=ad9ecbf9-bf83-45e7-bbe8-d2e5194f2240) details how to figure out appropriate covariance matrices for the Kalman filter, as well as how to add disturbance models to the system model. See also the [tutorial in the documentation](https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/adaptive_kalmanfilter/)
 """
-function KalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(Matrix(R1)); p = NullParameters(), α = 1.0, check = true)
+function KalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(Matrix(R1)); Ts = 1, p = NullParameters(), α = 1.0, check = true)
     if check
         α ≥ 1 || @warn "α should be > 1 for exponential forgetting. An α < 1 will lead to exponential loss of adaptation over time."
         maximum(abs, eigvals(A isa SMatrix ? Matrix(A) : A)) ≥ 2 && @warn "The dynamics matrix A has eigenvalues with absolute value ≥ 2. This is either a highly unstable system, or you have forgotten to discretize a continuous-time model. If you are sure that the system is provided in discrete time, you can disable this warning by setting check=false." maxlog=1
     end
     R = convert_cov_type(R1, d0.Σ)
     x0 = convert_x0_type(d0.μ)
-    KalmanFilter(A,B,C,D,R1,R2, d0, x0, R, 1, p, α)
+    KalmanFilter(A,B,C,D,R1,R2, d0, x0, R, 0, Ts, p, α)
 end
 
 function Base.propertynames(kf::KF, private::Bool=false) where KF <: AbstractKalmanFilter
@@ -119,5 +120,5 @@ Reset the initial distribution of the state. Optionally, a new mean vector `x0` 
 function reset!(kf::AbstractKalmanFilter; x0 = kf.d0.μ)
     kf.x = convert_x0_type(x0)
     kf.R = convert_cov_type(kf.R1, kf.d0.Σ)# typeof(kf.R1)(kf.d0.Σ)
-    kf.t = 1
+    kf.t = 0
 end
