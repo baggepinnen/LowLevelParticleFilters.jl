@@ -48,7 +48,7 @@ end
 end
 
 @recipe function plot(sol::KalmanFilteringSolution)
-    timevec = 1:length(sol.y)
+    timevec = (0:length(sol.y)-1)*sol.f.Ts
     @series timevec, sol
 end
 
@@ -82,6 +82,9 @@ end
 td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
 
 @recipe function plot(sol::ParticleFilteringSolution; nbinsy=30, xreal=nothing, dim=nothing, ploty=true)
+    timevec = (0:size(sol.y,1)-1)*sol.f.Ts
+    timevecm05 = timevec .- 0.5sol.f.Ts
+    timevecp05 = timevec .+ 0.5sol.f.Ts
     if dim === nothing || dim === (:)
         (; f,x,w,u,y) = sol
         p = parameters(f)
@@ -105,28 +108,28 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
             subplot := d
             @series begin
                 seriestype := :histogram2d
-                bins --> (0.5:1:T+0.5,nbinsy)
+                bins --> (timevecp05,nbinsy)
                 weights --> w
-                repeat((1:T)' .-0.5,N)[:], vec(getindex.(vx,d))
+                repeat(timevecm05',N)[:], vec(getindex.(vx,d))
             end
             xreal === nothing || @series begin
                 seriestype := :scatter
-                1:T, (xreal isa AbstractVector{<:AbstractArray} ? getindex.(xreal,d) : xreal[:, d]) # Handle both vec of vec and matrix
+                timevec, (xreal isa AbstractVector{<:AbstractArray} ? getindex.(xreal,d) : xreal[:, d]) # Handle both vec of vec and matrix
             end
         end
         if ploty
-            yhat = measurement(f).(x, permutedims(u), Ref(p), (1:T)') |> vec
+            yhat = measurement(f).(x, permutedims(u), Ref(p), (timevec)') |> vec
             for d = 1:P
                 subplot := d+D
                 @series begin
                     seriestype := :histogram2d
-                    bins --> (0.5:1:T+0.5,nbinsy)
+                    bins --> (timevecp05,nbinsy)
                     weights --> w
-                    repeat((1:T)' .-0.5,N)[:], vec(getindex.(yhat,d))
+                    repeat(timevecm05',N)[:], vec(getindex.(yhat,d))
                 end
                 @series begin
                     seriestype := :scatter
-                    1:T, getindex.(y,d)
+                    timevec, getindex.(y,d)
                 end
             end
         end
@@ -147,26 +150,26 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
         if d <= D
             @series begin
                 seriestype := :histogram2d
-                bins --> (0.5:1:T+0.5,nbinsy)
+                bins --> (timevecp05,nbinsy)
                 weights --> vec(w)
-                repeat((1:T)' .-0.5,N)[:], vec(getindex.(x,d))
+                repeat(timevecm05',N)[:], vec(getindex.(x,d))
             end
             xreal === nothing || @series begin
                 seriestype := :scatter
-                1:T, (xreal isa AbstractVector{<:AbstractArray} ? getindex.(xreal,d) : xreal[:, d]) # Handle both vec of vec and matrix
+                timevec, (xreal isa AbstractVector{<:AbstractArray} ? getindex.(xreal,d) : xreal[:, d]) # Handle both vec of vec and matrix
             end
         else
             d -= D
             yhat = measurement(f).(x,u',0) |> vec
             @series begin
                 seriestype := :histogram2d
-                bins --> (0.5:1:T+0.5,nbinsy)
+                bins --> (timevecp05,nbinsy)
                 weights --> vec(w)
-                repeat((1:T)' .-0.5,N)[:], vec(getindex.(yhat,d))
+                repeat(timevecm05',N)[:], vec(getindex.(yhat,d))
             end
             @series begin
                 seriestype := :scatter
-                1:T, getindex.(y,d)
+                timevec, getindex.(y,d)
             end
     
         end

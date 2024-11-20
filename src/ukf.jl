@@ -48,7 +48,8 @@ abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
     ys::Vector{Y}
     x::XT
     R::RT
-    t::Int = 1
+    t::Int = 0
+    Ts::Float64 = 1.0
     ny::Int
     nu::Int
     p::P
@@ -103,7 +104,7 @@ Use of augmented dynamics incurs extra computational cost. The number of sigma p
 # Sigma-point rejection
 For problems with challenging dynamics, a mechanism for rejection of sigma points after the dynamics update is provided. A function `reject(x) -> Bool` can be provided through the keyword argument `reject` that returns `true` if a sigma point for ``x(t+1)`` should be rejected, e.g., if an instability or non-finite number is detected. A rejected point is replaced by the propagated mean point (the mean point cannot be rejected). This function may be provided either to the constructor of the UKF or passed to the [`predict!`](@ref) function.
 """
-function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics,measurement,R1,R2,d0=SimpleMvNormal(R1); p = NullParameters(), nu::Int, ny::Int, reject=nothing) where {IPD,IPM,AUGD,AUGM}
+function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics,measurement,R1,R2,d0=SimpleMvNormal(R1); Ts = 1.0, p = NullParameters(), nu::Int, ny::Int, reject=nothing) where {IPD,IPM,AUGD,AUGM}
     nx = length(d0)
     nw = size(R1, 1) # nw may be smaller than nx for augmented dynamics
     ne = size(R2, 1)
@@ -142,7 +143,7 @@ function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics,measurement,R1,R2,d0=
     UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM, typeof(dynamics), typeof(measurement), typeof(R1), typeof(R2), typeof(d0),
         typeof(xsd[1]), typeof(xsd0[1]), typeof(xsm[1]), typeof(ys[1]),
         typeof(x0), typeof(R), typeof(p), typeof(reject)}(
-            dynamics,measurement,R1,R2, d0, xsd,xsd0,xsm,ys, x0, R, 1, ny, nu, p, reject)
+            dynamics,measurement,R1,R2, d0, xsd,xsd0,xsm,ys, x0, R, 0, Ts, ny, nu, p, reject)
 end
 
 function UnscentedKalmanFilter(dynamics,measurement,args...;kwargs...)
@@ -154,15 +155,15 @@ function UnscentedKalmanFilter(dynamics,measurement,args...;kwargs...)
 end
 
 sample_state(kf::AbstractUnscentedKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
-sample_state(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf); noise=true) = kf.dynamics(x,u,p,t) .+ noise.*rand(SimpleMvNormal(get_mat(kf.R1, x, u, p, t)))
-sample_measurement(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf); noise=true) = kf.measurement(x, u, p, t) .+ noise.*rand(SimpleMvNormal(get_mat(kf.R2, x, u, p, t)))
+sample_state(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf)*kf.Ts; noise=true) = kf.dynamics(x,u,p,t) .+ noise.*rand(SimpleMvNormal(get_mat(kf.R1, x, u, p, t)))
+sample_measurement(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf)*kf.Ts; noise=true) = kf.measurement(x, u, p, t) .+ noise.*rand(SimpleMvNormal(get_mat(kf.R2, x, u, p, t)))
 measurement(kf::AbstractUnscentedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 
 #                                        x(k+1)          x            u             p           t
 @inline has_ip(fun) = hasmethod(fun, Tuple{AbstractArray,AbstractArray,AbstractArray,AbstractArray,Real})
 
-function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = parameters(ukf), t::Real = index(ukf); R1 = get_mat(ukf.R1, ukf.x, u, p, t), reject = ukf.reject) where {IPD,IPM,AUGD,AUGM}
+function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = parameters(ukf), t::Real = index(ukf)*ukf.Ts; R1 = get_mat(ukf.R1, ukf.x, u, p, t), reject = ukf.reject) where {IPD,IPM,AUGD,AUGM}
     @unpack dynamics,measurement,x,xsd,xsd0,R = ukf
     xtyped = eltype(xsd)(x)
     nx = length(x)
@@ -235,7 +236,7 @@ end
 
 
 
-function correct!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y, p=parameters(ukf), t::Real = index(ukf); R2 = get_mat(ukf.R2, ukf.x, u, p, t)) where {IPD,IPM,AUGD,AUGM}
+function correct!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y, p=parameters(ukf), t::Real = index(ukf)*ukf.Ts; R2 = get_mat(ukf.R2, ukf.x, u, p, t)) where {IPD,IPM,AUGD,AUGM}
     @unpack measurement,x,xsm,ys,R,R1 = ukf
     nx = length(x)
     L = length(xsm[1])
@@ -312,26 +313,27 @@ function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter{IPD,IPM,
     nx = length(x[1])
     xi = 1:nx
     for t = T-1:-1:1
+        tt = (t-1)*kf.Ts
         m = xt[t]
         m̃ = [m; 0*m]
-        P̃ = cat(Rt[t], get_mat(kf.R1, xt[t], u[t], p, t), dims=(1,2))
+        P̃ = cat(Rt[t], get_mat(kf.R1, xt[t], u[t], p, tt), dims=(1,2))
         X̃ = sigmapoints(m̃, P̃)
         X̃⁻ = map(X̃) do xq
             if AUGD
                 if IPD
                     xd = similar(xq[xi]) .= 0
-                    kf.dynamics(xd, xq[xi], u[t], p, t, xq[nx+1:end])
+                    kf.dynamics(xd, xq[xi], u[t], p, tt, xq[nx+1:end])
                     xd
                 else
-                    kf.dynamics(xq[xi], u[t], p, t, xq[nx+1:end])
+                    kf.dynamics(xq[xi], u[t], p, tt, xq[nx+1:end])
                 end
             else
                 if IPD
                     xd = similar(xq) .= 0
-                    kf.dynamics(xd, xq[xi], u[t], p, t) + xq[nx+1:end]
+                    kf.dynamics(xd, xq[xi], u[t], p, tt) + xq[nx+1:end]
                     xd
                 else
-                    kf.dynamics(xq[xi], u[t], p, t) + xq[nx+1:end]
+                    kf.dynamics(xq[xi], u[t], p, tt) + xq[nx+1:end]
                 end
             end
         end
@@ -485,7 +487,7 @@ y = h(x, z)
 # calc_xz(ukf::DAEUnscentedKalmanFilter, args...) = 
 #     calc_xz(ukf.get_x_z, ukf.build_xz, ukf.g, args...)
 
-# function predict!(ukf::DAEUnscentedKalmanFilter, u, p = parameters(ukf), t::Integer = index(ukf); R1 = get_mat(ukf.R1, ukf.x, u, p, t))
+# function predict!(ukf::DAEUnscentedKalmanFilter, u, p = parameters(ukf), t = index(ukf)*ukf.Ts; R1 = get_mat(ukf.R1, ukf.x, u, p, t))
 #     @unpack dynamics,measurement,x,xs,xz,xzs,R,g,build_xz,get_x_z = ukf
 #     ns = length(xs)
 #     sigmapoints!(xs,x,R) # generate only for x
@@ -510,7 +512,7 @@ y = h(x, z)
 #     ukf.t += 1
 # end
 
-# function correct!(ukf::DAEUnscentedKalmanFilter, u, y, p = parameters(ukf), t::Integer = index(ukf); R2 = get_mat(ukf.R2, ukf.x, u, p, t))
+# function correct!(ukf::DAEUnscentedKalmanFilter, u, y, p = parameters(ukf), t = index(ukf)*ukf.Ts; R2 = get_mat(ukf.R2, ukf.x, u, p, t))
 #     @unpack measurement,x,xs,xz,xzs,R,R1,g,get_x_z,build_xz  = ukf
 #     n = size(R1,1)
 #     p = size(R2,1)

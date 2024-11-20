@@ -16,7 +16,7 @@ struct PFstate{PT<:AbstractArray, FT<:AbstractFloat}
     t::Base.RefValue{Int}
 end
 
-PFstate(N::Integer) = PFstate([zeros(N)],[zeros(N)],fill(-log(N), N),fill(1/N, N),Ref(0.),collect(1:N),zeros(N), Ref(1))
+PFstate(N::Integer) = PFstate([zeros(N)],[zeros(N)],fill(-log(N), N),fill(1/N, N),Ref(0.),collect(1:N),zeros(N), Ref(0))
 
 @with_kw struct ParticleFilter{ST,FT,GT,FDT,GDT,IDT,RST<:DataType,RNGT,P} <: AbstractParticleFilter
     state::ST
@@ -30,6 +30,7 @@ PFstate(N::Integer) = PFstate([zeros(N)],[zeros(N)],fill(-log(N), N),fill(1/N, N
     rng::RNGT = Xoshiro()
     p::P = NullParameters()
     threads::Bool = false
+    Ts::Float64 = 1.0
 end
 
 struct AuxiliaryParticleFilter{T<:AbstractParticleFilter} <: AbstractParticleFilter
@@ -64,7 +65,7 @@ function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, d
     x = deepcopy(xprev)
     w = fill(log(1/N), N)
     we = fill(1/N, N)
-    s = PFstate(x,xprev,w,we,Ref(0.), collect(1:N), zeros(N),Ref(1))
+    s = PFstate(x,xprev,w,we,Ref(0.), collect(1:N), zeros(N),Ref(0))
 
     ParticleFilter(; state = s, dynamics, measurement,
     dynamics_density, measurement_density,
@@ -91,6 +92,10 @@ function Base.getproperty(pf::AbstractParticleFilter, s::Symbol)
     end
 end
 
+function Base.getproperty(pf::AuxiliaryParticleFilter, s::Symbol)
+    s === :pf && return getfield(pf, :pf)
+    getproperty(getfield(pf, :pf), s)
+end
 
 
 Base.@propagate_inbounds function measurement_equation!(pf::ParticleFilter, u, y, p, t, w = pf.state.w, d=measurement_density(pf))
@@ -108,7 +113,7 @@ Base.@propagate_inbounds function measurement_equation!(pf::ParticleFilter, u, y
     w
 end
 
-Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u,j::Vector{Int}, p, t::Int, d=pf.dynamics_density)
+Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u,j::Vector{Int}, p, t::Real, d=pf.dynamics_density)
     f = dynamics(pf)
     s = state(pf)
     x,xp = s.x, s.xprev
@@ -160,6 +165,7 @@ end
     rng::RNGT = Xoshiro()
     p::P = NullParameters()
     threads::Bool = false
+    Ts::Float64 = 1.0
 end
 
 
@@ -185,7 +191,7 @@ function AdvancedParticleFilter(N::Integer, dynamics::Function, measurement::Fun
     x  = deepcopy(xprev)
     w  = fill(log(1/N), N)
     we = fill(1/N, N)
-    s = PFstate(x,xprev,w,we,Ref(0.), collect(1:N), zeros(N),Ref(1))
+    s = PFstate(x,xprev,w,we,Ref(0.), collect(1:N), zeros(N),Ref(0))
 
     AdvancedParticleFilter(; state = s, dynamics, measurement, measurement_likelihood, dynamics_density,
     initial_density, kwargs...)
@@ -203,7 +209,7 @@ Base.@propagate_inbounds function measurement_equation!(pf::AbstractParticleFilt
 end
 
 
-Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilter, u, j::Vector{Int}, p, t::Int, noise::Union{Bool, Nothing}=true)
+Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilter, u, j::Vector{Int}, p, t::Real, noise::Union{Bool, Nothing}=true)
     noise === nothing && (noise = false)
     f = dynamics(pf)
     s = state(pf)
@@ -220,7 +226,7 @@ Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilte
     x
 end
 
-Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilter, u, p, t::Int, noise::Nothing)
+Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilter, u, p, t::Real, noise::Nothing)
     f = pf.dynamics
     x,xp = particles(pf), state(pf).xprev
     if pf.threads
@@ -235,7 +241,7 @@ Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilte
     x
 end
 
-Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilter, u, p, t::Int, noise::Bool=true)
+Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilter, u, p, t::Real, noise::Bool=true)
     f = pf.dynamics
     x,xp = particles(pf), state(pf).xprev
     if pf.threads
