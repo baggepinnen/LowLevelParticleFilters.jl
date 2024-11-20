@@ -15,7 +15,7 @@ A nonlinear state estimator propagating uncertainty using linearization.
 
 The constructor to the extended Kalman filter takes dynamics and measurement functions, and either covariance matrices, or a [`KalmanFilter`](@ref). If the former constructor is used, the number of inputs to the system dynamics, `nu`, must be explicitly provided with a keyword argument.
 
-The filter will internally linearize the dynamics using ForwardDiff.
+By default, the filter will internally linearize the dynamics using ForwardDiff. User provided Jacobian functions can be provided as keyword arguments `Ajac` and `Cjac`. These functions should have the signature `(x,u,p,t)::AbstractMatrix` where `x` is the state, `u` is the input, `p` is the parameters, and `t` is the time.
 
 The dynamics and measurement function are on the following form
 ```

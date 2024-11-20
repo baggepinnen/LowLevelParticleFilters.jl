@@ -29,7 +29,7 @@ Depending on the nature of ``f`` and ``g``, the best method of estimating the st
 We provide a number of filter types
 - [`KalmanFilter`](@ref). A standard Kalman filter. Is restricted to linear dynamics (possibly time varying) and Gaussian noise.
 - [`SqKalmanFilter`](@ref). A standard Kalman filter on square-root form (slightly slower but more numerically stable with ill-conditioned covariance).
-- [`ExtendedKalmanFilter`](@ref): For nonlinear systems, the EKF runs a regular Kalman filter on linearized dynamics. Uses ForwardDiff.jl for linearization. The noise model must be Gaussian.
+- [`ExtendedKalmanFilter`](@ref): For nonlinear systems, the EKF runs a regular Kalman filter on linearized dynamics. Uses ForwardDiff.jl for linearization (or user provided). The noise model must be Gaussian.
 - [`UnscentedKalmanFilter`](@ref): The Unscented Kalman filter often performs slightly better than the Extended Kalman filter but may be slightly more computationally expensive. The UKF handles nonlinear dynamics and measurement models, but still requires a Gaussian noise model (may be non additive) and assumes all posterior distributions are Gaussian, i.e., can not handle multi-modal posteriors.
 - [`ParticleFilter`](@ref): The particle filter is a nonlinear estimator. This version of the particle filter is simple to use and assumes that both dynamics noise and measurement noise are additive. Particle filters handle multi-modal posteriors.
 - [`AdvancedParticleFilter`](@ref): This filter gives you more flexibility, at the expense of having to define a few more functions. This filter does not require the noise to be additive and is thus the most flexible filter type.
@@ -230,12 +230,12 @@ ukf = UnscentedKalmanFilter(dynamics, measurement, cov(df), cov(dg), MvNormal(SA
 
 
 # Extended Kalman Filter
-The [`ExtendedKalmanFilter`](@ref) ([EKF](https://en.wikipedia.org/wiki/Extended_Kalman_filter)) is similar to the UKF, but propagates Gaussian distributions by linearizing the dynamics and using the formulas for linear systems similar to the standard Kalman filter. This can be slightly faster than the UKF (not always), but also less accurate for strongly nonlinear systems. The linearization is performed automatically using ForwardDiff.jl. In general, the UKF is recommended over the EKF unless the EKF is faster and computational performance is the top priority.
+The [`ExtendedKalmanFilter`](@ref) ([EKF](https://en.wikipedia.org/wiki/Extended_Kalman_filter)) is similar to the UKF, but propagates Gaussian distributions by linearizing the dynamics and using the formulas for linear systems similar to the standard Kalman filter. This can be slightly faster than the UKF (not always), but also less accurate for strongly nonlinear systems. The linearization is performed automatically using ForwardDiff.jl unless the user provides Jacobian functions that compute ``A`` and ``C``. In general, the UKF is recommended over the EKF unless the EKF is faster and computational performance is the top priority.
 
 The EKF constructor has the following two signatures
 ```julia
-ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(R1); nu::Int, p = LowLevelParticleFilters.NullParameters(), α = 1.0, check = true)
-ExtendedKalmanFilter(kf, dynamics, measurement)
+ExtendedKalmanFilter(dynamics, measurement, R1, R2, d0=MvNormal(R1); nu::Int, p = LowLevelParticleFilters.NullParameters(), α = 1.0, check = true, Ajac = nothing, Cjac = nothing)
+ExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing, Cjac = nothing)
 ```
 The first constructor takes all the arguments required to initialize the extended Kalman filter, while the second one takes an already defined standard Kalman filter. using the first constructor, the user must provide the number of inputs to the system, `nu`.
 
