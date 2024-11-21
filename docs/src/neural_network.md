@@ -1,7 +1,7 @@
 # Adaptive Neural-Network training
-In this example, we will demonstrate hwo we can take the estimation of time-varying parameters to the extreme, and use a nonlinear state estimator to estimate the weights in a neural-network model of a dynamical system. 
+In this example, we will demonstrate how we can take the estimation of time-varying parameters to the extreme, and use a nonlinear state estimator to estimate the weights in a neural-network model of a dynamical system. 
 
-In the tutorial [Joint state and parameter estimation](@ref), we demonstrated how we can add a parameter as a state variable and let the state estimator estimate this alongside the state. In this example, we will try to learn a black-box model of the system dynamics using a neural network, and treat the network weights as time-varying parameters by adding them to the state.
+In the tutorial [Joint state and parameter estimation](@ref), we demonstrated how we can add a parameter as a state variable and let the state estimator estimate this alongside the state. In this example, we will try to learn an entire black-box model of the system dynamics using a neural network, and treat the network weights as time-varying parameters by adding them to the state.
 
 We start by generating some data from a simple dynamical system, we will continue to use the quadruple-tank system from [Joint state and parameter estimation](@ref).
 
@@ -66,7 +66,7 @@ Our neural network will be a small feedforward network built using the package [
 ```@example ADAPTIVE_NN
 ni = ny + nu
 nhidden = 8
-const model_ = Chain(Dense(ni, nhidden, tanh), Chain(Dense(nhidden, nhidden, tanh), Dense(nhidden, ny)))
+const model_ = Chain(Dense(ni, nhidden, tanh), Dense(nhidden, nhidden, tanh), Dense(nhidden, ny))
 ```
 
 Since the network is rather small, we will train on the CPU only, this will be fast enough for this use case. We may extract the parameters of the network using the function `Lux.setup`, and convert them to a ComponentArray to make it easier to refer to different parts of the combined state vector.
@@ -180,7 +180,7 @@ Performing the estimation using the Extended Kalman Filter took
 ```julia
 using BenchmarkTools
 @btime forward_trajectory(ekf, data.u, data.x);
-# 46.034 ms (77872 allocations: 123.45 MiB)
+  46.034 ms (77872 allocations: 123.45 MiB)
 ```
 and with the Unscented Kalman Filter
 ```julia
