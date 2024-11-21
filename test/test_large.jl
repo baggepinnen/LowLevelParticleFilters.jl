@@ -92,3 +92,12 @@ a = @allocations forward_trajectory(ekf, u, y)
 
 a = @allocated forward_trajectory(ekf, u, y)
 @test a <=  220_814_208*1.1
+
+
+
+## Plotting ====================================================================
+using Plots
+plot(sol_kf)
+plot(sol_ukf)
+plot(sol_ekf)
+plot(sol_sqkf)

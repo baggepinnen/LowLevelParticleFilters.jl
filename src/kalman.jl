@@ -121,12 +121,13 @@ end
 
 function (kfm::MeasurementOop)(x,u,p,t)
     kf = kfm.kf
-    if has_ip(kf.measurement)
+    mfun = measurement(kf)
+    if has_ip(mfun)
         y = zeros(kf.ny)
-        measurement(kf)(y,x,u,p,t)
+        mfun(y,x,u,p,t)
         return y
     else
-        return measurement(kf)(x,u,p,t)
+        return mfun(x,u,p,t)
     end
 end
 

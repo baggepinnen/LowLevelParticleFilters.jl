@@ -225,7 +225,7 @@ r = reduce(hcat, r)
 
         @testset "Metropolis" begin
             @info "testing Metropolis"
-            N = 1000
+            N = 200 # A small number of particles for testing
             function filter_from_parameters(θ,pf=nothing)
                 pf === nothing && (return ParticleFilter(N, dynamics, measurement, mvnormal(n,exp(θ[1])), mvnormal(p,exp(θ[2])), d0))
                 ParticleFilter(pf.state, dynamics, measurement, df,dg, d0)
