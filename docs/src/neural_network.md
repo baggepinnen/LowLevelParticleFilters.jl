@@ -193,5 +193,6 @@ The EKF is a bit faster, which is to be expected. Both methods are very fast fro
 ## Closing remarks
 
 We have seen how to estimate train a black-box neural network dynamics model by treating the parameter estimation as a state-estimation problem. This example is very simple and leaves a lot of room for improvement, such as
-- We assumed very little prior knowledge of the dynamics. In practice, we may want to model as much as possible from first principles and add a neural network to capture only the residuals that out first-principles model cannot capture.
+- We assumed very little prior knowledge of the dynamics. In practice, we may want to model as much as possible from first principles and add a neural network to capture only the residuals that our first-principles model cannot capture.
+- We started the training of the network weights directly from a random initialization. In practice, we may want to pre-train the network on a large offline dataset before updating the weights adaptively in real-time.
 - We used forward-mode AD to compute the Jacobian. The Jacobian of the dynamics has dense rows, which means that it's theoretically favorable to use reverse-mode AD to compute it. This is possible using Zygote.jl, but Zygote does not handle array mutation, and one must thus avoid the in-place version of the dynamics. Since the number of parameters in this example is small, sparse forward mode AD ended up being slightly faster.
