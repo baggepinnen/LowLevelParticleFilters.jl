@@ -21,10 +21,11 @@ struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll} <: AbstractFilteringSo
     ll::Tll
 end
 
-@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, name = "")
+@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=false, plotyht=true, name = "")
     isempty(name) || (name = name*" ")
+    kf = sol.f
     nx, nu, ny = length(sol.x[1]), length(sol.u[1]), length(sol.y[1])
-    layout --> nx*(plotx || plotxt) + plotu*nu + ploty*ny
+    layout --> nx*(plotx || plotxt) + plotu*nu + (ploty || plotyh || plotyht)*ny
     plotx && @series begin
         label --> ["$(name)x$(i)(t|t-1)" for i in 1:nx] |> permutedims
         subplot --> (1:nx)'
@@ -44,6 +45,20 @@ end
         label --> ["y$(i)" for i in 1:ny] |> permutedims
         subplot --> (1:ny)' .+ (nx*(plotx || plotxt) + nu*plotu)
         timevec, reduce(hcat, sol.y)'
+    end
+    plotyh && @series begin
+        label --> ["ŷ$(i)(t|t-1)" for i in 1:ny] |> permutedims
+        subplot --> (1:ny)' .+ (nx*(plotx || plotxt) + nu*plotu)
+        linestyle --> :dash
+        yh = measurement_oop(kf).(sol.x, sol.u, Ref(kf.p), timevec)
+        timevec, reduce(hcat, yh)'
+    end
+    plotyht && @series begin
+        label --> ["ŷ$(i)(t|t)" for i in 1:ny] |> permutedims
+        subplot --> (1:ny)' .+ (nx*(plotx || plotxt) + nu*plotu)
+        linestyle --> :dash
+        yht = measurement_oop(kf).(sol.xt, sol.u, Ref(kf.p), timevec)
+        timevec, reduce(hcat, yht)'
     end
 end
 

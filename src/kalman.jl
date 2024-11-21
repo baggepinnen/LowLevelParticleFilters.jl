@@ -1,6 +1,9 @@
 abstract type AbstractKalmanFilter <: AbstractFilter end
 
 function convert_cov_type(R1, R)
+    if !(eltype(R) <: AbstractFloat)
+        R = float.(R)
+    end
     if R isa SMatrix || R isa Matrix
         return copy(R)
     elseif R1 isa SMatrix && size(R) == size(R1)
@@ -68,6 +71,9 @@ function KalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(Matrix(R1)); Ts = 1, p = N
         α ≥ 1 || @warn "α should be > 1 for exponential forgetting. An α < 1 will lead to exponential loss of adaptation over time."
         maximum(abs, eigvals(A isa SMatrix ? Matrix(A) : A)) ≥ 2 && @warn "The dynamics matrix A has eigenvalues with absolute value ≥ 2. This is either a highly unstable system, or you have forgotten to discretize a continuous-time model. If you are sure that the system is provided in discrete time, you can disable this warning by setting check=false." maxlog=1
     end
+    if D == 0
+        D = zeros(eltype(A), size(C,1), size(B,2))
+    end
     R = convert_cov_type(R1, d0.Σ)
     x0 = convert_x0_type(d0.μ)
     KalmanFilter(A,B,C,D,R1,R2, d0, x0, R, 0, Ts, p, α)
@@ -106,6 +112,27 @@ function measurement(kf::AbstractKalmanFilter)
         end
         y
     end
+end
+
+# This helper struct is used to return a oop measurement function regardless of how the measurement function is defined
+struct MeasurementOop
+    kf::AbstractKalmanFilter
+end
+
+function (kfm::MeasurementOop)(x,u,p,t)
+    kf = kfm.kf
+    mfun = measurement(kf)
+    if has_ip(mfun)
+        y = zeros(kf.ny)
+        mfun(y,x,u,p,t)
+        return y
+    else
+        return mfun(x,u,p,t)
+    end
+end
+
+function measurement_oop(kf::AbstractKalmanFilter)
+    MeasurementOop(kf)
 end
 
 function dynamics(kf::AbstractKalmanFilter)

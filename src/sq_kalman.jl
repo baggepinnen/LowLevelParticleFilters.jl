@@ -133,9 +133,7 @@ function correct!(kf::SqKalmanFilter, u, y, p=parameters(kf), t::Real = index(kf
     end
     S0 = qr([R*Ct';R2]).R
     S = UpperTriangular(S0)
-    if any(<(0), @view(S0[diagind(S0)])) || det(S) < 0 # Cheap for triangular matrices
-        S0 = -S0 # To avoid log(negative) in logpdf
-    end
+    S0 = signdet!(S0, S)
     K   = ((R'*(R*Ct'))/S)/(S')
     kf.x += K*e
     M = [R*(I - K*Ct)';R2*K']
@@ -148,4 +146,22 @@ function correct!(kf::SqKalmanFilter, u, y, p=parameters(kf), t::Real = index(kf
     Sᵪ = Cholesky(S0, 'U', 0)
     ll = extended_logpdf(SimpleMvNormal(PDMat(SS, Sᵪ)), e)# - 1/2*logdet(S) # logdet is included in logpdf
     (; ll, e, SS, Sᵪ, K)
+end
+
+@inline function signdet!(S0, S)
+    @inbounds for rc in axes(S0, 1)
+        # In order to get a well-defined logdet, we need to enforce a positive diagonal of the R factor
+        if S0[rc,rc] < 0
+            for c = rc:size(S0, 2)
+                S0[rc, c] = -S0[rc,c]
+            end
+        end
+    end
+    S0
+end
+
+@inline function signdet!(S0::SMatrix, S)
+    Stemp = similar(S0) .= S0
+    signdet!(Stemp, S)
+    SMatrix(Stemp)
 end
