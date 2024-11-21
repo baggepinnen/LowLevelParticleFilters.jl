@@ -9,8 +9,16 @@ abstract type AbstractFilteringSolution end
 - `R`: predicted covariance matrices ``R(t+1|t)``
 - `Rt`: filter covariances ``R(t|t)``
 - `ll`: loglikelihood
+- `e`: prediction errors
+
+# Plot
+The solution object can be plotted
+```
+plot(sol, plotx=true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, name="")
+```
+where `plotx`, `plotxt`, `plotu`, `ploty`, `plotyh`, `plotyht` are booleans that control which plots are shown. `name` is a string that is prepended to the labels of the plots, which is useful when plotting multiple solutions in the same plot.
 """
-struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll} <: AbstractFilteringSolution
+struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll,Te} <: AbstractFilteringSolution
     f::F
     u::Tu
     y::Ty
@@ -19,13 +27,14 @@ struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll} <: AbstractFilteringSo
     R::TR
     Rt::TRt
     ll::Tll
+    e::Te
 end
 
-@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=false, plotyht=true, name = "")
+@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, name = "")
     isempty(name) || (name = name*" ")
     kf = sol.f
     nx, nu, ny = length(sol.x[1]), length(sol.u[1]), length(sol.y[1])
-    layout --> nx*(plotx || plotxt) + plotu*nu + (ploty || plotyh || plotyht)*ny
+    layout --> nx*(plotx || plotxt) + plotu*nu + (ploty || plotyh || plotyht || plote)*ny
     plotx && @series begin
         label --> ["$(name)x$(i)(t|t-1)" for i in 1:nx] |> permutedims
         subplot --> (1:nx)'
@@ -47,18 +56,24 @@ end
         timevec, reduce(hcat, sol.y)'
     end
     plotyh && @series begin
-        label --> ["ŷ$(i)(t|t-1)" for i in 1:ny] |> permutedims
+        label --> ["$(name)ŷ$(i)(t|t-1)" for i in 1:ny] |> permutedims
         subplot --> (1:ny)' .+ (nx*(plotx || plotxt) + nu*plotu)
         linestyle --> :dash
         yh = measurement_oop(kf).(sol.x, sol.u, Ref(kf.p), timevec)
         timevec, reduce(hcat, yh)'
     end
     plotyht && @series begin
-        label --> ["ŷ$(i)(t|t)" for i in 1:ny] |> permutedims
+        label --> ["$(name)ŷ$(i)(t|t)" for i in 1:ny] |> permutedims
         subplot --> (1:ny)' .+ (nx*(plotx || plotxt) + nu*plotu)
         linestyle --> :dash
         yht = measurement_oop(kf).(sol.xt, sol.u, Ref(kf.p), timevec)
         timevec, reduce(hcat, yht)'
+    end
+    plote && @series begin
+        label --> ["$(name)e$(i)(t|t-1)" for i in 1:ny] |> permutedims
+        subplot --> (1:ny)' .+ (nx*(plotx || plotxt) + nu*plotu)
+        linestyle --> :dash
+        timevec, reduce(hcat, sol.e)'
     end
 end
 
@@ -78,6 +93,12 @@ end
 - `w`: Weights (log space). These are used for internal computations.
 - `we`: Weights (exponentiated / original space). These are the ones to use to compute weighted means etc., they sum to one for each time step.
 - `ll`: Log likelihood
+
+# Plot
+The solution object can be plotted
+```
+plot(sol; nbinsy=30, xreal=nothing, dim=nothing, ploty=true)
+```
 """
 struct ParticleFilteringSolution{F,Tu,Ty,Tx,Tw,Twe,Tll} <: AbstractFilteringSolution
     f::F

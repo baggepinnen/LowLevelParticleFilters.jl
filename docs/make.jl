@@ -24,6 +24,7 @@ makedocs(
                   "Noise tuning and disturbance modeling for Kalman filtering" => "noisetuning.md",
                   "Particle-filter tutorial" => "beetle_example.md",
                   "State estimation for DAE systems" => "dae.md",
+                  "Adaptive Neural-Network training" => "neural_network.md",
             ],
             "API" => "api.md",
       ],
