@@ -20,9 +20,9 @@ function sigmapoints!(xs, m, Σ::AbstractMatrix)
     # X = sqrt(Symmetric(n*Σ)) # 2.184 μs (16 allocations: 2.27 KiB)
     X = cholesky!(Symmetric(n*Σ)).L # 170.869 ns (3 allocations: 176 bytes)
     @inbounds @views for i in 1:n
-        xs[i] = X[:,i]
-        xs[i+n] = -xs[i] .+ m
-        xs[i] = xs[i] .+ m
+        @bangbang xs[i] .= X[:,i]
+        @bangbang xs[i+n] .= .-xs[i] .+ m
+        @bangbang xs[i] .= xs[i] .+ m
     end
     xs[end] = m
     xs
@@ -39,13 +39,13 @@ abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
     R2::R2T
     d0::D0T
     "Sigma points after dynamics update"
-    xsd::Vector{XD}
+    xsd::XD
     "Sigma points before dynamics update"
-    xsd0::Vector{XD0}
+    xsd0::XD0
     "Sigma points before measurement update"
-    xsm::Vector{XM}
+    xsm::XM
     "Sigma points after measurement update"
-    ys::Vector{Y}
+    ys::Y
     x::XT
     R::RT
     t::Int = 0
@@ -108,22 +108,31 @@ function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics,measurement,R1,R2,d0=
     nx = length(d0)
     nw = size(R1, 1) # nw may be smaller than nx for augmented dynamics
     ne = size(R2, 1)
+    AUGD || nw == nx || error("R1 must be square with size equal to the state vector length for non-augmented dynamics")
+    AUGM || ne == ny || error("R2 must be square with size equal to the measurement vector length for non-augmented measurement")
     T = promote_type(eltype(d0), eltype(R1), eltype(R2))
     if AUGD
         L = nx + nw
-        xsd0 = [@SVector zeros(T, nx+nw) for _ in 1:2L+1]
-        if IPD
-            xsd = [zeros(T, nx) for _ in 1:2L+1]
+        XSD = zeros(T, nx, 2L+1)
+        if IPD || L > 50
+            xsd0 = [zeros(T, nx+nw) for _ in 1:2L+1]
+            # xsd = [zeros(T, nx) for _ in 1:2L+1]
+            xsd = eachcol(XSD)
         else
-            xsd = [@SVector zeros(T, nx) for _ in 1:2L+1]
+            xsd0 = [@SVector zeros(T, nx+nw) for _ in 1:2L+1]
+            # xsd = [@SVector zeros(T, nx) for _ in 1:2L+1]
+            xsd = reinterpret(SVector{nx,T}, XSD) |> copy |> vec
         end
     else
         L = nx
-        xsd0 = [@SVector zeros(T, nx) for _ in 1:2L+1]
-        if IPD
-            xsd = Vector.(xsd0)
+        xsd0 = zeros(T, nx, 2L+1)
+        xsd = zeros(T, nx, 2L+1)
+        if IPD || L > 50
+            xsd = eachcol(xsd)
+            xsd0 = eachcol(xsd0)
         else
-            xsd = xsd0
+            xsd = reinterpret(SVector{nx,T}, xsd) |> copy |> vec
+            xsd0 = reinterpret(SVector{nx,T}, xsd0) |> copy |> vec
         end
     end
     if AUGM
@@ -133,7 +142,10 @@ function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics,measurement,R1,R2,d0=
         L = nx
         xsm = [@SVector zeros(T, nx) for _ in 1:2L+1]
     end
-    if IPM
+    if L > 50
+        xsm = Vector.(xsm)
+    end
+    if IPM || L > 50
         ys = [zeros(T, ny) for _ in 1:2L+1]
     else
         ys = [@SVector zeros(T, ny) for _ in 1:2L+1]
@@ -141,7 +153,7 @@ function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics,measurement,R1,R2,d0=
     R = convert_cov_type(R1, d0.Σ)
     x0 = convert_x0_type(d0.μ)
     UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM, typeof(dynamics), typeof(measurement), typeof(R1), typeof(R2), typeof(d0),
-        typeof(xsd[1]), typeof(xsd0[1]), typeof(xsm[1]), typeof(ys[1]),
+        typeof(xsd), typeof(xsd0), typeof(xsm), typeof(ys),
         typeof(x0), typeof(R), typeof(p), typeof(reject)}(
             dynamics,measurement,R1,R2, d0, xsd,xsd0,xsm,ys, x0, R, 0, Ts, ny, nu, p, reject)
 end
@@ -165,17 +177,17 @@ dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 
 function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = parameters(ukf), t::Real = index(ukf)*ukf.Ts; R1 = get_mat(ukf.R1, ukf.x, u, p, t), reject = ukf.reject) where {IPD,IPM,AUGD,AUGM}
     @unpack dynamics,measurement,x,xsd,xsd0,R = ukf
-    xtyped = eltype(xsd)(x)
+    # xtyped = eltype(xsd)(x)
     nx = length(x)
     nw = size(R1, 1) # nw may be smaller than nx for augmented dynamics
     if AUGD
         xinds = 1:nx
         winds = nx+1:nx+nw
-        m = [xtyped; 0*R1[:, 1]]
+        m = [x; 0*R1[:, 1]]
         S = cat(R, R1, dims=(1,2))
         sigmapoints!(xsd0,m,S)
     else
-        sigmapoints!(xsd0,xtyped,R)
+        sigmapoints!(xsd0,x,R)
     end
     if IPD
         AUGD && error("IPD and AUGD not yet supported")
@@ -207,7 +219,7 @@ function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = paramete
         @bangbang ukf.R .= symmetrize(safe_cov(xsd)[xinds,xinds]) # TODO: optimize
     else
         ukf.x = safe_mean(xsd)
-        @bangbang ukf.R .= symmetrize(safe_cov(xsd)) .+ R1
+        @bangbang ukf.R .= symmetrize(safe_cov(xsd, ukf.x)) .+ R1
     end
     ukf.t += 1
 end
@@ -222,9 +234,18 @@ function safe_mean(xs::Vector{<:SVector})
     m ./ length(xs)
 end
 
-safe_cov(xs) = cov(xs)
-function safe_cov(xs::Vector{<:SVector})
-    m = safe_mean(xs)
+function safe_cov(xs, m=mean(xs))
+    # if length(m) > 100
+        Statistics.cov(reduce(hcat, xs); dims=2) # This is always faster :/
+    # else
+    #     Statistics.covm(xs, m)
+    # end
+end
+
+safe_mean(xs::ColumnSlices) = vec(mean(xs.parent, dims=2))
+safe_cov(xs::ColumnSlices, m=mean(xs)) = Statistics.covm(xs.parent, m, 2)
+
+function safe_cov(xs::Vector{<:SVector}, m = safe_mean(xs))
     P = 0 .* m*m'
     for i in eachindex(xs)
         e = xs[i] .- m
@@ -237,7 +258,7 @@ end
 
 
 function correct!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y, p=parameters(ukf), t::Real = index(ukf)*ukf.Ts; R2 = get_mat(ukf.R2, ukf.x, u, p, t)) where {IPD,IPM,AUGD,AUGM}
-    @unpack measurement,x,xsm,ys,R,R1 = ukf
+    (; measurement,x,xsm,ys,R,R1) = ukf
     nx = length(x)
     L = length(xsm[1])
     nv = size(R2, 1)
@@ -265,15 +286,22 @@ function correct!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y, p=paramet
         end
     end
     ym = safe_mean(ys)
-    C = @SMatrix zeros(nx,ny)
+    if R isa SMatrix
+        C = @SMatrix zeros(nx,ny)
+    else
+        C = zeros(nx,ny)
+    end
     @inbounds for i in eachindex(ys) # Cross cov between x and y
         d   = ys[i]-ym
         if AUGM
-            ca  = (xsm[i][xinds]-x)*d'
+            @bangbang C .+= (xsm[i][xinds]-x)*d'
         else
-            ca  = (xsm[i]-x)*d'
+            if C isa SMatrix
+                C += (xsm[i]-x)*d'
+            else
+                mul!(C, xsm[i]-x, d', one(eltype(d)), one(eltype(d)))
+            end
         end
-        C  += ca
     end
     e   = y .- ym
     if AUGM
