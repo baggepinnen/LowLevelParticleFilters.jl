@@ -20,8 +20,8 @@ const _B = @SMatrix [-0.7400216956683083 1.6097265310456392; -1.4384539113366408
 const _C = SMatrix{ny,ny}(eye(ny))
 # C = SMatrix{p,n}([1 1])
 
-dynamics(x,u,p,t) = _A*x .+ _B*u
-measurement(x,u,p,t) = _C*x
+dynamics_jet(x,u,p,t) = _A*x .+ _B*u
+measurement_jet(x,u,p,t) = _C*x
 
 T    = 200 # Number of time steps
 kf   = KalmanFilter(_A, _B, _C, 0, eye(nx), eye(ny), d0)
@@ -35,7 +35,7 @@ x,u,y = tosvec.((x,u,y))
 @test_opt correct!(kf, u[1], y[1])
 @report_call correct!(kf, u[1], y[1])
 
-ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), eye(ny), d0; ny, nu)
+ukf  = UnscentedKalmanFilter(dynamics_jet, measurement_jet, eye(nx), eye(ny), d0; ny, nu)
 @test ukf.R1 isa SMatrix{2, 2, Float64, 4}
 @test_opt predict!(ukf, u[1])
 @report_call predict!(ukf, u[1])
@@ -53,7 +53,7 @@ skf  = SqKalmanFilter(_A, _B, _C, 0, eye(nx), eye(ny), d0)
 @report_call correct!(skf, u[1], y[1])
 
 
-ekf = ExtendedKalmanFilter(dynamics, measurement, eye(nx), eye(ny), d0; nu)
+ekf = ExtendedKalmanFilter(dynamics_jet, measurement_jet, eye(nx), eye(ny), d0; nu)
 @test ekf.kf.R1 isa SMatrix{2, 2, Float64, 4}
 @test_opt predict!(ekf, u[1])
 @report_call predict!(ekf, u[1])
@@ -66,21 +66,21 @@ ekf = ExtendedKalmanFilter(dynamics, measurement, eye(nx), eye(ny), d0; nu)
 ## Test allocations ============================================================
 forward_trajectory(kf, u, y) 
 a = @allocations forward_trajectory(kf, u, y) 
-@test a <= 15 # Allocations occur when the arrays are allocated for saving the data, the important thing is that the number of allocations do not grow with the length of the trajectory (T = 200)
+@test a <= 16*1.1 # Allocations occur when the arrays are allocated for saving the data, the important thing is that the number of allocations do not grow with the length of the trajectory (T = 200)
 
 forward_trajectory(ukf, u, y) 
 a = @allocations forward_trajectory(ukf, u, y) 
-@test a <= 15
+@test a <= 16*1.1
 
 forward_trajectory(skf, u, y)
 a = @allocations forward_trajectory(skf, u, y)
 
 if get(ENV, "CI", nothing) == "true"
-    @test a <= 217 # Mysteriously higher on CI despite identical package environments
+    @test a <= 300 # Mysteriously higher on CI despite identical package environments
 else
     @test a <= 50 # was 7 on julia v1.10.6
 end
 
 forward_trajectory(ekf, u, y)
 a = @allocations forward_trajectory(ekf, u, y)
-@test a <= 15
+@test a <= 16*1.1

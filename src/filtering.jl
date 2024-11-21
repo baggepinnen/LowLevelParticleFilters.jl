@@ -217,17 +217,20 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
     xt   = Array{particletype(kf)}(undef,T)
     R    = Array{covtype(kf)}(undef,T)
     Rt   = Array{covtype(kf)}(undef,T)
+    e    = similar(y)
     ll   = zero(eltype(particletype(kf)))
     for t = 1:T
         ti = (t-1)*kf.Ts
         x[t]  = state(kf)      |> copy
         R[t]  = covariance(kf) |> copy
-        ll   += correct!(kf, u[t], y[t], p, ti)[1]
+        lli, ei = correct!(kf, u[t], y[t], p, ti)
+        ll += lli
+        e[t] = ei
         xt[t] = state(kf)      |> copy
         Rt[t] = covariance(kf) |> copy
         predict!(kf, u[t], p, ti)
     end
-    KalmanFilteringSolution(kf,u,y,x,xt,R,Rt,ll)
+    KalmanFilteringSolution(kf,u,y,x,xt,R,Rt,ll,e)
 end
 
 
