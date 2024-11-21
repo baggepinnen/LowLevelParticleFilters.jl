@@ -310,6 +310,11 @@ end
     include("test_jet.jl")
 end
 
+@testset "large" begin
+    @info "Testing large"
+    include("test_large.jl")
+end
+
 @testset "diff" begin
     @info "Testing diff"
     include("test_diff.jl")
