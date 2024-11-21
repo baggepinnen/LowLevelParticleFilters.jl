@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Adaptive Neural-Network training · LowLevelParticleFilters Documentation</title><meta name="title" content="Adaptive Neural-Network training · LowLevelParticleFilters Documentation"/><meta property="og:title" content="Adaptive Neural-Network training · LowLevelParticleFilters Documentation"/><meta property="twitter:title" content="Adaptive Neural-Network training · LowLevelParticleFilters Documentation"/><meta name="description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="og:description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="twitter:description" content="Documentation for LowLevelParticleFilters Documentation."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">LowLevelParticleFilters Documentation</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../discretization/">Discretization</a></li><li><a class="tocitem" href="../parameter_estimation/">Parameter estimation</a></li><li><a class="tocitem" href="../benchmark/">Benchmark</a></li><li><a class="tocitem" href="../distributions/">Performance tips</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../adaptive_kalmanfilter/">Kalman-filter tutorial with LowLevelParticleFilters</a></li><li><a class="tocitem" href="../noisetuning/">Noise tuning and disturbance modeling for Kalman filtering</a></li><li><a class="tocitem" href="../beetle_example/">Particle-filter tutorial</a></li><li><a class="tocitem" href="../dae/">State estimation for DAE systems</a></li><li class="is-active"><a class="tocitem" href>Adaptive Neural-Network training</a><ul class="internal"><li><a class="tocitem" href="#Neural-network-dynamics"><span>Neural network dynamics</span></a></li><li><a class="tocitem" href="#Kalman-filter-setup"><span>Kalman filter setup</span></a></li><li><a class="tocitem" href="#Estimation"><span>Estimation</span></a></li><li><a class="tocitem" href="#Benchmarking"><span>Benchmarking</span></a></li><li><a class="tocitem" href="#Closing-remarks"><span>Closing remarks</span></a></li></ul></li></ul></li><li><a class="tocitem" href="../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Adaptive Neural-Network training</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Adaptive Neural-Network training</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/docs/src/neural_network.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Adaptive-Neural-Network-training"><a class="docs-heading-anchor" href="#Adaptive-Neural-Network-training">Adaptive Neural-Network training</a><a id="Adaptive-Neural-Network-training-1"></a><a class="docs-heading-anchor-permalink" href="#Adaptive-Neural-Network-training" title="Permalink"></a></h1><p>In this example, we will demonstrate how we can take the estimation of time-varying parameters to the extreme, and use a nonlinear state estimator to estimate the weights in a neural-network model of a dynamical system. </p><p>In the tutorial <a href="../parameter_estimation/#Joint-state-and-parameter-estimation">Joint state and parameter estimation</a>, we demonstrated how we can add a parameter as a state variable and let the state estimator estimate this alongside the state. In this example, we will try to learn an entire black-box model of the system dynamics using a neural network, and treat the network weights as time-varying parameters by adding them to the state.</p><p>We start by generating some data from a simple dynamical system, we will continue to use the quadruple-tank system from <a href="../parameter_estimation/#Joint-state-and-parameter-estimation">Joint state and parameter estimation</a>.</p><pre><code class="language-julia hljs">using LowLevelParticleFilters, Lux, Random, SeeToDee, StaticArrays, Plots, LinearAlgebra, ComponentArrays, DifferentiationInterface, SparseMatrixColorings
+using SparseConnectivityTracer: TracerSparsityDetector
+
+using LowLevelParticleFilters: SimpleMvNormal
+
+function quadtank(h,u,p,t)
+    kc = 0.5
+    k1, k2, g = 1.6, 1.6, 9.81
+    A1 = A3 = A2 = A4 = 4.9
+    a1, a3, a2, a4 = 0.03, 0.03, 0.03, 0.03
+    γ1, γ2 = 0.2, 0.2
+
+    if t &gt; 2000
+        a1 *= 1.5 # Change the parameter at t = 2000
+    end
+
+    ssqrt(x) = √(max(x, zero(x)) + 1e-3) # For numerical robustness at x = 0
+
+    SA[
+        -a1/A1 * ssqrt(2g*h[1]) + a3/A1*ssqrt(2g*h[3]) +     γ1*k1/A1 * u[1]
+        -a2/A2 * ssqrt(2g*h[2]) + a4/A2*ssqrt(2g*h[4]) +     γ2*k2/A2 * u[2]
+        -a3/A3*ssqrt(2g*h[3])                          + (1-γ2)*k2/A3 * u[2]
+        -a4/A4*ssqrt(2g*h[4])                          + (1-γ1)*k1/A4 * u[1]
+    ]
+end
+
+Ts = 30 # sample time
+discrete_dynamics = SeeToDee.Rk4(quadtank, Ts) # Discretize dynamics
+nu = 2 # number of control inputs
+nx = 4 # number of state variables
+ny = 4 # number of measured outputs
+
+function generate_data()
+    measurement(x,u,p,t) = x#SA[x[1], x[2]]
+    Tperiod = 200
+    t = 0:Ts:4000
+    u = vcat.((0.25 .* sign.(sin.(2pi/Tperiod .* t)) .+ 0.25) .* sqrt.(rand.()))
+    u = SVector{nu, Float32}.(vcat.(u,u))
+    x0 = Float32[2,2,3,3]
+    x = LowLevelParticleFilters.rollout(discrete_dynamics, x0, u)[1:end-1]
+    y = measurement.(x, u, 0, 0)
+    y = [Float32.(y .+ 0.01.*randn.()) for y in y] # Add some noise to the measurement
+
+    (; x, u, y, nx, nu, ny, Ts)
+end
+
+rng = Random.default_rng()
+Random.seed!(rng, 1)
+data = generate_data()</code></pre><h2 id="Neural-network-dynamics"><a class="docs-heading-anchor" href="#Neural-network-dynamics">Neural network dynamics</a><a id="Neural-network-dynamics-1"></a><a class="docs-heading-anchor-permalink" href="#Neural-network-dynamics" title="Permalink"></a></h2><p>Our neural network will be a small feedforward network built using the package <a href="https://lux.csail.mit.edu/stable/tutorials/beginner/5_OptimizationIntegration">Lux.jl</a>. </p><pre><code class="language-julia hljs">ni = ny + nu
+nhidden = 8
+const model_ = Chain(Dense(ni, nhidden, tanh), Dense(nhidden, nhidden, tanh), Dense(nhidden, ny))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Chain(
+    layer_1 = Dense(6 =&gt; 8, tanh),      <span class="sgr90"># 56 parameters</span>
+    layer_2 = Dense(8 =&gt; 8, tanh),      <span class="sgr90"># 72 parameters</span>
+    layer_3 = Dense(8 =&gt; 4),            <span class="sgr90"># 36 parameters</span>
+) <span class="sgr90">        # Total: </span>164 parameters,
+<span class="sgr90">          #        plus </span>0 states.</code></pre><p>Since the network is rather small, we will train on the CPU only, this will be fast enough for this use case. We may extract the parameters of the network using the function <code>Lux.setup</code>, and convert them to a ComponentArray to make it easier to refer to different parts of the combined state vector.</p><pre><code class="language-julia hljs">dev = cpu_device()
+ps, st = Lux.setup(rng, model_) |&gt; dev
+parr = ComponentArray(ps)</code></pre><p>The dynamics of our black-box model will call the neural network to predict the next state given the current state and input. We bias the dynamics towards low frequencies by adding a multiple of the current state to the prediction of the next state, <code>0.95*x</code>. We also add a small amount of weight decay to the parameters of the neural network for regularization, <code>0.995*p</code>.</p><pre><code class="language-julia hljs">function dynamics(out0, xp0, u, _, t)
+    xp = ComponentArray(xp0, getaxes(s0))
+    out = ComponentArray(out0, getaxes(s0))
+    x = xp.x
+    p = xp.p
+    xp, _ = Lux.apply(model_, [x; u], p, st)
+    @. out.x = 0.95f0*x+xp
+    @. out.p = 0.995f0*p
+    nothing
+end
+
+@views measurement(out, x, _, _, _) = out .= x[1:nx] # Assume measurement of the full state vector</code></pre><p>For simplicity, we have assumed here that we have access to measurements of the entire state vector of the original process. This is many times unrealistic, and if we do not have such access, we may instead augment the measured signals with delayed versions of themselves (sometimes called a delay embedding). This is a common technique in discrete-time system identification, used in e.g., <code>ControlSystemIdentification.arx</code> and <code>subspaceid</code>.</p><p>The initial state of the process <code>x0</code> and the initial parameters of the neural network <code>parr</code> can now be concatenated to form the initial augmented state <code>s0</code>.</p><pre><code class="language-julia hljs">x0 = Float32[2; 2; 3; 3]
+s0 = ComponentVector(; x=x0, p=parr)</code></pre><h2 id="Kalman-filter-setup"><a class="docs-heading-anchor" href="#Kalman-filter-setup">Kalman filter setup</a><a id="Kalman-filter-setup-1"></a><a class="docs-heading-anchor-permalink" href="#Kalman-filter-setup" title="Permalink"></a></h2><p>We will estimate the parameters using two different nonlinear Kalman filters, the <a href="../api/#LowLevelParticleFilters.ExtendedKalmanFilter"><code>ExtendedKalmanFilter</code></a> and the <a href="../api/#LowLevelParticleFilters.UnscentedKalmanFilter-Union{Tuple{AUGM}, Tuple{AUGD}, Tuple{IPM}, Tuple{IPD}, NTuple{4, Any}, NTuple{5, Any}} where {IPD, IPM, AUGD, AUGM}"><code>UnscentedKalmanFilter</code></a>. The covariance matrices for the filters, <code>R1, R2</code>, may be tuned such that we get the desired learning speed of the weights, where larger covariance for the network weights will allow for faster learning, but also more noise in the estimates. </p><pre><code class="language-julia hljs">R1 = Diagonal([0.1ones(nx); 0.01ones(length(parr))]) .|&gt; Float32
+R2 = Diagonal((1e-2)^2 * ones(ny)) .|&gt; Float32</code></pre><p>The <a href="../api/#LowLevelParticleFilters.ExtendedKalmanFilter"><code>ExtendedKalmanFilter</code></a> uses Jacobians of the dynamics and measurement model, and if we do not provide those functions they will be automatically computed using ForwardDiff.jl. Since our Jacobians will be relatively large but sparse in this example, we will make use of the sparsity-aware features of DifferentiationInterface.jl in order to get efficient Jacobian computations. </p><pre><code class="language-julia hljs">function Ajacfun(x,u,p,t) # Function that returns a function for the Jacobian of the dynamics
+    # For large neural networks, it might be faster to use an OOP formulation with Zygote instead of ForwardDiff. Zygote does not handle the in-place version
+    backend = AutoSparse(
+        AutoForwardDiff(),
+        # AutoZygote(),
+        sparsity_detector=TracerSparsityDetector(),
+        coloring_algorithm=GreedyColoringAlgorithm(),
+    )
+    out = similar(getdata(x))
+    inner = (out,x)-&gt;dynamics(out,x,u,p,t)
+    prep = prepare_jacobian(inner, out, backend, getdata(x))
+    jac = one(eltype(x)) .* sparsity_pattern(prep)
+    function (x,u,p,t)
+        inner2 = (out,x)-&gt;dynamics(out,x,u,p,t)
+        DifferentiationInterface.jacobian!(inner2, out, jac, prep, backend, x)
+    end
+end
+
+Ajac = Ajacfun(s0, data.u[1], nothing, 0)
+
+const CJ_ = [I(nx) zeros(Float32, nx, length(parr))] # The jacobian of the measurement model is constant
+Cjac(x,u,p,t) = CJ_</code></pre><h2 id="Estimation"><a class="docs-heading-anchor" href="#Estimation">Estimation</a><a id="Estimation-1"></a><a class="docs-heading-anchor-permalink" href="#Estimation" title="Permalink"></a></h2><p>We may now initialize our filters and perform the estimation. Here, we use the function <a href="../api/#LowLevelParticleFilters.forward_trajectory"><code>forward_trajectory</code></a> to perform filtering along the entire data trajectory at once, but we may use this in a streaming fashion as well, as more data becomes available in real time.</p><p>We plot the one-step ahead prediction of the outputs and compare to the &quot;measured&quot; data.</p><pre><code class="language-julia hljs">ekf = ExtendedKalmanFilter(dynamics, measurement, R1, R2, SimpleMvNormal(s0, 100R1); nu, check=false, Ajac, Cjac, Ts)
+ukf = UnscentedKalmanFilter(dynamics, measurement, R1, R2, SimpleMvNormal(s0, 100R1); nu, ny, Ts)
+
+@time sole = forward_trajectory(ekf, data.u, data.x)
+@time solu = forward_trajectory(ukf, data.u, data.x)
+
+plot(sole, plotx=false, plotxt=false, plotyh=true, plotyht=false, plotu=false, plote=true, name=&quot;EKF&quot;, layout=(nx, 1))
+plot!(solu, plotx=false, plotxt=false, plotyh=true, plotyht=false, plotu=false, plote=true, name=&quot;UKF&quot;, ploty=false, size=(1200, 1500))</code></pre><img src="17238a9c.png" alt="Example block output"/><p>We see that prediction errors, <span>$e$</span>, are large in the beginning when the network weights are randomly initialized, but after about half the trajectory the errors are significantly reduced. Just like in the tutorial <a href="../parameter_estimation/#Joint-state-and-parameter-estimation">Joint state and parameter estimation</a>, we modified the true dynamics after some time, at <span>$t=2000$</span>, and we see that the filters are able to adapt to this change after a transient increase in prediction error variance.</p><p>We may also plot the evolution of the neural-network weights over time, and see how the filters adapt to the changing dynamics of the system.</p><pre><code class="language-julia hljs">plot(
+    plot(0:Ts:4000, reduce(hcat, sole.xt)&#39;[:, nx+1:end], title=&quot;EKF parameters&quot;),
+    plot(0:Ts:4000, reduce(hcat, solu.xt)&#39;[:, nx+1:end], title=&quot;UKF parameters&quot;),
+    legend = false,
+)</code></pre><img src="85201b39.png" alt="Example block output"/><h2 id="Benchmarking"><a class="docs-heading-anchor" href="#Benchmarking">Benchmarking</a><a id="Benchmarking-1"></a><a class="docs-heading-anchor-permalink" href="#Benchmarking" title="Permalink"></a></h2><p>The neural network used in this example has</p><pre><code class="language-julia hljs">length(parr)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">164</code></pre><p>parameters, and the length of the data is</p><pre><code class="language-julia hljs">length(data.u)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">134</code></pre><p>Performing the estimation using the Extended Kalman Filter took</p><pre><code class="language-julia hljs">using BenchmarkTools
+@btime forward_trajectory(ekf, data.u, data.x);
+  46.034 ms (77872 allocations: 123.45 MiB)</code></pre><p>and with the Unscented Kalman Filter</p><pre><code class="language-julia hljs">@btime forward_trajectory(ukf, data.u, data.x);
+  142.608 ms (2134370 allocations: 224.82 MiB)</code></pre><p>The EKF is a bit faster, which is to be expected. Both methods are very fast from a neural-network training perspective, but the performance will not scale favorably to very large network sizes.</p><h2 id="Closing-remarks"><a class="docs-heading-anchor" href="#Closing-remarks">Closing remarks</a><a id="Closing-remarks-1"></a><a class="docs-heading-anchor-permalink" href="#Closing-remarks" title="Permalink"></a></h2><p>We have seen how to estimate train a black-box neural network dynamics model by treating the parameter estimation as a state-estimation problem. This example is very simple and leaves a lot of room for improvement, such as</p><ul><li>We assumed very little prior knowledge of the dynamics. In practice, we may want to model as much as possible from first principles and add a neural network to capture only the residuals that our first-principles model cannot capture.</li><li>We started the training of the network weights directly from a random initialization. In practice, we may want to pre-train the network on a large offline dataset before updating the weights adaptively in real-time.</li><li>We used forward-mode AD to compute the Jacobian. The Jacobian of the dynamics has dense rows, which means that it&#39;s theoretically favorable to use reverse-mode AD to compute it. This is possible using Zygote.jl, but Zygote does not handle array mutation, and one must thus avoid the in-place version of the dynamics. Since the number of parameters in this example is small, sparse forward mode AD ended up being slightly faster.</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../dae/">« State estimation for DAE systems</a><a class="docs-footer-nextpage" href="../api/">API »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.8.0 on <span class="colophon-date" title="Thursday 21 November 2024 17:00">Thursday 21 November 2024</span>. Using Julia version 1.11.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
