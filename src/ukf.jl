@@ -180,32 +180,10 @@ function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = paramete
     # xtyped = eltype(xsd)(x)
     nx = length(x)
     nw = size(R1, 1) # nw may be smaller than nx for augmented dynamics
-    if AUGD
-        xinds = 1:nx
-        winds = nx+1:nx+nw
-        m = [x; 0*R1[:, 1]]
-        S = cat(R, R1, dims=(1,2))
-        sigmapoints!(xsd0,m,S)
-    else
-        sigmapoints!(xsd0,x,R)
-    end
-    if IPD
-        AUGD && error("IPD and AUGD not yet supported")
-        xp = similar(xsd[1])
-        for i in eachindex(xsd)
-            xp .= 0
-            dynamics(xp, xsd0[i], u, p, t)
-            xsd[i] .= xp
-        end
-    else
-        for i in eachindex(xsd)
-            if AUGD
-                xsd[i] = dynamics(xsd0[i][xinds], u, p, t, xsd0[i][winds])
-            else
-                xsd[i] = dynamics(xsd0[i], u, p, t)
-            end
-        end
-    end
+    xinds = 1:nx
+    winds = nx+1:nx+nw
+    sigmapoints_p!(ukf)
+    propagate_sigmapoints_p!(ukf, u, p, t)
     if reject !== nothing
         for i = 2:length(xsd)
             if reject(xsd[i])
@@ -224,6 +202,56 @@ function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = paramete
     ukf.t += 1
 end
 
+function propagate_sigmapoints_p!(ukf::UnscentedKalmanFilter{true,<:Any,true}, u, p, t)
+    error("IPD and AUGD not yet supported")
+end
+
+function propagate_sigmapoints_p!(ukf::UnscentedKalmanFilter{false,<:Any,true}, u, p, t)
+    (; xsd, xsd0, dynamics, x, R1) = ukf
+    nx = length(x)
+    nw = size(R1, 1) # nw may be smaller than nx for augmented dynamics
+    xinds = 1:nx
+    winds = nx+1:nx+nw
+    for i in eachindex(xsd)
+        xsd[i] = dynamics(xsd0[i][xinds], u, p, t, xsd0[i][winds])
+    end
+end
+
+function propagate_sigmapoints_p!(ukf::UnscentedKalmanFilter{true,<:Any,false}, u, p, t)
+    (; xsd, xsd0, dynamics, x, R1) = ukf
+    nx = length(x)
+    nw = size(R1, 1) # nw may be smaller than nx for augmented dynamics
+    xinds = 1:nx
+    winds = nx+1:nx+nw
+    xp = similar(xsd[1])
+    for i in eachindex(xsd)
+        xp .= 0
+        dynamics(xp, xsd0[i], u, p, t)
+        xsd[i] .= xp
+    end
+end
+
+function propagate_sigmapoints_p!(ukf::UnscentedKalmanFilter{false,<:Any,false}, u, p, t)
+    (; xsd, xsd0, dynamics) = ukf
+    for i in eachindex(xsd)
+        xsd[i] = dynamics(xsd0[i], u, p, t)
+    end
+end
+
+function sigmapoints_p!(ukf::UnscentedKalmanFilter{<:Any,<:Any,true})
+    nx = length(ukf.x)
+    nw = size(ukf.R1, 1) # nw may be smaller than nx for augmented dynamics
+    xinds = 1:nx
+    winds = nx+1:nx+nw
+    m = [ukf.x; 0*ukf.R1[:, 1]]
+    Raug = cat(ukf.R, ukf.R1, dims=(1,2))
+    sigmapoints!(ukf.xsd0, m, Raug)
+end
+
+function sigmapoints_p!(ukf::UnscentedKalmanFilter{<:Any,<:Any,false})
+    sigmapoints!(ukf.xsd0, ukf.x, ukf.R)
+end
+
 # The functions below are JET-safe from dynamic dispatch if called with static arrays
 safe_mean(xs) = mean(xs)
 function safe_mean(xs::Vector{<:SVector})
@@ -236,7 +264,7 @@ end
 
 function safe_cov(xs, m=mean(xs))
     # if length(m) > 100
-        Statistics.cov(reduce(hcat, xs); dims=2) # This is always faster :/
+        Statistics.covm(reduce(hcat, xs), m, 2) # This is always faster :/
     # else
     #     Statistics.covm(xs, m)
     # end
@@ -255,8 +283,6 @@ function safe_cov(xs::Vector{<:SVector}, m = safe_mean(xs))
     c
 end
 
-
-
 function correct!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y, p=parameters(ukf), t::Real = index(ukf)*ukf.Ts; R2 = get_mat(ukf.R2, ukf.x, u, p, t)) where {IPD,IPM,AUGD,AUGM}
     (; measurement,x,xsm,ys,R,R1) = ukf
     nx = length(x)
@@ -264,27 +290,10 @@ function correct!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y, p=paramet
     nv = size(R2, 1)
     ny = length(y)
     ns = length(xsm)
-    if AUGM
-        xinds = 1:nx
-        vinds = nx+1:nx+nv
-        xm = [x; 0*R2[:, 1]]
-        S = cat(R, R2, dims=(1,2))
-        sigmapoints!(xsm,xm,S)
-    else
-        xm = x
-        sigmapoints!(xsm,eltype(xsm)(x),R) # Update sigmapoints here since untransformed points required
-    end
-    for i = eachindex(xsm,ys)
-        if IPM
-            measurement(ys[i], xsm[i], u, p, t)
-        else
-            if AUGM
-                ys[i] = measurement(xsm[i][xinds], u, p, t, xsm[i][vinds])
-            else
-                ys[i] = measurement(xsm[i], u, p, t)
-            end
-        end
-    end
+    xinds = 1:nx
+    vinds = nx+1:nx+nv
+    sigmapoints_c!(ukf)
+    propagate_sigmapoints_c!(ukf, u, p, t)
     ym = safe_mean(ys)
     if R isa SMatrix
         C = @SMatrix zeros(nx,ny)
@@ -293,39 +302,100 @@ function correct!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y, p=paramet
     end
     @inbounds for i in eachindex(ys) # Cross cov between x and y
         d   = ys[i]-ym
-        if AUGM
-            @bangbang C .+= (xsm[i][xinds]-x)*d'
-        else
-            if C isa SMatrix
-                C += (xsm[i]-x)*d'
-            else
-                mul!(C, xsm[i]-x, d', one(eltype(d)), one(eltype(d)))
-            end
-        end
+        C = add_to_C!(C, xsm[i], x, d, xinds)
     end
     e   = y .- ym
-    if AUGM
-        S   = symmetrize(safe_cov(ys))
-    else
-        S   = symmetrize(safe_cov(ys)) + R2 # cov of y
-    end
-    Sᵪ  = cholesky(S)
+    S   = compute_S(ukf)
+    Sᵪ  = cholesky(Symmetric(S))
     K   = (C./(ns-1))/Sᵪ # ns normalization to make it a covariance matrix
     ukf.x += K*e
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized
-    if R isa SMatrix
-        ukf.R = symmetrize(R - K*S*K')
-    else
-        RmKSKT!(R, K, S)
-    end
+    RmKSKT!(ukf, K, S)
     ll = extended_logpdf(SimpleMvNormal(PDMat(S,Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf
     (; ll, e, S, Sᵪ, K)
 end
 
-@inline function RmKSKT!(R, K, S)
-    R .-= K*S*K'
-    symmetrize(R)
+# IPM = true
+function propagate_sigmapoints_c!(ukf::UnscentedKalmanFilter{<:Any,true,<:Any}, u, p, t)
+    for i = eachindex(ukf.xsm, ukf.ys)
+        ukf.measurement(ukf.ys[i], ukf.xsm[i], u, p, t)
+    end
+end
+
+# AUGM = true
+function propagate_sigmapoints_c!(ukf::UnscentedKalmanFilter{<:Any,false,<:Any,true}, u, p, t)
+    (; x, R, R2, xsm, ys) = ukf
+    nx = length(x)
+    nv = size(R2, 1)
+    xinds = 1:nx
+    vinds = nx+1:nx+nv
+    for i = eachindex(ukf.xsm, ukf.ys)
+        ys[i] = ukf.measurement(xsm[i][xinds], u, p, t, xsm[i][vinds])
+    end
+end
+
+# AUGM = false
+function propagate_sigmapoints_c!(ukf::UnscentedKalmanFilter{<:Any,false,<:Any,false}, u, p, t)
+    for i = eachindex(ukf.xsm, ukf.ys)
+        ukf.ys[i] = ukf.measurement(ukf.xsm[i], u, p, t)
+    end
+end
+
+function sigmapoints_c!(ukf::UnscentedKalmanFilter{<:Any,<:Any,<:Any,false})
+    sigmapoints!(ukf.xsm, eltype(ukf.xsm)(ukf.x), ukf.R)
+end
+
+function sigmapoints_c!(ukf::UnscentedKalmanFilter{<:Any,<:Any,<:Any,true})
+    (; x, R, R2, xsm) = ukf
+    nx = length(x)
+    nv = size(R2, 1)
+    xinds = 1:nx
+    vinds = nx+1:nx+nv
+    xm = [x; 0*R2[:, 1]]
+    Raug = cat(R, R2, dims=(1,2))
+    sigmapoints!(xsm, xm, Raug)
+end
+
+@inline function RmKSKT!(ukf, K, S)
+    R = ukf.R
+    if R isa SMatrix
+        ukf.R = symmetrize(R - K*S*K')
+    else
+        ukf.R .-= K*S*K'
+        symmetrize(ukf.R)
+    end
     nothing
+end
+
+function add_to_C!(C::SMatrix, xsm, x, d, xinds)
+    if length(xinds) == length(xsm)
+        C += (xsm-x)*d'
+    else
+        C += (xsm[xinds]-x)*d'
+    end
+    C
+end
+
+function add_to_C!(C, xsm, x, d, xinds)
+    @views if length(xinds) == length(x)
+        @bangbang xsm .-= x
+        mul!(C, xsm, d', one(eltype(d)), one(eltype(d)))
+    else
+        xsm[xinds] .-= x
+        mul!(C, xsm[xinds], d', one(eltype(d)), one(eltype(d)))
+    end
+end
+
+function compute_S(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}) where {IPD,IPM,AUGD,AUGM}
+    S = symmetrize(safe_cov(ukf.ys))
+    if !AUGM
+        if S isa SMatrix || S isa Symmetric{<:Any, <:SMatrix}
+            S += ukf.R2
+        else
+            S .+= ukf.R2
+        end
+    end
+    S
 end
 
 

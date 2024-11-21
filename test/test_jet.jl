@@ -7,9 +7,9 @@ Random.seed!(0)
 ## KF
 
 eye(n) = SMatrix{n,n}(Matrix{Float64}(I,n,n))
-nx = 2 # Dinemsion of state
-nu = 2 # Dinemsion of input
-ny = 2 # Dinemsion of measurements
+nx = 2 # Dimension of state
+nu = 2 # Dimension of input
+ny = 2 # Dimension of measurements
 
 d0 = MvNormal(@SVector(randn(nx)),2.0)   # Initial state Distribution
 du = MvNormal(2,1) # Control input distribution

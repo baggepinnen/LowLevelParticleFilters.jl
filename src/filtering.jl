@@ -58,7 +58,7 @@ end
 
 @inline function symmetrize(x::SArray)
     x = 0.5 .* (x .+ x')
-    Symmetric(x)
+    x
 end
 @inline function symmetrize(x)
     n = size(x,1)
@@ -66,7 +66,7 @@ end
         x[i,j] = 0.5 * (x[i,j] + x[j,i])
         x[j,i] = x[i,j]
     end
-    Symmetric(x)
+    x
 end
 
 """
