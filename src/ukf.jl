@@ -287,6 +287,7 @@ function correct!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y, p=paramet
     (; measurement,x,xsm,ys,R,R1) = ukf
     nx = length(x)
     L = length(xsm[1])
+    T = promote_type(eltype(x), eltype(R), eltype(R2))
     nv = size(R2, 1)
     ny = length(y)
     ns = length(xsm)
@@ -296,9 +297,9 @@ function correct!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y, p=paramet
     propagate_sigmapoints_c!(ukf, u, p, t)
     ym = safe_mean(ys)
     if R isa SMatrix
-        C = @SMatrix zeros(nx,ny)
+        C = @SMatrix zeros(T,nx,ny)
     else
-        C = zeros(nx,ny)
+        C = zeros(T,nx,ny)
     end
     @inbounds for i in eachindex(ys) # Cross cov between x and y
         d   = ys[i]-ym
@@ -361,7 +362,8 @@ end
     if R isa SMatrix
         ukf.R = symmetrize(R - K*S*K')
     else
-        ukf.R .-= K*S*K'
+        KS = K*S
+        mul!(ukf.R, KS, K', -1, 1)
         symmetrize(ukf.R)
     end
     nothing

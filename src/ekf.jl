@@ -1,5 +1,5 @@
-abstract type AbstractExtendedKalmanFilter <: AbstractKalmanFilter end
-@with_kw struct ExtendedKalmanFilter{KF <: KalmanFilter, F, G, A, C} <: AbstractExtendedKalmanFilter
+abstract type AbstractExtendedKalmanFilter{IPD,IPM} <: AbstractKalmanFilter end
+@with_kw struct ExtendedKalmanFilter{IPD, IPM, KF <: KalmanFilter, F, G, A, C} <: AbstractExtendedKalmanFilter{IPD,IPM}
     kf::KF
     dynamics::F
     measurement::G
@@ -8,7 +8,7 @@ abstract type AbstractExtendedKalmanFilter <: AbstractKalmanFilter end
 end
 
 """
-    ExtendedKalmanFilter(kf, dynamics, measurement)
+    ExtendedKalmanFilter(kf, dynamics, measurement; Ajac, Cjac)
     ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=MvNormal(Matrix(R1)); nu::Int, p = NullParameters(), α = 1.0, check = true)
 
 A nonlinear state estimator propagating uncertainty using linearization.
@@ -39,29 +39,42 @@ function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Mat
         x = zeros(T, nx)
         u = zeros(T, nu)
     end
-    t = one(T)
-    if Ajac === nothing
-        Ajac = (x,u,p,t) -> ForwardDiff.jacobian(x->dynamics(x,u,p,t), x)
-    end
-    if Cjac === nothing
-        Cjac = (x,u,p,t) -> ForwardDiff.jacobian(x->measurement(x,u,p,t), x)
-    end
-    A = Ajac(x,u,p,t)
+    t = zero(T)
+    A = zeros(nx, nx) # This one is never needed
     B = zeros(nx, nu) # This one is never needed
-    C = Cjac(x,u,p,t)
+    C = zeros(ny, nx) # This one is never needed
     D = zeros(ny, nu) # This one is never needed
     kf = KalmanFilter(A,B,C,D,R1,R2,d0; Ts, p, α, check)
-    return ExtendedKalmanFilter(kf, dynamics, measurement, Ajac, Cjac)
+
+    return ExtendedKalmanFilter(kf, dynamics, measurement; Ajac, Cjac)
 end
 
 function ExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing, Cjac = nothing)
+    IPD = has_ip(dynamics)
+    IPM = has_ip(measurement)
     if Ajac === nothing
-        Ajac = (x,u,p,t) -> ForwardDiff.jacobian(x->dynamics(x,u,p,t), x)
+        # if IPD
+        #     inner! = (xd,x)->dynamics(xd,x,u,p,t)
+        #     out = zeros(eltype(kf.d0), length(kf.x))
+        #     cfg = ForwardDiff.JacobianConfig(inner!, out, x)
+        #     Ajac = (x,u,p,t) -> ForwardDiff.jacobian!((xd,x)->dynamics(xd,x,u,p,t), out, x, cfg, Val(false))
+        # else
+        #     inner = x->dynamics(x,u,p,t)
+        #     cfg = ForwardDiff.JacobianConfig(inner, kf.x)
+        #     Ajac = (x,u,p,t) -> ForwardDiff.jacobian(x->dynamics(x,u,p,t), x, cfg, Val(false))
+        # end
+
+        if IPD
+            out = zeros(eltype(kf.d0), length(kf.x))
+            Ajac = (x,u,p,t) -> ForwardDiff.jacobian!((xd,x)->dynamics(xd,x,u,p,t), out, x)
+        else
+            Ajac = (x,u,p,t) -> ForwardDiff.jacobian(x->dynamics(x,u,p,t), x)
+        end
     end
     if Cjac === nothing
         Cjac = (x,u,p,t) -> ForwardDiff.jacobian(x->measurement(x,u,p,t), x)
     end
-    return ExtendedKalmanFilter(kf, dynamics, measurement, Ajac, Cjac)
+    return ExtendedKalmanFilter{IPD,IPM,typeof(kf),typeof(dynamics),typeof(measurement),typeof(Ajac),typeof(Cjac)}(kf, dynamics, measurement, Ajac, Cjac)
 end
 
 function Base.getproperty(ekf::EKF, s::Symbol) where EKF <: AbstractExtendedKalmanFilter
@@ -79,10 +92,16 @@ function Base.propertynames(ekf::EKF, private::Bool=false) where EKF <: Abstract
 end
 
 
-function predict!(kf::AbstractExtendedKalmanFilter, u, p = parameters(kf), t::Real = index(kf)*kf.Ts; R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α)
+function predict!(kf::AbstractExtendedKalmanFilter{IPD}, u, p = parameters(kf), t::Real = index(kf)*kf.Ts; R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α) where IPD
     @unpack x,R = kf
     A = kf.Ajac(x, u, p, t)
-    kf.x = kf.dynamics(x, u, p, t)
+    if IPD
+        xp = similar(x)
+        kf.dynamics(xp, x, u, p, t)
+        kf.x = xp
+    else
+        kf.x = kf.dynamics(x, u, p, t)
+    end
     if α == 1
         kf.R = symmetrize(A*R*A') + R1
     else
@@ -91,10 +110,16 @@ function predict!(kf::AbstractExtendedKalmanFilter, u, p = parameters(kf), t::Re
     kf.t += 1
 end
 
-function correct!(kf::AbstractExtendedKalmanFilter, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(kf.R2, kf.x, u, p, t))
+function correct!(kf::AbstractExtendedKalmanFilter{<:Any, IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(kf.R2, kf.x, u, p, t)) where IPM
     @unpack x,R = kf
     C   = kf.Cjac(x, u, p, t)
-    e   = y .- kf.measurement(x, u, p, t)
+    if IPM
+        e = zeros(length(y))
+        kf.measurement(e, x, u, p, t)
+        e .= y .- e
+    else
+        e = y .- kf.measurement(x, u, p, t)
+    end
     S   = symmetrize(C*R*C') + R2
     Sᵪ  = cholesky(S)
     K   = (R*C')/Sᵪ

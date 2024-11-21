@@ -108,6 +108,26 @@ function measurement(kf::AbstractKalmanFilter)
     end
 end
 
+# This helper struct is used to return a oop measurement function regardless of how the measurement function is defined
+struct MeasurementOop
+    kf::AbstractKalmanFilter
+end
+
+function (kfm::MeasurementOop)(x,u,p,t)
+    kf = kfm.kf
+    if has_ip(kf.measurement)
+        y = zeros(kf.ny)
+        measurement(kf)(y,x,u,p,t)
+        return y
+    else
+        return measurement(kf)(x,u,p,t)
+    end
+end
+
+function measurement_oop(kf::AbstractKalmanFilter)
+    MeasurementOop(kf)
+end
+
 function dynamics(kf::AbstractKalmanFilter)
     (x,u,p,t) -> get_mat(kf.A, x, u, p, t)*x + get_mat(kf.B, x, u, p, t)*u
 end
