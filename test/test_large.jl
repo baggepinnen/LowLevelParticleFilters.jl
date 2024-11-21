@@ -32,7 +32,7 @@ x,u,y = LowLevelParticleFilters.simulate(kf, U) # Simuate trajectory using the m
 ## Test allocations ============================================================
 sol_kf = forward_trajectory(kf, u, y) 
 a = @allocations forward_trajectory(kf, u, y) 
-@test a <= 6810*12*.1  # the x2 is for julia v1.11 vs. 1.10, the .1 is for 10% tolerance
+@test a <= 6810*2*1.1  # the x2 is for julia v1.11 vs. 1.10, the .1 is for 10% tolerance
 
 a = @allocated forward_trajectory(kf, u, y) 
 @test a <= 167477104*1.1 
@@ -60,3 +60,35 @@ a = @allocated forward_trajectory(skf, u, y)
 
 
 @test sol_kf.ll ≈ sol_ukf.ll ≈ sol_ekf.ll ≈ sol_sqkf.ll
+
+
+## In place ====================================================================
+
+function dynamics_large_ip(dx,x,u,p,t)
+    # __A*x .+ __B*u
+    mul!(dx, __A, x)
+    mul!(dx, __B, u, 1.0, 1.0)
+    nothing
+end
+function measurement_large_ip(y,x,u,p,t)
+    # __C*x
+    mul!(y, __C, x)
+    nothing
+end
+
+ukf = UnscentedKalmanFilter(dynamics_large_ip, measurement_large_ip, I(nx), I(ny); ny, nu)
+ekf = ExtendedKalmanFilter(dynamics_large_ip, measurement_large_ip, I(nx), I(ny); nu)
+
+sol_ukf = forward_trajectory(ukf, u, y)
+a = @allocations forward_trajectory(ukf, u, y)
+@test a <=  259416*1.1 # measured on julia v1.11, the .1 is for 10% tolerance
+
+a = @allocated forward_trajectory(ukf, u, y)
+@test a <=  390_719_072*1.1
+
+sol_ekf = forward_trajectory(ekf, u, y)
+a = @allocations forward_trajectory(ekf, u, y)
+@test a <=  15616*1.1
+
+a = @allocated forward_trajectory(ekf, u, y)
+@test a <=  220_814_208*1.1

@@ -65,14 +65,21 @@ function ExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing, Cjac = 
         # end
 
         if IPD
-            out = zeros(eltype(kf.d0), length(kf.x))
-            Ajac = (x,u,p,t) -> ForwardDiff.jacobian!((xd,x)->dynamics(xd,x,u,p,t), out, x)
+            outx = zeros(eltype(kf.d0), kf.nx)
+            jacx = zeros(eltype(kf.d0), kf.nx, kf.nx)
+            Ajac = (x,u,p,t) -> ForwardDiff.jacobian!(jacx, (xd,x)->dynamics(xd,x,u,p,t), outx, x)
         else
             Ajac = (x,u,p,t) -> ForwardDiff.jacobian(x->dynamics(x,u,p,t), x)
         end
     end
     if Cjac === nothing
-        Cjac = (x,u,p,t) -> ForwardDiff.jacobian(x->measurement(x,u,p,t), x)
+        if IPM
+            outy = zeros(eltype(kf.d0), kf.ny)
+            jacy = zeros(eltype(kf.d0), kf.ny, kf.nx)
+            Cjac = (x,u,p,t) -> ForwardDiff.jacobian!(jacy, (y,x)->measurement(y,x,u,p,t), outy, x)
+        else
+            Cjac = (x,u,p,t) -> ForwardDiff.jacobian(x->measurement(x,u,p,t), x)
+        end
     end
     return ExtendedKalmanFilter{IPD,IPM,typeof(kf),typeof(dynamics),typeof(measurement),typeof(Ajac),typeof(Cjac)}(kf, dynamics, measurement, Ajac, Cjac)
 end
@@ -112,7 +119,7 @@ end
 
 function correct!(kf::AbstractExtendedKalmanFilter{<:Any, IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(kf.R2, kf.x, u, p, t)) where IPM
     @unpack x,R = kf
-    C   = kf.Cjac(x, u, p, t)
+    C = kf.Cjac(x, u, p, t)
     if IPM
         e = zeros(length(y))
         kf.measurement(e, x, u, p, t)
