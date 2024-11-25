@@ -122,7 +122,7 @@ end
 function (kfm::MeasurementOop)(x,u,p,t)
     kf = kfm.kf
     mfun = measurement(kf)
-    if has_ip(mfun)
+    if kf isa UnscentedKalmanFilter{<:Any,true} || kf isa ExtendedKalmanFilter{<:Any,true}
         y = zeros(kf.ny)
         mfun(y,x,u,p,t)
         return y

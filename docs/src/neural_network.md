@@ -149,8 +149,8 @@ ukf = UnscentedKalmanFilter(dynamics, measurement, R1, R2, SimpleMvNormal(s0, 10
 @time sole = forward_trajectory(ekf, data.u, data.x)
 @time solu = forward_trajectory(ukf, data.u, data.x)
 
-plot(sole, plotx=false, plotxt=false, plotyh=true, plotyht=false, plotu=false, plote=true, name="EKF", layout=(nx, 1))
-plot!(solu, plotx=false, plotxt=false, plotyh=true, plotyht=false, plotu=false, plote=true, name="UKF", ploty=false, size=(1200, 1500))
+plot(sole, plotx=false, plotxt=false, plotyh=true, plotyht=false, plotu=false, plote=true, name="EKF", layout=(nx, 1), size=(1200, 1500))
+plot!(solu, plotx=false, plotxt=false, plotyh=true, plotyht=false, plotu=false, plote=true, name="UKF", ploty=false)
 DisplayAs.PNG(Plots.current()) # hide
 ```
 
@@ -180,12 +180,12 @@ Performing the estimation using the Extended Kalman Filter took
 ```julia
 using BenchmarkTools
 @btime forward_trajectory(ekf, data.u, data.x);
-  46.034 ms (77872 allocations: 123.45 MiB)
+  # 46.034 ms (77872 allocations: 123.45 MiB)
 ```
 and with the Unscented Kalman Filter
 ```julia
 @btime forward_trajectory(ukf, data.u, data.x);
-  142.608 ms (2134370 allocations: 224.82 MiB)
+  # 142.608 ms (2134370 allocations: 224.82 MiB)
 ```
 
 The EKF is a bit faster, which is to be expected. Both methods are very fast from a neural-network training perspective, but the performance will not scale favorably to very large network sizes.
