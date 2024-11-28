@@ -4,19 +4,29 @@ abstract type AbstractFilteringSolution end
     KalmanFilteringSolution{Tx,Txt,TR,TRt,Tll} <: AbstractFilteringSolution
 
 # Fields
-- `x`: predictions ``x(t+1|t)``
-- `xt`: filtered estimates ``x(t|t)``
-- `R`: predicted covariance matrices ``R(t+1|t)``
-- `Rt`: filter covariances ``R(t|t)``
+- `x`: predictions ``x(t+1|t)`` (plotted if `plotx=true`)
+- `xt`: filtered estimates ``x(t|t)`` (plotted if `plotxt=true`)
+- `R`: predicted covariance matrices ``R(t+1|t)`` (plotted if `plotR=true`)
+- `Rt`: filter covariances ``R(t|t)`` (plotted if `plotRt=true`)
 - `ll`: loglikelihood
-- `e`: prediction errors
+- `e`: prediction errors ``e(t|t-1) = y - ŷ(t|t-1)`` (plotted if `plote=true`)
 
 # Plot
 The solution object can be plotted
 ```
-plot(sol, plotx=true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, name="")
+plot(sol, plotx=true, plotxt=true, plotR=true, plotRt=true, plote=true, plotu=true, ploty=true, plotyh=true, plotyht=true, name="")
 ```
-where `plotx`, `plotxt`, `plotu`, `ploty`, `plotyh`, `plotyht` are booleans that control which plots are shown. `name` is a string that is prepended to the labels of the plots, which is useful when plotting multiple solutions in the same plot.
+where
+- `plotx`: Plot the predictions `x(t|t-1)`
+- `plotxt`: Plot the filtered estimates `x(t|t)`
+- `plotR`: Plot the predicted covariances `R(t|t-1)` as ribbons at ±2σ (1.96 σ to be precise)
+- `plotRt`: Plot the filter covariances `R(t|t)` as ribbons at ±2σ (1.96 σ to be precise)
+- `plote`: Plot the prediction errors `e(t|t-1) = y - ŷ(t|t-1)`
+- `plotu`: Plot the input
+- `ploty`: Plot the measurements
+- `plotyh`: Plot the predicted measurements `ŷ(t|t-1)`
+- `plotyht`: Plot the filtered measurements `ŷ(t|t)`
+- `name`: a string that is prepended to the labels of the plots, which is useful when plotting multiple solutions in the same plot.
 """
 struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll,Te} <: AbstractFilteringSolution
     f::F
@@ -30,20 +40,38 @@ struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll,Te} <: AbstractFilterin
     e::Te
 end
 
-@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, name = "")
+@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotR=false, plotRt=false, name = "")
     isempty(name) || (name = name*" ")
     kf = sol.f
     nx, nu, ny = length(sol.x[1]), length(sol.u[1]), length(sol.y[1])
     layout --> nx*(plotx || plotxt) + plotu*nu + (ploty || plotyh || plotyht || plote)*ny
-    plotx && @series begin
-        label --> ["$(name)x$(i)(t|t-1)" for i in 1:nx] |> permutedims
-        subplot --> (1:nx)'
-        timevec, reduce(hcat, sol.x)'
+    if plotx
+        m = reduce(hcat, sol.x)'
+        twoσ = 1.96 .* sqrt.(reduce(hcat, diag.(sol.R))')
+        for i = 1:nx
+            @series begin
+                label --> "$(name)x$(i)(t|t-1)"
+                subplot --> i
+                if plotR
+                    ribbon := twoσ[:,i]
+                end
+                timevec, m[:,i]
+            end
+        end
     end
-    plotxt && @series begin
-        label --> ["$(name)x$(i)(t|t)" for i in 1:nx] |> permutedims
-        subplot --> (1:nx)'
-        timevec, reduce(hcat, sol.xt)'
+    if plotxt
+        m = reduce(hcat, sol.xt)'
+        twoσ = 1.96 .* sqrt.(reduce(hcat, diag.(sol.Rt))')
+        for i = 1:nx
+            @series begin
+                label --> "$(name)x$(i)(t|t)"
+                subplot --> i
+                if plotRt
+                    ribbon := twoσ[:,i]
+                end
+                timevec, m[:,i]
+            end
+        end
     end
     plotu && nu > 0 && @series begin
         label --> ["u$(i)" for i in 1:nu] |> permutedims

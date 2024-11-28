@@ -28,7 +28,7 @@ See also [`UnscentedKalmanFilter`](@ref) which is typically more accurate than `
 """
 ExtendedKalmanFilter
 
-function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Matrix(R1)); nu::Int, Ts = 1.0, p = NullParameters(), α = 1.0, check = true, Ajac = nothing, Cjac = nothing)
+function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Matrix(R1)); nu::Int, ny=nothing, Ts = 1.0, p = NullParameters(), α = 1.0, check = true, Ajac = nothing, Cjac = nothing)
     nx = size(R1,1)
     ny = size(R2,1)
     T = eltype(R1)
