@@ -98,6 +98,6 @@ a = @allocated forward_trajectory(ekf, u, y)
 ## Plotting ====================================================================
 using Plots
 plot(sol_kf, plothy = true, plote = true)
-plot(sol_ukf, plothy = true, plote = true)
-plot(sol_ekf, plothy = true, plote = true)
+plot(sol_ukf, plothy = true, plote = true, plotR=true)
+plot(sol_ekf, plothy = true, plote = true, plotRt=true)
 plot(sol_sqkf, plothy = true, plote = true)
