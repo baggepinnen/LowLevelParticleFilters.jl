@@ -401,7 +401,7 @@ function compute_S(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}) where {IPD,IPM
 end
 
 
-function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u::AbstractVector, y::AbstractVector, p=parameters(kf)) where {IPD,IPM,AUGD,AUGM}
+function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u::AbstractVector=sol.u, y::AbstractVector=sol.y, p=parameters(kf)) where {IPD,IPM,AUGD,AUGM}
     # ref: "Unscented Rauch–Tung–Striebel Smoother" Simo Särkkä
     (; x,xt,R,Rt,ll) = sol
     T            = length(y)
@@ -412,6 +412,10 @@ function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter{IPD,IPM,
     ny = kf.ny
     nx = length(x[1])
     xi = 1:nx
+    xqxi = similar(xt[1])
+    C = zeros(nx,nx)
+    P⁻ = zeros(nx,nx)
+
     for t = T-1:-1:1
         tt = (t-1)*kf.Ts
         m = xt[t]
@@ -419,37 +423,38 @@ function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter{IPD,IPM,
         P̃ = cat(Rt[t], get_mat(kf.R1, xt[t], u[t], p, tt), dims=(1,2))
         X̃ = sigmapoints(m̃, P̃)
         X̃⁻ = map(X̃) do xq
+            @views xqxi .= xq[xi]
             if AUGD
                 if IPD
                     xd = similar(xq[xi]) .= 0
-                    kf.dynamics(xd, xq[xi], u[t], p, tt, xq[nx+1:end])
+                    kf.dynamics(xd, xqxi, u[t], p, tt, xq[nx+1:end])
                     xd
                 else
-                    kf.dynamics(xq[xi], u[t], p, tt, xq[nx+1:end])
+                    kf.dynamics(xqxi, u[t], p, tt, xq[nx+1:end])
                 end
             else
                 if IPD
-                    xd = similar(xq) .= 0
-                    kf.dynamics(xd, xq[xi], u[t], p, tt) + xq[nx+1:end]
-                    xd
+                    xd = similar(xq, length(xi)) .= 0
+                    kf.dynamics(xd, (xqxi), u[t], p, tt)
+                    xd .+= @view(xq[nx+1:end])
                 else
-                    kf.dynamics(xq[xi], u[t], p, tt) + xq[nx+1:end]
+                    kf.dynamics(xqxi, u[t], p, tt) + xq[nx+1:end]
                 end
             end
         end
         m⁻ = mean(X̃⁻)
-        P⁻ = @SMatrix zeros(nx,nx)
+        P⁻ .= 0
         for i in eachindex(X̃⁻)
             e = (X̃⁻[i] - m⁻)
-            P⁻ += e*e'
+            mul!(P⁻, e, e', 1, 1)
         end
         ns = length(X̃⁻)-1
-        P⁻ = P⁻ ./ ns
-        C = @SMatrix zeros(nx,nx)
+        @bangbang P⁻ .= P⁻ ./ ns
+        C .= 0
         for i in eachindex(X̃⁻)
-            C += (X̃[i][xi] - m)*(X̃⁻[i][xi] - m⁻)'
+            mul!(C, (X̃[i][xi] - m), (X̃⁻[i][xi] - m⁻)', 1, 1)
         end
-        C = C ./ ns
+        @bangbang C .= C ./ ns
         D = C / cholesky(P⁻)
         xT[t] = m + D*(xT[t+1]-m⁻[xi])
         RT[t] = Rt[t] + symmetrize(D*(RT[t+1] .- P⁻)*D')
