@@ -41,11 +41,14 @@ Perform the prediction step (updating the state estimate to ``x(t+1|t)``).
 If `R1` stored in `kf` is a function `R1(x, u, p, t)`, this function is evaluated at the state *before* the prediction is performed.
 The dynamics noise covariance matrix `R1` stored in `kf` can optionally be overridden by passing the argument `R1`, in this case `R1` must be a matrix.
 """
-function predict!(kf::AbstractKalmanFilter, u, p=parameters(kf), t::Real = index(kf)*kf.Ts; R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α)
+function predict!(kf::AbstractKalmanFilter, u, p=parameters(kf), t::Real = index(kf)*kf.Ts; R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α, At = get_mat(kf.A, kf.x, u, p, t), Bt = get_mat(kf.B, kf.x, u, p, t))
     @unpack A,B,x,R = kf
-    At = get_mat(A, x, u, p, t)
-    Bt = get_mat(B, x, u, p, t)
-    kf.x = At*x .+ Bt*u |> vec
+    if length(u) == 0
+        # Special case useful since empty input is common special case
+        kf.x = At*x
+    else
+        kf.x = At*x .+ Bt*u |> vec
+    end
     if α == 1
         if R isa SMatrix
             kf.R = symmetrize(At*R*At') + R1
@@ -83,12 +86,10 @@ The correct step for a Kalman filter returns not only the log likelihood `ll` an
 If `R2` stored in `kf` is a function `R2(x, u, p, t)`, this function is evaluated at the state *before* the correction is performed.
 The measurement noise covariance matrix `R2` stored in the filter object can optionally be overridden by passing the argument `R2`, in this case `R2` must be a matrix.
 """
-function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Real = index(kf)*kf.Ts; R2 = get_mat(kf.R2, kf.x, u, p, t))
-    @unpack C,D,x,R = kf
-    Ct = get_mat(C, x, u, p, t)
-    Dt = get_mat(D, x, u, p, t)
+function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Real = index(kf)*kf.Ts; R2 = get_mat(kf.R2, kf.x, u, p, t), Ct = get_mat(kf.C, kf.x, u, p, t), Dt = get_mat(kf.D, kf.x, u, p, t))
+    @unpack x,R = kf
     e   = y .- Ct*x
-    if !iszero(D)
+    if !iszero(Dt)
         e -= Dt*u
     end
     S = symmetrize(Ct*R*Ct')
