@@ -137,7 +137,7 @@ function correct!(kf::AbstractExtendedKalmanFilter{<:Any, IPM}, u, y, p = parame
 end
 
 
-function smooth(sol, kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf))
+function smooth(sol, kf::AbstractExtendedKalmanFilter, u::AbstractVector=sol.u, y::AbstractVector=sol.y, p=parameters(kf))
     T            = length(y)
     (; x,xt,R,Rt,ll) = sol
     xT           = similar(xt)
@@ -147,8 +147,8 @@ function smooth(sol, kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::Abs
     for t = T-1:-1:1
         A = kf.Ajac(xT[t+1],u[t+1],p,((t+1)-1)*kf.Ts)
         C     = Rt[t]*A'/R[t+1]
-        xT[t] = xt[t] .+ C*(xT[t+1] .- x[t+1])
-        RT[t] = Rt[t] .+ symmetrize(C*(RT[t+1] .- R[t+1])*C')
+        xT[t] = C*(xT[t+1] .- x[t+1]) .+= xt[t]
+        RT[t] = symmetrize(C*(RT[t+1] .- R[t+1])*C') .+= Rt[t]
     end
     xT,RT,ll
 end

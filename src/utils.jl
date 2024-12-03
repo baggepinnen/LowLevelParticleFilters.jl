@@ -115,7 +115,7 @@ Assumes the state [x; ẋ]. `h` is the sample time. `σ` scales the covariance m
 This matrix is rank deficient and some applications might require a small increase in the diagonal to make it positive definite.
 """
 function double_integrator_covariance(h, σ=1)
-    σ*[h^4/4 h^3/2
+    σ*SA[h^4/4 h^3/2
     h^3/2  h^2]
 end
 
