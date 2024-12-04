@@ -94,7 +94,8 @@ function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Real = in
     end
     S = symmetrize(Ct*R*Ct')
     @bangbang S .+= R2
-    Sᵪ  = cholesky(S)
+    Sᵪ  = cholesky(Symmetric(S); check = false)
+    issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed, got S = ", S)
     K   = (R*Ct')/Sᵪ
     kf.x += K*e
     kf.R  = symmetrize((I - K*Ct)*R) # WARNING against I .- A
@@ -197,7 +198,7 @@ end
 """
     sol = forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector, p=parameters(kf))
 
-Run a Kalman filter forward
+Run a Kalman filter forward to perform (offline) filtering along an entire trajectory `u, y`.
 
 Returns a KalmanFilteringSolution: with the following
 - `x`: predictions ``x(t|t-1)``
@@ -210,6 +211,15 @@ Returns a KalmanFilteringSolution: with the following
 ```
 plot(sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true)
 ```
+See [`KalmanFilteringSolution`](@ref) for more details.
+
+# Extended help
+## Very large systems
+If your system is very large, i.e., the dimension of the state is very large, and the arrays `u,y` are long, this function may use a lot of memory to store all covariance matrices `R, Rt`. If you do not need all the information retained by this function, you may opt to call one of the functions
+- [`loglik`](@ref)
+- [`LowLevelParticleFilters.sse`](@ref)
+- [`LowLevelParticleFilters.prediction_errors!`](@ref)
+That store significantly less information. The amount of computation performed by all of these functions is identical, the only difference lies in what is stored and returned.
 """
 function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf))
     reset!(kf)

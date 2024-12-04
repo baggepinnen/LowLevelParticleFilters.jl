@@ -307,7 +307,8 @@ function correct!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y, p=paramet
     end
     e   = y .- ym
     S   = compute_S(ukf)
-    Sᵪ  = cholesky(Symmetric(S))
+    Sᵪ  = cholesky(Symmetric(S); check=false)
+    issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed, got S = ", S)
     K   = (C./(ns-1))/Sᵪ # ns normalization to make it a covariance matrix
     ukf.x += K*e
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized

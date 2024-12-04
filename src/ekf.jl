@@ -128,7 +128,8 @@ function correct!(kf::AbstractExtendedKalmanFilter{<:Any, IPM}, u, y, p = parame
         e = y .- kf.measurement(x, u, p, t)
     end
     S   = symmetrize(C*R*C') + R2
-    Sᵪ  = cholesky(S)
+    Sᵪ  = cholesky(Symmetric(S); check=false)
+    issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed, got S = ", S)
     K   = (R*C')/Sᵪ
     kf.x += vec(K*e)
     kf.R  = symmetrize((I - K*C)*R) # WARNING against I .- A
