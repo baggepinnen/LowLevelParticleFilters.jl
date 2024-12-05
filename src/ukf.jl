@@ -32,7 +32,7 @@ end
 
 abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
 
-@with_kw mutable struct UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,R2T,D0T,XD,XD0,XM,Y,XT,RT,P,RJ} <: AbstractUnscentedKalmanFilter
+@with_kw mutable struct UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,R2T,D0T,XD,XD0,XM,Y,XT,RT,P,RJ,MET,CT,IT} <: AbstractUnscentedKalmanFilter
     dynamics::DT
     measurement::MT
     R1::R1T
@@ -54,6 +54,9 @@ abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
     nu::Int
     p::P
     reject::RJ = nothing
+    mean::MET = safe_mean
+    cov::CT = safe_cov
+    innovation::IT = .-
 end
 
 
@@ -103,8 +106,12 @@ Use of augmented dynamics incurs extra computational cost. The number of sigma p
 
 # Sigma-point rejection
 For problems with challenging dynamics, a mechanism for rejection of sigma points after the dynamics update is provided. A function `reject(x) -> Bool` can be provided through the keyword argument `reject` that returns `true` if a sigma point for ``x(t+1)`` should be rejected, e.g., if an instability or non-finite number is detected. A rejected point is replaced by the propagated mean point (the mean point cannot be rejected). This function may be provided either to the constructor of the UKF or passed to the [`predict!`](@ref) function.
+
+# Custom mean innovation functions
+By default, standard arithmetic mean and `e(y, yh) = y - yh` are used as mean and innovation functions.
+By passing the keyword arguments `mean` and `innovation`, you may overrider those for use in situations where the state lives on a manifold.
 """
-function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics,measurement,R1,R2,d0=SimpleMvNormal(R1); Ts = 1.0, p = NullParameters(), nu::Int, ny::Int, reject=nothing) where {IPD,IPM,AUGD,AUGM}
+function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics,measurement,R1,R2,d0=SimpleMvNormal(R1); Ts = 1.0, p = NullParameters(), nu::Int, ny::Int, reject=nothing, mean=safe_mean, cov=safe_cov, innovation=.-) where {IPD,IPM,AUGD,AUGM}
     nx = length(d0)
     nw = size(R1, 1) # nw may be smaller than nx for augmented dynamics
     ne = size(R2, 1)
@@ -154,11 +161,11 @@ function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics,measurement,R1,R2,d0=
     x0 = convert_x0_type(d0.μ)
     UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM, typeof(dynamics), typeof(measurement), typeof(R1), typeof(R2), typeof(d0),
         typeof(xsd), typeof(xsd0), typeof(xsm), typeof(ys),
-        typeof(x0), typeof(R), typeof(p), typeof(reject)}(
-            dynamics,measurement,R1,R2, d0, xsd,xsd0,xsm,ys, x0, R, 0, Ts, ny, nu, p, reject)
+        typeof(x0), typeof(R), typeof(p), typeof(reject), typeof(mean), typeof(cov), typeof(innovation)}(
+            dynamics,measurement,R1,R2, d0, xsd,xsd0,xsm,ys, x0, R, 0, Ts, ny, nu, p, reject, mean, cov, innovation)
 end
 
-function UnscentedKalmanFilter(dynamics,measurement,args...;kwargs...)
+function UnscentedKalmanFilter(dynamics,measurement,args...; kwargs...)
     IPD = has_ip(dynamics)
     IPM = has_ip(measurement)
     AUGD = false
@@ -175,7 +182,8 @@ dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 #                                        x(k+1)          x            u             p           t
 @inline has_ip(fun) = hasmethod(fun, Tuple{AbstractArray,AbstractArray,AbstractArray,AbstractArray,Real})
 
-function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = parameters(ukf), t::Real = index(ukf)*ukf.Ts; R1 = get_mat(ukf.R1, ukf.x, u, p, t), reject = ukf.reject) where {IPD,IPM,AUGD,AUGM}
+function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = parameters(ukf), t::Real = index(ukf)*ukf.Ts;
+        R1 = get_mat(ukf.R1, ukf.x, u, p, t), reject = ukf.reject, mean = ukf.mean, cov = ukf.cov) where {IPD,IPM,AUGD,AUGM}
     @unpack dynamics,measurement,x,xsd,xsd0,R = ukf
     # xtyped = eltype(xsd)(x)
     nx = length(x)
@@ -193,11 +201,11 @@ function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = paramete
         end
     end
     if AUGD
-        ukf.x = safe_mean(xsd)[xinds]
-        @bangbang ukf.R .= symmetrize(safe_cov(xsd)[xinds,xinds]) # TODO: optimize
+        ukf.x = mean(xsd)[xinds]
+        @bangbang ukf.R .= symmetrize(cov(xsd)[xinds,xinds]) # TODO: optimize
     else
-        ukf.x = safe_mean(xsd)
-        @bangbang ukf.R .= symmetrize(safe_cov(xsd, ukf.x)) .+ R1
+        ukf.x = mean(xsd)
+        @bangbang ukf.R .= symmetrize(cov(xsd, ukf.x)) .+ R1
     end
     ukf.t += 1
 end
@@ -283,7 +291,8 @@ function safe_cov(xs::Vector{<:SVector}, m = safe_mean(xs))
     c
 end
 
-function correct!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y, p=parameters(ukf), t::Real = index(ukf)*ukf.Ts; R2 = get_mat(ukf.R2, ukf.x, u, p, t)) where {IPD,IPM,AUGD,AUGM}
+function correct!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y, p=parameters(ukf), t::Real = index(ukf)*ukf.Ts;
+        R2 = get_mat(ukf.R2, ukf.x, u, p, t), mean = ukf.mean, cov = ukf.cov, innovation = ukf.innovation) where {IPD,IPM,AUGD,AUGM}
     (; measurement,x,xsm,ys,R,R1) = ukf
     nx = length(x)
     L = length(xsm[1])
@@ -305,7 +314,7 @@ function correct!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y, p=paramet
         d   = ys[i]-ym
         C = add_to_C!(C, xsm[i], x, d, xinds)
     end
-    e   = y .- ym
+    e   = innovation(y, ym)
     S   = compute_S(ukf)
     Sᵪ  = cholesky(Symmetric(S); check=false)
     issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed, got S = ", S)
