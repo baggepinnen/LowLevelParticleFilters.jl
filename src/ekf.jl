@@ -151,9 +151,13 @@ function smooth(sol, kf::AbstractExtendedKalmanFilter, u::AbstractVector=sol.u, 
         xT[t] = C*(xT[t+1] .- x[t+1]) .+= xt[t]
         RD = RT[t+1] .- R[t+1]
         RDC = RD*C'
-        CRDC = RD # Just a rename
-        mul!(CRDC, C, RDC)
-        R0 = symmetrize(CRDC)
+        if RD isa SMatrix
+            CRDC = symmetrize(C*RDC)
+        else
+            CRDC = RD # Just a rename
+            mul!(CRDC, C, RDC)
+            R0 = symmetrize(CRDC)
+        end
         RT[t] = @bangbang R0 .+= Rt[t]
     end
     xT,RT,ll
