@@ -147,9 +147,18 @@ function smooth(sol, kf::AbstractExtendedKalmanFilter, u::AbstractVector=sol.u, 
     RT[end]      = Rt[end]      |> copy
     for t = T-1:-1:1
         A = kf.Ajac(xT[t+1],u[t+1],p,((t+1)-1)*kf.Ts)
-        C     = Rt[t]*A'/R[t+1]
+        C     = Rt[t]*A'/cholesky(Symmetric(R[t+1]))
         xT[t] = C*(xT[t+1] .- x[t+1]) .+= xt[t]
-        RT[t] = symmetrize(C*(RT[t+1] .- R[t+1])*C') .+= Rt[t]
+        RD = RT[t+1] .- R[t+1]
+        RDC = RD*C'
+        if RD isa SMatrix
+            R0 = symmetrize(C*RDC)
+        else
+            CRDC = RD # Just a rename
+            mul!(CRDC, C, RDC)
+            R0 = symmetrize(CRDC)
+        end
+        RT[t] = @bangbang R0 .+= Rt[t]
     end
     xT,RT,ll
 end

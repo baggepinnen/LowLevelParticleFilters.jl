@@ -323,3 +323,32 @@ See examples in [Parameter Estimation](@ref).
 ## Tuning through simulation
 It is possible to sample from the Bayesian model implied by a filter and its parameters by calling the function [`simulate`](@ref). A simple tuning strategy is to adjust the noise parameters such that a simulation looks "similar" to the data, i.e., the data must not be too unlikely under the model.
 
+# Videos
+Several video tutorials using this package are available in the playlists
+- [System identification in Julia](https://www.youtube.com/playlist?list=PLC0QOsNQS8ha6SwaNOZDXyG9Bj8MPbF-q)
+- [Control systems in Julia](https://www.youtube.com/playlist?list=PLC0QOsNQS8hZtOQPHdtul3kpQwMOBL8Qc)
+
+Some examples featuring this package in particular are
+
+---
+
+**Using an optimizer to optimize the likelihood of an [`UnscentedKalmanFilter`](@ref):**
+```@raw html
+<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/0RxQwepVsoM" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+```
+
+---
+
+**Estimation of time-varying parameters:**
+```@raw html
+<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/zJcOPPLqv4A?si=XCvpo3WD-4U3PJ2S" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+```
+
+---
+
+**Adaptive control by means of estimation of time-varying parameters:**
+```@raw html
+<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/Ip_prmA7QTU?si=Fat_srMTQw5JtW2d" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+```
+
+
