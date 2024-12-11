@@ -361,7 +361,7 @@ function correct!(
     ym = mean(ys)
     C  = measurement_cov(xsm, x, ys, ym)
     e  = innovation(y, ym)
-    S  = compute_S(measurement_model, R2)
+    S  = compute_S(measurement_model, R2, ym)
     Sᵪ = cholesky(Symmetric(S); check = false)
     issuccess(Sᵪ) ||
         error("Cholesky factorization of innovation covariance failed, got S = ", S)
@@ -452,11 +452,11 @@ function propagate_sigmapoints_c!(
     end
 end
 
-function compute_S(measurement_model::UKFMeasurementModel{<:Any, AUGM}, R2) where AUGM
+function compute_S(measurement_model::UKFMeasurementModel{<:Any, AUGM}, R2, ym) where AUGM
     sigma_point_cache = measurement_model.cache
     ys = sigma_point_cache.x1
     cov = measurement_model.cov
-    S = symmetrize(cov(ys))
+    S = symmetrize(cov(ys, ym))
     if !AUGM
         if S isa SMatrix || S isa Symmetric{<:Any,<:SMatrix}
             S += R2

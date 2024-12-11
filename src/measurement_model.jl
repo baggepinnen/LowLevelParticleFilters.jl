@@ -16,6 +16,8 @@ struct UKFMeasurementModel{IPM,AUGM,MT,RT,IT,MET,CT,CCT,CAT} <: AbstractMeasurem
     cache::CAT
 end
 
+isinplace(::UKFMeasurementModel{IPM}) where IPM = IPM
+
 UKFMeasurementModel{IPM,AUGM}(
     measurement,
     R2,
@@ -35,7 +37,7 @@ UKFMeasurementModel{IPM,AUGM}(
     typeof(mean),
     typeof(cov),
     typeof(cross_cov),
-    cache,
+    typeof(cache),
 }(
     measurement,
     R2,
@@ -143,3 +145,83 @@ function SigmaPointCache{T}(nx, nw, ny, L, static) where T
 end
 
 Base.eltype(spc::SigmaPointCache) = eltype(spc.x0)
+
+
+## EKF measurement model =======================================================
+
+struct EKFMeasurementModel{IPM,MT,RT,CJ,CAT} <: AbstractMeasurementModel
+    measurement::MT
+    R2::RT
+    ny::Int
+    Cjac::CJ
+    cache::CAT
+end
+
+isinplace(::EKFMeasurementModel{IPM}) where IPM = IPM
+
+EKFMeasurementModel{IPM}(
+    measurement,
+    R2,
+    ny,
+    Cjac,
+    cache = nothing,
+) where {IPM} = EKFMeasurementModel{
+    IPM,
+    typeof(measurement),
+    typeof(R2),
+    typeof(Cjac),
+    typeof(cache),
+}(
+    measurement,
+    R2,
+    ny,
+    Cjac,
+    cache,
+)
+
+
+function add_cache(model::EKFMeasurementModel{IPM}, cache) where {IPM}
+    EKFMeasurementModel{eltype(model.cache),IPM}(
+        model.measurement,
+        model.R2,
+        model.ny,
+        model.Cjac,
+        cache,
+    )
+end
+
+
+function EKFMeasurementModel{T,IPM}(
+    measurement::M,
+    R2;
+    nx,
+    ny,
+    Cjac = nothing,
+) where {T,IPM,M}
+
+    
+    if Cjac === nothing
+        if IPM
+            outy = zeros(T, ny)
+            jacy = zeros(T, ny, nx)
+            Cjac = (x,u,p,t) -> ForwardDiff.jacobian!(jacy, (y,x)->measurement(y,x,u,p,t), outy, x)
+        else
+            Cjac = (x,u,p,t) -> ForwardDiff.jacobian(x->measurement(x,u,p,t), x)
+        end
+    end
+
+
+    EKFMeasurementModel{
+        IPM,
+        typeof(measurement),
+        typeof(R2),
+        typeof(Cjac),
+        typeof(nothing),
+    }(
+        measurement,
+        R2,
+        ny,
+        Cjac,
+        nothing,
+    )
+end
