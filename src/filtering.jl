@@ -85,6 +85,9 @@ The correct step for a Kalman filter returns not only the log likelihood `ll` an
 
 If `R2` stored in `kf` is a function `R2(x, u, p, t)`, this function is evaluated at the state *before* the correction is performed.
 The measurement noise covariance matrix `R2` stored in the filter object can optionally be overridden by passing the argument `R2`, in this case `R2` must be a matrix.
+
+# Extended help
+To perform separate measurement updates for different sensors, see the ["Measurement models" in the documentation](@ref measurement_models).
 """
 function correct!(kf::AbstractKalmanFilter, mm::LinearMeasurementModel, u, y, p=parameters(kf), t::Real = index(kf)*kf.Ts; R2 = get_mat(mm.R2, kf.x, u, p, t), Ct = get_mat(mm.C, kf.x, u, p, t), Dt = get_mat(mm.D, kf.x, u, p, t))
     (;x,R) = kf

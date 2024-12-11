@@ -36,7 +36,7 @@ A measurement model for the Unscented Kalman Filter.
 - `R2`: The measurement noise covariance matrix
 - `ny`: The number of measurement variables
 - `ne`: If `augmented_measurement` is `true`, the number of measurement noise variables
-- `innovation`: The innovation function `innovation(y, yh) -> e`
+- `innovation(y::AbstractVector, yh::AbstractVector)` where the arguments represent (measured output, predicted output)
 - `mean(ys::AbstractVector{<:AbstractVector})`: computes the mean of the vector of vectors of output sigma points.
 - `cov(ys::AbstractVector{<:AbstractVector}, y::AbstractVector)`: computes the covariance matrix of the output sigma points.
 - `cross_cov(xs::AbstractVector{<:AbstractVector}, x::AbstractVector, ys::AbstractVector{<:AbstractVector}, y::AbstractVector)` where the arguments represents (state sigma points, mean state, output sigma points, mean output). The function should return the **cross-covariance** matrix between the state and output sigma points.

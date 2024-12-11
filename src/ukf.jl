@@ -111,14 +111,17 @@ Use of augmented dynamics incurs extra computational cost. The number of sigma p
 # Sigma-point rejection
 For problems with challenging dynamics, a mechanism for rejection of sigma points after the dynamics update is provided. A function `reject(x) -> Bool` can be provided through the keyword argument `reject` that returns `true` if a sigma point for ``x(t+1)`` should be rejected, e.g., if an instability or non-finite number is detected. A rejected point is replaced by the propagated mean point (the mean point cannot be rejected). This function may be provided either to the constructor of the UKF or passed to the [`predict!`](@ref) function.
 
-# Custom mean innovation functions
+# Custom measurement models
+
 By default, standard arithmetic mean and `e(y, yh) = y - yh` are used as mean and innovation functions.
-By passing the keyword arguments `state_mean`, `state_cov`, `measurement_mean`, `measurement_cov` and `innovation`, you may override those for use in situations where the state lives on a manifold. These functions must take the following signatures
+
+By passing and explicitly created [`UKFMeasurementModel`](@ref), one may provide custom functions that compute the mean, the covariance and the innovation. This is useful in situations where the state or a measurement lives on a manifold. One may further override the mean and covariance functions for the state sigma points by passing the keyword arguments `state_mean` and `state_cov` to the constructor.
+
+
 - `state_mean(xs::AbstractVector{<:AbstractVector})` computes the mean of the vector of vectors of state sigma points.
 - `state_cov(xs::AbstractVector{<:AbstractVector}, m = mean(xs))` where the first argument represent state sigma points and the second argument, which must be optional, represents the mean of those points. The function should return the covariance matrix of the state sigma points.
-- `measurement_mean(ys::AbstractVector{<:AbstractVector})` computes the mean of the vector of vectors of output sigma points.
-- `measurement_cov(xs::AbstractVector{<:AbstractVector}, x::AbstractVector, ys::AbstractVector{<:AbstractVector}, y::AbstractVector)` where the arguments represents (state sigma points, mean state, output sigma points, mean output). The function should return the **cross-covariance** matrix between the state and output sigma points.
-- `innovation(y::AbstractVector, yh::AbstractVector)` where the arguments represent (measured output, predicted output)
+
+See [`UKFMeasurementModel`](@ref) for more details on how to set up a custom measurement model. Pass the custom measurement model as the second argument to the UKF constructor.
 """
 function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::AbstractMeasurementModel, R1, d0=SimpleMvNormal(R1); Ts=1.0, p=NullParameters(), nu::Int, ny=measurement_model.ny, nw = nothing, reject=nothing, state_mean=safe_mean, state_cov=safe_cov, kwargs...) where {IPD,IPM,AUGD,AUGM}
     nx = length(d0)
@@ -311,9 +314,9 @@ function safe_cov(xs::Vector{<:SVector}, m = safe_mean(xs))
 end
 
 """
-    correct!(ukf::UnscentedKalmanFilter{IPD, IPM, AUGD, AUGM}, u, y, p = parameters(ukf), t::Real = index(ukf) * ukf.Ts; R2 = get_mat(ukf.R2, ukf.x, u, p, t), mean, measurement_cov, innovation, measurement)
+    correct!(ukf::UnscentedKalmanFilter{IPD, IPM, AUGD, AUGM}, u, y, p = parameters(ukf), t::Real = index(ukf) * ukf.Ts; R2 = get_mat(ukf.R2, ukf.x, u, p, t), mean, cross_cov, innovation, measurement)
 
-The correction step for an [`UnscentedKalmanFilter`](@ref) allows the user to override, `R2`, `mean`, `measurement_cov`, `innovation`, `measurement`.
+The correction step for an [`UnscentedKalmanFilter`](@ref) allows the user to override, `R2`, `mean`, `cross_cov`, `innovation`, `measurement`.
 
 # Arguments:
 - `u`: The input
@@ -322,12 +325,12 @@ The correction step for an [`UnscentedKalmanFilter`](@ref) allows the user to ov
 - `t`: The current time
 - `R2`: The measurement noise covariance matrix, or a function that returns the covariance matrix `(x,u,p,t)->R2`.
 - `mean`: The function that computes the mean of the output sigma points.
-- `measurement_cov`: The function that computes the cross-covariance of the state and output sigma points.
+- `cross_cov`: The function that computes the cross-covariance of the state and output sigma points.
 - `innovation`: The function that computes the innovation between the measured output and the predicted output.
 - `measurement`: The measurement function.
 
 # Extended help
-To perform separate measurement updates for different sensors, call `correct!` once for each sensor, passing the approriate `measurement(x,u,p,t)->yh` and `R2` keyword arguments.
+To perform separate measurement updates for different sensors, see the ["Measurement models" in the documentation](@ref measurement_models)
 """
 function correct!(ukf::UnscentedKalmanFilter, u, y, p, t::Real; kwargs...)
     measurement_model = ukf.measurement_model
@@ -344,7 +347,7 @@ function correct!(
     t::Real = index(kf) * kf.Ts;
     R2 = get_mat(measurement_model.R2, kf.x, u, p, t),
     mean = measurement_model.mean,
-    measurement_cov = measurement_model.cross_cov,
+    cross_cov = measurement_model.cross_cov,
     innovation = measurement_model.innovation,
     measurement = measurement_model.measurement,
 )
@@ -359,7 +362,7 @@ function correct!(
     sigmapoints_c!(kf, measurement_model, R2) # TODO: should this take other arguments?
     propagate_sigmapoints_c!(kf, u, p, t, R2, measurement_model)
     ym = mean(ys)
-    C  = measurement_cov(xsm, x, ys, ym)
+    C  = cross_cov(xsm, x, ys, ym)
     e  = innovation(y, ym)
     S  = compute_S(measurement_model, R2, ym)
     Sᵪ = cholesky(Symmetric(S); check = false)

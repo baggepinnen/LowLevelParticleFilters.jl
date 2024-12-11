@@ -16,6 +16,7 @@ makedocs(
       pages = [
             "Home" => "index.md",
             "Discretization" => "discretization.md",
+            "Multiple measurement models" => "measurement_models.md",
             "Parameter estimation" => "parameter_estimation.md",
             "Benchmark" => "benchmark.md",
             "Performance tips" => "distributions.md",
