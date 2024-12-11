@@ -166,6 +166,17 @@ plot(
 DisplayAs.PNG(Plots.current()) # hide
 ```
 
+## Smoothing
+```@example ADAPTIVE_NN
+@time xTe,RTe = smooth(sole, ekf)
+@time xTu,RTu = smooth(solu, ukf)
+plot(
+    plot(0:Ts:4000, reduce(hcat, xTe)'[:, nx+1:end], title="EKF parameters", c=1, alpha=0.2),
+    plot(0:Ts:4000, reduce(hcat, xTu)'[:, nx+1:end], title="UKF parameters", c=1, alpha=0.2),
+    legend = false,
+)
+```
+
 ## Benchmarking
 The neural network used in this example has
 ```@example ADAPTIVE_NN

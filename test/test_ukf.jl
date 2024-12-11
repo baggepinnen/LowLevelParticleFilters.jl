@@ -91,13 +91,13 @@ dynamics(x,u::NamedTuple,p,t) = _A*x .+ _B*[u.a; u.b]
 unt = reinterpret(@NamedTuple{a::Float64, b::Float64}, u)
 resukfnt = forward_trajectory(ukf, unt, y)
 @test resukf.xt ≈ resukfnt.xt
-xTnt,RTnt,llnt = smooth(resukfnt, ukf, unt, y)
+xTnt,RTnt,llnt = smooth(resukfnt, ukf)
 @test xT ≈ xTnt
 @test RT ≈ RTnt
 @test ll ≈ llnt
 
 predict!(ukf, u[1], y[1], reject=x->true)
-@test iszero(cov(ukf.xsd)) # we rejected all points so the covariance should be zero
+@test iszero(cov(ukf.predict_sigma_point_cache.x1)) # we rejected all points so the covariance should be zero
 
 ## Non-static arrays ===========================================================
 

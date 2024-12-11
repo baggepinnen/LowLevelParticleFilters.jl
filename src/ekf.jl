@@ -1,5 +1,5 @@
 abstract type AbstractExtendedKalmanFilter{IPD,IPM} <: AbstractKalmanFilter end
-@with_kw struct ExtendedKalmanFilter{IPD, IPM, KF <: KalmanFilter, F, G, A, C} <: AbstractExtendedKalmanFilter{IPD,IPM}
+struct ExtendedKalmanFilter{IPD, IPM, KF <: KalmanFilter, F, G, A, C} <: AbstractExtendedKalmanFilter{IPD,IPM}
     kf::KF
     dynamics::F
     measurement::G
@@ -117,15 +117,15 @@ function predict!(kf::AbstractExtendedKalmanFilter{IPD}, u, p = parameters(kf), 
     kf.t += 1
 end
 
-function correct!(kf::AbstractExtendedKalmanFilter{<:Any, IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(kf.R2, kf.x, u, p, t)) where IPM
+function correct!(kf::AbstractExtendedKalmanFilter{<:Any, IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(kf.R2, kf.x, u, p, t), measurement = kf.measurement) where IPM
     @unpack x,R = kf
     C = kf.Cjac(x, u, p, t)
     if IPM
         e = zeros(length(y))
-        kf.measurement(e, x, u, p, t)
+        measurement(e, x, u, p, t)
         e .= y .- e
     else
-        e = y .- kf.measurement(x, u, p, t)
+        e = y .- measurement(x, u, p, t)
     end
     S   = symmetrize(C*R*C') + R2
     Sᵪ  = cholesky(Symmetric(S); check=false)

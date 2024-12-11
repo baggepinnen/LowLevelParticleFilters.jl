@@ -22,7 +22,7 @@ function convert_x0_type(μ)
     end
 end
 
-@with_kw mutable struct KalmanFilter{AT,BT,CT,DT,R1T,R2T,D0T,XT,RT,TS,P,αT} <: AbstractKalmanFilter
+mutable struct KalmanFilter{AT,BT,CT,DT,R1T,R2T,D0T,XT,RT,TS,P,αT} <: AbstractKalmanFilter
     A::AT
     B::BT
     C::CT
@@ -32,10 +32,10 @@ end
     d0::D0T
     x::XT
     R::RT
-    t::Int = 0
-    Ts::TS = 1
-    p::P = NullParameters()
-    α::αT = 1.0
+    t::Int
+    Ts::TS
+    p::P
+    α::αT
 end
 
 

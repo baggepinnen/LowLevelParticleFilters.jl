@@ -28,6 +28,7 @@ abstract type AbstractFilter end
 
 include("PFtypes.jl")
 include("solutions.jl")
+include("measurement_model.jl")
 include("kalman.jl")
 include("ukf.jl")
 include("filtering.jl")
