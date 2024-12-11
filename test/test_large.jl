@@ -18,11 +18,14 @@ const __C = randn(ny,nx)
 dynamics_large(x,u,p,t) = __A*x .+ __B*u
 measurement_large(x,u,p,t) = __C*x
 
+R1 = I(nx)
+R2 = I(ny)
+
 T    = 200 # Number of time steps
-kf   = KalmanFilter(__A, __B, __C, 0, I(nx), I(ny))
-skf = SqKalmanFilter(__A, __B, __C, 0, I(nx), I(ny))
-ukf = UnscentedKalmanFilter(dynamics_large, measurement_large, I(nx), I(ny); ny, nu)
-ekf = ExtendedKalmanFilter(dynamics_large, measurement_large, I(nx), I(ny); nu)
+kf   = KalmanFilter(__A, __B, __C, 0, R1, R2)
+skf = SqKalmanFilter(__A, __B, __C, 0, R1, R2)
+ukf = UnscentedKalmanFilter(dynamics_large, measurement_large, R1, R2; ny, nu)
+ekf = ExtendedKalmanFilter(dynamics_large, measurement_large, R1, R2; nu)
 
 U = [randn(nu) for _ in 1:T]
 x,u,y = LowLevelParticleFilters.simulate(kf, U) # Simuate trajectory using the model in the filter
@@ -76,8 +79,8 @@ function measurement_large_ip(y,x,u,p,t)
     nothing
 end
 
-ukf = UnscentedKalmanFilter(dynamics_large_ip, measurement_large_ip, I(nx), I(ny); ny, nu)
-ekf = ExtendedKalmanFilter(dynamics_large_ip, measurement_large_ip, I(nx), I(ny); nu)
+ukf = UnscentedKalmanFilter(dynamics_large_ip, measurement_large_ip, R1, R2; ny, nu)
+ekf = ExtendedKalmanFilter(dynamics_large_ip, measurement_large_ip, R1, R2; nu)
 
 sol_ukf = forward_trajectory(ukf, u, y)
 a = @allocations forward_trajectory(ukf, u, y)
@@ -101,3 +104,23 @@ plot(sol_kf, plothy = true, plote = true)
 plot(sol_ukf, plothy = true, plote = true, plotR=true)
 plot(sol_ekf, plothy = true, plote = true, plotRt=true)
 plot(sol_sqkf, plothy = true, plote = true)
+
+## Test mixing of measurement models ===========================================
+
+mm_ukf = UKFMeasurementModel{Float64, true, false}(measurement_large_ip, R2; nx, ny)
+mm_ekf = EKFMeasurementModel{Float64, true}(measurement_large_ip, R2; nx, ny)
+mm_kf = LinearMeasurementModel(__C, 0, R2; nx, ny)
+
+
+mms = [mm_ukf, mm_ekf, mm_kf]
+
+for mm in mms
+    @show nameof(typeof(mm))
+    
+    correct!(kf, mm, u[1], y[1])
+    correct!(ekf, mm, u[1], y[1])
+    correct!(ukf, mm, u[1], y[1])
+
+    @test kf.x ≈ ekf.x ≈ ukf.x
+    @test kf.R ≈ ekf.R ≈ ukf.R
+end

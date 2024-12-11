@@ -336,28 +336,28 @@ end
 
 
 function correct!(
-    ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM},
+    kf::AbstractKalmanFilter,
     measurement_model::UKFMeasurementModel,
     u,
     y,
-    p = parameters(ukf),
-    t::Real = index(ukf) * ukf.Ts;
-    R2 = get_mat(measurement_model.R2, ukf.x, u, p, t),
+    p = parameters(kf),
+    t::Real = index(kf) * kf.Ts;
+    R2 = get_mat(measurement_model.R2, kf.x, u, p, t),
     mean = measurement_model.mean,
     measurement_cov = measurement_model.cross_cov,
     innovation = measurement_model.innovation,
     measurement = measurement_model.measurement,
-) where {IPD,IPM,AUGD,AUGM}
+)
 
     sigma_point_cache = measurement_model.cache
     xsm = sigma_point_cache.x0
     ys = sigma_point_cache.x1
-    (; x, R) = ukf
+    (; x, R) = kf
 
     T = promote_type(eltype(x), eltype(R), eltype(R2))
     ns = length(xsm)
-    sigmapoints_c!(ukf, sigma_point_cache, R2) # TODO: should this take other arguments?
-    propagate_sigmapoints_c!(ukf, u, p, t, R2, measurement_model)
+    sigmapoints_c!(kf, measurement_model, R2) # TODO: should this take other arguments?
+    propagate_sigmapoints_c!(kf, u, p, t, R2, measurement_model)
     ym = mean(ys)
     C  = measurement_cov(xsm, x, ys, ym)
     e  = innovation(y, ym)
@@ -366,28 +366,31 @@ function correct!(
     issuccess(Sᵪ) ||
         error("Cholesky factorization of innovation covariance failed, got S = ", S)
     K = (C ./ (ns - 1)) / Sᵪ # ns normalization to make it a covariance matrix
-    ukf.x += K * e
+    kf.x += K * e
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized
-    RmKSKT!(ukf, K, S)
+    RmKSKT!(kf, K, S)
     ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf
     (; ll, e, S, Sᵪ, K)
 end
 
+# AUGM = false
 function sigmapoints_c!(
-    ukf::UnscentedKalmanFilter{<:Any,<:Any,<:Any,false},
-    sigma_point_cache,
+    kf,
+    measurement_model::UKFMeasurementModel{<:Any,false},
     R2,
 )
+    sigma_point_cache = measurement_model.cache
     xsm = sigma_point_cache.x0
-    sigmapoints!(xsm, eltype(xsm)(ukf.x), ukf.R)
+    sigmapoints!(xsm, eltype(xsm)(kf.x), kf.R)
 end
 
 function sigmapoints_c!(
-    ukf::UnscentedKalmanFilter{<:Any,<:Any,<:Any,true},
-    sigma_point_cache,
+    kf,
+    measurement_model::UKFMeasurementModel{<:Any,true},
     R2,
 )
-    (; x, R) = ukf
+    (; x, R) = kf
+    sigma_point_cache = measurement_model.cache
     xsm = sigma_point_cache.x0
     nx = length(x)
     nv = size(R2, 1)
@@ -398,12 +401,12 @@ end
 
 # IPM = true
 function propagate_sigmapoints_c!(
-    ukf::UnscentedKalmanFilter{<:Any,true,<:Any},
+    kf,
     u,
     p,
     t,
     R2,
-    measurement_model,
+    measurement_model::UKFMeasurementModel{true},
 )
     sigma_point_cache = measurement_model.cache
     xsm = sigma_point_cache.x0
@@ -415,17 +418,17 @@ end
 
 # AUGM = true
 function propagate_sigmapoints_c!(
-    ukf::UnscentedKalmanFilter{<:Any,false,<:Any,true},
+    kf,
     u,
     p,
     t,
     R2,
-    measurement_model,
+    measurement_model::UKFMeasurementModel{false,true},
 )
     sigma_point_cache = measurement_model.cache
     xsm = sigma_point_cache.x0
     ys = sigma_point_cache.x1
-    (; x, R) = ukf
+    (; x, R) = kf
     nx = length(x)
     nv = size(R2, 1)
     xinds = 1:nx
@@ -437,12 +440,12 @@ end
 
 # AUGM = false
 function propagate_sigmapoints_c!(
-    ukf::UnscentedKalmanFilter{<:Any,false,<:Any,false},
+    kf,
     u,
     p,
     t,
     R2,
-    measurement_model,
+    measurement_model::UKFMeasurementModel{false,false},
 )
     sigma_point_cache = measurement_model.cache
     xsm = sigma_point_cache.x0

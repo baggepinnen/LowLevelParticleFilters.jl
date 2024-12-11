@@ -137,8 +137,8 @@ function correct!(ukf::AbstractExtendedKalmanFilter, u, y, p, t::Real; kwargs...
     correct!(ukf, measurement_model, u, y, p, t::Real; kwargs...)    
 end
 
-function correct!(kf::AbstractExtendedKalmanFilter{<:Any, IPM},  measurement_model::EKFMeasurementModel, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(kf.measurement_model.R2, kf.x, u, p, t))where IPM
-    @unpack x,R = kf
+function correct!(kf::AbstractKalmanFilter,  measurement_model::EKFMeasurementModel{IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(measurement_model.R2, kf.x, u, p, t)) where IPM
+    (; x,R) = kf
     (; measurement, Cjac) = measurement_model
     C = Cjac(x, u, p, t)
     if IPM

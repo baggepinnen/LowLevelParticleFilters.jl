@@ -86,8 +86,8 @@ The correct step for a Kalman filter returns not only the log likelihood `ll` an
 If `R2` stored in `kf` is a function `R2(x, u, p, t)`, this function is evaluated at the state *before* the correction is performed.
 The measurement noise covariance matrix `R2` stored in the filter object can optionally be overridden by passing the argument `R2`, in this case `R2` must be a matrix.
 """
-function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Real = index(kf)*kf.Ts; R2 = get_mat(kf.R2, kf.x, u, p, t), Ct = get_mat(kf.C, kf.x, u, p, t), Dt = get_mat(kf.D, kf.x, u, p, t))
-    @unpack x,R = kf
+function correct!(kf::AbstractKalmanFilter, mm::LinearMeasurementModel, u, y, p=parameters(kf), t::Real = index(kf)*kf.Ts; R2 = get_mat(mm.R2, kf.x, u, p, t), Ct = get_mat(mm.C, kf.x, u, p, t), Dt = get_mat(mm.D, kf.x, u, p, t))
+    (;x,R) = kf
     e   = y .- Ct*x
     if !iszero(Dt)
         e -= Dt*u
@@ -101,6 +101,11 @@ function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Real = in
     kf.R  = symmetrize((I - K*Ct)*R) # WARNING against I .- A
     ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), e)# - 1/2*logdet(S) # logdet is included in logpdf
     (; ll, e, S, Sᵪ, K)
+end
+
+function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Real = index(kf)*kf.Ts; kwargs...)
+    measurement_model = LinearMeasurementModel(kf.C, kf.D, kf.R2, length(y), nothing)
+    correct!(kf, measurement_model, u, y, p, t; kwargs...)
 end
 
 """
