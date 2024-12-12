@@ -1,11 +1,12 @@
 
 """
+    xT,RT,ll = smooth(sol, kf)
     xT,RT,ll = smooth(kf::KalmanFilter, u::Vector, y::Vector, p=parameters(kf))
     xT,RT,ll = smooth(kf::ExtendedKalmanFilter, u::Vector, y::Vector, p=parameters(kf))
 
-Returns smoothed estimates of state `x` and covariance `R` given all input output data `u,y`
+Returns smoothed estimates of state `x` and covariance `R` given all input output data `u,y` or an existing solution `sol` obtained from [`forward_trajectory`](@ref).
 """
-function smooth(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf))
+function smooth(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractVector=sol.u, y::AbstractVector=sol.y,  p=parameters(kf))
     (; x,xt,R,Rt,ll) = sol
     T            = length(y)
     xT           = similar(xt)
@@ -13,7 +14,7 @@ function smooth(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractVecto
     xT[end]      = xt[end]      |> copy
     RT[end]      = Rt[end]      |> copy
     for t = T-1:-1:1
-        C     = Rt[t]*get_mat(kf.A, xT[t+1], u[t+1], p, (t+1-1)*kf.Ts)'/R[t+1]
+        C     = Rt[t]*get_mat(kf.A, xT[t+1], u[t+1], p, (t+1-1)*kf.Ts)'/cholesky(Symmetric(R[t+1]))
         xT[t] = xt[t] .+ C*(xT[t+1] .- x[t+1])
         RT[t] = Rt[t] .+ symmetrize(C*(RT[t+1] .- R[t+1])*C')
     end
