@@ -18,6 +18,7 @@ This is possible by constructing a filter with an explicitly created measurement
 
 Constructing a Kalman-type filter automatically creates a measurement model of the corresponding type, given the functions/matrices passed to the filter constructor. To construct a filter with a non-standard measurement model, e.g., and UKF with a KF measurement model, manually create the desired measurement model and pass it as the second argument to the constructor. For example, to construct an UKF with a linear measurement model, we do
 ```@example MEASUREMENT_MODELS
+using LowLevelParticleFilters, LinearAlgebra
 nx = 100    # Dimension of state
 nu = 2      # Dimension of input
 ny = 90     # Dimension of measurements
@@ -54,6 +55,7 @@ Above we constructed a filter with a custom measurement model, we can also pass 
 The following example instantiates three different filters and three different measurement models. Each filter is updated with each measurement model, demonstrating that any combination of filter and measurement model can be used together.
 
 ```@example MEASUREMENT_MODELS
+using LowLevelParticleFilters, LinearAlgebra
 nx = 100    # Dimension of state
 nu = 2      # Dimension of input
 ny = 90     # Dimension of measurements
@@ -100,6 +102,7 @@ for mm in mms, filter in filters
     @info "Updating $(nameof(typeof(filter))) with measurement model $(nameof(typeof(mm)))"
     correct!(filter, mm, u[1], y[1]) # Pass the measurement model as the second argument to the correct! function if not using the measurement model built into the filter
 end
+nothing # hide
 ```
 
 Since the dynamics in this particular example is in fact linear, we should get identical results for all three filters.
