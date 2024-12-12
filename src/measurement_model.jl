@@ -1,15 +1,74 @@
 abstract type AbstractMeasurementModel end
 
-"""
-    ComponsiteMeasurementModel{M}
+measurement(model::AbstractMeasurementModel) = model.measurement
 
-A composite measurement model that combines multiple measurement models.
+struct CompositeMeasurementModel{M} <: AbstractMeasurementModel
+    models::M
+    ny::Int
+    R2
+end
+
+"""
+    CompositeMeasurementModel(model1, model2, ...)
+
+A composite measurement model that combines multiple measurement models. This model acts as all component models concatenated. The tuple returned from [`correct!`](@ref) will be
+- `ll`: The sum of the log-likelihood of all component models
+- `e`: The concatenated innovation vector
+- `S`: A vector of the innovation covariance matrices of the component models
+- `Sᵪ`: A vector of the Cholesky factorizations of the innovation covariance matrices of the component models
+- `K`: A vector of the Kalman gains of the component models
+
+If all sensors operate on at the same rate, and all measurement models are of the same type, it's more efficient to use a single measurement model with a vector-valued measurement function.
 
 # Fields:
 - `models`: A tuple of measurement models
 """
-struct ComponsiteMeasurementModel{M} <: AbstractMeasurementModel
-    models::M
+function CompositeMeasurementModel(m1, rest...)
+    models = (m1, rest...)
+    ny = sum(m.ny for m in models)
+    R2 = cat([m.R2 for m in models]..., dims=(1,2))
+    CompositeMeasurementModel(models, ny, R2)
+end
+
+isinplace(model::CompositeMeasurementModel) = isinplace(model.models[1])
+
+function measurement(model::CompositeMeasurementModel)
+    function (x,u,p,t)
+        y = zeros(model.ny)
+        i = 1
+        for m in model.models
+            y[i:i+m.ny-1] .= measurement(m)(x,u,p,t)
+            i += m.ny
+        end
+        y
+    end
+end
+
+function correct!(
+    kf::AbstractKalmanFilter,
+    measurement_model::CompositeMeasurementModel,
+    u,
+    y,
+    p = parameters(kf),
+    t::Real = index(kf) * kf.Ts;
+)
+    ll = 0.0
+    e = zeros(measurement_model.ny)
+    S = []
+    Sᵪ = []
+    K = []
+    last_ind = 0
+    for i = 1:length(measurement_model.models)
+        lli, ei, Si, Sᵪi, Ki = correct!(kf, measurement_model.models[i], u, y, p, t)
+        ll += lli
+        inds = (1:measurement_model.models[i].ny) .+ last_ind
+        e[inds] .= ei
+        last_ind = inds[end]
+        push!(S, Si)
+        push!(Sᵪ, Sᵪi)
+        push!(K, Ki)
+    end
+    ll, e, S, Sᵪ, K
 end
 
 struct UKFMeasurementModel{IPM,AUGM,MT,RT,IT,MET,CT,CCT,CAT} <: AbstractMeasurementModel
@@ -154,7 +213,6 @@ function UKFMeasurementModel{T,IPM,AUGM}(
         correct_sigma_point_cahce,
     )
 end
-
 
 
 struct SigmaPointCache{X0, X1}
@@ -306,3 +364,26 @@ struct LinearMeasurementModel{CT,DT,RT,CAT} <: AbstractMeasurementModel
 end
 
 LinearMeasurementModel(C, D, R2; ny = size(R2, 1), cache = nothing, nx=nothing) = LinearMeasurementModel(C, D, R2, ny, cache)
+isinplace(::LinearMeasurementModel) = false
+
+function (model::LinearMeasurementModel)(x,u,p,t)
+    y = model.C*x
+    if !iszero(model.D)
+        if y isa SVector
+            y += model.D*u
+        else
+            mul!(y, model.D, u, 1, 1)
+        end
+    end
+    y
+end
+
+function (model::LinearMeasurementModel)(y,x,u,p,t)
+    mul!(y, model.C, x)
+    if !iszero(model.D)
+        mul!(y, model.D, u, 1, 1)
+    end
+    y
+end
+
+measurement(model::LinearMeasurementModel) = model

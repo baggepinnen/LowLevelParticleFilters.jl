@@ -57,6 +57,8 @@ function Base.getproperty(ukf::UnscentedKalmanFilter, s::Symbol)
         return getfield(mm, s)
     elseif s === :nx
         return length(getfield(ukf, :x))
+    elseif s === :measurement
+        return measurement(mm)
     else
         throw(ArgumentError("$(typeof(ukf)) has no property named $s"))
     end

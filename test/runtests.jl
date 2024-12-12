@@ -379,6 +379,10 @@ end
     include("test_parameters.jl")
 end
 
+@testset "measurement_models" begin
+    @info "Testing measurement_models"
+    include("test_measurement_models.jl")
+end
 
 
 end

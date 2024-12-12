@@ -110,9 +110,9 @@ plot(sol_sqkf, plothy = true, plote = true)
 mm_ukf = UKFMeasurementModel{Float64, true, false}(measurement_large_ip, R2; nx, ny)
 mm_ekf = EKFMeasurementModel{Float64, true}(measurement_large_ip, R2; nx, ny)
 mm_kf = LinearMeasurementModel(__C, 0, R2; nx, ny)
+mm = CompositeMeasurementModel(mm_ukf, mm_ekf, mm_kf)
 
-
-mms = [mm_ukf, mm_ekf, mm_kf]
+mms = [mm_ukf, mm_ekf, mm_kf, mm]
 
 for mm in mms
     @show nameof(typeof(mm))

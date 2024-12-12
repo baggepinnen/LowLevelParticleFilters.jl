@@ -1,5 +1,3 @@
-abstract type AbstractKalmanFilter <: AbstractFilter end
-
 function convert_cov_type(R1, R)
     if !(eltype(R) <: AbstractFloat)
         R = float.(R)

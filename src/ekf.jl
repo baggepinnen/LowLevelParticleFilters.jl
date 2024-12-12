@@ -96,6 +96,8 @@ function Base.getproperty(ekf::EKF, s::Symbol) where EKF <: AbstractExtendedKalm
     mm = getfield(ekf, :measurement_model)
     if s ∈ fieldnames(typeof(mm))
         return getfield(mm, s)
+    elseif s === :measurement
+        return measurement(mm)
     end
     kf = getfield(ekf, :kf)
     if s ∈ fieldnames(typeof(kf))
