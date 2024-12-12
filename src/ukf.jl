@@ -316,9 +316,9 @@ function safe_cov(xs::Vector{<:SVector}, m = safe_mean(xs))
 end
 
 """
-    correct!(ukf::UnscentedKalmanFilter{IPD, IPM, AUGD, AUGM}, u, y, p = parameters(ukf), t::Real = index(ukf) * ukf.Ts; R2 = get_mat(ukf.R2, ukf.x, u, p, t), mean, cross_cov, innovation, measurement)
+    correct!(ukf::UnscentedKalmanFilter{IPD, IPM, AUGD, AUGM}, u, y, p = parameters(ukf), t::Real = index(ukf) * ukf.Ts; R2 = get_mat(ukf.R2, ukf.x, u, p, t), mean, cross_cov, innovation)
 
-The correction step for an [`UnscentedKalmanFilter`](@ref) allows the user to override, `R2`, `mean`, `cross_cov`, `innovation`, `measurement`.
+The correction step for an [`UnscentedKalmanFilter`](@ref) allows the user to override, `R2`, `mean`, `cross_cov`, `innovation`.
 
 # Arguments:
 - `u`: The input
@@ -329,7 +329,6 @@ The correction step for an [`UnscentedKalmanFilter`](@ref) allows the user to ov
 - `mean`: The function that computes the mean of the output sigma points.
 - `cross_cov`: The function that computes the cross-covariance of the state and output sigma points.
 - `innovation`: The function that computes the innovation between the measured output and the predicted output.
-- `measurement`: The measurement function.
 
 # Extended help
 To perform separate measurement updates for different sensors, see the ["Measurement models" in the documentation](@ref measurement_models)
