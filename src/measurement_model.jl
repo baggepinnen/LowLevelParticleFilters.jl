@@ -132,21 +132,6 @@ UKFMeasurementModel{IPM,AUGM}(
     cache,
 )
 
-
-function add_cache(model::UKFMeasurementModel{IPM,AUGM}, cache) where {IPM,AUGM}
-    UKFMeasurementModel{eltype(model.cache),IPM,AUGM}(
-        model.measurement,
-        model.R2,
-        model.ny,
-        model.ne,
-        model.innovation,
-        model.mean,
-        model.cov,
-        model.cross_cov,
-        cache,
-    )
-end
-
 """
     UKFMeasurementModel{T,IPM,AUGM}(measurement, R2; nx, ny, ne = nothing, innovation = -, mean = safe_mean, cov = safe_cov, cross_cov = cross_cov, static = nothing)
 
@@ -288,17 +273,6 @@ EKFMeasurementModel{IPM}(
     Cjac,
     cache,
 )
-
-
-function add_cache(model::EKFMeasurementModel{IPM}, cache) where {IPM}
-    EKFMeasurementModel{eltype(model.cache),IPM}(
-        model.measurement,
-        model.R2,
-        model.ny,
-        model.Cjac,
-        cache,
-    )
-end
 
 """
     EKFMeasurementModel{T,IPM}(measurement::M, R2; nx, ny, Cjac = nothing)

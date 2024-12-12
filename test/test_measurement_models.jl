@@ -14,9 +14,10 @@ ny = 3 # Dimension of measurements
 const __A_ = 0.1*randn(nx, nx)
 const __B_ = randn(nx, nu)
 const __C_ = randn(ny,nx)
+const __D_ = randn(ny,nu)
 
 dynamics_l(x,u,p,t) = __A_*x .+ __B_*u
-measurement_l(x,u,p,t) = __C_*x
+measurement_l(x,u,p,t) = __C_*x .+ __D_*u
 
 R1 = I(nx)
 R2 = I(ny)
@@ -68,11 +69,16 @@ for mm in mms
 
     sol_ukf = forward_trajectory(ukf, u, y)
     sol_ekf = forward_trajectory(ekf, u, y)
-    plot(sol_ukf) # |> display
-    plot(sol_ekf) # |> display
+    plot(sol_ukf, plotyh = true, plotyht=true, plote=true) # |> display
+    plot(sol_ekf, plotyh = true, plotyht=true, plote=true) # |> display
 
     @test sol_ukf.x ≈ sol_ekf.x
     @test sol_ukf.xt ≈ sol_ekf.xt
     @test sol_ukf.R ≈ sol_ekf.R
     @test sol_ukf.Rt ≈ sol_ekf.Rt
+    @test sol_ukf.e ≈ sol_ekf.e
+
+    if mm isa CompositeMeasurementModel
+        @test length(sol_ukf.e[1]) == 3ny
+    end
 end
