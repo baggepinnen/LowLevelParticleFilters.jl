@@ -105,6 +105,22 @@ plot(sol_ukf, plothy = true, plote = true, plotR=true)
 plot(sol_ekf, plothy = true, plote = true, plotRt=true)
 plot(sol_sqkf, plothy = true, plote = true)
 
+## Smoothing ===================================================================
+
+xT,RT,ll = smooth(sol_kf, kf)
+xT2,RT2,ll2 = smooth(sol_ekf, ekf)
+xT3,RT3,ll3 = smooth(sol_ukf, ukf)
+xT4,RT4,ll4 = smooth(sol_sqkf, ukf)
+
+@test xT2 ≈ xT
+@test RT2 ≈ RT
+
+@test xT3 ≈ xT
+@test RT3 ≈ RT
+
+@test xT4 ≈ xT
+@test RT4 ≈ RT
+
 ## Test mixing of measurement models ===========================================
 
 mm_ukf = UKFMeasurementModel{Float64, true, false}(measurement_large_ip, R2; nx, ny)
