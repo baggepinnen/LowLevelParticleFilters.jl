@@ -92,9 +92,14 @@ Special care is needed if the sample rate is not constant, i.e., the time interv
 ### Dropped samples
 A common case is that the sample rate is constant, but some measurements are lost. This case is very easy to handle; the filter loop iterates between two steps
 1. Prediction using `predict!(filter, x, u, p, t)`
-2. Correction using `correct!(f, u, y, p, t)`
+2. Correction using
+    - `correct!(f, u, y, p, t)` if using the standard measurement model of the filter
+    - `correct!(f, mm, u, y, p, t, mm)` to use a custom measurement model `mm`
 
 If a measurement `y` is lacking, one simply skips the corresponding call to `correct!` where `y` is missing. Repeated calls to `predict!` corresponds to simulating the system without any feedback from measurements, like if an ODE was solved. Internally, the filter will keep track of the covariance of the estimate, which is likely to grow if no measurements are used to inform the filter about the state of the system.
+
+### Sensors with different sample rates
+For Kalman-type filters, it is possible to construct custom measurement models, and pass an instance of a measurement model as the second argument to [`correct!`](@ref). This allows for sensor fusion with sensors operating at different rates, or when parts of the measurement model are linear, and other parts are nonlinear. See examples in [Measurement models](@ref measurement_models) for how to construct explicit measurement models.
 
 
 ### Stochastic sample rate

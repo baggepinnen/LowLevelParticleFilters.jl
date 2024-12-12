@@ -1,6 +1,7 @@
 module LowLevelParticleFilters
 
 export KalmanFilter, SqKalmanFilter, UnscentedKalmanFilter, DAEUnscentedKalmanFilter, ExtendedKalmanFilter, ParticleFilter, AuxiliaryParticleFilter, AdvancedParticleFilter, PFstate, index, state, covariance, num_particles, effective_particles, weights, expweights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, mode_trajectory, weighted_mean, weighted_cov, update!, predict!, correct!, reset!, metropolis, shouldresample, TupleProduct
+export LinearMeasurementModel, EKFMeasurementModel, UKFMeasurementModel, CompositeMeasurementModel
 @deprecate weigthed_mean weighted_mean
 @deprecate weigthed_cov weighted_cov
 
@@ -25,9 +26,11 @@ abstract type ResamplingStrategy end
 struct ResampleSystematic <: ResamplingStrategy end
 
 abstract type AbstractFilter end
+abstract type AbstractKalmanFilter <: AbstractFilter end
 
 include("PFtypes.jl")
 include("solutions.jl")
+include("measurement_model.jl")
 include("kalman.jl")
 include("ukf.jl")
 include("filtering.jl")

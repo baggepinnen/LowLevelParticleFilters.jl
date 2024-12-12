@@ -1,10 +1,9 @@
 abstract type AbstractExtendedKalmanFilter{IPD,IPM} <: AbstractKalmanFilter end
-@with_kw struct ExtendedKalmanFilter{IPD, IPM, KF <: KalmanFilter, F, G, A, C} <: AbstractExtendedKalmanFilter{IPD,IPM}
+struct ExtendedKalmanFilter{IPD, IPM, KF <: KalmanFilter, F, G, A} <: AbstractExtendedKalmanFilter{IPD,IPM}
     kf::KF
     dynamics::F
-    measurement::G
+    measurement_model::G
     Ajac::A
-    Cjac::C
 end
 
 """
@@ -28,10 +27,10 @@ See also [`UnscentedKalmanFilter`](@ref) which is typically more accurate than `
 """
 ExtendedKalmanFilter
 
-function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Matrix(R1)); nu::Int, ny=nothing, Ts = 1.0, p = NullParameters(), α = 1.0, check = true, Ajac = nothing, Cjac = nothing)
+function ExtendedKalmanFilter(dynamics, measurement_model::AbstractMeasurementModel, R1,d0=SimpleMvNormal(Matrix(R1)); nu::Int, ny=measurement_model.ny, Ts = 1.0, p = NullParameters(), α = 1.0, check = true, Ajac = nothing)
     nx = size(R1,1)
-    ny = size(R2,1)
     T = eltype(R1)
+    R2 = measurement_model.R2
     if R1 isa SMatrix
         x = @SVector zeros(T, nx)
         u = @SVector zeros(T, nu)
@@ -46,12 +45,28 @@ function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Mat
     D = zeros(ny, nu) # This one is never needed
     kf = KalmanFilter(A,B,C,D,R1,R2,d0; Ts, p, α, check)
 
-    return ExtendedKalmanFilter(kf, dynamics, measurement; Ajac, Cjac)
+    return ExtendedKalmanFilter(kf, dynamics, measurement_model; Ajac)
 end
+
+function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Matrix(R1)); nu::Int, ny=size(R2,1), Cjac = nothing, kwargs...)
+    IPM = has_ip(measurement)
+    T = promote_type(eltype(R1), eltype(R2), eltype(d0))
+    nx = size(R1,1)
+    measurement_model = EKFMeasurementModel{T, IPM}(measurement, R2; nx, ny, Cjac)
+    return ExtendedKalmanFilter(dynamics, measurement_model, R1, d0; nu, kwargs...)
+end
+
 
 function ExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing, Cjac = nothing)
     IPD = has_ip(dynamics)
-    IPM = has_ip(measurement)
+    if measurement isa AbstractMeasurementModel
+        measurement_model = measurement
+        IPM = isinplace(measurement_model)
+    else
+        IPM = has_ip(measurement)
+        T = promote_type(eltype(kf.R1), eltype(kf.R2), eltype(kf.d0))
+        measurement_model = EKFMeasurementModel{T, IPM}(measurement, kf.R2; kf.nx, kf.ny, Cjac)
+    end
     if Ajac === nothing
         # if IPD
         #     inner! = (xd,x)->dynamics(xd,x,u,p,t)
@@ -72,21 +87,23 @@ function ExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing, Cjac = 
             Ajac = (x,u,p,t) -> ForwardDiff.jacobian(x->dynamics(x,u,p,t), x)
         end
     end
-    if Cjac === nothing
-        if IPM
-            outy = zeros(eltype(kf.d0), kf.ny)
-            jacy = zeros(eltype(kf.d0), kf.ny, kf.nx)
-            Cjac = (x,u,p,t) -> ForwardDiff.jacobian!(jacy, (y,x)->measurement(y,x,u,p,t), outy, x)
-        else
-            Cjac = (x,u,p,t) -> ForwardDiff.jacobian(x->measurement(x,u,p,t), x)
-        end
-    end
-    return ExtendedKalmanFilter{IPD,IPM,typeof(kf),typeof(dynamics),typeof(measurement),typeof(Ajac),typeof(Cjac)}(kf, dynamics, measurement, Ajac, Cjac)
+
+    return ExtendedKalmanFilter{IPD,IPM,typeof(kf),typeof(dynamics),typeof(measurement_model),typeof(Ajac)}(kf, dynamics, measurement_model, Ajac)
 end
 
 function Base.getproperty(ekf::EKF, s::Symbol) where EKF <: AbstractExtendedKalmanFilter
     s ∈ fieldnames(EKF) && return getfield(ekf, s)
-    return getproperty(getfield(ekf, :kf), s)
+    mm = getfield(ekf, :measurement_model)
+    if s ∈ fieldnames(typeof(mm))
+        return getfield(mm, s)
+    elseif s === :measurement
+        return measurement(mm)
+    end
+    kf = getfield(ekf, :kf)
+    if s ∈ fieldnames(typeof(kf))
+        return getproperty(kf, s)
+    end
+    error("$(typeof(ekf)) has no property named $s")
 end
 
 function Base.setproperty!(ekf::ExtendedKalmanFilter, s::Symbol, val)
@@ -117,15 +134,21 @@ function predict!(kf::AbstractExtendedKalmanFilter{IPD}, u, p = parameters(kf), 
     kf.t += 1
 end
 
-function correct!(kf::AbstractExtendedKalmanFilter{<:Any, IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(kf.R2, kf.x, u, p, t)) where IPM
-    @unpack x,R = kf
-    C = kf.Cjac(x, u, p, t)
+function correct!(ukf::AbstractExtendedKalmanFilter, u, y, p, t::Real; kwargs...)
+    measurement_model = ukf.measurement_model
+    correct!(ukf, measurement_model, u, y, p, t::Real; kwargs...)    
+end
+
+function correct!(kf::AbstractKalmanFilter,  measurement_model::EKFMeasurementModel{IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(measurement_model.R2, kf.x, u, p, t)) where IPM
+    (; x,R) = kf
+    (; measurement, Cjac) = measurement_model
+    C = Cjac(x, u, p, t)
     if IPM
         e = zeros(length(y))
-        kf.measurement(e, x, u, p, t)
+        measurement(e, x, u, p, t)
         e .= y .- e
     else
-        e = y .- kf.measurement(x, u, p, t)
+        e = y .- measurement(x, u, p, t)
     end
     S   = symmetrize(C*R*C') + R2
     Sᵪ  = cholesky(Symmetric(S); check=false)

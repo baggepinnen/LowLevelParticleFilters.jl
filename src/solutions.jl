@@ -73,35 +73,59 @@ end
             end
         end
     end
-    plotu && nu > 0 && @series begin
-        label --> ["u$(i)" for i in 1:nu] |> permutedims
-        subplot --> (1:nu)' .+ nx*(plotx || plotxt)
-        timevec, reduce(hcat, sol.u)'
+    if plotu && nu > 0
+        series = reduce(hcat, sol.u)'
+        for i = 1:nu
+            @series begin
+                label --> "u$(i)"
+                subplot --> i + nx*(plotx || plotxt)
+                timevec, series[:, i]
+            end
+        end
     end
-    ploty && @series begin
-        label --> ["y$(i)" for i in 1:ny] |> permutedims
-        subplot --> (1:ny)' .+ (nx*(plotx || plotxt) + nu*plotu)
-        timevec, reduce(hcat, sol.y)'
+    if ploty
+        series = reduce(hcat, sol.y)'
+        for i = 1:ny
+            @series begin
+                label --> "y$(i)"
+                subplot --> i + (nx*(plotx || plotxt) + nu*plotu)
+                timevec, series[:, i]
+            end
+        end
     end
-    plotyh && @series begin
-        label --> ["$(name)ŷ$(i)(t|t-1)" for i in 1:ny] |> permutedims
-        subplot --> (1:ny)' .+ (nx*(plotx || plotxt) + nu*plotu)
-        linestyle --> :dash
-        yh = measurement_oop(kf).(sol.x, sol.u, Ref(kf.p), timevec)
-        timevec, reduce(hcat, yh)'
+    if plotyh
+        series = reduce(hcat, measurement_oop(kf).(sol.x, sol.u, Ref(kf.p), timevec))'
+        for i = 1:ny
+            @series begin
+                label -->"$(name)ŷ$(i)(t|t-1)" 
+                subplot --> i + (nx*(plotx || plotxt) + nu*plotu)
+                linestyle --> :dash
+                
+                timevec, series[:, i]
+            end
+        end
     end
-    plotyht && @series begin
-        label --> ["$(name)ŷ$(i)(t|t)" for i in 1:ny] |> permutedims
-        subplot --> (1:ny)' .+ (nx*(plotx || plotxt) + nu*plotu)
-        linestyle --> :dash
-        yht = measurement_oop(kf).(sol.xt, sol.u, Ref(kf.p), timevec)
-        timevec, reduce(hcat, yht)'
+    if plotyht
+        series = reduce(hcat, measurement_oop(kf).(sol.xt, sol.u, Ref(kf.p), timevec))'
+        for i = 1:ny
+            @series begin
+                label --> "$(name)ŷ$(i)(t|t)"
+                subplot --> i + (nx*(plotx || plotxt) + nu*plotu)
+                linestyle --> :dash
+                timevec, series[:, i]
+            end
+        end
     end
-    plote && @series begin
-        label --> ["$(name)e$(i)(t|t-1)" for i in 1:ny] |> permutedims
-        subplot --> (1:ny)' .+ (nx*(plotx || plotxt) + nu*plotu)
-        linestyle --> :dash
-        timevec, reduce(hcat, sol.e)'
+    if plote
+        series = reduce(hcat, sol.e)'
+        for i = 1:ny
+            @series begin
+                label --> "$(name)e$(i)(t|t-1)"
+                subplot --> i + (nx*(plotx || plotxt) + nu*plotu)
+                linestyle --> :dash
+                timevec, series[:, i]
+            end
+        end
     end
 end
 

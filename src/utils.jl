@@ -107,16 +107,23 @@ end
 function TupleProduct end
 
 """
-    C = double_integrator_covariance(h, σ=1)
+    C = double_integrator_covariance(h, σ2=1)
 
-Returns the covariance matrix of a discrete-time integrator with force as input.
-Assumes the state [x; ẋ]. `h` is the sample time. `σ` scales the covariance matrix with the variance of the noise.
+Returns the covariance matrix of a discrete-time integrator with piecewise constant force as input.
+Assumes the state [x; ẋ]. `h` is the sample time. `σ2` scales the covariance matrix with the variance of the noise.
 
 This matrix is rank deficient and some applications might require a small increase in the diagonal to make it positive definite.
+
+See also `double_integrator_covariance_smooth`](@ref) for the version that does not assume piecewise constant noise.
 """
-function double_integrator_covariance(h, σ=1)
-    σ*SA[h^4/4 h^3/2
+function double_integrator_covariance(h, σ2=1)
+    σ2*SA[h^4/4 h^3/2
     h^3/2  h^2]
+end
+
+function double_integrator_covariance_smooth(h, σ2=1)
+    σ2*SA[h^3/3 h^2/2
+    h^2/2  h]
 end
 
 function rk4(f::F, Ts0; supersample::Integer = 1) where {F}
