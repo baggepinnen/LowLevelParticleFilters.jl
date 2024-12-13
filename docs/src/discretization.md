@@ -101,6 +101,13 @@ If a measurement `y` is lacking, one simply skips the corresponding call to `cor
 ### Sensors with different sample rates
 For Kalman-type filters, it is possible to construct custom measurement models, and pass an instance of a measurement model as the second argument to [`correct!`](@ref). This allows for sensor fusion with sensors operating at different rates, or when parts of the measurement model are linear, and other parts are nonlinear. See examples in [Measurement models](@ref measurement_models) for how to construct explicit measurement models.
 
+A video demonstrating the use of multiple measurement models running at different rates is available on YouTube:
+
+```@raw html
+<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/BLsJrW5XXcg?si=bkob76-uJj27-S80" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+```
+
+
 
 ### Stochastic sample rate
 In some situations, such as in event-based systems, the sample rate is truly stochastic. There is no single correct way of handling this, and we instead outline some alternative approaches.

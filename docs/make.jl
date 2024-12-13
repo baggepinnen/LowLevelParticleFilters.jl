@@ -26,6 +26,7 @@ makedocs(
                   "Particle-filter tutorial" => "beetle_example.md",
                   "State estimation for DAE systems" => "dae.md",
                   "Adaptive Neural-Network training" => "neural_network.md",
+                  "Fault detection" => "fault_detection.md",
             ],
             "API" => "api.md",
       ],

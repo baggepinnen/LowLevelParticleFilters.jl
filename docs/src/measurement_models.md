@@ -111,3 +111,12 @@ using Test
 @test kf.x ≈ ekf.x ≈ ukf.x
 @test kf.R ≈ ekf.R ≈ ukf.R
 ```
+
+
+## Video tutorial
+
+A video demonstrating the use of multiple measurement models in a sensor-fusion context is available on YouTube:
+
+```@raw html
+<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/BLsJrW5XXcg?si=bkob76-uJj27-S80" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+```
