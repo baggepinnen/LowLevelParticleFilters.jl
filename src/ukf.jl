@@ -192,7 +192,7 @@ dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 #                                        x(k+1)          x            u             p           t
 @inline has_ip(fun) = hasmethod(fun, Tuple{AbstractArray,AbstractArray,AbstractArray,AbstractArray,Real})
 @inline has_oop(fun) = hasmethod(fun, Tuple{       AbstractArray,AbstractArray,AbstractArray,Real})
-
+has_oop(mm::UKFMeasurementModel{})
 
 """
     predict!(ukf::UnscentedKalmanFilter, u, p = parameters(ukf), t::Real = index(ukf) * ukf.Ts; R1 = get_mat(ukf.R1, ukf.x, u, p, t), reject, mean, cov, dynamics)
@@ -237,7 +237,16 @@ function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = paramete
 end
 
 function propagate_sigmapoints_p!(ukf::UnscentedKalmanFilter{true,<:Any,true}, u, p, t, R1)
-    error("IPD and AUGD not yet supported")
+    (; dynamics, x) = ukf
+    sigma_point_cache = ukf.predict_sigma_point_cache
+    xsd,xsd0 = sigma_point_cache.x1, sigma_point_cache.x0
+    nx = length(x)
+    nw = size(R1, 1) # nw may be smaller than nx for augmented dynamics
+    xinds = 1:nx
+    winds = nx+1:nx+nw
+    for i in eachindex(xsd)
+        dynamics(xsd[i], xsd0[i][xinds], u, p, t, xsd0[i][winds])
+    end
 end
 
 function propagate_sigmapoints_p!(ukf::UnscentedKalmanFilter{false,<:Any,true}, u, p, t, R1)
@@ -406,20 +415,42 @@ function sigmapoints_c!(
     sigmapoints!(xsm, xm, Raug)
 end
 
-# IPM = true
+# IPM = true, AUGM = false
 function propagate_sigmapoints_c!(
     kf,
     u,
     p,
     t,
     R2,
-    measurement_model::UKFMeasurementModel{true},
+    measurement_model::UKFMeasurementModel{true, false},
 )
     sigma_point_cache = measurement_model.cache
     xsm = sigma_point_cache.x0
     ys  = sigma_point_cache.x1
     for i in eachindex(xsm, ys)
         measurement_model.measurement(ys[i], xsm[i], u, p, t)
+    end
+end
+
+# IPM = true, AUGM = true
+function propagate_sigmapoints_c!(
+    kf,
+    u,
+    p,
+    t,
+    R2,
+    measurement_model::UKFMeasurementModel{true,true},
+)
+    sigma_point_cache = measurement_model.cache
+    xsm = sigma_point_cache.x0
+    ys = sigma_point_cache.x1
+    x = kf.x
+    nx = length(x)
+    nv = size(R2, 1)
+    xinds = 1:nx
+    vinds = nx+1:nx+nv
+    for i in eachindex(xsm, ys)
+        measurement_model.measurement(ys[i], xsm[i][xinds], u, p, t, xsm[i][vinds])
     end
 end
 
@@ -435,7 +466,7 @@ function propagate_sigmapoints_c!(
     sigma_point_cache = measurement_model.cache
     xsm = sigma_point_cache.x0
     ys = sigma_point_cache.x1
-    (; x, R) = kf
+    (; x) = kf
     nx = length(x)
     nv = size(R2, 1)
     xinds = 1:nx

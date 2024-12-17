@@ -179,6 +179,37 @@ resukfv2 = forward_trajectory(ukfv2, u, y)
 
 plot(resukfv, plotyht=true) # Test that plotting works with augmented measurement model
 
+## Augmented dynamics in place
+function dynamics_ws!(xp,x,u,p,t,w) 
+    mul!(xp, _A, x) 
+    mul!(xp, _B, u, 1.0, 1.0)
+    mul!(xp, Bw, w, 1, 1)
+end
+
+function measurement_vs!(y,x,u,p,t,v) 
+    mul!(y, _C, x)
+    mul!(y, Bv, v, 1, 1)
+end
+
+ukfw  = UnscentedKalmanFilter{true,false,true,false}(dynamics_ws!, measurement, [1.0;;], R2, d0; ny, nu)
+resukfw3 = forward_trajectory(ukfw, u, y)
+
+@test reduce(hcat, resukfw3.xt) ≈ reduce(hcat, resukfw.xt) atol=1e-6
+@test reduce(hcat, resukfw3.x) ≈ reduce(hcat, resukfw.x) atol=1e-6
+@test reduce(hcat, resukfw3.R) ≈ reduce(hcat, resukfw.R) atol=1e-6
+@test reduce(hcat, resukfw3.Rt) ≈ reduce(hcat, resukfw.Rt) atol=1e-6
+@test resukfw3.ll ≈ resukfw.ll rtol=1e-6
+
+ukfv  = UnscentedKalmanFilter{false,true,false,true}(dynamics, measurement_vs!, eye(nx), [1.0;;], d0; ny, nu, cholesky! = R->cholesky!(Positive, Matrix(R)))
+resukfv3 = forward_trajectory(ukfv, u, y)
+
+@test reduce(hcat, resukfv3.xt) ≈ reduce(hcat, resukfv.xt) atol=0.05
+@test reduce(hcat, resukfv3.x) ≈ reduce(hcat, resukfv.x) atol=0.05
+@test reduce(hcat, resukfv3.R) ≈ reduce(hcat, resukfv.R) atol=0.1
+@test reduce(hcat, resukfv3.Rt) ≈ reduce(hcat, resukfv.Rt) atol=0.05
+@test resukfv3.ll ≈ resukfv.ll rtol=0.01
+
+
 ## DAE UKF =====================================================================
 # "A pendulum in DAE form"
 # function pend(state, f, p, t=0)
