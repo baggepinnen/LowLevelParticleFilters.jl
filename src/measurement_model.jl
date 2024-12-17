@@ -31,6 +31,8 @@ function CompositeMeasurementModel(m1, rest...)
 end
 
 isinplace(model::CompositeMeasurementModel) = isinplace(model.models[1])
+has_ip(model::CompositeMeasurementModel) = has_ip(model.models[1])
+has_oop(model::CompositeMeasurementModel) = has_oop(model.models[1])
 
 function measurement(model::CompositeMeasurementModel)
     function (x,u,p,t)
@@ -84,6 +86,8 @@ struct UKFMeasurementModel{IPM,AUGM,MT,RT,IT,MET,CT,CCT,CAT} <: AbstractMeasurem
 end
 
 isinplace(::UKFMeasurementModel{IPM}) where IPM = IPM
+has_ip(::UKFMeasurementModel{IPM}) where IPM = IPM
+has_oop(::UKFMeasurementModel{IPM}) where IPM = !IPM
 
 """
     UKFMeasurementModel{inplace_measurement,augmented_measurement}(measurement, R2, ny, ne, innovation, mean, cov, cross_cov, cache = nothing)
@@ -241,6 +245,8 @@ struct EKFMeasurementModel{IPM,MT,RT,CJ,CAT} <: AbstractMeasurementModel
 end
 
 isinplace(::EKFMeasurementModel{IPM}) where IPM = IPM
+has_ip(::EKFMeasurementModel{IPM}) where IPM = IPM
+has_oop(::EKFMeasurementModel{IPM}) where IPM = !IPM
 
 """
     EKFMeasurementModel{IPM}(measurement, R2, ny, Cjac, cache = nothing)
