@@ -176,8 +176,8 @@ end
 
 
 function UnscentedKalmanFilter(dynamics,measurement,args...; kwargs...)
-    IPD = has_ip(dynamics)
-    IPM = has_ip(measurement)
+    IPD = !has_oop(dynamics)
+    IPM = !has_oop(measurement)
     AUGD = false
     AUGM = false
     UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics,measurement,args...;kwargs...)
@@ -191,6 +191,7 @@ dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 
 #                                        x(k+1)          x            u             p           t
 @inline has_ip(fun) = hasmethod(fun, Tuple{AbstractArray,AbstractArray,AbstractArray,AbstractArray,Real})
+@inline has_oop(fun) = hasmethod(fun, Tuple{       AbstractArray,AbstractArray,AbstractArray,Real})
 
 
 """

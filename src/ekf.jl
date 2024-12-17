@@ -49,7 +49,7 @@ function ExtendedKalmanFilter(dynamics, measurement_model::AbstractMeasurementMo
 end
 
 function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Matrix(R1)); nu::Int, ny=size(R2,1), Cjac = nothing, kwargs...)
-    IPM = has_ip(measurement)
+    IPM = !has_oop(measurement)
     T = promote_type(eltype(R1), eltype(R2), eltype(d0))
     nx = size(R1,1)
     measurement_model = EKFMeasurementModel{T, IPM}(measurement, R2; nx, ny, Cjac)
@@ -58,7 +58,7 @@ end
 
 
 function ExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing, Cjac = nothing)
-    IPD = has_ip(dynamics)
+    IPD = !has_oop(dynamics)
     if measurement isa AbstractMeasurementModel
         measurement_model = measurement
         IPM = isinplace(measurement_model)
