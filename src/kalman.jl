@@ -120,7 +120,13 @@ end
 function (kfm::MeasurementOop)(x,u,p,t)
     kf = kfm.kf
     mfun = measurement(kf)
-    if kf isa UnscentedKalmanFilter{<:Any,true} || kf isa ExtendedKalmanFilter{<:Any,true}
+    if kf isa UnscentedKalmanFilter{<:Any,true, <:Any, true} # augmented inplace
+        y = zeros(kf.ny)
+        mfun(y,x,u,p,t,0)
+        return y
+    elseif kf isa UnscentedKalmanFilter{<:Any,false, <:Any, true} # augmented oop
+        return mfun(x,u,p,t,0)
+    elseif kf isa UnscentedKalmanFilter{<:Any,true} || kf isa ExtendedKalmanFilter{<:Any,true}
         y = zeros(kf.ny)
         mfun(y,x,u,p,t)
         return y

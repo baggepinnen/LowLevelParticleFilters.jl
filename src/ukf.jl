@@ -3,7 +3,7 @@
 
 Return a vector of (2n+1) static vectors, where `n` is the length of `m`, representing sigma points with mean `m` and covariance `Σ`.
 """
-@inline function sigmapoints(m, Σ; static = true)
+@inline function sigmapoints(m, Σ; static = true, cholesky! = cholesky!)
     T = promote_type(eltype(m), eltype(Σ))
     n = max(length(m), size(Σ,1))
     if static
@@ -11,10 +11,10 @@ Return a vector of (2n+1) static vectors, where `n` is the length of `m`, repres
     else
         xs = [zeros(T, n) for _ in 1:(2n+1)]
     end
-    sigmapoints!(xs,m,Σ)
+    sigmapoints!(xs,m,Σ,cholesky!)
 end
 
-function sigmapoints!(xs, m, Σ::AbstractMatrix)
+function sigmapoints!(xs, m, Σ::AbstractMatrix, cholesky! = cholesky!)
     n = length(xs[1])
     @assert n == length(m)
     # X = sqrt(Symmetric(n*Σ)) # 2.184 μs (16 allocations: 2.27 KiB)
@@ -32,7 +32,7 @@ end
 
 abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
 
-mutable struct UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,RT,P,RJ,SMT,SCT} <: AbstractUnscentedKalmanFilter
+mutable struct UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,RT,P,RJ,SMT,SCT,CH} <: AbstractUnscentedKalmanFilter
     dynamics::DT
     measurement_model::MT
     R1::R1T
@@ -48,6 +48,7 @@ mutable struct UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,RT,P
     reject::RJ
     state_mean::SMT
     state_cov::SCT
+    cholesky!::CH
 end
 
 function Base.getproperty(ukf::UnscentedKalmanFilter, s::Symbol)
@@ -68,6 +69,7 @@ end
 
 """
     UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0=MvNormal(Matrix(R1)); p = NullParameters(), ny, nu)
+    UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::AbstractMeasurementModel, R1, d0=SimpleMvNormal(R1); p=NullParameters(), nu)
 
 A nonlinear state estimator propagating uncertainty using the unscented transform.
 
@@ -106,7 +108,7 @@ is used, where the Boolean type parameters have the following meaning
 - `inplace_dynamics`: If `true`, the dynamics function operates in-place, i.e., it modifies the first argument in `dynamics(dx, x, u, p, t)`. Default is `false`.
 - `inplace_measurement`: If `true`, the measurement function operates in-place, i.e., it modifies the first argument in `measurement(y, x, u, p, t)`. Default is `false`.
 - `augmented_dynamics`: If `true` the dynamics function is augmented with an additional noise input `w`, i.e., `dynamics(x, u, p, t, w)`. Default is `false`.
-- `augmented_measurement`: If `true` the measurement function is agumented with an additional noise input `e`, i.e., `measurement(x, u, p, t, e)`. Default is `false`.
+- `augmented_measurement`: If `true` the measurement function is agumented with an additional noise input `e`, i.e., `measurement(x, u, p, t, e)`. Default is `false`. (If the measurement noise has fewer degrees of freedom than the number of measurements, you may failure in Cholesky factorizations, see "Custom Cholesky factorization" below).
 
 Use of augmented dynamics incurs extra computational cost. The number of sigma points used is `2L+1` where `L` is the length of the augmented state vector. Without augmentation, `L = nx`, with augmentation `L = nx + nw` and `L = nx + ne` for dynamics and measurement, respectively.
 
@@ -124,11 +126,23 @@ By passing and explicitly created [`UKFMeasurementModel`](@ref), one may provide
 - `state_cov(xs::AbstractVector{<:AbstractVector}, m = mean(xs))` where the first argument represent state sigma points and the second argument, which must be optional, represents the mean of those points. The function should return the covariance matrix of the state sigma points.
 
 See [`UKFMeasurementModel`](@ref) for more details on how to set up a custom measurement model. Pass the custom measurement model as the second argument to the UKF constructor.
-"""
-function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::AbstractMeasurementModel, R1, d0=SimpleMvNormal(R1); Ts=1.0, p=NullParameters(), nu::Int, ny=measurement_model.ny, nw = nothing, reject=nothing, state_mean=safe_mean, state_cov=safe_cov, kwargs...) where {IPD,IPM,AUGD,AUGM}
-    nx = length(d0)
-    
 
+# Custom Cholesky factorization
+The UnscentedKalmanFilter supports providing a custom function to compute the Cholesky factorization of the covariance matrices for use in sigma-point generation.
+
+If either of the following conditions are met, you may experience failure in internal Cholesky factorizations:
+- The dynamics noise or measurement noise covariance matrices (``R_1, R_2``) are singular
+- The measurement is augmented and the measurement noise has fewer degrees of freedom than the number of measurements
+- (Under specific technical conditions) The dynamics is augmented and the dynamics noise has fewer degrees of freedom than the number of state variables. The technical conditions are easiest to understand in the linear-systems case, where it corresponds to the Riccati equation associated with the Kalman gain not having a solution. This may happen when the pair ``(A, R1)`` has uncontrollable modes on the unit circle, for example, when there are integrating modes that are not affected through the noise.
+
+The error message may look like
+```
+ERROR: PosDefException: matrix is not positive definite; Factorization failed.
+```
+In such situations, it is advicable to reconsider the noise model and covariance matrices, alternatively, you may provide a custom Cholesky factorization function to the UKF constructor through the keyword argument `cholesky!`. The function should have the signature `cholesky!(A::AbstractMatrix)::Cholesky`. A useful alternative factorizaiton when covariance matrices are expected to be singular is `cholesky! = R->cholesky!(Positive, Matrix(R))` where the "positive" Cholesky factorization is provided by the package PositiveFactorizations.jl, which must be manually installed and loaded by the user.
+"""
+function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::AbstractMeasurementModel, R1, d0=SimpleMvNormal(R1); Ts=1.0, p=NullParameters(), nu::Int, ny=measurement_model.ny, nw = nothing, reject=nothing, state_mean=safe_mean, state_cov=safe_cov, cholesky! = cholesky!, kwargs...) where {IPD,IPM,AUGD,AUGM}
+    nx = length(d0)
     
     T = promote_type(eltype(d0), eltype(R1))
 
@@ -138,7 +152,6 @@ function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::A
         elseif nw === nothing
             error("The number of dynamics noise variables, nw, can not be inferred from R1 when R1 is not an array, please provide the keyword argument `nw`.")
         end
-        nw == nx || error("R1 must be square with size equal to the state vector length for non-augmented dynamics")
         L = nx + nw
     else
         nw = 0
@@ -150,15 +163,15 @@ function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::A
     R = convert_cov_type(R1, d0.Σ)
     x0 = convert_x0_type(d0.μ)
     UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,typeof(dynamics),typeof(measurement_model),typeof(R1),typeof(d0),
-        typeof(predict_sigma_point_cache),typeof(x0),typeof(R),typeof(p),typeof(reject),typeof(state_mean),typeof(state_cov)}(
-        dynamics, measurement_model, R1, d0, predict_sigma_point_cache, x0, R, 0, Ts, ny, nu, p, reject, state_mean, state_cov)
+        typeof(predict_sigma_point_cache),typeof(x0),typeof(R),typeof(p),typeof(reject),typeof(state_mean),typeof(state_cov), typeof(cholesky!)}(
+        dynamics, measurement_model, R1, d0, predict_sigma_point_cache, x0, R, 0, Ts, ny, nu, p, reject, state_mean, state_cov, cholesky!)
 end
 
-function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement, R1, R2, d0=SimpleMvNormal(R1), args...; Ts = 1.0, p = NullParameters(), ny, nu, kwargs...) where {IPD,IPM,AUGD,AUGM}
+function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement, R1, R2, d0=SimpleMvNormal(R1), args...; Ts = 1.0, p = NullParameters(), ny, nu, cholesky! = cholesky!, kwargs...) where {IPD,IPM,AUGD,AUGM}
     nx = length(d0)
     T = promote_type(eltype(d0), eltype(R1), eltype(R2))
     measurement_model = UKFMeasurementModel{T,IPM,AUGM}(measurement, R2; nx, ny, kwargs...)
-    UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model, R1, d0, args...; Ts, p, nu, kwargs...)
+    UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model, R1, d0, args...; Ts, p, nu, cholesky!, kwargs...)
 end
 
 
@@ -198,12 +211,10 @@ function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = paramete
         R1 = get_mat(ukf.R1, ukf.x, u, p, t), reject = ukf.reject, mean = ukf.state_mean, cov = ukf.state_cov, dynamics = ukf.dynamics) where {IPD,IPM,AUGD,AUGM}
     (; dynamics,x,R) = ukf
     sigma_point_cache = ukf.predict_sigma_point_cache
-    xsd,xsd0 = sigma_point_cache.x1, sigma_point_cache.x0
+    xsd = sigma_point_cache.x1
     # xtyped = eltype(xsd)(x)
     nx = length(x)
-    nw = size(R1, 1) # nw may be smaller than nx for augmented dynamics
     xinds = 1:nx
-    winds = nx+1:nx+nw
     sigmapoints_p!(ukf, R1)
     propagate_sigmapoints_p!(ukf, u, p, t, R1)
     if reject !== nothing
@@ -216,7 +227,7 @@ function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = paramete
     end
     if AUGD
         ukf.x = mean(xsd)[xinds]
-        @bangbang ukf.R .= symmetrize(cov(xsd)[xinds,xinds]) # TODO: optimize
+        @bangbang ukf.R .= symmetrize(cov([x[xinds] for x in xsd])) #+ 1e-16I # TODO: optimize
     else
         ukf.x = mean(xsd)
         @bangbang ukf.R .= symmetrize(cov(xsd, ukf.x)) .+ R1
@@ -245,10 +256,6 @@ function propagate_sigmapoints_p!(ukf::UnscentedKalmanFilter{true,<:Any,false}, 
     (; dynamics, x) = ukf
     sigma_point_cache = ukf.predict_sigma_point_cache
     xsd,xsd0 = sigma_point_cache.x1, sigma_point_cache.x0
-    nx = length(x)
-    nw = size(R1, 1) # nw may be smaller than nx for augmented dynamics
-    xinds = 1:nx
-    winds = nx+1:nx+nw
     xp = similar(xsd[1])
     for i in eachindex(xsd)
         xp .= 0
@@ -268,20 +275,16 @@ end
 
 function sigmapoints_p!(ukf::UnscentedKalmanFilter{<:Any,<:Any,true}, R1)
     sigma_point_cache = ukf.predict_sigma_point_cache
-    xsd,xsd0 = sigma_point_cache.x1, sigma_point_cache.x0
-    nx = length(ukf.x)
-    nw = size(R1, 1) # nw may be smaller than nx for augmented dynamics
-    xinds = 1:nx
-    winds = nx+1:nx+nw
+    xsd0 = sigma_point_cache.x0
     m = [ukf.x; 0*R1[:, 1]]
     Raug = cat(ukf.R, R1, dims=(1,2))
-    sigmapoints!(xsd0, m, Raug)
+    sigmapoints!(xsd0, m, Raug, ukf.cholesky!)
 end
 
 function sigmapoints_p!(ukf::UnscentedKalmanFilter{<:Any,<:Any,false}, R1)
     sigma_point_cache = ukf.predict_sigma_point_cache
-    xsd,xsd0 = sigma_point_cache.x1, sigma_point_cache.x0
-    sigmapoints!(xsd0, ukf.x, ukf.R)
+    xsd0 = sigma_point_cache.x0
+    sigmapoints!(xsd0, ukf.x, ukf.R, ukf.cholesky!)
 end
 
 # The functions below are JET-safe from dynamic dispatch if called with static arrays
@@ -358,7 +361,6 @@ function correct!(
     ys = sigma_point_cache.x1
     (; x, R) = kf
 
-    T = promote_type(eltype(x), eltype(R), eltype(R2))
     ns = length(xsm)
     sigmapoints_c!(kf, measurement_model, R2) # TODO: should this take other arguments?
     propagate_sigmapoints_c!(kf, u, p, t, R2, measurement_model)
@@ -536,7 +538,6 @@ function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter{IPD,IPM,
     RT           = similar(Rt)
     xT[end]      = xt[end]      |> copy
     RT[end]      = Rt[end]      |> copy
-    ny = kf.ny
     nx = length(x[1])
     xi = 1:nx
     xqxi = similar(xt[1])
@@ -779,3 +780,7 @@ y = h(x, z)
 #     ll = extended_logpdf(SimpleMvNormal(PDMat(S,Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf
 #     (; ll, e, S, Sᵪ, K)
 # end
+
+
+function unscentedplot end
+function unscentedplot! end
