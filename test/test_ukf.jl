@@ -1,6 +1,6 @@
 using LowLevelParticleFilters
 import LowLevelParticleFilters.resample
-using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions, Plots
+using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions, Plots, PositiveFactorizations
 Random.seed!(0)
 
 mvnormal(d::Int, σ::Real) = MvNormal(LinearAlgebra.Diagonal(fill(float(σ) ^ 2, d)))
@@ -56,6 +56,11 @@ x,u,y = tosvec.((x,u,y))
 
 reskf = forward_trajectory(kf, u, y) # filtered, prediction, pred
 resukf = forward_trajectory(ukf, u, y)
+
+# sp = ukf.predict_sigma_point_cache
+# LowLevelParticleFilters.unscentedplot(sp.x0)
+# LowLevelParticleFilters.unscentedplot!(sp.x1)
+
 
 sse(x) = sum(sum.(abs2, x))
 sse(x .- reskf.x)
@@ -139,6 +144,71 @@ resukfv = forward_trajectory(ukfv, u, y)
 @test reduce(hcat, resukfv.R) ≈ reduce(hcat, resukf.R) atol=1e-6
 @test reduce(hcat, resukfv.Rt) ≈ reduce(hcat, resukf.Rt) atol=1e-6
 @test resukfv.ll ≈ resukf.ll rtol=1e-6
+
+
+## Augmented dynamics with smaller noise
+Bw = @SMatrix [0.1; 1]
+dynamics_ws(x,u,p,t,w) = _A*x .+ _B*u .+ Bw*w
+ukfw  = UnscentedKalmanFilter{false,false,true,false}(dynamics_ws, measurement, [1.0;;], R2, d0; ny, nu)
+resukfw = forward_trajectory(ukfw, u, y)
+
+ukfw2  = UnscentedKalmanFilter{false,false,false,false}(dynamics, measurement, Bw*Bw', R2, d0; ny, nu)
+resukfw2 = forward_trajectory(ukfw2, u, y)
+
+@test reduce(hcat, resukfw.xt) ≈ reduce(hcat, resukfw2.xt) atol=1e-6
+@test reduce(hcat, resukfw.x) ≈ reduce(hcat, resukfw2.x) atol=1e-6
+@test reduce(hcat, resukfw.R) ≈ reduce(hcat, resukfw2.R) atol=1e-6
+@test reduce(hcat, resukfw.Rt) ≈ reduce(hcat, resukfw2.Rt) atol=1e-6
+
+# With small measurement noise, the covariance matrix becomes exactly singular. Not even a square-root formulation handles this since the standard Cholesky factorization cannot be computed. We handle that by using PositiveFactorizations.jl and providing a custom Cholesky factorization function.
+Bv = @SMatrix [0.1; 1]
+measurement_vs(x,u,p,t,v) = _C*x .+ Bv*v
+ukfv  = UnscentedKalmanFilter{false,false,false,true}(dynamics, measurement_vs, eye(nx), [1.0;;], d0; ny, nu, cholesky! = R->cholesky!(Positive, Matrix(R)))
+resukfv = forward_trajectory(ukfv, u, y)
+
+ukfv2 = UnscentedKalmanFilter{false,false,false,false}(dynamics, measurement, eye(nx), Bv*Bv', d0; ny, nu, cholesky! = R->cholesky!(Positive, Matrix(R)))
+resukfv2 = forward_trajectory(ukfv2, u, y)
+
+# Covariance matrices will occasionally have some small spikes so we soften tolerances here.
+# plot(tr.(resukfv.Rt)[2:end])
+@test norm(reduce(hcat, resukfv.xt) - reduce(hcat, resukfv2.xt)) < 0.05
+@test norm(reduce(hcat, resukfv.x) - reduce(hcat, resukfv2.x)) < 0.05
+@test norm(reduce(hcat, resukfv.R) - reduce(hcat, resukfv2.R)) < 0.1
+@test norm(reduce(hcat, resukfv.Rt) - reduce(hcat, resukfv2.Rt)) < 0.05
+@test resukfv.ll ≈ resukf.ll rtol=1e-1
+
+plot(resukfv, plotyht=true) # Test that plotting works with augmented measurement model
+
+## Augmented dynamics in place
+function dynamics_ws!(xp,x,u,p,t,w) 
+    mul!(xp, _A, x) 
+    mul!(xp, _B, u, 1.0, 1.0)
+    mul!(xp, Bw, w, 1, 1)
+end
+
+function measurement_vs!(y,x,u,p,t,v) 
+    mul!(y, _C, x)
+    mul!(y, Bv, v, 1, 1)
+end
+
+ukfw  = UnscentedKalmanFilter{true,false,true,false}(dynamics_ws!, measurement, [1.0;;], R2, d0; ny, nu)
+resukfw3 = forward_trajectory(ukfw, u, y)
+
+@test reduce(hcat, resukfw3.xt) ≈ reduce(hcat, resukfw.xt) atol=1e-6
+@test reduce(hcat, resukfw3.x) ≈ reduce(hcat, resukfw.x) atol=1e-6
+@test reduce(hcat, resukfw3.R) ≈ reduce(hcat, resukfw.R) atol=1e-6
+@test reduce(hcat, resukfw3.Rt) ≈ reduce(hcat, resukfw.Rt) atol=1e-6
+@test resukfw3.ll ≈ resukfw.ll rtol=1e-6
+
+ukfv  = UnscentedKalmanFilter{false,true,false,true}(dynamics, measurement_vs!, eye(nx), [1.0;;], d0; ny, nu, cholesky! = R->cholesky!(Positive, Matrix(R)))
+resukfv3 = forward_trajectory(ukfv, u, y)
+
+@test reduce(hcat, resukfv3.xt) ≈ reduce(hcat, resukfv.xt) atol=0.05
+@test reduce(hcat, resukfv3.x) ≈ reduce(hcat, resukfv.x) atol=0.05
+@test reduce(hcat, resukfv3.R) ≈ reduce(hcat, resukfv.R) atol=0.1
+@test reduce(hcat, resukfv3.Rt) ≈ reduce(hcat, resukfv.Rt) atol=0.05
+@test resukfv3.ll ≈ resukfv.ll rtol=0.01
+
 
 ## DAE UKF =====================================================================
 # "A pendulum in DAE form"
