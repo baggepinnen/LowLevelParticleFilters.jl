@@ -192,7 +192,6 @@ dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
 #                                        x(k+1)          x            u             p           t
 @inline has_ip(fun) = hasmethod(fun, Tuple{AbstractArray,AbstractArray,AbstractArray,AbstractArray,Real})
 @inline has_oop(fun) = hasmethod(fun, Tuple{       AbstractArray,AbstractArray,AbstractArray,Real})
-has_oop(mm::UKFMeasurementModel{})
 
 """
     predict!(ukf::UnscentedKalmanFilter, u, p = parameters(ukf), t::Real = index(ukf) * ukf.Ts; R1 = get_mat(ukf.R1, ukf.x, u, p, t), reject, mean, cov, dynamics)
