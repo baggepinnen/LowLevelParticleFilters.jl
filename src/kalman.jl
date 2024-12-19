@@ -114,7 +114,7 @@ end
 
 # This helper struct is used to return a oop measurement function regardless of how the measurement function is defined
 struct MeasurementOop
-    kf::AbstractKalmanFilter
+    kf::AbstractFilter
 end
 
 function (kfm::MeasurementOop)(x,u,p,t)
@@ -135,7 +135,7 @@ function (kfm::MeasurementOop)(x,u,p,t)
     end
 end
 
-function measurement_oop(kf::AbstractKalmanFilter)
+function measurement_oop(kf)
     MeasurementOop(kf)
 end
 
