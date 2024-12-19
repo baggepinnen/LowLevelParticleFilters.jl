@@ -122,4 +122,4 @@ x,u,y = simulate(imm, T, du) # Simulate the IMM
 
 sol = forward_trajectory(imm, u, y) # Forward trajectory
 
-plot(sol)
+plot(sol, plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=true, plote=true, plotR=true, plotRt=true)
