@@ -28,7 +28,7 @@ where
 - `plotyht`: Plot the filtered measurements `ŷ(t|t)`
 - `name`: a string that is prepended to the labels of the plots, which is useful when plotting multiple solutions in the same plot.
 """
-struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll,Te} <: AbstractFilteringSolution
+struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll,Te,Et} <: AbstractFilteringSolution
     f::F
     u::Tu
     y::Ty
@@ -38,7 +38,10 @@ struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll,Te} <: AbstractFilterin
     Rt::TRt
     ll::Tll
     e::Te
+    extra::Et
 end
+
+KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e) = KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e,nothing)
 
 @recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotR=false, plotRt=false, name = "")
     isempty(name) || (name = name*" ")

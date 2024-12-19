@@ -6,6 +6,7 @@ mutable struct IMM{MT, PT, XT, RT, μT, PAT} <: AbstractFilter
     x::XT
     R::RT
     μ::μT
+    μ0::μT
     p::PAT
 end
 
@@ -35,20 +36,22 @@ Ref: "Interacting multiple model methods in target tracking: a survey", E. Mazor
 - `check`: If `true`, check that the inputs are valid. If `false`, skip the checks.
 - `p`: Parameters for the filter. NOTE: this `p` is shared among all internal filters. The internal `p` of each filter will be overridden by this one.
 """
-function IMM(models, P, μ; check=true, p = NullParameters())
+function IMM(models, P::AbstractMatrix, μ::AbstractVector; check=true, p = NullParameters())
     if check
         N = length(models)
         length(μ) == N || throw(ArgumentError("μ must have the same length as the number of models"))
         LinearAlgebra.checksquare(P) == N || throw(ArgumentError("P must be square with side length same as the number of models"))
         sum(μ) ≈ 1.0 || throw(ArgumentError("μ must sum to 1.0"))
-        sum(P, dims=2) ≈ ones(N) || throw(ArgumentError("P must sum to 1.0 along rows"))
+        all(x ≈ 1 for x in sum(P, dims=2)) || throw(ArgumentError("P must sum to 1.0 along rows"))
         allequal(typeof(m.x) for m in models) || @warn("The list of models have different type of their state vector x, this leads to poor performance. Turn off this warining by passing IMM(..., check=false)")
         allequal(typeof(m.R) for m in models) || @warn("The list of models have different type of their state vector x, this leads to poor performance. Turn off this warining by passing IMM(..., check=false)")
         allequal(m.Ts for m in models) || throw(ArgumentError("All models must have the same sampling time Ts"))
     end
-    x = sum(i->μ[i]*models[i].x, eachindex(models))
-    R = sum(i->μ[i]*models[i].R, eachindex(models))
-    IMM(models, P, x, R, μ, p)
+    T = eltype(models[1].d0)
+    μT = T.(μ)
+    x = sum(i->μT[i]*models[i].x, eachindex(models))
+    R = sum(i->μT[i]*models[i].R, eachindex(models))
+    IMM(models, P, x, R, μT, copy(μT), p)
 end
 
 function Base.getproperty(imm::IMM, s::Symbol)
@@ -75,14 +78,21 @@ function interact!(imm::IMM)
     new_x = [0*model.x for model in models]
     new_R = [0*model.R for model in models]
     for j in eachindex(models)
+        if iszero(cj[j]) # Filter has died, we let it evolve on its own
+            new_x[j] = models[j].x
+            new_R[j] = models[j].R
+            continue
+        end
         for i = 1:length(models)
             μij = P[i,j] * μ[i] / cj[j]
             @bangbang new_x[j] .+= μij .* models[i].x
         end
         for i = eachindex(models)
             μij = P[i,j] * μ[i] / cj[j]
-            d = models[i].x - new_x[j]
-            @bangbang new_R[j] .+= symmetrize(μij .* (d * d' .+  models[i].R))
+            if !iszero(μij)
+                d = models[i].x - new_x[j]
+                @bangbang new_R[j] .+= symmetrize(μij .* (d * d' .+  models[i].R))
+            end
         end
     end
     for (model, x, R) in zip(models, new_x, new_R)
@@ -94,7 +104,8 @@ function interact!(imm::IMM)
 end
 
 function predict!(imm::IMM, args...; kwargs...)
-    for model in imm.models
+    for (model,μ) in zip(imm.models, imm.μ)
+        # iszero(μ) && continue # Filter has died
         predict!(model, args...; kwargs...)
     end
 end
@@ -113,7 +124,13 @@ function correct!(imm::IMM, u, y, args...; kwargs...)
     lls = zeros(eltype(imm.x), length(models))
     rest = []
     for (j, model) in enumerate(models)
-        lls[j], others... = correct!(model, u, y; kwargs...)
+        # if iszero(μ[j]) # Filter has died
+        #     # QUESTION: we may want to keep updating the filter, maybe make it an option?
+        #     lls[j] = eltype(imm.x)(-Inf)
+        #     push!(rest, [])
+        #     continue
+        # end
+        lls[j], others... = correct!(model, u, y, args...; kwargs...)
         push!(rest, others)
     end
     μP = P'μ
@@ -140,6 +157,7 @@ function combine!(imm::IMM)
     end
 
     for (j, model) in enumerate(models)
+        iszero(μ[j]) && continue
         d = model.x .- x
         @bangbang R .+= symmetrize(μ[j] .* (model.R .+ d * d'))
     end
@@ -165,18 +183,25 @@ This differs slightly from the udpate step of other filters, where at the end of
 - `correct_kwargs`: An optional named tuple of keyword arguments that are sent to [`correct!`](@ref).
 - `predict_kwargs`: An optional named tuple of keyword arguments that are sent to [`predict!`](@ref).
 """
-function update!(imm::IMM, args...; correct_kwargs = (;), predict_kwargs = (;))
-    ll, rest = correct!(imm, args...; correct_kwargs...)
+function update!(imm::IMM, u, y, args...; correct_kwargs = (;), predict_kwargs = (;))
+    ll, rest = correct!(imm, u, y, args...; correct_kwargs...)
     combine!(imm)
     interact!(imm)
-    predict!(imm, args...; predict_kwargs...)
+    predict!(imm, u, args...; predict_kwargs...)
     ll, rest
 end
 
+(imm::IMM)(args...; kwargs...) = update!(imm::IMM, args...; kwargs...)
+
 function reset!(imm::IMM)
-    for model in imm.models
+    (; models, μ0) = imm
+    for model in models
         reset!(model)
     end
+    imm.x = sum(i->μ0[i]*models[i].x, eachindex(models))
+    imm.R = sum(i->μ0[i]*models[i].R, eachindex(models))
+    imm.μ = copy(imm.μ0)
+    nothing
 end
 
 
@@ -212,14 +237,16 @@ function forward_trajectory(imm::IMM, u::AbstractVector, y::AbstractVector, p=pa
     xt   = Array{particletype(imm)}(undef,T)
     R    = Array{covtype(imm)}(undef,T)
     Rt   = Array{covtype(imm)}(undef,T)
+    μ    = zeros(length(imm.μ), T)
     e    = similar(y)
     ll   = zero(eltype(particletype(imm)))
     for t = 1:T
         ti = (t-1)*imm.Ts
         x[t]  = state(imm)      |> copy
         R[t]  = covariance(imm) |> copy
-        lli, ei = correct!(imm, u[t], y[t], p, ti)
+        lli, _ = correct!(imm, u[t], y[t], p, ti)
         ll += lli
+        μ[:, t] .= imm.μ
         combine!(imm)
         yh = measurement(imm)(state(imm), u[t], p, ti)
         e[t] = y[t] .- yh
@@ -228,5 +255,5 @@ function forward_trajectory(imm::IMM, u::AbstractVector, y::AbstractVector, p=pa
         Rt[t] = covariance(imm) |> copy
         predict!(imm, u[t], p, ti)
     end
-    KalmanFilteringSolution(imm,u,y,x,xt,R,Rt,ll,e)
+    KalmanFilteringSolution(imm,u,y,x,xt,R,Rt,ll,e,μ)
 end

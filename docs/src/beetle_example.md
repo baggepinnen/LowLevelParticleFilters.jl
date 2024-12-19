@@ -14,7 +14,7 @@ where
 ``
 e_t ∼ N(0,σ_e), w_t ∼ N(0,σ_w)
 ``
-The beetle further has two "modes", one where it's moving towards a goal, and one where it's searching in a more erratic manner. Figuring out when this mode switch occurs is the goal of the filtering. The mode will be encoded as a state variable, and used to determine the amount of dynamic noise affecting the velocity of the beetle, i.e., in the searching mode, the beetle has more velocity noise. The mode switching is modeled as a stochastic process with a binomial distribution (coin flip) describing the likelihood of a switch from mode 0 (moving to goal) and mode 1 (searching). Once the beetle has started searching, it stays in that mode, i.e., the searching mode is "sticky" or "terminal".
+The beetle further has two "modes", one where it's moving towards a goal, and one where it's searching in a more erratic manner. Figuring out when this mode switch occurs is the goal of the filtering. The mode will be encoded as a state variable, and used to determine the amount of dynamic noise affecting the angle of the beetle, i.e., in the searching mode, the beetle has more angle noise. The mode switching is modeled as a stochastic process with a binomial distribution (coin flip) describing the likelihood of a switch from mode 0 (moving to goal) and mode 1 (searching). Once the beetle has started searching, it stays in that mode, i.e., the searching mode is "sticky" or "terminal".
 
 We load a single experiment from file for the purpose of this example (in practice, there may be hundreds of experiments)
 ```@example beetle
@@ -30,8 +30,8 @@ nothing # hide
 We then define some properties of the dynamics and the filter. We will use an [`AdvancedParticleFilter`](@ref) since we want to have fine-grained control over the noise sampling for the mode switch.
 ```@example beetle
 N = 2000 # Number of particles in the particle filter
-n = 4 # Dimension of state: we have speed and angle, so two
-p = 2 # Dimension of measurements, we can measure the x and the y, so also two
+n = 4 # Dimension of state: we have position (2D), speed and angle
+p = 2 # Dimension of measurements, we can measure the x and the y
 @inline pos(s) = s[SVector(1,2)]
 @inline vel(s) = s[3]
 @inline ϕ(s) = s[4]
@@ -47,7 +47,7 @@ dvσ = 0.3 # the deviation of the dynamics noise distribution
 const switch_prob = 0.03 # Probability of mode switch
 const dg = MvNormal(@SVector(zeros(p)), dgσ^2) # Measurement noise Distribution
 const df = LowLevelParticleFilters.TupleProduct((Normal.(0,[1e-1, 1e-1, dvσ, ϕσ])...,Binomial(1,switch_prob)))
-const d0 = MvNormal(SVector(y[1]..., 0.5, atan((y[2]-y[1])...), 0), [3.,3,2,2,0])
+d0 = MvNormal(SVector(y[1]..., 0.5, atan((y[2]-y[1])...), 0), [3.,3,2,2,0])
 const noisevec = zeros(5) # cache vector
 nothing # hide
 ```
@@ -76,7 +76,7 @@ end
 function measurement_likelihood(s,u,y,p,t)
     logpdf(dg, pos(s)-y) # A simple linear measurement model with normal additive noise
 end
-@inline measurement(s,u,p,t,noise=false) = s[SVector(1,2)] + noise*rand(dg) # We observer the position coordinates with the measurement
+@inline measurement(s,u,p,t,noise=false) = s[SVector(1,2)] + noise*rand(dg) # We observe the position coordinates with the measurement
 nothing # hide
 ```
 
