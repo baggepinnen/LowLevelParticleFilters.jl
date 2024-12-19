@@ -1,6 +1,6 @@
 # Interacting multiple models
 
-mutable struct IMM{MT, PT, XT, RT, μT, PAT} <: AbstractFilter
+mutable struct IMM{MT, PT, XT, RT, μT, PAT, NX, NR} <: AbstractFilter
     models::MT
     P::PT
     x::XT
@@ -8,11 +8,14 @@ mutable struct IMM{MT, PT, XT, RT, μT, PAT} <: AbstractFilter
     μ::μT
     μ0::μT
     p::PAT
+    new_x::NX
+    new_R::NR
+    interact::Bool
 end
 
 
 """
-    IMM(models, P, μ; check = true, p = NullParameters())
+    IMM(models, P, μ; check = true, p = NullParameters(), interact = true)
 
 Interacting Multiple Model (IMM) filter. This filter is a combination of multiple Kalman-type filters, each with its own state and covariance. The IMM filter is a probabilistically weighted average of the states and covariances of the individual filters. The weights are determined by the probability matrix `P` and the mixing probabilities `μ`.
 
@@ -35,8 +38,9 @@ Ref: "Interacting multiple model methods in target tracking: a survey", E. Mazor
 - `μ`: The initial mixing probabilities. `μ[i]` is the probability of being in mode `i` at the initial contidion (must sum to one).
 - `check`: If `true`, check that the inputs are valid. If `false`, skip the checks.
 - `p`: Parameters for the filter. NOTE: this `p` is shared among all internal filters. The internal `p` of each filter will be overridden by this one.
+- `interact`: If `true`, the filter will run the interaction as part of [`update!`](@ref) and [`forward_trajectory`](@ref). If `false`, the filter will not run the interaction step. This choice can be overridden by passing the keyword argument `interact` to the respective functions.
 """
-function IMM(models, P::AbstractMatrix, μ::AbstractVector; check=true, p = NullParameters())
+function IMM(models, P::AbstractMatrix, μ::AbstractVector; check=true, p = NullParameters(), interact = true)
     if check
         N = length(models)
         length(μ) == N || throw(ArgumentError("μ must have the same length as the number of models"))
@@ -51,7 +55,9 @@ function IMM(models, P::AbstractMatrix, μ::AbstractVector; check=true, p = Null
     μT = T.(μ)
     x = sum(i->μT[i]*models[i].x, eachindex(models))
     R = sum(i->μT[i]*models[i].R, eachindex(models))
-    IMM(models, P, x, R, μT, copy(μT), p)
+    new_x = [copy(model.x) for model in models]
+    new_R = [copy(model.R) for model in models]
+    IMM(models, P, x, R, μT, copy(μT), p, new_x, new_R, interact)
 end
 
 function Base.getproperty(imm::IMM, s::Symbol)
@@ -72,18 +78,19 @@ The interaction step of the IMM filter updates the state and covariance of each 
 Models with small mixing probabilities will have their states and covariances updated more towards the states and covariances of models with higher mixing probabilities, and vice versa.
 """
 function interact!(imm::IMM)
-    (; μ, P, models) = imm
+    (; μ, P, models, new_x, new_R) = imm
     @assert sum(μ) ≈ 1.0
     cj = P'μ
-    new_x = [0*model.x for model in models]
-    new_R = [0*model.R for model in models]
     for j in eachindex(models)
         if iszero(cj[j]) # Filter has died, we let it evolve on its own
             new_x[j] = models[j].x
             new_R[j] = models[j].R
             continue
+        else
+            @bangbang new_x[j] .= 0 .* new_x[j]
+            @bangbang new_R[j] .= 0 .* new_R[j]
         end
-        for i = 1:length(models)
+        for i = eachindex(models)
             μij = P[i,j] * μ[i] / cj[j]
             @bangbang new_x[j] .+= μij .* models[i].x
         end
@@ -96,8 +103,8 @@ function interact!(imm::IMM)
         end
     end
     for (model, x, R) in zip(models, new_x, new_R)
-        model.x = x
-        model.R = R
+        @bangbang model.x .= x
+        @bangbang model.R .= R
     end
 
     nothing
@@ -169,7 +176,7 @@ end
 
 
 """
-    update!(imm::IMM, u, y, p, t; correct_kwargs = (;), predict_kwargs = (;))
+    update!(imm::IMM, u, y, p, t; correct_kwargs = (;), predict_kwargs = (;), interact = true)
 
 The combined udpate for an [`IMM`](@ref) filter performs the following steps:
 1. Correct each model with the measurements `y` and control input `u`.
@@ -182,11 +189,12 @@ This differs slightly from the udpate step of other filters, where at the end of
 # Arguments:
 - `correct_kwargs`: An optional named tuple of keyword arguments that are sent to [`correct!`](@ref).
 - `predict_kwargs`: An optional named tuple of keyword arguments that are sent to [`predict!`](@ref).
+- `interact`: Whether or not to run the interaction step.
 """
-function update!(imm::IMM, u, y, args...; correct_kwargs = (;), predict_kwargs = (;))
+function update!(imm::IMM, u, y, args...; correct_kwargs = (;), predict_kwargs = (;), interact = true)
     ll, rest = correct!(imm, u, y, args...; correct_kwargs...)
     combine!(imm)
-    interact!(imm)
+    interact && interact!(imm)
     predict!(imm, u, args...; predict_kwargs...)
     ll, rest
 end
@@ -230,7 +238,7 @@ covtype(imm::IMM) = typeof(imm.R)
 state(imm::IMM) = imm.x
 covariance(imm::IMM) = imm.R
 
-function forward_trajectory(imm::IMM, u::AbstractVector, y::AbstractVector, p=parameters(imm))
+function forward_trajectory(imm::IMM, u::AbstractVector, y::AbstractVector, p=parameters(imm); interact = true)
     reset!(imm)
     T    = length(y)
     x    = Array{particletype(imm)}(undef,T)
@@ -250,7 +258,7 @@ function forward_trajectory(imm::IMM, u::AbstractVector, y::AbstractVector, p=pa
         combine!(imm)
         yh = measurement(imm)(state(imm), u[t], p, ti)
         e[t] = y[t] .- yh
-        interact!(imm)
+        interact && interact!(imm)
         xt[t] = state(imm)      |> copy
         Rt[t] = covariance(imm) |> copy
         predict!(imm, u[t], p, ti)

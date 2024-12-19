@@ -82,7 +82,7 @@ kftrue = UnscentedKalmanFilter{false,false,true,false}((x,u,p,t,w)->dynamics(x,u
 imm = IMM([kffalse, kftrue], P, μ; p = 10)
 
 T = length(y)
-sol = forward_trajectory(imm,u[1:T],y[1:T])
+sol = forward_trajectory(imm,u[1:T],y[1:T],interact=false)
 figx = plot(sol, plotu=false, plotRt=true)
 figmode = plot(sol.extra', title="Mode")
 plot(figx, figmode)
@@ -115,7 +115,7 @@ end
 function cost(pars)
 	try
 		imm = get_opt_kf(pars)
-        ll = loglik(imm, u, y, p)
+        ll = loglik(imm, u, y, p, interact=false)
 		return -ll
 	catch e
         # rethrow()
