@@ -1,6 +1,7 @@
 module LowLevelParticleFilters
 
 export KalmanFilter, SqKalmanFilter, UnscentedKalmanFilter, DAEUnscentedKalmanFilter, ExtendedKalmanFilter, ParticleFilter, AuxiliaryParticleFilter, AdvancedParticleFilter, PFstate, index, state, covariance, num_particles, effective_particles, weights, expweights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, mode_trajectory, weighted_mean, weighted_cov, update!, predict!, correct!, reset!, metropolis, shouldresample, TupleProduct
+export IMM, interact!, combine!
 export LinearMeasurementModel, EKFMeasurementModel, UKFMeasurementModel, CompositeMeasurementModel
 @deprecate weigthed_mean weighted_mean
 @deprecate weigthed_cov weighted_cov
@@ -40,6 +41,7 @@ include("smoothing.jl")
 include("plotting.jl")
 include("ekf.jl")
 include("sq_kalman.jl")
+include("imm.jl")
 
 index(f::AbstractFilter) = f.t
 
