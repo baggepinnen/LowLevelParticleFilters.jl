@@ -120,7 +120,7 @@ function cost(pars)
         ll = loglik(imm, u, y, interact=true) - 1/2*logdet(imm.models[1].R1)
 		return -ll
 	catch e
-        # rethrow()
+        # rethrow() # If you only get Inf, you can uncomment this line to see the error message
 		return eltype(pars)(Inf)
 	end
 end
@@ -135,14 +135,12 @@ res = Optim.optimize(
         show_trace        = true,
         show_every        = 5,
         iterations        = 200,
-		# x_tol 			  = 1e-7,
     ),
-	autodiff = :forward,
 )
 
-# res.minimizer = [-0.23848249020342335, 0.09510413594186848, -2.7540206342539832, -0.026720713351238334, -5.596193009305194, -25.37645648820617] # hide
-
 imm = get_opt_kf(res.minimizer)
+imm = get_opt_kf([-0.23848249020342335, 0.09510413594186848, -2.7540206342539832, -0.026720713351238334, -5.596193009305194, -25.37645648820617]) #make sure it goes well # hide
+
 sol = forward_trajectory(imm, u, y)
 plot(sol.extra', title="Mode (optimized filter)")
 ```

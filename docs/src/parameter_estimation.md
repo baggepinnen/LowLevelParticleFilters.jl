@@ -322,6 +322,7 @@ nothing # hide
 
 Similar to previous example, we simulate the system, this time using a more exciting input in order to be able to identify several parameters
 ```@example paramest
+using Random; Random.seed!(1) # hide
 Tperiod = 200
 t = 0:Ts:1000
 u1 = vcat.(0.25 .* sign.(sin.(2pi/Tperiod .* (t ./ 40).^2)) .+ 0.25)
