@@ -116,9 +116,9 @@ end
 
 Calculate log-likelihood for entire sequences `u,y`
 """
-function loglik(f::AbstractFilter,u,y,p=parameters(f))
+function loglik(f::AbstractFilter,u,y,p=parameters(f); kwargs...)
     reset!(f)
-    sum(x->f(x[1],x[2],p)[1], zip(u, y))
+    sum(x->f(x[1],x[2],p; kwargs...)[1], zip(u, y))
 end
 
 function loglik(pf::AuxiliaryParticleFilter,u,y,p=parameters(pf))
