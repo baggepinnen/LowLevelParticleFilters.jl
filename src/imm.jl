@@ -28,7 +28,7 @@ In addition to the [`predict!`](@ref) and [`correct!`](@ref) steps, the IMM filt
 
 These two orders are cyclic permutations of each other, and the order used in [`update!`](@ref) is chosen to align with the order used in the other filters, where the initial condition is corrected using the first measurement, i.e., we assume the first measurement updates ``x(0|-1)`` to ``x(0|0)``.
 
-The (combined) state and covariance of the IMM filter is made up of the weighted average of the states and covariances of the individual filters. The weights are the initial mixing probabilities `μ`.
+The initial (combined) state and covariance of the IMM filter is made up of the weighted average of the states and covariances of the individual filters. The weights are the initial mixing probabilities `μ`.
 
 Ref: "Interacting multiple model methods in target tracking: a survey", E. Mazor; A. Averbuch; Y. Bar-Shalom; J. Dayan
 
@@ -238,6 +238,16 @@ covtype(imm::IMM) = typeof(imm.R)
 state(imm::IMM) = imm.x
 covariance(imm::IMM) = imm.R
 
+
+"""
+    forward_trajectory(imm::IMM, u, y, p = parameters(imm); interact = true)
+
+When performing batch filtering using an [`IMM`](@ref) filter, one may
+- Override the `interact` parameter of the filter
+- Access the mode probabilities along the trajectory as the `sol.extra` field. This is a matrix of size `(n_modes, T)` where `T` is the length of the trajectory (length of `u` and `y`).
+
+The returned solution object is of type [`KalmanFilteringSolution`](@ref) and has the following fields:
+"""
 function forward_trajectory(imm::IMM, u::AbstractVector, y::AbstractVector, p=parameters(imm); interact = true)
     reset!(imm)
     T    = length(y)
