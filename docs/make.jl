@@ -24,6 +24,7 @@ makedocs(
                   "Kalman-filter tutorial with LowLevelParticleFilters" => "adaptive_kalmanfilter.md",
                   "Noise tuning and disturbance modeling for Kalman filtering" => "noisetuning.md",
                   "Particle-filter tutorial" => "beetle_example.md",
+                  "IMM-filter tutorial" => "beetle_example_imm.md",
                   "State estimation for DAE systems" => "dae.md",
                   "Adaptive Neural-Network training" => "neural_network.md",
                   "Fault detection" => "fault_detection.md",
