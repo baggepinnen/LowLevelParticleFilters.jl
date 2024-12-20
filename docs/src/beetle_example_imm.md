@@ -32,28 +32,28 @@ nothing # hide
 ```
 We then define some properties of the dynamics and the filter. We will use an [`AdvancedParticleFilter`](@ref) since we want to have fine-grained control over the noise sampling for the mode switch.
 ```@example beetle_imm
-n = 4 # Dimension of state: we have position (2d), speed and angle
-p = 2 # Dimension of measurements, we can measure the x and the y
+nx = 4 # Dimension of state: we have position (2d), speed and angle
+ny = 2 # Dimension of measurements, we can measure the x and the y
 @inline pos(s) = s[SVector(1,2)]
 @inline vel(s) = s[3]
 @inline ϕ(s) = s[4]
 nothing # hide
 ```
 
-We then define the probability distributions we need.
+We then define the probability distributions we need. The IMM filter takes a transition-probability matrix, ``P``, and an initial mixing probability, ``μ``. ``P`` is a Markov (stochastic) matrix, where each row sums to one, and `P[i, j]` is the probability of switching from mode `i` to mode `j`. `μ` is a vector of probabilities, where `μ[i]` is the probability of starting in mode `i`. We also define the noise distributions for the dynamics and the measurements. The dynamics noise is modeled as a Gaussian distribution with a standard deviation of `dvσ` for the velocity and `ϕσ` for the angle. The measurement noise is modeled as a Gaussian distribution with a standard deviation of `dgσ`. The initial state is modeled as a Gaussian distribution with a mean at the first measurement and a standard deviation of `d0`.
 ```@example beetle_imm
 dgσ = 1.0 # the deviation of the measurement noise distribution
 dvσ = 0.3 # the deviation of the dynamics noise distribution
 ϕσ  = 0.5
-P = [0.995 0.005; 0.0001 0.9999] # Transition probability matrix, we model the search mode as "almost terminal"
+P = [0.995 0.005; 0.0 1] # Transition probability matrix, we model the search mode as "almost terminal"
 μ = [1.0, 0.0] # Initial mixing probabilities
 R1 = Diagonal([1e-1, 1e-1, dvσ, ϕσ].^2)
-R2 = dgσ^2*I(p) # Measurement noise covariance matrix
+R2 = dgσ^2*I(ny) # Measurement noise covariance matrix
 d0 = MvNormal(SVector(y[1]..., 0.5, atan((y[2]-y[1])...)), [3.,3,2,2])
 nothing # hide
 ```
 
-We now define the dynamics, since we use the advanced filter, we include the `noise=false` argument. The dynamics is directly defined in discrete time.
+We now define the dynamics, which is directly defined in discrete time. The third argument is a parameter we call `modegain`, which is used to scale the amount of noise in the angle of the beetle depending on the mode in which it is in. The last argument is a boolean that tells the dynamics function which mode it is in, we will close over this argument when defining the dynamics for the individual Kalman filters that are part of the IMM, one will use `m = false` and one will use `m = true`.
 ```@example beetle_imm
 @inline function dynamics(s,_,modegain,t,w,m)
     # current state
@@ -75,23 +75,25 @@ nothing # hide
 
 In this example, we have no control inputs, we thus define a vector of only zeros. We then solve the forward filtering problem and plot the results.
 ```@example beetle_imm
-u = zeros(length(y))
-kffalse = UnscentedKalmanFilter{false,false,true,false}((x,u,p,t,w)->dynamics(x,u,p,t,w,false), measurement, R1, R2, d0, ny=p, nu=0, p=10)
-kftrue = UnscentedKalmanFilter{false,false,true,false}((x,u,p,t,w)->dynamics(x,u,p,t,w,true), measurement, R1, R2, d0, ny=p, nu=0, p=10)
+u = zeros(length(y)) # no control inputs
+kffalse = UnscentedKalmanFilter{false,false,true,false}((x,u,p,t,w)->dynamics(x,u,p,t,w,false), measurement, R1, R2, d0; ny, nu=0, p=10)
+kftrue = UnscentedKalmanFilter{false,false,true,false}((x,u,p,t,w)->dynamics(x,u,p,t,w,true), measurement, R1, R2, d0; ny, nu=0, p=10)
 
 imm = IMM([kffalse, kftrue], P, μ; p = 10)
 
 T = length(y)
-sol = forward_trajectory(imm,u[1:T],y[1:T],interact=false)
+sol = forward_trajectory(imm, u, y, interact=true)
 figx = plot(sol, plotu=false, plotRt=true)
 figmode = plot(sol.extra', title="Mode")
 plot(figx, figmode)
-# DisplayAs.PNG(Plots.current()) # hide
+DisplayAs.PNG(Plots.current()) # hide
 ```
-We can clearly see when the beetle switched mode. This corresponds well to annotations provided by a biologist and is the fundamental question we want to answer with the filtering procedure.
+
+If you have followed the particle filter tutorial [Smoothing the track of a moving beetle](@ref), you will notice that the result here is much worse. We used noise parameters similar to in the particle-gilter example, but those were tuned fo the particle filter. Below, we will attempt to optimize the performance of the IMM filter.
 
 
-
+## Tuning by optimization
+We will attempt to optimize the dynamics and measurement noise covariance matrices and the `modegain` parameter. We code this up in two functions, one that takes the parameter vector and returns an [`IMM`](@ref) filter, and one that calculates the loss given the filter. We will optimize the log-likelihood of the data given the filter.
 
 
 ```@example beetle_imm
@@ -106,16 +108,16 @@ function get_opt_kf(p)
     Pi = SMatrix{2,2, Float64,4}(P)
     # sigmoid(x) = 1/(1+exp(-x))
     # switch_prob = sigmoid(p[7])
-    # Pi = [1-switch_prob switch_prob; 0.0000001 0.9999999]
-    kffalse = UnscentedKalmanFilter{false,false,true,false}((x,u,p,t,w)->dynamics(x,u,p,t,w,false), measurement, R1i, R2i, d0i, ny=2, nu=0)
-    kftrue = UnscentedKalmanFilter{false,false,true,false}((x,u,p,t,w)->dynamics(x,u,p,t,w,true), measurement, R1i, R2i, d0i, ny=2, nu=0)
+    # Pi = [1-switch_prob switch_prob; 0 1]
+    kffalse = UnscentedKalmanFilter{false,false,true,false}((x,u,p,t,w)->dynamics(x,u,p,t,w,false), measurement, R1i, R2i, d0i; ny, nu=0)
+    kftrue = UnscentedKalmanFilter{false,false,true,false}((x,u,p,t,w)->dynamics(x,u,p,t,w,true), measurement, R1i, R2i, d0i; ny, nu=0)
 
     IMM([kffalse, kftrue], Pi, T.(μ), p=modegain)
 end
 function cost(pars)
 	try
 		imm = get_opt_kf(pars)
-        ll = loglik(imm, u, y, p, interact=false)
+        ll = loglik(imm, u, y, interact=true) - 1/2*logdet(imm.models[1].R1)
 		return -ll
 	catch e
         # rethrow()
@@ -124,6 +126,7 @@ function cost(pars)
 end
 
 using Optim
+Random.seed!(0)
 res = Optim.optimize(
     cost,
     params,
@@ -137,10 +140,14 @@ res = Optim.optimize(
 	autodiff = :forward,
 )
 
+# res.minimizer = [-0.23848249020342335, 0.09510413594186848, -2.7540206342539832, -0.026720713351238334, -5.596193009305194, -25.37645648820617] # hide
+
 imm = get_opt_kf(res.minimizer)
-sol = forward_trajectory(imm,u[1:T],y[1:T])
-figx = plot(sol, plotu=false, plotRt=true)
-figmode = plot(sol.extra', title="Mode")
-plot(figx, figmode)
+sol = forward_trajectory(imm, u, y)
+plot(sol.extra', title="Mode (optimized filter)")
 ```
+
+If it went well, the filter should be in mode 1 (the `false` mode) from the start until just before 200 time steps, at which point it should switch to model 2 (`true`). This method of detecting the mode switch of the beetle appears to be somewhat less robust than the particle filter, but is significantly cheaper computationally. 
+
+The IMM filter does not stick in mode 2 perpetually after having reached it since it never actually becomes fully confident that mode 2 has been reached, but detecting the first switch is sufficient to know that the switch has occurred. 
 
