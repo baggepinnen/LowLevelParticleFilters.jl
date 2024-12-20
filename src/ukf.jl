@@ -167,11 +167,11 @@ function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::A
         dynamics, measurement_model, R1, d0, predict_sigma_point_cache, x0, R, 0, Ts, ny, nu, p, reject, state_mean, state_cov, cholesky!)
 end
 
-function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement, R1, R2, d0=SimpleMvNormal(R1), args...; Ts = 1.0, p = NullParameters(), ny, nu, cholesky! = cholesky!, kwargs...) where {IPD,IPM,AUGD,AUGM}
+function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement, R1, R2, d0=SimpleMvNormal(R1), args...; Ts = 1.0, p = NullParameters(), ny, nu, reject=nothing, state_mean=safe_mean, state_cov=safe_cov, cholesky! = cholesky!, kwargs...) where {IPD,IPM,AUGD,AUGM}
     nx = length(d0)
     T = promote_type(eltype(d0), eltype(R1), eltype(R2))
     measurement_model = UKFMeasurementModel{T,IPM,AUGM}(measurement, R2; nx, ny, kwargs...)
-    UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model, R1, d0, args...; Ts, p, nu, cholesky!, kwargs...)
+    UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model, R1, d0, args...; Ts, p, nu, reject, state_mean, state_cov, cholesky!, kwargs...)
 end
 
 
