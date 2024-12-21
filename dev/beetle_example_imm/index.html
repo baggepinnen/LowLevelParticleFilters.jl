@@ -17,7 +17,7 @@ ny = 2 # Dimension of measurements, we can measure the x and the y
 @inline ϕ(s) = s[4]</code></pre><p>We then define the probability distributions we need. The IMM filter takes a transition-probability matrix, <span>$P$</span>, and an initial mixing probability, <span>$μ$</span>. <span>$P$</span> is a Markov (stochastic) matrix, where each row sums to one, and <code>P[i, j]</code> is the probability of switching from mode <code>i</code> to mode <code>j</code>. <code>μ</code> is a vector of probabilities, where <code>μ[i]</code> is the probability of starting in mode <code>i</code>. We also define the noise distributions for the dynamics and the measurements. The dynamics noise is modeled as a Gaussian distribution with a standard deviation of <code>dvσ</code> for the velocity and <code>ϕσ</code> for the angle. The measurement noise is modeled as a Gaussian distribution with a standard deviation of <code>dgσ</code>. The initial state is modeled as a Gaussian distribution with a mean at the first measurement and a standard deviation of <code>d0</code>.</p><pre><code class="language-julia hljs">dgσ = 1.0 # the deviation of the measurement noise distribution
 dvσ = 0.3 # the deviation of the dynamics noise distribution
 ϕσ  = 0.5
-P = [0.995 0.005; 0.0 1] # Transition probability matrix, we model the search mode as &quot;almost terminal&quot;
+P = [0.995 0.005; 0.0 1] # Transition probability matrix, we model the search mode as &quot;terminal&quot;
 μ = [1.0, 0.0] # Initial mixing probabilities
 R1 = Diagonal([1e-1, 1e-1, dvσ, ϕσ].^2)
 R2 = dgσ^2*I(ny) # Measurement noise covariance matrix
@@ -45,14 +45,14 @@ T = length(y)
 sol = forward_trajectory(imm, u, y, interact=true)
 figx = plot(sol, plotu=false, plotRt=true)
 figmode = plot(sol.extra&#39;, title=&quot;Mode&quot;)
-plot(figx, figmode)</code></pre><img src="4396de8a.png" alt="Example block output"/><p>If you have followed the particle filter tutorial <a href="../beetle_example/#Smoothing-the-track-of-a-moving-beetle">Smoothing the track of a moving beetle</a>, you will notice that the result here is much worse. We used noise parameters similar to in the particle-gilter example, but those were tuned fo the particle filter. Below, we will attempt to optimize the performance of the IMM filter.</p><h2 id="Tuning-by-optimization"><a class="docs-heading-anchor" href="#Tuning-by-optimization">Tuning by optimization</a><a id="Tuning-by-optimization-1"></a><a class="docs-heading-anchor-permalink" href="#Tuning-by-optimization" title="Permalink"></a></h2><p>We will attempt to optimize the dynamics and measurement noise covariance matrices and the <code>modegain</code> parameter. We code this up in two functions, one that takes the parameter vector and returns an <a href="../api/#LowLevelParticleFilters.IMM-Tuple{Any, AbstractMatrix, AbstractVector}"><code>IMM</code></a> filter, and one that calculates the loss given the filter. We will optimize the log-likelihood of the data given the filter.</p><pre><code class="language-julia hljs">params = [log10.(diag(R1)); log10(1); log10(10)]
+plot(figx, figmode)</code></pre><img src="68a796f9.png" alt="Example block output"/><p>If you have followed the particle filter tutorial <a href="../beetle_example/#Smoothing-the-track-of-a-moving-beetle">Smoothing the track of a moving beetle</a>, you will notice that the result here is much worse. We used noise parameters similar to in the particle-gilter example, but those were tuned fo the particle filter. Below, we will attempt to optimize the performance of the IMM filter.</p><h2 id="Tuning-by-optimization"><a class="docs-heading-anchor" href="#Tuning-by-optimization">Tuning by optimization</a><a id="Tuning-by-optimization-1"></a><a class="docs-heading-anchor-permalink" href="#Tuning-by-optimization" title="Permalink"></a></h2><p>We will attempt to optimize the dynamics and measurement noise covariance matrices and the <code>modegain</code> parameter. We code this up in two functions, one that takes the parameter vector and returns an <a href="../api/#LowLevelParticleFilters.IMM-Tuple{Any, AbstractMatrix, AbstractVector}"><code>IMM</code></a> filter, and one that calculates the loss given the filter. We will optimize the log-likelihood of the data given the filter.</p><pre><code class="language-julia hljs">params = [log10.(diag(R1)); log10(1); log10(10)]
 
 function get_opt_kf(p)
     T = eltype(p)
     R1i = Diagonal(SVector{4}(exp10.(p[1:4])))
     R2i = SMatrix{2,2}(exp10(p[5])*R2)
     d0i = MvNormal(SVector{4, T}(T.(d0.μ)), SMatrix{4,4}(T.(d0.Σ)))
-    modegain = 5+exp10(p[6])
+    modegain = 2+exp10(p[6])
     Pi = SMatrix{2,2, Float64,4}(P)
     # sigmoid(x) = 1/(1+exp(-x))
     # switch_prob = sigmoid(p[7])
@@ -65,7 +65,8 @@ end
 function cost(pars)
     try
         imm = get_opt_kf(pars)
-        ll = loglik(imm, u, y, interact=true) - 1/2*logdet(imm.models[1].R1)
+        T = length(y)
+        ll = loglik(imm, u[1:T], y[1:T], interact=true) - 1/2*logdet(imm.models[1].R1)
         return -ll
     catch e
         # rethrow() # If you only get Inf, you can uncomment this line to see the error message
@@ -78,15 +79,16 @@ Random.seed!(0)
 res = Optim.optimize(
     cost,
     params,
-    ParticleSwarm(),
+    ParticleSwarm(), # Use a gradient-free optimizer. ForwardDiff works, but the algorithm is numerically difficult to compute gradients through and may suffer from overflows in the gradient computation
     Optim.Options(
         show_trace        = true,
         show_every        = 5,
-        iterations        = 200,
+        iterations        = 100,
+        time_limit        = 30,
     ),
 )
 
 imm = get_opt_kf(res.minimizer)
 
 sol = forward_trajectory(imm, u, y)
-plot(sol.extra&#39;, title=&quot;Mode (optimized filter)&quot;)</code></pre><img src="1f6e463e.svg" alt="Example block output"/><p>If it went well, the filter should be in mode 1 (the <code>false</code> mode) from the start until just before 200 time steps, at which point it should switch to model 2 (<code>true</code>). This method of detecting the mode switch of the beetle appears to be somewhat less robust than the particle filter, but is significantly cheaper computationally. </p><p>The IMM filter does not stick in mode 2 perpetually after having reached it since it never actually becomes fully confident that mode 2 has been reached, but detecting the first switch is sufficient to know that the switch has occurred. </p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../beetle_example/">« Particle-filter tutorial</a><a class="docs-footer-nextpage" href="../dae/">State estimation for DAE systems »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.8.0 on <span class="colophon-date" title="Saturday 21 December 2024 07:27">Saturday 21 December 2024</span>. Using Julia version 1.11.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+plot(sol.extra&#39;, title=&quot;Mode (optimized filter)&quot;)</code></pre><img src="5525986c.svg" alt="Example block output"/><p>If it went well, the filter should be in mode 1 (the <code>false</code> mode) from the start until around 200 time steps, at which point it should switch to model 2 (<code>true</code>). This method of detecting the mode switch of the beetle appears to be somewhat less robust than the particle filter, but is significantly cheaper computationally. </p><p>The IMM filter does not stick in mode 2 perpetually after having reached it since it never actually becomes fully confident that mode 2 has been reached, but detecting the first switch is sufficient to know that the switch has occurred. </p><p>The log-likelihood of the solution</p><pre><code class="language-julia hljs">sol.ll</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">-1660.8132416661117</code></pre><p>should be similar to that of the particle-filter in the tutorial <a href="../beetle_example/#Smoothing-the-track-of-a-moving-beetle">Smoothing the track of a moving beetle</a>, which was around -1660.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../beetle_example/">« Particle-filter tutorial</a><a class="docs-footer-nextpage" href="../dae/">State estimation for DAE systems »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.8.0 on <span class="colophon-date" title="Saturday 21 December 2024 09:28">Saturday 21 December 2024</span>. Using Julia version 1.11.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
