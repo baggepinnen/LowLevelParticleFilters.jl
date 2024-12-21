@@ -29,8 +29,8 @@ Depending on the nature of ``f`` and ``g``, the best method of estimating the st
 We provide a number of filter types
 - [`KalmanFilter`](@ref). A standard Kalman filter. Is restricted to linear dynamics (possibly time varying) and Gaussian noise.
 - [`SqKalmanFilter`](@ref). A standard Kalman filter on square-root form (slightly slower but more numerically stable with ill-conditioned covariance).
-- [`ExtendedKalmanFilter`](@ref): For nonlinear systems, the EKF runs a regular Kalman filter on linearized dynamics. Uses ForwardDiff.jl for linearization (or user provided). The noise model must be Gaussian.
-- [`UnscentedKalmanFilter`](@ref): The Unscented Kalman filter often performs slightly better than the Extended Kalman filter but may be slightly more computationally expensive. The UKF handles nonlinear dynamics and measurement models, but still requires a Gaussian noise model (may be non additive) and assumes all posterior distributions are Gaussian, i.e., can not handle multi-modal posteriors.
+- [`ExtendedKalmanFilter`](@ref): For nonlinear systems, the EKF runs a regular Kalman filter on linearized dynamics. Uses ForwardDiff.jl for linearization (or user provided). The noise model must still be Gaussian and additive.
+- [`UnscentedKalmanFilter`](@ref): The Unscented Kalman filter often performs slightly better than the Extended Kalman filter but may be slightly more computationally expensive. The UKF handles nonlinear dynamics and measurement models, but still requires a Gaussian noise model (may be non additive) and still assumes that all posterior distributions are Gaussian, i.e., can not handle multi-modal posteriors.
 - [`ParticleFilter`](@ref): The particle filter is a nonlinear estimator. This version of the particle filter is simple to use and assumes that both dynamics noise and measurement noise are additive. Particle filters handle multi-modal posteriors.
 - [`AdvancedParticleFilter`](@ref): This filter gives you more flexibility, at the expense of having to define a few more functions. This filter does not require the noise to be additive and is thus the most flexible filter type.
 - [`AuxiliaryParticleFilter`](@ref): This filter is identical to [`ParticleFilter`](@ref), but uses a slightly different proposal mechanism for new particles.
@@ -46,6 +46,8 @@ All filters work in two distinct steps.
 1. The *prediction* step ([`predict!`](@ref)). During prediction, we use the dynamics model to form ``x(t|t-1) = f(x(t-1), ...)``
 2. The *correction* step ([`correct!`](@ref)). In this step, we adjust the predicted state ``x(t|t-1)`` using the measurement ``y(t)`` to form ``x(t|t)``.
 
+(The IMM filter is an exception to the above and has two additional steps, [`combine!`](@ref) and [`interact!`](@ref))
+
 In general, all filters represent not only a point estimate of ``x(t)``, but a representation of the complete posterior probability distribution over ``x`` given all the data available up to time ``t``. One major difference between different filter types is how they represent these probability distributions.
 
 
@@ -53,7 +55,7 @@ In general, all filters represent not only a point estimate of ``x(t)``, but a r
 # Particle filter
 A particle filter represents the probability distribution over the state as a collection of samples, each sample is propagated through the dynamics function ``f`` individually. When a measurement becomes available, the samples, called *particles*, are given a weight based on how likely the particle is given the measurement. Each particle can thus be seen as representing a hypothesis about the current state of the system. After a few time steps, most weights are inevitably going to be extremely small, a manifestation of the curse of dimensionality, and a resampling step is incorporated to refresh the particle distribution and focus the particles on areas of the state space with high posterior probability.
 
-Defining a particle filter is straightforward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u,p,t)` and the noise distribution `dg` in the measurement function `measurement(x,u,p,t)`. Both of these noise sources are assumed to be additive, but can have any distribution. The distribution of the initial state `d0` must also be provided. In the example below, we use linear Gaussian dynamics so that we can easily compare both particle and Kalman filters. (If we have something close to linear Gaussian dynamics in practice, we should of course use a Kalman filter and not a particle filter.)
+Defining a particle filter ([`ParticleFilter`](@ref)) is straightforward, one must define the distribution of the noise `df` in the dynamics function, `dynamics(x,u,p,t)` and the noise distribution `dg` in the measurement function `measurement(x,u,p,t)`. Both of these noise sources are assumed to be additive, but can have any distribution (see [`AdvancedParticleFilter`](@ref) for non-additive noise). The distribution of the initial state estimate `d0` must also be provided. In the example below, we use linear Gaussian dynamics so that we can easily compare both particle and Kalman filters. (If we have something close to linear Gaussian dynamics in practice, we should of course use a Kalman filter and not a particle filter.)
 
 ```@example lingauss
 using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions, Plots
@@ -91,7 +93,7 @@ measurement(x,u,p,t) = C*x
 vecvec_to_mat(x) = copy(reduce(hcat, x)') # Helper function
 nothing # hide
 ```
-the parameter `p` can be anything, and is often optional. If `p` is not provided when performing operations on filters, any `p` stored in the filter objects (if supported) is used. The default if none is provided and none is stored in the filter is `p = LowLevelParticleFilters.NullParameters()`.
+the parameter `p` can be _anything_, and is often optional. If `p` is not provided when performing operations on filters, any `p` stored in the filter objects (if supported) is used. The default if none is provided and none is stored in the filter is `p = LowLevelParticleFilters.NullParameters()`.
 
 We are now ready to define and use a filter
 
@@ -108,15 +110,15 @@ particles(pf)                # Query the filter for particles, try weights(pf) o
 x̂ = weighted_mean(pf)        # using the current state
 ```
 
-If you want to perform filtering using vectors of inputs and measurements, try any of the functions
+If you want to perform batch filtering using an existing trajectory consisting of vectors of inputs and measurements, try any of the functions [`forward_trajectory`](@ref), [`mean_trajectory`](@ref):
 
 ```@example lingauss
-sol = forward_trajectory(pf, u, y) # Filter whole vectors of signals
+sol = forward_trajectory(pf, u, y) # Filter whole trajectories at once
 x̂,ll = mean_trajectory(pf, u, y)
 plot(sol, xreal=xs, markersize=2)
 DisplayAs.PNG(Plots.current()) # hide
 ```
-`u` ad `y` are then assumed to be vectors of vectors. StaticArrays is recommended for maximum performance.
+`u` ad `y` are then assumed to be _vectors of vectors_. StaticArrays is recommended for maximum performance.
 
 
 If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurements.jl) is loaded, you may transform the output particles to `Matrix{MonteCarloMeasurements.Particles}` with the layout `T × n_state` using `Particles(x,we)`. Internally, the particles are then resampled such that they all have unit weight. This is conventient for making use of the [plotting facilities of MonteCarloMeasurements.jl](https://baggepinnen.github.io/MonteCarloMeasurements.jl/stable/#Plotting-1).
@@ -171,7 +173,7 @@ y(t) &= Cx(t) + Du(t) + e(t)
 ```
 for some matrices ``A,B,C,D`` where ``w \sim N(0, R_1)`` and ``e \sim N(0, R_2)`` are zero mean and Gaussian. The Kalman filter represents the posterior distributions over ``x`` by the mean and a covariance matrix. The magic behind the Kalman filter is that linear transformations of Gaussian distributions remain Gaussian, and we thus have a very efficient way of representing them.
 
-A Kalman filter is easily created using the constructor. Many of the functions defined for particle filters, are defined also for Kalman filters, e.g.:
+A Kalman filter is easily created using the constructor [`KalmanFilter`](@ref). Many of the functions defined for particle filters, are defined also for Kalman filters, e.g.:
 
 ```@example lingauss
 R1 = cov(df)
@@ -185,11 +187,11 @@ It can also be called in a loop like the `pf` above
 
 ```julia
 for t = 1:T
-    kf(u,y) # Performs both correct and predict!!
+    kf(u,y) # Performs both correct! and predict!
     # alternatively
-    ll, e = correct!(kf, y, nothing, t) # Returns loglikelihood and prediction error
-    x     = state(kf)
-    R     = covariance(kf)
+    ll, e = correct!(kf, y, nothing, t) # Returns loglikelihood and prediction error (plus other things if you want)
+    x     = state(kf)       # Access the state estimate
+    R     = covariance(kf)  # Access the covariance of the estimate
     predict!(kf, u, nothing, t)
 end
 ```
@@ -220,7 +222,7 @@ The tutorial ["How to tune a Kalman filter"](https://juliahub.com/pluto/editor.h
 
 # Unscented Kalman Filter
 
-The [`UnscentedKalmanFilter`](@ref) represents posterior distributions over ``x`` as Gaussian distributions, but propagate them through a nonlinear function ``f`` by a deterministic sampling of a small number of particles called *sigma points* (this is referred to as the [*unscented transform*](https://en.wikipedia.org/wiki/Unscented_transform)). This UKF thus handles nonlinear functions ``f,g``, but only Gaussian disturbances and unimodal posteriors. The UKF will _by default_ treat the noise as additive, but by using the _augmented UKF_ form, non-additive noise may be handled as well. See the docstring of [`UnscentedKalmanFilter`](@ref) for more details.
+The [`UnscentedKalmanFilter`](@ref) represents posterior distributions over ``x`` as Gaussian distributions just like the [`KalmanFilter`](@ref), but propagates them through a nonlinear function ``f`` by a deterministic sampling of a small number of particles called *sigma points* (this is referred to as the [*unscented transform*](https://en.wikipedia.org/wiki/Unscented_transform)). This UKF thus handles nonlinear functions ``f,g``, but only Gaussian disturbances and unimodal posteriors. The UKF will _by default_ treat the noise as additive, but by using the _augmented UKF_ form, non-additive noise may be handled as well. See the docstring of [`UnscentedKalmanFilter`](@ref) for more details.
 
 The UKF takes the same arguments as a regular [`KalmanFilter`](@ref), but the matrices defining the dynamics are replaced by two functions, `dynamics` and `measurement`, working in the same way as for the `ParticleFilter` above (unless the augmented form is used).
 ```@example lingauss
@@ -228,6 +230,8 @@ ukf = UnscentedKalmanFilter(dynamics, measurement, cov(df), cov(dg), MvNormal(SA
 ```
 !!! info
     If your function `dynamics` describes a continuous-time ODE, do not forget to **discretize** it before passing it to the UKF. See [Discretization](@ref) for more information.
+
+The [`UnscentedKalmanFilter`](@ref) has many customization options, see the docstring for more details. In particular, the UKF may be created with a linear measurement model as an optimization.
 
 
 # Extended Kalman Filter
@@ -249,13 +253,13 @@ where `kf` is a standard [`KalmanFilter`](@ref) from which the covariance proper
 # AdvancedParticleFilter
 The [`AdvancedParticleFilter`](@ref) works very much like the [`ParticleFilter`](@ref), but admits more flexibility in its noise models.
 
-The [`AdvancedParticleFilter`](@ref) type requires you to implement the same functions as the regular `ParticleFilter`, but in this case you also need to handle sampling from the noise distributions yourself.
+The [`AdvancedParticleFilter`](@ref) type requires you to implement the same functions as the regular [`ParticleFilter`](@ref), but in this case you also need to handle sampling from the noise distributions yourself.
 The function `dynamics` must have a method signature like below. It must provide one method that accepts state vector, control vector, parameter, time *and* `noise::Bool` that indicates whether or not to add noise to the state. If noise should be added, this should be done inside `dynamics` An example is given below
 
 ```@example lingauss
 using Random
 const rng = Random.Xoshiro()
-function dynamics(x, u, p, t, noise=false) # It's important that this defaults to false
+function dynamics(x, u, p, t, noise=false) # It's important that `noise` defaults to false
     x = A*x .+ B*u # A simple linear dynamics model in discrete time
     if noise
         x += rand(rng, df) # it's faster to supply your own rng
@@ -269,7 +273,7 @@ The `measurement_likelihood` function must have a method accepting state, input,
 
 ```@example lingauss
 function measurement_likelihood(x, u, y, p, t)
-    logpdf(dg, C*x-y) # A simple linear measurement model with normal additive noise
+    logpdf(dg, C*x-y) # An example of a simple linear measurement model with normal additive noise
 end
 nothing # hide
 ```
@@ -278,6 +282,7 @@ This gives you very high flexibility. The noise model in either function can, fo
 To be able to simulate the [`AdvancedParticleFilter`](@ref) like we did with the simple filter above, the `measurement` method with the signature `measurement(x,u,p,t,noise=false)` must be available and return a sample measurement given state (and possibly time). For our example measurement model above, this would look like this
 
 ```@example lingauss
+# This function is only required for simulation
 measurement(x, u, p, t, noise=false) = C*x + noise*rand(rng, dg)
 nothing # hide
 ```
@@ -286,14 +291,14 @@ We now create the [`AdvancedParticleFilter`](@ref) and use it in the same way as
 
 ```@example lingauss
 apf = AdvancedParticleFilter(N, dynamics, measurement, measurement_likelihood, df, d0)
-sol = forward_trajectory(apf, u, y, ny)
+sol = forward_trajectory(apf, u, y, ny) # Perform batch filtering
 ```
 
 ```@example lingauss
 plot(sol, xreal=x)
 DisplayAs.PNG(Plots.current()) # hide
 ```
-We can even use this type as an AuxiliaryParticleFilter
+We can even use this type as an [`AuxiliaryParticleFilter`](@ref)
 
 ```@example lingauss
 apfa = AuxiliaryParticleFilter(apf)
@@ -312,7 +317,7 @@ Tuning a particle filter can be quite the challenge. To assist with this, we pro
 debugplot(pf,u[1:20],y[1:20], runall=true, xreal=x[1:20])
 ```
 
-The plot displays all states and all measurements. The heatmap in the background represents the weighted particle distributions per time step. For the measurement sequences, the heatmap represent the distributions of predicted measurements. The blue dots corresponds to measured values. In this case, we simulated the data and we had access to states as well, if we do not have that, just omit `xreal`.
+The plot displays all state variables and all measurements. The heatmap in the background represents the weighted particle distributions per time step. For the measurement sequences, the heatmap represent the distributions of predicted measurements. The blue dots corresponds to measured values. In this case, we simulated the data and we had access to the state as well, if we do not have that, just omit `xreal`.
 You can also manually step through the time-series using
 - `commandplot(pf,u,y; kwargs...)`
 For options to the debug plots, see `?pplot`.
