@@ -91,11 +91,11 @@ function interact!(imm::IMM)
             @bangbang new_R[j] .= 0 .* new_R[j]
         end
         for i = eachindex(models)
-            μij = P[i,j] * μ[i] / cj[j]
+            μij = calc_μij(P[i,j], μ[i], cj[j])
             @bangbang new_x[j] .+= μij .* models[i].x
         end
         for i = eachindex(models)
-            μij = P[i,j] * μ[i] / cj[j]
+            μij = calc_μij(P[i,j], μ[i], cj[j])
             if !iszero(μij)
                 d = models[i].x - new_x[j]
                 @bangbang new_R[j] .+= symmetrize(μij .* (d * d' .+  models[i].R))
@@ -108,6 +108,10 @@ function interact!(imm::IMM)
     end
 
     nothing
+end
+
+function calc_μij(P, μ, cj)
+    P*μ/cj # This overflows for Dual numbers when cj has extremely small values
 end
 
 function predict!(imm::IMM, args...; kwargs...)
@@ -126,7 +130,7 @@ The correct step of the IMM filter corrects each model with the measurements `y`
 
 The returned tuple consists of the sum of the log-likelihood of all models, the vector of individual log-likelihoods and an array of the rest of the return values from the correct step of each model.
 """
-function correct!(imm::IMM, u, y, args...; kwargs...)
+function correct!(imm::IMM, u, y, args...; expnormalize = true, kwargs...)
     (; μ, P, models) = imm
     lls = zeros(eltype(imm.x), length(models))
     rest = []
@@ -141,10 +145,15 @@ function correct!(imm::IMM, u, y, args...; kwargs...)
         push!(rest, others)
     end
     μP = P'μ
-    new_μ = exp.(lls) .* μP
-    μ .= new_μ ./ sum(new_μ)
 
-    sum(lls), lls, rest
+    # Naive formulas
+    # new_μ = exp.(lls) .* μP
+    # μ .= new_μ ./ sum(new_μ)
+
+    # Rewrite exp.(lls) .* μP as exp.(lls .+ log.(μP)), after which we can identify lls .+ log.(μP) as w and μ as we from the particle-filter implementation. This may improve the numerics
+    w = lls .+ log.(μP)
+    ll = logsumexp!(w, μ)
+    return ll, lls, rest
 end
 
 """
@@ -154,7 +163,7 @@ Combine the models of the IMM filter into a single state `imm.x` and covariance 
 """
 function combine!(imm::IMM)
     (; μ, x, R, models) = imm
-    @assert sum(μ) ≈ 1.0
+    @assert sum(μ) ≈ 1.0 "sum(μ) = $(sum(μ))"
 
     @bangbang x .= 0 .* x
     @bangbang R .= 0 .* R
