@@ -48,7 +48,7 @@ We then define the probability distributions we need. The IMM filter takes a tra
 dgσ = 1.0 # the deviation of the measurement noise distribution
 dvσ = 0.3 # the deviation of the dynamics noise distribution
 ϕσ  = 0.5
-P = [0.995 0.005; 0.0 1] # Transition probability matrix, we model the search mode as "almost terminal"
+P = [0.995 0.005; 0.0 1] # Transition probability matrix, we model the search mode as "terminal"
 μ = [1.0, 0.0] # Initial mixing probabilities
 R1 = Diagonal([1e-1, 1e-1, dvσ, ϕσ].^2)
 R2 = dgσ^2*I(ny) # Measurement noise covariance matrix
@@ -107,7 +107,7 @@ function get_opt_kf(p)
     R1i = Diagonal(SVector{4}(exp10.(p[1:4])))
     R2i = SMatrix{2,2}(exp10(p[5])*R2)
     d0i = MvNormal(SVector{4, T}(T.(d0.μ)), SMatrix{4,4}(T.(d0.Σ)))
-    modegain = 5+exp10(p[6])
+    modegain = 2+exp10(p[6])
     Pi = SMatrix{2,2, Float64,4}(P)
     # sigmoid(x) = 1/(1+exp(-x))
     # switch_prob = sigmoid(p[7])
@@ -120,7 +120,8 @@ end
 function cost(pars)
     try
         imm = get_opt_kf(pars)
-        ll = loglik(imm, u, y, interact=true) - 1/2*logdet(imm.models[1].R1)
+        T = length(y)
+        ll = loglik(imm, u[1:T], y[1:T], interact=true) - 1/2*logdet(imm.models[1].R1)
         return -ll
     catch e
         # rethrow() # If you only get Inf, you can uncomment this line to see the error message
@@ -133,22 +134,29 @@ Random.seed!(0)
 res = Optim.optimize(
     cost,
     params,
-    ParticleSwarm(),
+    ParticleSwarm(), # Use a gradient-free optimizer. ForwardDiff works, but the algorithm is numerically difficult to compute gradients through and may suffer from overflows in the gradient computation
     Optim.Options(
         show_trace        = true,
         show_every        = 5,
-        iterations        = 200,
+        iterations        = 100,
+        time_limit        = 30,
     ),
 )
 
 imm = get_opt_kf(res.minimizer)
-imm = get_opt_kf([-0.23848249020342335, 0.09510413594186848, -2.7540206342539832, -0.026720713351238334, -5.596193009305194, -25.37645648820617]) #make sure it goes well # hide
+imm = get_opt_kf([-0.1981314138910982, -0.18626406669394405, -2.7342979645906547, 0.17994244691004058, -11.706419070755908, -54.16703441089562]) #make sure it goes well # hide
 
 sol = forward_trajectory(imm, u, y)
 plot(sol.extra', title="Mode (optimized filter)")
 ```
 
-If it went well, the filter should be in mode 1 (the `false` mode) from the start until just before 200 time steps, at which point it should switch to model 2 (`true`). This method of detecting the mode switch of the beetle appears to be somewhat less robust than the particle filter, but is significantly cheaper computationally. 
+If it went well, the filter should be in mode 1 (the `false` mode) from the start until around 200 time steps, at which point it should switch to model 2 (`true`). This method of detecting the mode switch of the beetle appears to be somewhat less robust than the particle filter, but is significantly cheaper computationally. 
 
 The IMM filter does not stick in mode 2 perpetually after having reached it since it never actually becomes fully confident that mode 2 has been reached, but detecting the first switch is sufficient to know that the switch has occurred. 
 
+The log-likelihood of the solution
+```@example beetle_imm
+sol.ll
+```
+
+should be similar to that of the particle-filter in the tutorial [Smoothing the track of a moving beetle](@ref), which was around -1660.
