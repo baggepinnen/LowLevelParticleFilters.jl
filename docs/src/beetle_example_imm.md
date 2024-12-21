@@ -18,6 +18,9 @@ e_t ∼ N(0,σ_e), w_t ∼ N(0,σ_w)
 ``
 The beetle further has two "modes", one where it's moving towards a goal, and one where it's searching in a more erratic manner. Figuring out when this mode switch occurs is the goal of the filtering. The mode will be encoded as two different models, where the difference between the models lies in the amount of dynamic noise affecting the angle of the beetle, i.e., in the searching mode, the beetle has more angle noise. The mode switching is modeled as a stochastic process with a binomial distribution (coin flip) describing the likelihood of a switch from mode 0 (moving to goal) and mode 1 (searching). Once the beetle has started searching, it stays in that mode, i.e., the searching mode is "sticky" or "terminal".
 
+The image below shows an example video from which the data is obtained
+![Bettle](https://global.discourse-cdn.com/julialang/original/3X/7/9/79a9255c4fc79677249fce7321c8c70f3df46431.gif)
+
 We load a single experiment from file for the purpose of this example (in practice, there may be hundreds of experiments)
 ```@example beetle_imm
 using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions, Plots, Random
@@ -115,13 +118,13 @@ function get_opt_kf(p)
     IMM([kffalse, kftrue], Pi, T.(μ), p=modegain)
 end
 function cost(pars)
-	try
-		imm = get_opt_kf(pars)
+    try
+        imm = get_opt_kf(pars)
         ll = loglik(imm, u, y, interact=true) - 1/2*logdet(imm.models[1].R1)
-		return -ll
-	catch e
+        return -ll
+    catch e
         # rethrow() # If you only get Inf, you can uncomment this line to see the error message
-		return eltype(pars)(Inf)
+        return eltype(pars)(Inf)
 	end
 end
 
