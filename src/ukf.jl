@@ -65,8 +65,12 @@ function Base.getproperty(ukf::UnscentedKalmanFilter, s::Symbol)
     end
 end
 
-function Base.show(io::IO, ukf::UnscentedKalmanFilter)
-    println(io, "UnscentedKalmanFilter")
+function Base.show(io::IO, ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}) where {IPD,IPM,AUGD,AUGM}
+    println(io, "UnscentedKalmanFilter{$IPD,$IPM,$AUGD,$AUGM}")
+    println(io, "  Inplace dynamics: $IPD")
+    println(io, "  Inplace measurement: $IPM")
+    println(io, "  Augmented dynamics: $AUGD")
+    println(io, "  Augmented measurement: $AUGM")
     println(io, "  nx: $(length(ukf.x))")
     println(io, "  nu: $(ukf.nu)")
     println(io, "  ny: $(ukf.ny)")
@@ -74,7 +78,11 @@ function Base.show(io::IO, ukf::UnscentedKalmanFilter)
     println(io, "  t: $(ukf.t)")
     for field in fieldnames(typeof(ukf))
         field in (:ny, :nu, :Ts, :t) && continue
-        println(io, "  $field: $(getfield(ukf, field))")
+        if field in (:measurement_model, :predict_sigma_point_cache)
+            println(io, "  $field: $(fieldtype(typeof(ukf), field)))")
+        else
+            println(io, "  $field: $(repr(getfield(ukf, field), context=:compact => true))")
+        end
     end
 end
 

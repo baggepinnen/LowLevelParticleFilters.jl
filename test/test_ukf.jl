@@ -48,6 +48,7 @@ R2 = eye(ny)
 T    = 200 # Number of time steps
 kf   = KalmanFilter(_A, _B, _C, 0, eye(nx), R2, d0)
 ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), R2, d0; ny, nu)
+show(ukf)
 x,u,y = LowLevelParticleFilters.simulate(kf,T,du) # Simuate trajectory using the model in the filter
 @test_nowarn LowLevelParticleFilters.simulate(ukf,T,du)
 tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
