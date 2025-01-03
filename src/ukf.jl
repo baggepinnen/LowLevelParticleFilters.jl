@@ -65,6 +65,18 @@ function Base.getproperty(ukf::UnscentedKalmanFilter, s::Symbol)
     end
 end
 
+function Base.show(io::IO, ukf::UnscentedKalmanFilter)
+    println(io, "UnscentedKalmanFilter")
+    println(io, "  nx: $(length(ukf.x))")
+    println(io, "  nu: $(ukf.nu)")
+    println(io, "  ny: $(ukf.ny)")
+    println(io, "  Ts: $(ukf.Ts)")
+    println(io, "  t: $(ukf.t)")
+    for field in fieldnames(typeof(ukf))
+        field in (:ny, :nu, :Ts, :t) && continue
+        println(io, "  $field: $(getfield(ukf, field))")
+    end
+end
 
 
 """
@@ -605,12 +617,12 @@ function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter{IPD,IPM,
         P⁻ .= 0
         for i in eachindex(X̃⁻)
             e = (X̃⁻[i] - m⁻)
-            mul!(P⁻, e, e', 1, 1)
+            mul!(P⁻, e, e', 1, 1) # TODO: consider formulating as matrix-matrix multiply
         end
         ns = length(X̃⁻)-1
         @bangbang P⁻ .= P⁻ ./ ns
         C .= 0
-        for i in eachindex(X̃⁻)
+        for i in eachindex(X̃⁻) # TODO: consider formulating as matrix-matrix multiply
             mul!(C, (X̃[i][xi] - m), (X̃⁻[i][xi] - m⁻)', 1, 1)
         end
         @bangbang C .= C ./ ns

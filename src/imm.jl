@@ -19,6 +19,11 @@ end
 
 Interacting Multiple Model (IMM) filter. This filter is a combination of multiple Kalman-type filters, each with its own state and covariance. The IMM filter is a probabilistically weighted average of the states and covariances of the individual filters. The weights are determined by the probability matrix `P` and the mixing probabilities `μ`.
 
+This implmentation allows for any combination of Kalman-type estimators to be used in the internal ensemble of models, and is not limited to linear estimators. This class of models encompasses others, such as 
+- Jump Markov Linear Systems (JMLS)
+- Multiple-model filters (interactivity can be turned off by setting `interact=false`)
+- Multiple Hypothesis Tracking (MHT)
+
 !!! warning "Experimental"
     This filter is currently considered experimental and the user interface may change in the future without respecting semantic versioning.
 
