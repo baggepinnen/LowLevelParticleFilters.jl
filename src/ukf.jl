@@ -337,14 +337,18 @@ end
 safe_mean(xs::ColumnSlices) = vec(mean(xs.parent, dims=2))
 safe_cov(xs::ColumnSlices, m=mean(xs)) = Statistics.covm(xs.parent, m, 2)
 
-function safe_cov(xs::Vector{<:SVector}, m = safe_mean(xs))
-    P = 0 .* m*m'
-    for i in eachindex(xs)
-        e = xs[i] .- m
-        P += e*e'
+function safe_cov(xs::Vector{<:SVector{N}}, m = safe_mean(xs)) where N
+    if N > 8
+        Statistics.covm(reduce(hcat, xs), m, 2)
+    else
+        P = 0 .* m*m'
+        for i in eachindex(xs)
+            e = xs[i] .- m
+            P += e*e'
+        end
+        c = P ./ (length(xs) - 1)
+        c
     end
-    c = P ./ (length(xs) - 1)
-    c
 end
 
 """
