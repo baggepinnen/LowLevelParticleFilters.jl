@@ -4,6 +4,7 @@ struct ExtendedKalmanFilter{IPD, IPM, KF <: KalmanFilter, F, G, A} <: AbstractEx
     dynamics::F
     measurement_model::G
     Ajac::A
+    names::SignalNames
 end
 
 """
@@ -57,7 +58,7 @@ function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Mat
 end
 
 
-function ExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing, Cjac = nothing)
+function ExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing, Cjac = nothing, names=default_names(kf.nx, kf.nu, measurement.ny, "EKF"))
     IPD = !has_oop(dynamics)
     if measurement isa AbstractMeasurementModel
         measurement_model = measurement
@@ -88,7 +89,7 @@ function ExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing, Cjac = 
         end
     end
 
-    return ExtendedKalmanFilter{IPD,IPM,typeof(kf),typeof(dynamics),typeof(measurement_model),typeof(Ajac)}(kf, dynamics, measurement_model, Ajac)
+    return ExtendedKalmanFilter{IPD,IPM,typeof(kf),typeof(dynamics),typeof(measurement_model),typeof(Ajac)}(kf, dynamics, measurement_model, Ajac, names)
 end
 
 function Base.getproperty(ekf::EKF, s::Symbol) where EKF <: AbstractExtendedKalmanFilter
