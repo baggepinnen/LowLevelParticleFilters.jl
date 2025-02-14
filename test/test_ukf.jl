@@ -46,7 +46,8 @@ measurement(x,u,p,t) = _C*x
 R2 = eye(ny)
 
 T    = 200 # Number of time steps
-kf   = KalmanFilter(_A, _B, _C, 0, eye(nx), R2, d0)
+names = SignalNames(x=["p", "v"], u=["t", "f"], y=["py", "vy"], name="My KF")
+kf   = KalmanFilter(_A, _B, _C, 0, eye(nx), R2, d0; names)
 ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), R2, d0; ny, nu)
 show(ukf)
 x,u,y = LowLevelParticleFilters.simulate(kf,T,du) # Simuate trajectory using the model in the filter

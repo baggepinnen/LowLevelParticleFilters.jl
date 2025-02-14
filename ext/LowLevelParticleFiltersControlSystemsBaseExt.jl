@@ -1,6 +1,6 @@
 module LowLevelParticleFiltersControlSystemsBaseExt
 import LowLevelParticleFilters.KalmanFilter
-using LowLevelParticleFilters: AbstractExtendedKalmanFilter, AbstractUnscentedKalmanFilter, SimpleMvNormal
+using LowLevelParticleFilters: AbstractFilter, AbstractKalmanFilter, AbstractExtendedKalmanFilter, AbstractUnscentedKalmanFilter, SimpleMvNormal, SignalNames
 using ControlSystemsBase: AbstractStateSpace, ssdata
 import ControlSystemsBase
 
@@ -11,7 +11,12 @@ Construct a `KalmanFilter` from a predefined `StateSpace` system from ControlSys
 """
 function KalmanFilter(sys::AbstractStateSpace{<:ControlSystemsBase.Discrete}, R1, R2, d0=SimpleMvNormal(Matrix(R1)); kwargs...)
     A, B, C, D = ssdata(sys)
-    KalmanFilter(A, B, C, D, R1, R2, d0; kwargs...)
+    name = ControlSystemsBase.system_name(sys)
+    x = ControlSystemsBase.state_names(sys)
+    u = ControlSystemsBase.input_names(sys)
+    y = ControlSystemsBase.output_names(sys)
+    names = SignalNames(x, u, y, name)
+    KalmanFilter(A, B, C, D, R1, R2, d0; names, kwargs...)
 end
 
 function ControlSystemsBase.linearize(kf::Union{AbstractExtendedKalmanFilter, AbstractUnscentedKalmanFilter}, x::AbstractVector, u::AbstractVector, p, t)
@@ -19,5 +24,10 @@ function ControlSystemsBase.linearize(kf::Union{AbstractExtendedKalmanFilter, Ab
     C,D = ControlSystemsBase.linearize(kf.measurement, x, u, p, t)
     (; A, B, C, D)
 end
+
+ControlSystemsBase.state_names(f::AbstractKalmanFilter)  = f.names.x
+ControlSystemsBase.input_names(f::AbstractKalmanFilter)  = f.names.u
+ControlSystemsBase.output_names(f::AbstractKalmanFilter) = f.names.y
+ControlSystemsBase.system_name(f::AbstractKalmanFilter)  = f.names.name
 
 end

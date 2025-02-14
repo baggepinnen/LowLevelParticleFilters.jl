@@ -49,6 +49,7 @@ mutable struct UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,RT,P
     state_mean::SMT
     state_cov::SCT
     cholesky!::CH
+    names::SignalNames
 end
 
 function Base.getproperty(ukf::UnscentedKalmanFilter, s::Symbol)
@@ -161,7 +162,7 @@ ERROR: PosDefException: matrix is not positive definite; Factorization failed.
 ```
 In such situations, it is advicable to reconsider the noise model and covariance matrices, alternatively, you may provide a custom Cholesky factorization function to the UKF constructor through the keyword argument `cholesky!`. The function should have the signature `cholesky!(A::AbstractMatrix)::Cholesky`. A useful alternative factorizaiton when covariance matrices are expected to be singular is `cholesky! = R->cholesky!(Positive, Matrix(R))` where the "positive" Cholesky factorization is provided by the package PositiveFactorizations.jl, which must be manually installed and loaded by the user.
 """
-function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::AbstractMeasurementModel, R1, d0=SimpleMvNormal(R1); Ts=1.0, p=NullParameters(), nu::Int, ny=measurement_model.ny, nw = nothing, reject=nothing, state_mean=safe_mean, state_cov=safe_cov, cholesky! = cholesky!, kwargs...) where {IPD,IPM,AUGD,AUGM}
+function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::AbstractMeasurementModel, R1, d0=SimpleMvNormal(R1); Ts=1.0, p=NullParameters(), nu::Int, ny=measurement_model.ny, nw = nothing, reject=nothing, state_mean=safe_mean, state_cov=safe_cov, cholesky! = cholesky!, names=default_names(length(d0), nu, ny, "UKF"), kwargs...) where {IPD,IPM,AUGD,AUGM}
     nx = length(d0)
     
     T = promote_type(eltype(d0), eltype(R1))
@@ -184,7 +185,7 @@ function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::A
     x0 = convert_x0_type(d0.μ)
     UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,typeof(dynamics),typeof(measurement_model),typeof(R1),typeof(d0),
         typeof(predict_sigma_point_cache),typeof(x0),typeof(R),typeof(p),typeof(reject),typeof(state_mean),typeof(state_cov), typeof(cholesky!)}(
-        dynamics, measurement_model, R1, d0, predict_sigma_point_cache, x0, R, 0, Ts, ny, nu, p, reject, state_mean, state_cov, cholesky!)
+        dynamics, measurement_model, R1, d0, predict_sigma_point_cache, x0, R, 0, Ts, ny, nu, p, reject, state_mean, state_cov, cholesky!, names)
 end
 
 function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement, R1, R2, d0=SimpleMvNormal(R1), args...; Ts = 1.0, p = NullParameters(), ny, nu, reject=nothing, state_mean=safe_mean, state_cov=safe_cov, cholesky! = cholesky!, kwargs...) where {IPD,IPM,AUGD,AUGM}

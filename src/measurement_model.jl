@@ -152,6 +152,7 @@ function UKFMeasurementModel{T,IPM,AUGM}(
     cov = safe_cov,
     cross_cov = cross_cov,
     static = nothing,
+    names = nothing, # throwaway
 ) where {T,IPM,AUGM}
 
     ne = if ne === nothing

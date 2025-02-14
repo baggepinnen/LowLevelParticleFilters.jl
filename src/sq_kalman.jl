@@ -12,6 +12,7 @@
     Ts::TS = 1
     p::P = NullParameters()
     α::αT = 1.0
+    names::SignalNames = names=default_names(length(d0), size(B,2), size(C,1), name="SqKF")
 end
 
 
@@ -43,7 +44,7 @@ R(t+1|t) = α AR(t)A^T + R_1
 
 Ref: "A Square-Root Kalman Filter Using Only QR Decompositions", Kevin Tracy https://arxiv.org/abs/2208.06452
 """
-function SqKalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(Matrix(R1)); p = NullParameters(), α = 1.0, check = true, Ts=1)
+function SqKalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(Matrix(R1)); p = NullParameters(), α = 1.0, check = true, Ts=1, names=default_names(length(d0), size(B,2), size(C,1), "SqKF"))
     α ≥ 1 || @warn "α should be > 1 for exponential forgetting. An α < 1 will lead to exponential loss of adaptation over time."
     if check
         maximum(abs, eigvals(A isa SMatrix ? Matrix(A) : A)) ≥ 2 && @warn "The dynamics matrix A has eigenvalues with absolute value ≥ 2. This is either a highly unstable system, or you have forgotten to discretize a continuous-time model. If you are sure that the system is provided in discrete time, you can disable this warning by setting check=false." maxlog=1
@@ -54,7 +55,7 @@ function SqKalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(Matrix(R1)); p = NullPar
     
     x0 = convert_x0_type(d0.μ)
 
-    SqKalmanFilter(A,B,C,D,R1,R2, d0, x0, R, 0, Ts, p, α)
+    SqKalmanFilter(A,B,C,D,R1,R2, d0, x0, R, 0, Ts, p, α, names)
 end
 
 

@@ -27,6 +27,8 @@ where
 - `plotyh`: Plot the predicted measurements `ŷ(t|t-1)`
 - `plotyht`: Plot the filtered measurements `ŷ(t|t)`
 - `name`: a string that is prepended to the labels of the plots, which is useful when plotting multiple solutions in the same plot.
+
+To modify the signal names used in legend entries, construct an instance of [`SignalNames`](@ref) and pass this to the filter (or directly to the plot command) using the `names` keyword argument.
 """
 struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll,Te,Et} <: AbstractFilteringSolution
     f::F
@@ -43,17 +45,18 @@ end
 
 KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e) = KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e,nothing)
 
-@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotR=false, plotRt=false, name = "")
+@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotR=false, plotRt=false, names = sol.f.names, name = names.name)
     isempty(name) || (name = name*" ")
     kf = sol.f
     nx, nu, ny = length(sol.x[1]), length(sol.u[1]), length(sol.y[1])
     layout --> nx*(plotx || plotxt) + plotu*nu + (ploty || plotyh || plotyht || plote)*ny
+    xnames = names.x
     if plotx
         m = reduce(hcat, sol.x)'
         twoσ = 1.96 .* sqrt.(reduce(hcat, diag.(sol.R))')
         for i = 1:nx
             @series begin
-                label --> "$(name)x$(i)(t|t-1)"
+                label --> "$(name)$(xnames[i])(t|t-1)"
                 subplot --> i
                 if plotR
                     ribbon := twoσ[:,i]
@@ -67,7 +70,7 @@ KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e) = KalmanFilteringSolution(f,u,y,x,
         twoσ = 1.96 .* sqrt.(reduce(hcat, diag.(sol.Rt))')
         for i = 1:nx
             @series begin
-                label --> "$(name)x$(i)(t|t)"
+                label --> "$(name)$(xnames[i])(t|t)"
                 subplot --> i
                 if plotRt
                     ribbon := twoσ[:,i]
@@ -78,19 +81,21 @@ KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e) = KalmanFilteringSolution(f,u,y,x,
     end
     if plotu && nu > 0
         series = reduce(hcat, sol.u)'
+        unames = names.u
         for i = 1:nu
             @series begin
-                label --> "u$(i)"
+                label --> "$(unames[i])$(i)"
                 subplot --> i + nx*(plotx || plotxt)
                 timevec, series[:, i]
             end
         end
     end
+    ynames = names.y
     if ploty
         series = reduce(hcat, sol.y)'
         for i = 1:ny
             @series begin
-                label --> "y$(i)"
+                label --> "$(ynames[i])$(i)"
                 subplot --> i + (nx*(plotx || plotxt) + nu*plotu)
                 timevec, series[:, i]
             end
