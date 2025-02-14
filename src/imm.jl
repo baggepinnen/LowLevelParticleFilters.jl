@@ -11,6 +11,7 @@ mutable struct IMM{MT, PT, XT, RT, μT, PAT, NX, NR} <: AbstractFilter
     new_x::NX
     new_R::NR
     interact::Bool
+    names::SignalNames
 end
 
 
@@ -45,7 +46,7 @@ Ref: "Interacting multiple model methods in target tracking: a survey", E. Mazor
 - `p`: Parameters for the filter. NOTE: this `p` is shared among all internal filters. The internal `p` of each filter will be overridden by this one.
 - `interact`: If `true`, the filter will run the interaction as part of [`update!`](@ref) and [`forward_trajectory`](@ref). If `false`, the filter will not run the interaction step. This choice can be overridden by passing the keyword argument `interact` to the respective functions.
 """
-function IMM(models, P::AbstractMatrix, μ::AbstractVector; check=true, p = NullParameters(), interact = true)
+function IMM(models, P::AbstractMatrix, μ::AbstractVector; check=true, p = NullParameters(), interact = true, names = SignalNames(models[1].names, "IMM"))
     if check
         N = length(models)
         length(μ) == N || throw(ArgumentError("μ must have the same length as the number of models"))
@@ -62,7 +63,7 @@ function IMM(models, P::AbstractMatrix, μ::AbstractVector; check=true, p = Null
     R = sum(i->μT[i]*models[i].R, eachindex(models))
     new_x = [copy(model.x) for model in models]
     new_R = [copy(model.R) for model in models]
-    IMM(models, P, x, R, μT, copy(μT), p, new_x, new_R, interact)
+    IMM(models, P, x, R, μT, copy(μT), p, new_x, new_R, interact, names)
 end
 
 function Base.getproperty(imm::IMM, s::Symbol)

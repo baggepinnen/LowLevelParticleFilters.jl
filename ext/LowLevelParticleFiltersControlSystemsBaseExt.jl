@@ -1,6 +1,6 @@
 module LowLevelParticleFiltersControlSystemsBaseExt
 import LowLevelParticleFilters.KalmanFilter
-using LowLevelParticleFilters: AbstractFilter, AbstractKalmanFilter, AbstractExtendedKalmanFilter, AbstractUnscentedKalmanFilter, SimpleMvNormal
+using LowLevelParticleFilters: AbstractFilter, AbstractKalmanFilter, AbstractExtendedKalmanFilter, AbstractUnscentedKalmanFilter, SimpleMvNormal, SignalNames
 using ControlSystemsBase: AbstractStateSpace, ssdata
 import ControlSystemsBase
 

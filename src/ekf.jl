@@ -58,7 +58,7 @@ function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Mat
 end
 
 
-function ExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing, Cjac = nothing, names=default_names(kf.nx, kf.nu, measurement.ny, "EKF"))
+function ExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing, Cjac = nothing, names=default_names(kf.nx, kf.nu, kf.ny, "EKF"))
     IPD = !has_oop(dynamics)
     if measurement isa AbstractMeasurementModel
         measurement_model = measurement

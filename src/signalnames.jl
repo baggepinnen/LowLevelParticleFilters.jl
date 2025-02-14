@@ -15,6 +15,13 @@ A structure representing the names of the signals in a system.
     name::String
 end
 
+"""
+    SignalNames(sn::SignalNames, name)
+
+Copy the `SignalNames` structure and change the name of the system.
+"""
+SignalNames(sn::SignalNames, name) = SignalNames(sn.x, sn.u, sn.y, name)
+
 function default_names(nx, nu, ny, name="")
     x = ["x$i" for i in 1:nx]
     u = ["u$i" for i in 1:nu]
