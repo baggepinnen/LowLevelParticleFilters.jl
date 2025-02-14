@@ -3,6 +3,8 @@ using LowLevelParticleFilters
 using LowLevelParticleFilters: AbstractFilter, parameters, pplot
 using Plots
 using Printf
+using Statistics: mean, cov
+using LinearAlgebra: eigen, diagm, cholesky
 
 
 function LowLevelParticleFilters.pplot(pf::AbstractFilter, u, y, p, args...; kwargs...)
@@ -112,6 +114,88 @@ function LowLevelParticleFilters.debugplot(pf, u, y, p=parameters(pf); runall=fa
         runall || display(pdata[1])
     end
     display(pdata[1])
+end
+
+function gaussian_chol(μ, Σ; n_std::Real, inds=1:2)
+    # λ, U = eigen(Σ[inds, inds])
+    # μ[inds], (n_std * U * diagm(.√λ))
+    U = cholesky(Σ[inds, inds]).L
+    μ[inds], (n_std * U)
+end
+
+import LowLevelParticleFilters: unscentedplot, unscentedplot!, covplot, covplot!
+@userplot UnscentedPlot
+
+@recipe function f(c::UnscentedPlot; n_std = 2, N = 100, inds=nothing)
+    if c.args[1] isa UnscentedKalmanFilter
+        ukf = c.args[1]
+        sigmapoints = ukf.predict_sigma_point_cache.x1
+    else
+        sigmapoints = c.args[1]
+    end
+    if length(sigmapoints[1]) == 2
+        inds = 1:2
+    else
+        if inds === nothing
+            @warn("UnscentedPlot only supports 2D inputs, plotting the first two dimensions. Select dimensions using inds=[dim1, dim2].")
+            inds = 1:2
+        end
+    end
+    μ, S = gaussian_chol(mean(sigmapoints), cov(sigmapoints); n_std, inds)
+
+    θ = range(0, 2π; length = N)
+    A = S * [cos.(θ)'; sin.(θ)']
+
+    xguide --> "x$(inds[1])"
+    yguide --> "x$(inds[2])"
+    @series begin
+        seriestype --> :scatter
+        markersize --> 2
+        label --> "Sigma points"
+        SP = reduce(hcat, sigmapoints)
+        SP[inds[1], :], SP[inds[2], :]
+    end
+    @series begin
+        primary := false
+        seriesalpha --> 0.3
+        Plots.Shape(μ[1] .+ A[1, :], μ[2] .+ A[2, :])
+    end
+
+    
+end
+
+Plots.@userplot CovPlot
+
+"""
+    covplot(μ, R; n_std = 2, N = 100, inds=1:2)
+    covplot(f;    n_std = 2, N = 100, inds=1:2)
+
+Plot the covariance ellipse of the state `μ` and covariance `R`. `inds` indicate the two dimensions to plot, and defaults to the first two dimensions.
+
+If a filter `f` is passed, the state and covariance are extracted from the filter.
+"""
+covplot
+Plots.@recipe function f(c::CovPlot; n_std = 2, N = 100, inds=nothing)
+    if inds === nothing
+        inds = 1:2
+    end
+    if c.args[1] isa AbstractFilter
+        kf = c.args[1]
+        μ, R = state(kf), covariance(kf)
+    else
+        μ, R = c.args[1:2]
+    end
+    μ, S = gaussian_chol(μ, R; n_std, inds)
+
+    θ = range(0, 2π; length = N)
+    A = S * [cos.(θ)'; sin.(θ)']
+
+    xguide --> "x$(inds[1])"
+    yguide --> "x$(inds[2])"
+    Plots.@series begin
+        seriesalpha --> 0.3
+        Plots.Shape(μ[1] .+ A[1, :], μ[2] .+ A[2, :])
+    end
 end
 
 end

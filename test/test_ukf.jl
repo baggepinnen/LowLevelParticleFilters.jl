@@ -58,6 +58,11 @@ x,u,y = tosvec.((x,u,y))
 reskf = forward_trajectory(kf, u, y) # filtered, prediction, pred
 resukf = forward_trajectory(ukf, u, y)
 
+@test_nowarn LowLevelParticleFilters.covplot(ukf)
+@test_nowarn LowLevelParticleFilters.unscentedplot(ukf)
+@test_nowarn LowLevelParticleFilters.covplot(kf)
+
+
 # sp = ukf.predict_sigma_point_cache
 # LowLevelParticleFilters.unscentedplot(sp.x0)
 # LowLevelParticleFilters.unscentedplot!(sp.x1)

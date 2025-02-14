@@ -8,6 +8,7 @@ export KalmanFilteringSolution, ParticleFilteringSolution
 @deprecate weigthed_cov weighted_cov
 
 export densityplot, debugplot, commandplot
+export unscentedplot, unscentedplot!, covplot, covplot!
 
 using StatsAPI
 import StatsAPI: weights, predict!
@@ -103,4 +104,37 @@ The generated plot becomes quite heavy. Initially, try limiting your input to 10
 """
 function debugplot end
 
+"""
+    unscentedplot(ukf;          n_std = 2, N = 100, inds=1:2)
+    unscentedplot(sigmapoints;  n_std = 2, N = 100, inds=1:2)
+
+Plot the sigma points and their corresponding covariance ellipse. `inds` indicate the two dimensions to plot, and defaults to the first two dimensions.
+
+If an UKF is passed, the sigma points after the last dynamics update are extracted from the filter. To plot the sigma points of the output, pass those in manually, they are available as `ukf.measurement_model.cache.x0` and `ukf.measurement_model.cache.x1`, denoting the input and output points of the measurement model.
+
+Note: The covariance of the sigma points does not in general equal the predicted covariance of the state, since the state covariance is updated as `cov(sigmapoints) + R1`. Only when `AUGD = true` (augmented dynamics), the covariance of the state is given by the first `nx` sigmapoints.
+
+See also `covplot`.
+
+!!! note
+    This function requires `using Plots` to be called before it is used.
+"""
+function unscentedplot end
+function unscentedplot! end
+
+"""
+    covplot(μ, Σ; n_std = 2, inds=1:2)
+    covplot(kf; n_std = 2, inds=1:2)
+
+Plot the covariance ellipse of the state `μ` and covariance `Σ`. `inds` indicate the two dimensions to plot, and defaults to the first two dimensions.
+
+If a Kalman-type filter is passed, the state and covariance are extracted from the filter.
+
+See also `unscentedplot`.
+
+!!! note
+    This function requires `using Plots` to be called before it is used.
+"""
+function covplot end
+function covplot! end
 end # module
