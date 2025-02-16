@@ -314,3 +314,24 @@ resukfv3 = forward_trajectory(ukfv, u, y)
 #         plot!(reduce(hcat, sol.xt)') |> display
 #     end
 # end
+
+
+## Test ControlSystemsBase interface
+using ControlSystemsBase
+Al, Bl, Cl, Dl = ControlSystemsBase.linearize(ukf, x[1], u[1], nothing)
+@test Al ≈ _A
+@test Bl ≈ _B
+@test Cl ≈ _C
+@test iszero(Dl)
+
+Al, Bl, Cl, Dl = ControlSystemsBase.linearize(kf, x[1], u[1], nothing)
+@test Al ≈ _A
+@test Bl ≈ _B
+@test Cl ≈ _C
+@test iszero(Dl)
+
+obs = observability(ukf, x[1], u[1], nothing)
+@test obs.isobservable
+
+obs = observability(kf, x[1], u[1], nothing)
+@test obs.isobservable
