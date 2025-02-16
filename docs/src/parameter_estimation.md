@@ -409,8 +409,10 @@ norm(p_true - p_opt_gn) / norm(p_true)
 
 Gauss-Newton algorithms are often more efficient at sum-of-squares minimization than the more generic BFGS optimizer. This form of Gauss-Newton optimization of prediction errors is also available through [ControlSystemIdentification.jl](https://baggepinnen.github.io/ControlSystemIdentification.jl/dev/nonlinear/#Identification-of-nonlinear-models), which uses this package undernath the hood.
 
-### Identifiability
-There is no guarantee that we will recover the true parameters for this system, especially not if the input excitation is poor, but we will generally find parameters that results in a good predictor for the system (this is after all what we're optimizing for). A tool like [StructuralIdentifiability.jl](https://github.com/SciML/StructuralIdentifiability.jl) may be used to determine the identifiability of parameters and state variables, something that for this system could look like
+## Identifiability
+
+### Polynomial methods
+There is no guarantee that we will recover the true parameters by perfoming parameter estimation, especially not if the input excitation is poor. For the system in this tutorial, we will generally find parameters that results in a good predictor for the system (this is after all what we're optimizing for), but these may not be the "correct" parameters. A tool like [StructuralIdentifiability.jl](https://github.com/SciML/StructuralIdentifiability.jl) may be used to determine the identifiability of parameters and state variables (for rational systems), something that for this system could look like
 ```julia
 using StructuralIdentifiability
 
@@ -425,7 +427,7 @@ ode = @ODEmodel(
 
 local_id = assess_local_identifiability(ode, 0.99)
 ```
-where we have made the substitution ``\sqrt h \rightarrow h`` due to a limitation of the tool. The output of the above analysis is 
+where we have made the substitution ``\sqrt h \rightarrow h`` due to a limitation of the tool (it currently only handles rational ODEs). The output of the above analysis is 
 ```julia
 julia> local_id = assess_local_identifiability(ode, 0.99)
 Dict{Nemo.fmpq_mpoly, Bool} with 15 entries:
@@ -448,8 +450,8 @@ Dict{Nemo.fmpq_mpoly, Bool} with 15 entries:
 
 indicating that we can not hope to resolve all of the parameters. However, using appropriate regularization from prior information, we might still recover a lot of information about the system. Regularization could easily be added to the function `cost` above, e.g., using a penalty like `(p-p_guess)'Γ*(p-p_guess)` for some matrix ``\Gamma``, to indicate our confidence in the initial guess.
 
-#### Observability using linearization
-This package contains an interface to [ControlSystemsBase](https://juliacontrol.github.io/ControlSystems.jl/stable/), which allows you to call `ControlSystemsBase.observability(kf, x, u, p, t)` on a system to linearize (if needed) it in the point `x,u,p,t` and assess observability using linear methods (the PHB test).
+### Linear methods
+This package also contains an interface to [ControlSystemsBase](https://juliacontrol.github.io/ControlSystems.jl/stable/), which allows you to call `ControlSystemsBase.observability(f, x, u, p, t)` on a filter `f` to linearize (if needed) it in the point `x,u,p,t` and assess observability using linear methods (the PHB test).
 
 ## Videos
 Examples of parameter estimation are available here
