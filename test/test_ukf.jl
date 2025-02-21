@@ -62,6 +62,7 @@ resukf = forward_trajectory(ukf, u, y)
 @test_nowarn LowLevelParticleFilters.covplot(ukf)
 @test_nowarn LowLevelParticleFilters.unscentedplot(ukf)
 @test_nowarn LowLevelParticleFilters.covplot(kf)
+@test_nowarn LowLevelParticleFilters.covplot(ukf.x, ukf.R)
 
 
 # sp = ukf.predict_sigma_point_cache

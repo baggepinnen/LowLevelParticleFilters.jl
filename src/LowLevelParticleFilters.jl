@@ -106,10 +106,10 @@ The generated plot becomes quite heavy. Initially, try limiting your input to 10
 function debugplot end
 
 """
-    unscentedplot(ukf;          n_std = 2, N = 100, inds=1:2)
-    unscentedplot(sigmapoints;  n_std = 2, N = 100, inds=1:2)
+    unscentedplot(ukf;          n_std = 2, N = 100, dims=1:2)
+    unscentedplot(sigmapoints;  n_std = 2, N = 100, dims=1:2)
 
-Plot the sigma points and their corresponding covariance ellipse. `inds` indicate the two dimensions to plot, and defaults to the first two dimensions.
+Plot the sigma points and their corresponding covariance ellipse. `dims` indicate the two dimensions to plot, and defaults to the first two dimensions.
 
 If an UKF is passed, the sigma points after the last dynamics update are extracted from the filter. To plot the sigma points of the output, pass those in manually, they are available as `ukf.measurement_model.cache.x0` and `ukf.measurement_model.cache.x1`, denoting the input and output points of the measurement model.
 
@@ -124,10 +124,10 @@ function unscentedplot end
 function unscentedplot! end
 
 """
-    covplot(μ, Σ; n_std = 2, inds=1:2)
-    covplot(kf; n_std = 2, inds=1:2)
+    covplot(μ, Σ; n_std = 2, dims=1:2)
+    covplot(kf; n_std = 2, dims=1:2)
 
-Plot the covariance ellipse of the state `μ` and covariance `Σ`. `inds` indicate the two dimensions to plot, and defaults to the first two dimensions.
+Plot the covariance ellipse of the state `μ` and covariance `Σ`. `dims` indicate the two dimensions to plot, and defaults to the first two dimensions.
 
 If a Kalman-type filter is passed, the state and covariance are extracted from the filter.
 
