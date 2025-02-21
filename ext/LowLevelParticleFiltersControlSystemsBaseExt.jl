@@ -20,17 +20,17 @@ function KalmanFilter(sys::AbstractStateSpace{<:ControlSystemsBase.Discrete}, R1
 end
 
 """
-    A, B, C, D = ControlSystemsBase.linearize(kf::AbstractKalmanFilter, x::AbstractVector, u::AbstractVector, p, t = 0.0)
+    A, B, C, D = ControlSystemsBase.linearize(kf::AbstractKalmanFilter, x::AbstractVector, u::AbstractVector, p=kf.p, t = 0.0)
 
 Linearize a nonlinear Kalman filter at the given state `x`, input `u`, and parameter `p` at time `t`. Returns the linearized system matrices `A`, `B`, `C`, and `D`. Call `ss(A, B, C, D, kf.Ts)` to get a `StateSpace` object.
 """
-function ControlSystemsBase.linearize(kf::Union{AbstractParticleFilter,AbstractExtendedKalmanFilter, AbstractUnscentedKalmanFilter}, x::AbstractVector, u::AbstractVector, p, t=0.0)
+function ControlSystemsBase.linearize(kf::Union{AbstractParticleFilter,AbstractExtendedKalmanFilter, AbstractUnscentedKalmanFilter}, x::AbstractVector, u::AbstractVector, p=kf.p, t=0.0)
     A,B = linearize(kf.dynamics, x, u, p, t)
     C,D = linearize(kf.measurement, x, u, p, t)
     (; A, B, C, D)
 end
 
-function ControlSystemsBase.linearize(kf::AbstractKalmanFilter, x::AbstractVector, u::AbstractVector, p, t=0.0)
+function ControlSystemsBase.linearize(kf::AbstractKalmanFilter, x::AbstractVector, u::AbstractVector, p=kf.p, t=0.0)
     A = get_mat(kf.A, x, u, p, t) 
     B = get_mat(kf.B, x, u, p, t)
     C = get_mat(kf.C, x, u, p, t)

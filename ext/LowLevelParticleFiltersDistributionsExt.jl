@@ -32,8 +32,8 @@ struct TupleProductType{N,S,V<:NTuple{N,UnivariateDistribution}} <: Multivariate
         return new{N,Mixed,V}(v)
     end
 end
-TupleProductType(d::Distribution...) = TupleProductType(d)
 
+LowLevelParticleFilters.TupleProduct(d::Distribution...) = TupleProductType(d)
 LowLevelParticleFilters.TupleProduct(t) = TupleProductType(t)
 
 Base.length(d::TupleProductType{N}) where N = N

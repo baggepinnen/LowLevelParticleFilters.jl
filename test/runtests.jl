@@ -76,6 +76,7 @@ r = reduce(hcat, r)
         @test logpdf(d,x) == logpdf(d,Vector(x))
 
         dt = LowLevelParticleFilters.TupleProduct((Normal(0,2), Normal(0,2)))
+        @test dt == LowLevelParticleFilters.TupleProduct(Normal(0,2), Normal(0,2))
         @test logpdf(dt,x) == logpdf(dt,Vector(x)) == logpdf(d,x)
         @test_nowarn rand(dt)
         @test rand(dt) isa SVector{2, Float64}
