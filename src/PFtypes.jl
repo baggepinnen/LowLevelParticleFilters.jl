@@ -250,7 +250,7 @@ Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilte
             @inbounds x[i] = f(xp[i], u, p, t)
         end
     else
-        @batch for i = eachindex(x)
+        for i = eachindex(x)
             @inbounds x[i] = f(xp[i], u, p, t)
         end
     end
@@ -265,7 +265,7 @@ Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilte
             @inbounds x[i] = f(xp[i], u, p, t, noise)
         end
     else
-        @batch for i = eachindex(x)
+        for i = eachindex(x)
             @inbounds x[i] = f(xp[i], u, p, t, noise)
         end
     end
