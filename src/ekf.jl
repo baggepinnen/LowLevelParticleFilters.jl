@@ -172,7 +172,9 @@ function smooth(sol, kf::AbstractExtendedKalmanFilter, u::AbstractVector=sol.u, 
     for t = T-1:-1:1
         A = kf.Ajac(xT[t+1],u[t+1],p,((t+1)-1)*kf.Ts)
         C     = Rt[t]*A'/cholesky(Symmetric(R[t+1]))
-        xT[t] = C*(xT[t+1] .- x[t+1]) .+= xt[t]
+        Ce = C*(xT[t+1] .- x[t+1])
+        @bangbang Ce .+= xt[t]
+        xT[t] = Ce
         RD = RT[t+1] .- R[t+1]
         RDC = RD*C'
         if RD isa SMatrix
