@@ -84,7 +84,7 @@ KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e) = KalmanFilteringSolution(f,u,y,x,
         unames = names.u
         for i = 1:nu
             @series begin
-                label --> "$(unames[i])$(i)"
+                label --> "$(unames[i])"
                 subplot --> i + nx*(plotx || plotxt)
                 timevec, series[:, i]
             end
@@ -95,7 +95,7 @@ KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e) = KalmanFilteringSolution(f,u,y,x,
         series = reduce(hcat, sol.y)'
         for i = 1:ny
             @series begin
-                label --> "$(ynames[i])$(i)"
+                label --> "$(ynames[i])"
                 subplot --> i + (nx*(plotx || plotxt) + nu*plotu)
                 timevec, series[:, i]
             end
@@ -196,10 +196,10 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
         vx = vec(x)
         background_color --> :black
 
-        layout := D+P*ploty
+        layout --> D+P*ploty
         label := ""
         markercolor --> :cyan
-        title --> reshape([["State $d" for d = 1:D];["Measurement $d" for d = 1:P]], 1, :)
+        title --> reshape([["State[$d]" for d = 1:D];["Measurement $d" for d = 1:P]], 1, :)
         for d = 1:D
             subplot := d
             @series begin
