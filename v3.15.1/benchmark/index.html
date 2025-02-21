@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Benchmark · LowLevelParticleFilters Documentation</title><meta name="title" content="Benchmark · LowLevelParticleFilters Documentation"/><meta property="og:title" content="Benchmark · LowLevelParticleFilters Documentation"/><meta property="twitter:title" content="Benchmark · LowLevelParticleFilters Documentation"/><meta name="description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="og:description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="twitter:description" content="Documentation for LowLevelParticleFilters Documentation."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">LowLevelParticleFilters Documentation</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../discretization/">Discretization</a></li><li><a class="tocitem" href="../measurement_models/">Multiple measurement models</a></li><li><a class="tocitem" href="../parameter_estimation/">Parameter estimation</a></li><li class="is-active"><a class="tocitem" href>Benchmark</a><ul class="internal"><li><a class="tocitem" href="#Particle-filtering"><span>Particle filtering</span></a></li><li><a class="tocitem" href="#Comparison-against-filterpy"><span>Comparison against filterpy</span></a></li></ul></li><li><a class="tocitem" href="../distributions/">Performance tips</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../adaptive_kalmanfilter/">Kalman-filter tutorial with LowLevelParticleFilters</a></li><li><a class="tocitem" href="../noisetuning/">Noise tuning and disturbance modeling for Kalman filtering</a></li><li><a class="tocitem" href="../beetle_example/">Particle-filter tutorial</a></li><li><a class="tocitem" href="../beetle_example_imm/">IMM-filter tutorial</a></li><li><a class="tocitem" href="../dae/">State estimation for DAE systems</a></li><li><a class="tocitem" href="../adaptive_control/">Adaptive estimation and control</a></li><li><a class="tocitem" href="../neural_network/">Adaptive Neural-Network training</a></li><li><a class="tocitem" href="../fault_detection/">Fault detection</a></li></ul></li><li><a class="tocitem" href="../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Benchmark</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Benchmark</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/docs/src/benchmark.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Benchmarks"><a class="docs-heading-anchor" href="#Benchmarks">Benchmarks</a><a id="Benchmarks-1"></a><a class="docs-heading-anchor-permalink" href="#Benchmarks" title="Permalink"></a></h1><h2 id="Particle-filtering"><a class="docs-heading-anchor" href="#Particle-filtering">Particle filtering</a><a id="Particle-filtering-1"></a><a class="docs-heading-anchor-permalink" href="#Particle-filtering" title="Permalink"></a></h2><p>To see how the performance varies with the number of particles, we simulate several times. The following code simulates the system and performs filtering using the simulated measurements. We do this for varying number of time steps and varying number of particles.</p><div class="admonition is-info"><header class="admonition-header">Note</header><div class="admonition-body"><p>To run this code, see the bottom of <code>src/example_lineargaussian.jl</code>.</p></div></div><pre><code class="language-julia hljs">function run_test()
+    particle_count = [10, 20, 50, 100, 200, 500, 1000]
+    time_steps = [20, 100, 200]
+    RMSE = zeros(length(particle_count),length(time_steps)) # Store the RMS errors
+    propagated_particles = 0
+    t = @elapsed for (Ti,T) = enumerate(time_steps)
+        for (Ni,N) = enumerate(particle_count)
+            montecarlo_runs = 2*maximum(particle_count)*maximum(time_steps) ÷ T ÷ N
+            E = sum(1:montecarlo_runs) do mc_run
+                pf = ParticleFilter(N, dynamics, measurement, df, dg, d0) # Create filter
+                u = @SVector randn(2)
+                x = SVector{2,Float64}(rand(rng, d0))
+                y = SVector{2,Float64}(sample_measurement(pf,x,u,0,1))
+                error = 0.0
+                @inbounds for t = 1:T-1
+                    pf(u, y) # Update the particle filter
+                    x = dynamics(x,u,t) + SVector{2,Float64}(rand(rng, df)) # Simulate the true dynamics and add some noise
+                    y = SVector{2,Float64}(sample_measurement(pf,x,u,0,t)) # Simulate a measuerment
+                    u = @SVector randn(2) # draw a random control input
+                    error += sum(abs2,x-weighted_mean(pf))
+                end # t
+                √(error/T)
+            end # MC
+            RMSE[Ni,Ti] = E/montecarlo_runs
+            propagated_particles += montecarlo_runs*N*T
+            @show N
+        end # N
+        @show T
+    end # T
+    println(&quot;Propagated $propagated_particles particles in $t seconds for an average of $(propagated_particles/t/1000) particles per millisecond&quot;)
+    return RMSE
+end
+
+@time RMSE = run_test()</code></pre><p>Propagated 8400000 particles in 1.140468043 seconds for an average of 7365.397085484139 particles per millisecond</p><p>We then plot the results</p><pre><code class="language-julia hljs">time_steps     = [20, 100, 200]
+particle_count = [10, 20, 50, 100, 200, 500, 1000]
+nT             = length(time_steps)
+leg            = reshape([&quot;$(time_steps[i]) time steps&quot; for i = 1:nT], 1,:)
+plot(particle_count,RMSE,xscale=:log10, ylabel=&quot;RMS errors&quot;, xlabel=&quot; Number of particles&quot;, lab=leg)</code></pre><p><img src="https://raw.githubusercontent.com/baggepinnen/LowLevelParticleFilters.jl/master/figs/rmse.png" alt="window"/></p><h2 id="Comparison-against-filterpy"><a class="docs-heading-anchor" href="#Comparison-against-filterpy">Comparison against filterpy</a><a id="Comparison-against-filterpy-1"></a><a class="docs-heading-anchor-permalink" href="#Comparison-against-filterpy" title="Permalink"></a></h2><p><a href="https://filterpy.readthedocs.io/en/latest/kalman/UnscentedKalmanFilter.html">filterpy</a> is a popular Python library for state estimation. Below, we compare performance on <a href="https://filterpy.readthedocs.io/en/latest/kalman/UnscentedKalmanFilter.html">their UKF example</a>, but we use a longer trajectory of 50k time steps:</p><h3 id="Python-implementation"><a class="docs-heading-anchor" href="#Python-implementation">Python implementation</a><a id="Python-implementation-1"></a><a class="docs-heading-anchor-permalink" href="#Python-implementation" title="Permalink"></a></h3><pre><code class="language-python hljs">from filterpy import *
+from filterpy.kalman import *
+import numpy as np
+from numpy.random import randn
+from filterpy.common import Q_discrete_white_noise
+import time
+def fx(x, dt):
+    # state transition function - predict next state based
+    # on constant velocity model x = vt + x_0
+    F = np.array([[1, dt, 0, 0],
+                  [0, 1, 0, 0],
+                  [0, 0, 1, dt],
+                  [0, 0, 0, 1]], dtype=float)
+    return np.dot(F, x)
+
+def hx(x):
+   # measurement function - convert state into a measurement
+   # where measurements are [x_pos, y_pos]
+   return np.array([x[0], x[2]])
+
+dt = 0.1
+# create sigma points to use in the filter. This is standard for Gaussian processes
+points = MerweScaledSigmaPoints(4, alpha=.1, beta=2., kappa=-1)
+
+kf = UnscentedKalmanFilter(dim_x=4, dim_z=2, dt=dt, fx=fx, hx=hx, points=points)
+kf.x = np.array([-1., 1., -1., 1]) # initial state
+kf.P *= 0.2 # initial uncertainty
+z_std = 0.1
+kf.R = np.diag([z_std**2, z_std**2]) # 1 standard
+kf.Q = Q_discrete_white_noise(dim=2, dt=dt, var=0.01**2, block_size=2)
+
+zs = [[i+randn()*z_std, i+randn()*z_std] for i in range(50000)] # measurements
+
+start_time = time.time()
+
+for z in zs:
+    kf.predict()
+    kf.update(z)
+    # print(kf.x, &#39;log-likelihood&#39;, kf.log_likelihood)
+
+end_time = time.time()
+print(f&quot;Execution time: {end_time - start_time} seconds&quot;)</code></pre><pre><code class="nohighlight hljs">Execution time: 6.390492916107178 seconds</code></pre><h3 id="Julia-implementation"><a class="docs-heading-anchor" href="#Julia-implementation">Julia implementation</a><a id="Julia-implementation-1"></a><a class="docs-heading-anchor-permalink" href="#Julia-implementation" title="Permalink"></a></h3><pre><code class="language-julia hljs">using LowLevelParticleFilters, StaticArrays, LinearAlgebra, BenchmarkTools
+const dt = 0.1
+function fx(x,u,p,t)
+    # state transition function - predict next state based
+    # on constant velocity model x = vt + x_0
+    F = SA[1.0 dt 0.0 0.0;
+         0.0 1.0 0.0 0.0;
+         0.0 0.0 1.0 dt;
+         0.0 0.0 0.0 1.0]
+    return F*x
+end
+
+function hx(x,u,p,t)
+    # measurement function - convert state into a measurement
+    # where measurements are [x_pos, y_pos]
+    return x[SA[1,3]]
+end
+
+x0 = SA[-1.0, 1.0, -1.0, 1.0] # initial state
+R0 = 0.2I(4) # initial uncertainty
+z_std = 0.1
+R1 = LowLevelParticleFilters.double_integrator_covariance(dt, 0.01^2)
+R1 = SMatrix{4,4}(cat(R1, R1, dims=(1,2)))  # Called Q in the Python code
+R2 = Diagonal(SA[z_std^2, z_std^2])         # Called R in the Python code
+d0 = LowLevelParticleFilters.SimpleMvNormal(x0, R0)
+ukf = UnscentedKalmanFilter(fx, hx, R1, R2, d0; nu=0, ny=2, Ts=dt, p=nothing)
+zs = [[i+randn()*z_std, i+randn()*z_std] for i in 1:50000] # measurements
+
+function runsim(ukf, zs)
+    for z in zs
+        predict!(ukf, SA[])
+        ll, _ = correct!(ukf, SA[], z)
+        # @show ll
+    end
+end
+
+runsim(ukf, zs)
+
+time_julia = @belapsed runsim($ukf, $zs)</code></pre><pre><code class="nohighlight hljs">0.017676814</code></pre><h3 id="Result"><a class="docs-heading-anchor" href="#Result">Result</a><a id="Result-1"></a><a class="docs-heading-anchor-permalink" href="#Result" title="Permalink"></a></h3><pre><code class="nohighlight hljs">time_python = 6.390492916107178
+time_python / time_julia</code></pre><pre><code class="nohighlight hljs">361.51836615507625</code></pre><p>The Julia version is about 360x faster than the Python version.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../parameter_estimation/">« Parameter estimation</a><a class="docs-footer-nextpage" href="../distributions/">Performance tips »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.8.1 on <span class="colophon-date" title="Friday 21 February 2025 06:10">Friday 21 February 2025</span>. Using Julia version 1.11.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
