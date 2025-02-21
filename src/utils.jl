@@ -166,6 +166,11 @@ end
 
 
 Base.rand(rng::AbstractRNG, d::SimpleMvNormal) = d.μ + cholesky(d.Σ).L*randn(rng, length(d.μ))
+function Random.rand!(rng::AbstractRNG, d::SimpleMvNormal, out)
+    randn!(rng, out)
+    mul!(out, cholesky(d.Σ).L, out) # This might work due to L being lower triangular
+    out .+= d.μ
+end
 Base.length(d::SimpleMvNormal) = length(d.μ)
 Base.eltype(d::SimpleMvNormal) = eltype(d.μ)
 

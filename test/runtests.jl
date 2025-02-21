@@ -16,6 +16,10 @@ r = [rand(d) for i = 1:10000]
 r = reduce(hcat, r)
 @test cov(r, dims=2) ≈ S atol = 0.1
 
+out = zeros(2, 10000)
+@test_nowarn rand!(Random.default_rng(), d, out)
+@test cov(out, dims=2) ≈ S atol = 0.1
+
 @testset "LowLevelParticleFilters" begin
     @info "testing LowLevelParticleFilters"
     @testset "logsumexp" begin
