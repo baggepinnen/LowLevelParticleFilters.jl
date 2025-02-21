@@ -28,7 +28,7 @@ See also [`UnscentedKalmanFilter`](@ref) which is typically more accurate than `
 """
 ExtendedKalmanFilter
 
-function ExtendedKalmanFilter(dynamics, measurement_model::AbstractMeasurementModel, R1,d0=SimpleMvNormal(Matrix(R1)); nu::Int, ny=measurement_model.ny, Ts = 1.0, p = NullParameters(), α = 1.0, check = true, Ajac = nothing)
+function ExtendedKalmanFilter(dynamics, measurement_model::AbstractMeasurementModel, R1,d0=SimpleMvNormal(Matrix(R1)); nu::Int, ny=measurement_model.ny, Ts = 1.0, p = NullParameters(), α = 1.0, check = true, Ajac = nothing, kwargs...)
     nx = size(R1,1)
     T = eltype(R1)
     R2 = measurement_model.R2
@@ -46,7 +46,7 @@ function ExtendedKalmanFilter(dynamics, measurement_model::AbstractMeasurementMo
     D = zeros(ny, nu) # This one is never needed
     kf = KalmanFilter(A,B,C,D,R1,R2,d0; Ts, p, α, check)
 
-    return ExtendedKalmanFilter(kf, dynamics, measurement_model; Ajac)
+    return ExtendedKalmanFilter(kf, dynamics, measurement_model; Ajac, kwargs...)
 end
 
 function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Matrix(R1)); nu::Int, ny=size(R2,1), Cjac = nothing, kwargs...)
