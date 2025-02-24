@@ -24,8 +24,8 @@ See also [`UnscentedKalmanFilter`](@ref) which is more robust than `IteratedExte
 """
 IteratedExtendedKalmanFilter
 
-function IteratedExtendedKalmanFilter(dynamics, measurement_model::AbstractMeasurementModel, R1,d0=SimpleMvNormal(Matrix(R1)); nu=0, ny=measurement_model.ny, Ts = 1.0, p = NullParameters(), α = 1.0, check = true, Ajac = nothing, kwargs...)
-    return ExtendedKalmanFilter(dynamics, measurement_model::AbstractMeasurementModel, R1,d0=SimpleMvNormal(Matrix(R1)); nu=0, ny=measurement_model.ny, Ts = 1.0, p = NullParameters(), α = 1.0, check = true, Ajac = nothing, kwargs...)
+function IteratedExtendedKalmanFilter(args...; kwargs...)
+    return ExtendedKalmanFilter(args...; kwargs...)
 end
 
 function IteratedExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Matrix(R1)); nu::Int, ny=size(R2,1), Cjac = nothing, step = 1.0, maxiters=10, epsilon=1e-8, kwargs...)
@@ -64,15 +64,13 @@ function correct!(kf::AbstractKalmanFilter,  measurement_model::IEKFMeasurementM
     (; x,R) = kf
     (; measurement, Cjac, step, maxiters, epsilon) = measurement_model
     
-    
     xi = copy(x)
-
-    C = zeros(measurement_model.ny, length(x))
 
     if IPM
         pred_err = zeros(length(y))
-        measurement(e, xi, u, p, t)
+        measurement(pred_err, xi, u, p, t)
         pred_err .= y .- pred_err
+        e = zeros(length(y))
     else
         pred_err = y .- measurement(xi, u, p, t)
     end
@@ -83,7 +81,6 @@ function correct!(kf::AbstractKalmanFilter,  measurement_model::IEKFMeasurementM
         prev = copy(xi)
         C = Cjac(xi, u, p, t)
         if IPM
-            e = zeros(length(y))
             measurement(e, xi, u, p, t)
             e .= y .- e
         else
@@ -104,9 +101,3 @@ function correct!(kf::AbstractKalmanFilter,  measurement_model::IEKFMeasurementM
         i += 1
     end
 end
-
-
-
-
-
-
