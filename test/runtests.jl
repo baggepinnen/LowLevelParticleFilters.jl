@@ -223,10 +223,13 @@ out = zeros(2, 10000)
         @test 5 ≤ mi ≤ 7
 
         m,mi = findmax(llspfa)
-        @test_broken 5 ≤ mi ≤ 7
+        @test 5 ≤ mi ≤ 7
 
         m,mi = findmax(llskf)
         @test 5 ≤ mi ≤ 7
+
+        @test maximum(abs, llskf .- llspf) < 20
+        @test maximum(abs, llskf .- llspfa) < 20
 
         @testset "Metropolis" begin
             @info "testing Metropolis"
