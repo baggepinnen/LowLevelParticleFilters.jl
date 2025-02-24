@@ -171,7 +171,7 @@ function predict!(pf::AuxiliaryParticleFilter, u, y1, p = parameters(pf), t = in
     λ  = s.we
     λ .= 0
     measurement_equation!(pf.pf, u, y1, p, t, λ)
-    s.w .+= λ
+    s.w .+= λ # old w + new w, equivalent to old_we*new_we
     expnormalize!(s.w) # w used as buffer
     j = resample(ResampleSystematic, s.w , s.j, s.bins)
     reset_weights!(s)

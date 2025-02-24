@@ -33,6 +33,7 @@ Downloads.download(url, filename)
 raw_data = readdlm(filename, ';')
 header = raw_data[1,:]
 df = dateformat"yyyy-mm-ddTHH:MM:SS"
+nothing # hide
 ```
 
 The data is not stored in order
@@ -46,7 +47,8 @@ so we compute a sorting permutation that brings it into chronological order
 ```@example FAULT_DETECTION
 perm = sortperm(time_unsorted)
 time = time_unsorted[perm]
-y = raw_data[2:end, 3][perm] .|> float;
+y = raw_data[2:end, 3][perm] .|> float
+nothing # hide
 ```
 
 `y` is the recorded temperature data.
@@ -68,10 +70,12 @@ Samples are not evenly spaced (lots of missing data), but the interval is always
 intervals = sort(unique(diff(timev)))
 intervals ./ intervals[1]
 Ts = intervals[1]
+nothing # hide
 ```
 
 ```@example FAULT_DETECTION
 Tf = intervals[end] - intervals[1]
+nothing # hide
 ```
 
 We expand the data arrays such that we can treat them as having a constant sample interval, time points where there is no data available are indicated as `missing`
@@ -85,6 +89,7 @@ y_full = fill(NaN, length(time_full))
 y_full[available_inds] .= y
 y_full = replace(y_full, NaN=>missing)
 y_full = SVector{1}.(y_full)
+nothing # hide
 ```
 
 ## Design Kalman filter
@@ -128,6 +133,7 @@ A = \begin{bmatrix}
 
 ```@example FAULT_DETECTION
 A,B,C,D = SA[1.0 1; 0 1], @SMatrix(zeros(2,0)), SA[1.0 0], 0;
+nothing # hide
 ```
 ### Picking covariance matrices
 
@@ -170,7 +176,7 @@ function special_forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector,
 end
 
 u_full = [@SVector(zeros(0)) for y in y_full];
-
+nothing # hide
 ```
 
 #### Smoothing
@@ -188,6 +194,28 @@ x(k \,|\, k-1)
 ```
 
 ### Visualize the filtered and smoothed trajectories
+
+```@example FAULT_DETECTION
+start = 1 # Change this value to display different parts of the data set
+N = 1000
+sol, σs = special_forward_trajectory(kf, u_full[(1:N) .+ (start-1)], y_full[(1:N) .+ (start-1)])
+
+sol.ll
+xT,RT = smooth(sol, kf, sol.u, sol.y)
+timevec = range(0, step=Ts, length=length(sol.y))
+
+plot(sol,
+    plotx   = false,
+    plotxt  = true,
+    plotRt  = true,
+    plotyh  = false,
+    plotyht = true,
+    size = (650,600), seriestype = [:line :line :scatter], link = :x,
+)
+plot!(timevec, reduce(hcat, xT)[1,:], sp=3, label="Smoothed")
+DisplayAs.PNG(Plots.current()) # hide
+```
+
 ## Estimate the dynamics covariance using maximum-likelihood estimation (MLE)
 Since we have a single parameter only, we may plot the loss landscape.
 
@@ -303,18 +331,7 @@ exp.([params res.minimizer])
 
 ### Visualize optimized filtering trajectory
 
-```@example FAULT_DETECTION
-start = 1 # Change this value to display different parts of the data set
-N = 1000
-sol, σs = special_forward_trajectory(kf, u_full[(1:N) .+ (start-1)], y_full[(1:N) .+ (start-1)])
 
-sol.ll
-xT,RT = smooth(sol, kf, sol.u, sol.y)
-timevec = range(0, step=Ts, length=length(sol.y))
-
-plot(sol, plotx=false, plotxt=true, plotRt=true, plotyh=false, plotyht=true, size=(650,600), seriestype=[:line :line :scatter], link=:x); plot!(timevec, reduce(hcat, xT)[1,:], sp=3, label="Smoothed")
-DisplayAs.PNG(Plots.current()) # hide
-```
 
 ```@example FAULT_DETECTION
 kf2 = get_opt_kf(res.minimizer)
@@ -341,7 +358,8 @@ DisplayAs.PNG(Plots.current()) # hide
 Z-scores may not capture large outliners if they occur when the estimator is very uncertain
 Does Z-score correlate with "velocity", i.e., are faults correlated with large continuous slopes in the data?
 ```@example FAULT_DETECTION
-scatter(abs.(getindex.(sol2.xt, 2)), σs2, ylabel="Z-score", xlabel="velocity")
+sol_full, σs_full = special_forward_trajectory(kf2, u_full, y_full)
+scatter(abs.(getindex.(sol_full.xt, 2)), σs_full, ylabel="Z-score", xlabel="velocity")
 DisplayAs.PNG(Plots.current()) # hide
 ```
 not really, it looks like large Z-scores can appear even when the estimated velocity is small.
