@@ -379,6 +379,11 @@ end
     include("test_ekf.jl")
 end
 
+@testset "iekf" begin
+    @info "testing iekf"
+    include("test_iekf.jl")
+end
+
 @testset "imm" begin
     @info "Testing imm"
     include("test_imm.jl")
