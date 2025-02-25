@@ -129,7 +129,7 @@ A = \begin{bmatrix}
 0 & 1
 \end{bmatrix}
 ```
-"""
+
 
 ```@example FAULT_DETECTION
 A,B,C,D = SA[1.0 1; 0 1], @SMatrix(zeros(2,0)), SA[1.0 0], 0;
@@ -176,7 +176,13 @@ function special_forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector,
 end
 
 u_full = [@SVector(zeros(0)) for y in y_full];
-nothing # hide
+
+start = 1 # Change this value to display different parts of the data set
+N = 1000  # Number of data points to include (to limit plot size in the docs, plot with Plots.plotly() and N = length(y_full) to see the full data set with the ability to zoom interactively in the plot)
+
+sol, σs = special_forward_trajectory(kf, u_full[(1:N) .+ (start-1)], y_full[(1:N) .+ (start-1)])
+
+sol.ll
 ```
 
 #### Smoothing
@@ -193,15 +199,14 @@ or prediction
 x(k \,|\, k-1)
 ```
 
+```@example FAULT_DETECTION
+xT,RT = smooth(sol, kf, sol.u, sol.y)
+nothing # hide
+```
+
 ### Visualize the filtered and smoothed trajectories
 
 ```@example FAULT_DETECTION
-start = 1 # Change this value to display different parts of the data set
-N = 1000
-sol, σs = special_forward_trajectory(kf, u_full[(1:N) .+ (start-1)], y_full[(1:N) .+ (start-1)])
-
-sol.ll
-xT,RT = smooth(sol, kf, sol.u, sol.y)
 timevec = range(0, step=Ts, length=length(sol.y))
 
 plot(sol,
@@ -257,7 +262,7 @@ By modifying this to
 \end{bmatrix}
 ```
 where ``0 \leq \alpha \leq 1``, we can add some damping to the velocity, i.e., if no force is acting on it it will eventually slow down to velocity zero. It's not quite correct to call the parameter ``\alpha`` a "damping term", the formulation ``\beta = 1 - \alpha`` would be closer to an actual discrete-time damping factor.
-"""
+
 
 ```@example FAULT_DETECTION
 function triangular(x)
