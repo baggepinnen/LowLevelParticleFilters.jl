@@ -43,12 +43,18 @@ llspf = map(svec) do s
     pfs = ParticleFilter(N, dynamics, measurement, df, dg, d0)
     loglik(pfs, u, y, p)
 end
+llspfaux = map(svec) do s
+    df = MvNormal(nx,s)
+    pfs = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
+    loglik(pfs, u, y, p)
+end
 plot( svec, llspf,
     xscale = :log10,
     title = "Log-likelihood",
     xlabel = "Dynamics noise standard deviation",
     lab = "PF",
 )
+plot!(svec, llspfaux, yscale=:identity, xscale=:log10, lab="AUX PF", c=:green)
 vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue), primary=false)
 ```
 the correct value for the simulated data is 1 (the simulated system is the same as on the front page of the docs).

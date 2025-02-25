@@ -146,6 +146,12 @@ function correct!(pf, u, y, p = parameters(pf), t = index(pf)*pf.Ts, args...; kw
     ll, 0
 end
 
+function correct!(pf::AuxiliaryParticleFilter, u, y, p = parameters(pf), t = index(pf)*pf.Ts, args...; kwargs...)
+    # The measurement update is done already in the predict step for AUX filter
+    ll = logsumexp!(state(pf))
+    ll, 0
+end
+
 """
     ll, e = update!(f::AbstractFilter, u, y, p = parameters(f), t = index(f))
 
@@ -166,6 +172,8 @@ end
 
 
 function predict!(pf::AuxiliaryParticleFilter, u, y1, p = parameters(pf), t = index(pf)*pf.Ts)
+    g = measurement(pf)
+    d = measurement_density(pf)
     s = state(pf)
     propagate_particles!(pf.pf, u, p, t, nothing)# Propagate without noise
     λ  = s.we
@@ -174,14 +182,18 @@ function predict!(pf::AuxiliaryParticleFilter, u, y1, p = parameters(pf), t = in
     s.w .+= λ # old w + new w, equivalent to old_we*new_we
     expnormalize!(s.w) # w used as buffer
     j = resample(ResampleSystematic, s.w , s.j, s.bins)
-    reset_weights!(s)
+    # reset_weights!(s) # We don't do this to keep λ and instead assign into w directly
     permute_with_buffer!(s.x, s.xprev, j)
     add_noise!(pf.pf)
+    lN = log(num_particles(pf))
+    for i = 1:length(s.we)
+        # note unresampled λ[i] instead of λ[j[i]]
+        s.w[i] = λ[i] - lN
+    end
 
     s.t[] += 1
     copyto!(s.xprev, s.x)
 end
-
 
 function predict!(pf::AuxiliaryParticleFilter{<:AdvancedParticleFilter},u, y, p=parameters(pf), t = index(pf)*pf.Ts)
     s = state(pf)
