@@ -9,7 +9,6 @@ The second is the system
 f(x,u,p,t) = 0.5x + 25x / (1 + x^2) + 8cos(1.2*(t-1))
 h(x,u,p,t) = x^2 / 20
 =#
-cd(@__DIR__)
 using StaticArrays
 using LowLevelParticleFilters
 using LowLevelParticleFilters: SimpleMvNormal
@@ -65,7 +64,7 @@ end
 dynamics(x,u,p,t) = x
 measurement(x,u,p,t) = SA[atan((x[2]-1.5)/(x[1]-0)), atan((x[2]-0)/(x[1]-0))]
 
-N = 10000 # Number of simulations
+N = isinteractive() ? 10000 : 1000 # Number of simulations
 Tmax = 25 # Number of time steps
 
 R1 = 0.1 * SA[1.0 0.0; 0.0 1.0] # Process noise
@@ -84,6 +83,10 @@ plot(1:Tmax, ukfrms, label="UKF", xlabel="Time", ylabel="RMSE", title="RMSE vs T
 plot!(1:Tmax, ekfrms, label="EKF", lw=2)
 plot!(1:Tmax, iekfrms, label="IEKF", lw=2)
 
+using Test
+@test ukfrms[end] < ekfrms[end]
+@test iekfrms[end] < ekfrms[end]
+
 
 
 ## System 2
@@ -91,7 +94,7 @@ plot!(1:Tmax, iekfrms, label="IEKF", lw=2)
 dynamics_ugmd(x,u,p,t) = @. 0.5x + 25x / (1 + x^2) + 8cos(1.2*(t-1))
 measurement_ugmd(x,u,p,t) = x.^2 ./20
 
-N = 10000 # Number of simulations
+N = isinteractive() ? 10000 : 1000 # Number of simulations
 Tmax = 50 # Number of time steps
 
 R1 = 0.1 * @SMatrix ones(1,1) # Process noise
