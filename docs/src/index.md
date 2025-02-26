@@ -30,6 +30,7 @@ We provide a number of filter types
 - [`KalmanFilter`](@ref). A standard Kalman filter. Is restricted to linear dynamics (possibly time varying) and Gaussian noise.
 - [`SqKalmanFilter`](@ref). A standard Kalman filter on square-root form (slightly slower but more numerically stable with ill-conditioned covariance).
 - [`ExtendedKalmanFilter`](@ref): For nonlinear systems, the EKF runs a regular Kalman filter on linearized dynamics. Uses ForwardDiff.jl for linearization (or user provided). The noise model must still be Gaussian and additive.
+- [`IteratedExtendedKalmanFilter`](@ref) same as EKF, but performs iteration in the measurement update for increased accuracy in the covariance update.
 - [`UnscentedKalmanFilter`](@ref): The Unscented Kalman filter often performs slightly better than the Extended Kalman filter but may be slightly more computationally expensive. The UKF handles nonlinear dynamics and measurement models, but still requires a Gaussian noise model (may be non additive) and still assumes that all posterior distributions are Gaussian, i.e., can not handle multi-modal posteriors.
 - [`ParticleFilter`](@ref): The particle filter is a nonlinear estimator. This version of the particle filter is simple to use and assumes that both dynamics noise and measurement noise are additive. Particle filters handle multi-modal posteriors.
 - [`AdvancedParticleFilter`](@ref): This filter gives you more flexibility, at the expense of having to define a few more functions. This filter does not require the noise to be additive and is thus the most flexible filter type.
@@ -46,7 +47,9 @@ All filters work in two distinct steps.
 1. The *prediction* step ([`predict!`](@ref)). During prediction, we use the dynamics model to form ``x(t|t-1) = f(x(t-1), ...)``
 2. The *correction* step ([`correct!`](@ref)). In this step, we adjust the predicted state ``x(t|t-1)`` using the measurement ``y(t)`` to form ``x(t|t)``.
 
-(The IMM filter is an exception to the above and has two additional steps, [`combine!`](@ref) and [`interact!`](@ref))
+The following two exceptions to the above exist
+- The [`IMM`](@ref) filter has two additional steps, [`combine!`](@ref) and [`interact!`](@ref)
+- The [`AuxiliaryParticleFilter`](@ref) makes use of the next measurement in the dynamics update, and thus only has an [`update!`](@ref) method.
 
 In general, all filters represent not only a point estimate of ``x(t)``, but a representation of the complete posterior probability distribution over ``x`` given all the data available up to time ``t``. One major difference between different filter types is how they represent these probability distributions.
 
