@@ -68,6 +68,7 @@ x,u,y = LLPF.simulate(kf,T,du)
 
 
 sol = forward_trajectory(kf, u, y)
+@show sol
 iekf = LLPF.IteratedExtendedKalmanFilter(kf, dynamics, measurement; maxiters=20, step=1.0, epsilon=1e-7)
 @test iekf.maxiters == 20
 @test iekf.step == 1.0

@@ -45,6 +45,14 @@ end
 
 KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e) = KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e,nothing)
 
+function Base.show(io::IO, sol::KalmanFilteringSolution)
+    println(io, "KalmanFilteringSolution:")
+    println(io, "  Filter: ", sol.f.names.name, " ", typeof(sol.f))
+    println(io, "  length: ", length(sol.x))
+    println(io, "  nx: ", sol.f.nx)
+    println(io, "  ll: ", sol.ll)
+end
+
 @recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotR=false, plotRt=false, names = sol.f.names, name = names.name)
     isempty(name) || (name = name*" ")
     kf = sol.f
