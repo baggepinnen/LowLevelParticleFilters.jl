@@ -35,25 +35,26 @@ kf2 = KalmanFilter(ss(A, B, C, 0, 1), R1, R2, d0, α=1.01)
 @test kf2.R2 == kf.R2
 @test kf2.d0 == kf.d0
 
-ekf = LLPF.IteratedExtendedKalmanFilter(kf, dynamics, measurement)
-ekf2 = LLPF.IteratedExtendedKalmanFilter(dynamics, measurement, R1, R2, d0, α=1.01, nu=nu, maxiters=20, step=0.5, epsilon=1e-6)
+ekf = LLPF.ExtendedKalmanFilter(kf, dynamics, measurement)
+iekf = LLPF.IteratedExtendedKalmanFilter(kf, dynamics, measurement)
+iekf2 = LLPF.IteratedExtendedKalmanFilter(dynamics, measurement, R1, R2, d0, α=1.01, nu=nu, maxiters=20, step=0.5, epsilon=1e-6)
 ukf = LLPF.UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0, nu=nu, ny=ny)
-@test ekf2.kf.R1 == ekf.kf.R1
-@test ekf2.kf.R2 == ekf.kf.R2
-@test ekf2.kf.d0 == ekf.kf.d0
-@test ukf.R1 == ekf.kf.R1
-@test ukf.R2 == ekf.kf.R2
-@test ukf.d0 == ekf.kf.d0
+@test iekf2.kf.R1 == iekf.kf.R1
+@test iekf2.kf.R2 == iekf.kf.R2
+@test iekf2.kf.d0 == iekf.kf.d0
+@test ukf.R1 == iekf.kf.R1
+@test ukf.R2 == iekf.kf.R2
+@test ukf.d0 == iekf.kf.d0
 
-@test ekf.maxiters == 10
-@test ekf.step == 1.0
-@test ekf.epsilon == 1e-8
-@test ekf2.maxiters == 20
-@test ekf2.step == 0.5
-@test ekf2.epsilon == 1e-6
+@test iekf.maxiters == 10
+@test iekf.step == 1.0
+@test iekf.epsilon == 1e-8
+@test iekf2.maxiters == 20
+@test iekf2.step == 0.5
+@test iekf2.epsilon == 1e-6
 
 
-@test ekf.measurement_model.Cjac([0,0],[0],[0],0) == C
+@test iekf.measurement_model.Cjac([0,0],[0],[0],0) == C
 
 
 x,u,y = LLPF.simulate(kf,T,du)
@@ -67,11 +68,11 @@ x,u,y = LLPF.simulate(kf,T,du)
 
 
 sol = forward_trajectory(kf, u, y)
-ekf = LLPF.IteratedExtendedKalmanFilter(kf, dynamics, measurement; maxiters=20, step=1.0, epsilon=1e-7)
-@test ekf.maxiters == 20
-@test ekf.step == 1.0
-@test ekf.epsilon == 1e-7
-sol2 = forward_trajectory(ekf, u, y)
+iekf = LLPF.IteratedExtendedKalmanFilter(kf, dynamics, measurement; maxiters=20, step=1.0, epsilon=1e-7)
+@test iekf.maxiters == 20
+@test iekf.step == 1.0
+@test iekf.epsilon == 1e-7
+sol2 = forward_trajectory(iekf, u, y)
 
 
 # When the dynamics is linear, these should be the same
@@ -84,23 +85,23 @@ sol2 = forward_trajectory(ekf, u, y)
 
 ## add nonlinear dynamics
 dynamics2(x,u,p,t) = A*x - 0.01*sin.(x) .+ B*u
-ekf = LLPF.IteratedExtendedKalmanFilter(kf, dynamics2, measurement)
-x,u,y = LLPF.simulate(ekf,T,du)
+iekf = LLPF.IteratedExtendedKalmanFilter(kf, dynamics2, measurement)
+x,u,y = LLPF.simulate(iekf,T,du)
 
 sol = forward_trajectory(kf, u, y)
-sol2 = forward_trajectory(ekf, u, y)
+solie = forward_trajectory(iekf, u, y)
 
-@test norm(reduce(hcat, x .- sol.x)) > norm(reduce(hcat, x .- sol2.x))
-@test norm(reduce(hcat, x .- sol.xt)) > norm(reduce(hcat, x .- sol2.xt))
-@test sol.ll < 0.999*sol2.ll # using the ekf should improve ll (we add a small margin since it otherwise fails in about 1/10)
+@test norm(reduce(hcat, x .- sol.x)) > norm(reduce(hcat, x .- solie.x))
+@test norm(reduce(hcat, x .- sol.xt)) > norm(reduce(hcat, x .- solie.xt))
+@test sol.ll < 0.999*solie.ll # using the iekf should improve ll (we add a small margin since it otherwise fails in about 1/10)
 
-xT,RT,ll = smooth(ekf, u, y)
-@test norm(reduce(hcat, x .- xT)) < norm(reduce(hcat, x .- sol2.x)) # Smoothing solution better than filtering sol (normally around 8-20% better)
+xT,RT,ll = smooth(iekf, u, y)
+@test norm(reduce(hcat, x .- xT)) < norm(reduce(hcat, x .- solie.x)) # Smoothing solution better than filtering sol (normally around 8-20% better)
 
 
 ## Compare all
 kf = KalmanFilter(A, B, C, 0, R1, R2, d0)
-ekf = LLPF.IteratedExtendedKalmanFilter(kf, dynamics, measurement, maxiters=1)
+iekf = LLPF.IteratedExtendedKalmanFilter(kf, dynamics, measurement, maxiters=1)
 ukf = LLPF.UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0, nu=nu, ny=ny)
 
 x,u,y = LLPF.simulate(kf,20,du)
@@ -108,41 +109,39 @@ x,u,y = LLPF.simulate(kf,20,du)
 
 
 sol = forward_trajectory(kf, u, y)
-sol2 = forward_trajectory(ekf, u, y)
-sol3 = forward_trajectory(ukf, u, y)
+solie = forward_trajectory(iekf, u, y)
+solu = forward_trajectory(ukf, u, y)
 
-@test reduce(hcat, sol.x) ≈ reduce(hcat, sol2.x)
-@test reduce(hcat, sol.xt) ≈ reduce(hcat, sol2.xt)
-@test reduce(hcat, sol.R)  ≈ reduce(hcat, sol2.R)
-@test reduce(hcat, sol.Rt) ≈ reduce(hcat, sol2.Rt)
-@test sol.ll ≈ sol2.ll
+@test reduce(hcat, sol.x) ≈ reduce(hcat, solie.x)
+@test reduce(hcat, sol.xt) ≈ reduce(hcat, solie.xt)
+@test reduce(hcat, sol.R)  ≈ reduce(hcat, solie.R)
+@test reduce(hcat, sol.Rt) ≈ reduce(hcat, solie.Rt)
+@test sol.ll ≈ solie.ll
 
-@test reduce(hcat, sol.x) ≈ reduce(hcat, sol3.x)
-@test reduce(hcat, sol.xt) ≈ reduce(hcat, sol3.xt)
-@test reduce(hcat, sol.R)  ≈ reduce(hcat, sol3.R)
-@test reduce(hcat, sol.Rt) ≈ reduce(hcat, sol3.Rt)
-@test sol.ll ≈ sol3.ll
+@test reduce(hcat, sol.x) ≈ reduce(hcat, solu.x)
+@test reduce(hcat, sol.xt) ≈ reduce(hcat, solu.xt)
+@test reduce(hcat, sol.R)  ≈ reduce(hcat, solu.R)
+@test reduce(hcat, sol.Rt) ≈ reduce(hcat, solu.Rt)
+@test sol.ll ≈ solu.ll
 
 
 
 
 # More tests:
-h(x,u,p,t) = [1.0/x[1]]
-hjac(x,u,p,t) = hcat(-1.0/x[1]^2)
-h2(x,u,p,t) = [u./x[1]]
-h2jac(x,u,p,t) = hcat(-u./x[1]^2)
+h(x,u,p,t) = SA[1.0/x[1]]
+hjac(x,u,p,t) = SA[-1.0/x[1]^2;;]
+h2(x,u,p,t) = SA[u[]/x[1]]
+h2jac(x,u,p,t) = SA[-u[]/x[1]^2;;]
 
 function f(x,u,p,t)
-    for i in 1:length(x)
-        x[i] = x[i]^i
-    end
-    x
+    x-0.01*x.^2
 end
 
 
-Q = hcat(1.0)
-RR = hcat(1.0) * 2
-d0 = MvNormal([5.0],1.0*I)
+Q = SA[1.0;;]
+RR = SA[1.0;;] * 2
+d0 = MvNormal(SA[5.0],1.0*I)
+
 iekf2 = LLPF.IteratedExtendedKalmanFilter(f, h,Q,RR,d0; nu = 0)
 iekf = LLPF.IteratedExtendedKalmanFilter(f, h,Q,RR,d0; Cjac=hjac, nu = 0)
 
@@ -157,8 +156,9 @@ sol2 = correct!(iekf2, 100,[1/4],0,0)
 @test iekf.x ≈ iekf2.x
 @test iekf.R ≈ iekf2.R
 
-iekf = LLPF.IteratedExtendedKalmanFilter(f, h2,Q,RR,d0; nu = 1)
-iekf2 = LLPF.IteratedExtendedKalmanFilter(f, h2,Q,RR,d0; Cjac=h2jac, nu = 1)
+ekf =           LLPF.ExtendedKalmanFilter(f, h2, Q, RR, d0; nu = 1)
+iekf  = LLPF.IteratedExtendedKalmanFilter(f, h2, Q, RR, d0; nu = 1, step=0.9)
+iekf2 = LLPF.IteratedExtendedKalmanFilter(f, h2, Q, RR, d0; Cjac=h2jac, nu = 1, step=0.9)
 
 sol = correct!(iekf, 100,[100/4],0,0)
 sol2 = correct!(iekf2, 100,[100/4],0,0)
@@ -172,6 +172,12 @@ sol2 = correct!(iekf2, 100,[100/4],0,0)
 @test iekf.R ≈ iekf2.R
 
 
+## Test full trajectory
+T = 28
+x,u,y = LLPF.simulate(ekf,T,du)
+sole = forward_trajectory(ekf, u, y)
+solie = forward_trajectory(iekf, u, y)
+# @test norm(reduce(hcat, x .- solie.x)) <= norm(reduce(hcat, x .- sole.x))
 
-
-
+# 56.010 ms (887460 allocations: 35.09 MiB)
+# 53.884 ms (872972 allocations: 34.80 MiB) # reuse first call to measurement model

@@ -70,27 +70,31 @@ function correct!(kf::AbstractKalmanFilter,  measurement_model::IEKFMeasurementM
         pred_err = zeros(length(y))
         measurement(pred_err, xi, u, p, t)
         pred_err .= y .- pred_err
-        e = zeros(length(y))
     else
         pred_err = y .- measurement(xi, u, p, t)
     end
-
+    e = copy(pred_err)
 
     i = 1
     while true
-        prev = copy(xi)
+        prev = xi
         C = Cjac(xi, u, p, t)
-        if IPM
-            measurement(e, xi, u, p, t)
-            e .= y .- e
-        else
-            e = y .- measurement(xi, u, p, t)
+        if i > 1
+            # We already evaluated e above
+            if IPM
+                measurement(e, xi, u, p, t)
+                e .= y .- e
+            else
+                @bangbang e .= y .- measurement(xi, u, p, t)
+            end
         end
         S = symmetrize(C*R*C') + R2
         Sᵪ  = cholesky(Symmetric(S); check=false)
         issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed, got S = ", S)
         K = (R*C')/Sᵪ
-        xi += vec(step*(x-xi+K*(e-C*(x-xi))))
+        dx = x-xi
+        xi += vec(step*(dx + K*(e-C*dx)))
+        # @show i, sum(abs, xi-prev)
         if sum(abs, xi-prev) < epsilon || i >= maxiters
             kf.x = xi
             kf.R = symmetrize((I - K*C)*R) # WARNING against I .- A
