@@ -419,3 +419,8 @@ end
     @info "testing example_beetle"
     include("../examples/example_beetle.jl")
 end
+
+@testset "IEKF benchmarks" begin
+    @info "testing example_beetle"
+    include("../examples/example_nonlinear_kf.jl")
+end
