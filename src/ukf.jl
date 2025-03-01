@@ -18,7 +18,12 @@ function sigmapoints!(xs, m, Σ::AbstractMatrix, cholesky! = cholesky!)
     n = length(xs[1])
     @assert n == length(m)
     # X = sqrt(Symmetric(n*Σ)) # 2.184 μs (16 allocations: 2.27 KiB)
-    X = cholesky!(Symmetric(n*Σ)).L # 170.869 ns (3 allocations: 176 bytes)
+    XX = cholesky!(Symmetric(n*Σ), check=false).L # 170.869 ns (3 allocations: 176 bytes)
+    if !issuccess(XX)
+        xs[1] = NaN*xs[1]
+        return xs
+    end
+    X = XX.L
     @inbounds @views for i in 1:n
         @bangbang xs[i] .= X[:,i]
         @bangbang xs[i+n] .= .-xs[i] .+ m
@@ -309,12 +314,16 @@ function sigmapoints_p!(ukf::UnscentedKalmanFilter{<:Any,<:Any,true}, R1)
     m = [ukf.x; 0*R1[:, 1]]
     Raug = cat(ukf.R, R1, dims=(1,2))
     sigmapoints!(xsd0, m, Raug, ukf.cholesky!)
+    isnan(xsd0[1][1]) && error("Cholesky factorization of augmented state covariance failed at time step $(ukf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got Raug = ", Raug)
+    nothing
 end
 
 function sigmapoints_p!(ukf::UnscentedKalmanFilter{<:Any,<:Any,false}, R1)
     sigma_point_cache = ukf.predict_sigma_point_cache
     xsd0 = sigma_point_cache.x0
     sigmapoints!(xsd0, ukf.x, ukf.R, ukf.cholesky!)
+    isnan(xsd0[1][1]) && error("Cholesky factorization of state covariance failed at time step $(ukf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got R = ", ukf.R)
+    nothing
 end
 
 # The functions below are JET-safe from dynamic dispatch if called with static arrays
@@ -404,7 +413,7 @@ function correct!(
     S  = compute_S(measurement_model, R2, ym)
     Sᵪ = cholesky(Symmetric(S); check = false)
     issuccess(Sᵪ) ||
-        error("Cholesky factorization of innovation covariance failed, got S = ", S)
+        error("Cholesky factorization of innovation covariance failed at time step $(ukf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got S = ", S)
     K = (C ./ (ns - 1)) / Sᵪ # ns normalization to make it a covariance matrix
     kf.x += K * e
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized
