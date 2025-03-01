@@ -18,12 +18,16 @@ function sigmapoints!(xs, m, Σ::AbstractMatrix, cholesky! = cholesky!)
     n = length(xs[1])
     @assert n == length(m)
     # X = sqrt(Symmetric(n*Σ)) # 2.184 μs (16 allocations: 2.27 KiB)
-    XX = cholesky!(Symmetric(n*Σ), check=false).L # 170.869 ns (3 allocations: 176 bytes)
-    if !issuccess(XX)
-        xs[1] = NaN*xs[1]
-        return xs
+    if cholesky! === LinearAlgebra.cholesky!
+        XX = cholesky!(Symmetric(n*Σ), check=false) # 170.869 ns (3 allocations: 176 bytes)
+        if !issuccess(XX)
+            xs[1] = NaN*xs[1]
+            return xs
+        end
+        X = XX.L
+    else
+        X = cholesky!(Symmetric(n*Σ)).L
     end
-    X = XX.L
     @inbounds @views for i in 1:n
         @bangbang xs[i] .= X[:,i]
         @bangbang xs[i+n] .= .-xs[i] .+ m
@@ -413,7 +417,7 @@ function correct!(
     S  = compute_S(measurement_model, R2, ym)
     Sᵪ = cholesky(Symmetric(S); check = false)
     issuccess(Sᵪ) ||
-        error("Cholesky factorization of innovation covariance failed at time step $(ukf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got S = ", S)
+        error("Cholesky factorization of innovation covariance failed at time step $(kf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got S = ", S)
     K = (C ./ (ns - 1)) / Sᵪ # ns normalization to make it a covariance matrix
     kf.x += K * e
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized
