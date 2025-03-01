@@ -314,6 +314,8 @@ See the tutorials section for more advanced examples, including state estimation
 
 
 # Troubleshooting and tuning
+
+## Particle filters
 Tuning a particle filter can be quite the challenge. To assist with this, we provide som visualization tools
 
 ```@example lingauss
@@ -324,6 +326,11 @@ The plot displays all state variables and all measurements. The heatmap in the b
 You can also manually step through the time-series using
 - `commandplot(pf,u,y; kwargs...)`
 For options to the debug plots, see `?pplot`.
+
+## Troubleshooting Kalman filters
+A commonly occurring error is "Cholesky factorization failed", which may occur due to several different reasons
+- The dynamics is diverging and the covariance matrices end up with NaNs or Infs. If this is the case, verify that the dynamics is correctly implemented and that the integration is sufficiently accurate, especially if using a fixed-step integrator like any of those from SeeToDee.jl.
+- The covariance matrix is poorly conditioned and numerical issues make causes it to lose positive definiteness. This issue is rare, but can be mitigated by using the [`SqKalmanFilter`](@ref), rescaling the dynamics or by using a different cholesky factorization method (available in UKF only).
 
 
 ## Tuning noise parameters through optimization

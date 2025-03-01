@@ -11,6 +11,7 @@ It is sometimes useful to mix and match dynamics and measurement models. For exa
 This is possible by constructing a filter with an explicitly created measurement model. The available measurement models are
 - [`LinearMeasurementModel`](@ref) performs linear propagation of covariance (as is done in [`KalmanFilter`](@ref)).
 - [`EKFMeasurementModel`](@ref) uses linearization to propagate covariance (as is done in [`ExtendedKalmanFilter`](@ref)).
+- [`IEKFMeasurementModel`](@ref) uses iterated linearization to propagate covariance (as is done in [`IteratedExtendedKalmanFilter`](@ref)).
 - [`UKFMeasurementModel`](@ref) uses the unscented transform to propagate covariance (as is done in [`UnscentedKalmanFilter`](@ref)).
 - [`CompositeMeasurementModel`](@ref) combines multiple measurement models.
 

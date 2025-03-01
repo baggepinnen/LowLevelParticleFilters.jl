@@ -149,8 +149,9 @@ ukf = UnscentedKalmanFilter(dynamics, measurement, R1, R2, SimpleMvNormal(s0, 10
 @time sole = forward_trajectory(ekf, data.u, data.x)
 @time solu = forward_trajectory(ukf, data.u, data.x)
 
-plot(sole, plotx=false, plotxt=false, plotyh=true, plotyht=false, plotu=false, plote=true, name="EKF", layout=(nx, 1), size=(1200, 1500))
-plot!(solu, plotx=false, plotxt=false, plotyh=true, plotyht=false, plotu=false, plote=true, name="UKF", ploty=false)
+kwargs = (plotx=false, plotxt=false, plotyh=true, plotyht=false, plotu=false, plote=true)
+plot(sole;  name="EKF", layout=(nx, 1), size=(1200, 1500), kwargs...)
+plot!(solu; name="UKF", ploty=false, kwargs...)
 DisplayAs.PNG(Plots.current()) # hide
 ```
 
