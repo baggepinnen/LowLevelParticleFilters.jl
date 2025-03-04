@@ -3,6 +3,7 @@ using LowLevelParticleFilters
 import LowLevelParticleFilters.resample
 using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions, Plots
 using MonteCarloMeasurements
+const LLPF = LowLevelParticleFilters
 gr(show=false)
 Random.seed!(0)
 
