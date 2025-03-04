@@ -335,8 +335,18 @@ mode_trajectory(pf, u::Vector, y::Vector) = reduce_trajectory(pf, u::Vector, y::
 
 Compute the weighted mean along the trajectory of a particle-filter solution. Returns a matrix of size `T × nx`.
 If `x` and `we` are supplied, the weights are expected to be in the original space (not log space).
+
+See also [`mode_trajectory`](@ref)
 """
 mean_trajectory(sol::ParticleFilteringSolution) = mean_trajectory(sol.x, sol.we)
+
+
+"""
+    mode_trajectory(sol::ParticleFilteringSolution)
+    mode_trajectory(x::AbstractMatrix, we::AbstractMatrix)
+
+Compute the mode (particle with largest weight) along the trajectory of a particle-filter solution. Returns a matrix of size `T × nx`.
+"""
 mode_trajectory(sol::ParticleFilteringSolution) = mode_trajectory(sol.x, sol.we)
 
 function reduce_trajectory(pf, u::Vector, y::Vector, f::F, p=parameters(pf)) where F
@@ -431,6 +441,8 @@ end
 """
     x̂ = weighted_mean(pf)
     x̂ = weighted_mean(s::PFstate)
+
+See also [`mean_trajectory`](@ref)
 """
 weighted_mean(s) = weighted_mean(s.x,s.we)
 weighted_mean(pf::AbstractParticleFilter) = weighted_mean(state(pf))
@@ -443,5 +455,21 @@ Similar to [`weighted_mean`](@ref), but returns covariances
 function weighted_cov(x,we)
     N,T = size(x)
     n = length(x[1])
-    [cov(copy(reshape(reinterpret(Float64, x[:,t]),n,N)),ProbabilityWeights(we[:,t]), dims=2, corrected=true) for t = 1:T]
+    [cov(copy(reshape(reinterpret(Float64, x[:,t]),n,N)),ProbabilityWeights(we[:,t]), 2, corrected=true) for t = 1:T]
 end
+
+function weighted_cov(sol::ParticleFilteringSolution)
+    weighted_cov(sol.x,sol.we)
+end
+
+
+"""
+    weighted_quantile(x,we,q)
+    weighted_quantile(sol,q)
+
+Calculated weighted quantile `q` of particle trajectories. `we` are expweights. Returns a vector of length `size(x, 2)` where each entry has length `nx`. For a particle-filtering solution, this means the vector will be as long as the number of time steps in the solution.
+"""
+function weighted_quantile(x,we,q)
+    [[quantile(getindex.(x[:, t], i),ProbabilityWeights(we[:,t]),q) for i = 1:length(x[1])] for t = 1:size(x,2)]
+end
+weighted_quantile(sol::ParticleFilteringSolution,q) = weighted_quantile(sol.x,sol.we,q)

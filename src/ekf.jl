@@ -104,6 +104,9 @@ function Base.getproperty(ekf::EKF, s::Symbol) where EKF <: AbstractExtendedKalm
     if s ∈ fieldnames(typeof(kf))
         return getproperty(kf, s)
     end
+    if s ∈ (:nx, :nu, :ny)
+        return getproperty(kf, s)
+    end
     error("$(typeof(ekf)) has no property named $s")
 end
 
