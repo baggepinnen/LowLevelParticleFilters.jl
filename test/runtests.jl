@@ -170,6 +170,9 @@ out = zeros(2, 10000)
         x,u,y = LowLevelParticleFilters.simulate(pf,T,du)
 
         sol = forward_trajectory(pf, u, y)
+        plot(sol)
+        plot(sol, q=[0.5])
+        plot(sol, q=0.5)
         parts = Particles(sol.x,sol.we)
         @test size(parts) == (T,n)
         @test length(parts[1].particles) == N
