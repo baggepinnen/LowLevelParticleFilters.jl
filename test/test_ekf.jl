@@ -181,3 +181,13 @@ xT3,RT3,ll3 = smooth(sol3, ukf, u, y)
 
 # @test Rs ≈ sol.Rt
 # @test Xs ≈ sol.xt # tested with sol = forward_trajectory(kf, 0 .* u, y)
+measurement(x,u,p,t) = C*x
+
+function error_dynamics(x,u,p,t)
+    error()
+end
+
+ekf = LLPF.ExtendedKalmanFilter(kf, error_dynamics, measurement)
+@test_throws ErrorException forward_trajectory(ekf, u, y)
+
+@test_logs (:error,r"State estimation failed") forward_trajectory(ekf, u, y, debug=true)
