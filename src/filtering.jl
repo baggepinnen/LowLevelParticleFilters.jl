@@ -244,7 +244,7 @@ If your system is very large, i.e., the dimension of the state is very large, an
 - [`LowLevelParticleFilters.prediction_errors!`](@ref)
 That store significantly less information. The amount of computation performed by all of these functions is identical, the only difference lies in what is stored and returned.
 """
-function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf))
+function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf); debug=false)
     reset!(kf)
     T    = length(y)
     x    = Array{particletype(kf)}(undef,T)
@@ -253,16 +253,28 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
     Rt   = Array{covtype(kf)}(undef,T)
     e    = similar(y)
     ll   = zero(eltype(particletype(kf)))
-    for t = 1:T
-        ti = (t-1)*kf.Ts
-        x[t]  = state(kf)      |> copy
-        R[t]  = covariance(kf) |> copy
-        lli, ei = correct!(kf, u[t], y[t], p, ti)
-        ll += lli
-        e[t] = ei
-        xt[t] = state(kf)      |> copy
-        Rt[t] = covariance(kf) |> copy
-        predict!(kf, u[t], p, ti)
+    local t
+    try
+        for outer t = 1:T
+            ti = (t-1)*kf.Ts
+            x[t]  = state(kf)      |> copy
+            R[t]  = covariance(kf) |> copy
+            lli, ei = correct!(kf, u[t], y[t], p, ti)
+            ll += lli
+            e[t] = ei
+            xt[t] = state(kf)      |> copy
+            Rt[t] = covariance(kf) |> copy
+            predict!(kf, u[t], p, ti)
+        end
+    catch err
+        if debug
+            t -= 1
+            x, xt, R, Rt, e, u, y = x[1:t], xt[1:t], R[1:t], Rt[1:t], e[1:t], u[1:t], y[1:t]
+            @error "State estimation failed, returning partial solution" err
+        else
+            @error "State estimation failed, pass `debug = true` to forward_trajectory to return a partial solution"
+            rethrow()
+        end
     end
     KalmanFilteringSolution(kf,u,y,x,xt,R,Rt,ll,e)
 end
