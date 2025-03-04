@@ -3,6 +3,7 @@ using LowLevelParticleFilters
 import LowLevelParticleFilters.resample
 using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions, Plots
 using MonteCarloMeasurements
+const LLPF = LowLevelParticleFilters
 gr(show=false)
 Random.seed!(0)
 
@@ -50,6 +51,36 @@ out = zeros(2, 10000)
         @test sum(abs, weighted_mean(x,we)) < 0.06
     end
 
+
+    @testset "weighted_quantile" begin
+        @info "testing weighted_quantile"
+
+        # Test case 1: Simple example with known quantiles
+        x = [randn(3) for i = 1:100]
+        w = ones(100); we = similar(w)
+        logsumexp!(w, we)
+        q = 0.5
+        result = weighted_quantile(x, we, q)[]
+        expected = [quantile(getindex.(x, i), LLPF.ProbabilityWeights(we), q) for i = 1:length(x[1])]
+        @test result ≈ expected
+        @test result ≈ [median(getindex.(x, i)) for i = 1:length(x[1])]
+
+        # Test case 2: Different weights
+        w = rand(100); we = similar(w)
+        logsumexp!(w, we)
+        q = 0.75
+        result = weighted_quantile(x, we, q)[]
+        expected = [quantile(getindex.(x, i), LLPF.ProbabilityWeights(we), q) for i = 1:length(x[1])]
+        @test result ≈ expected
+
+        # Test case 3: Edge case with all weights zero except one
+        we = zeros(100); we[1] = 1
+        q = 0.5
+        result = weighted_quantile(x, we, q)[]
+        expected = [quantile(getindex.(x, i), LLPF.ProbabilityWeights(we), q) for i = 1:length(x[1])]
+        @test result ≈ expected
+        @test result ≈ x[1]
+    end
 
     @testset "resample" begin
         @info "testing resample"
@@ -139,12 +170,30 @@ out = zeros(2, 10000)
         x,u,y = LowLevelParticleFilters.simulate(pf,T,du)
 
         sol = forward_trajectory(pf, u, y)
+        plot(sol)
+        plot(sol, q=[0.5])
+        plot(sol, q=0.5)
         parts = Particles(sol.x,sol.we)
         @test size(parts) == (T,n)
         @test length(parts[1].particles) == N
         WM = weighted_mean(sol.x, sol.we)
+        @test WM == weighted_mean(sol)
         @test length(WM) == T
         @test WM[1] ≈ weighted_mean(sol.x[:, 1], sol.we[:, 1])
+
+        WQ1 = weighted_quantile(sol, 0.1)
+        WQ9 = weighted_quantile(sol, 0.9)
+
+        @test all(all(WM[i] .< WQ9[i]) for i in eachindex(WM))
+        @test all(all(WM[i] .> WQ1[i]) for i in eachindex(WM))
+
+        C = weighted_cov(sol)
+        C2 = zero(C[2])
+        for (i, w) in enumerate(sol.we[:, 2])
+            d = sol.x[i, 2] .- WM[2]
+            C2 .+= w * d*d'
+        end
+        @test C2*N/(N-1) ≈ C[2] # C is normalized by N-1 but the weights are normalized by N
 
         xm = reduce(hcat,x)
         tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy

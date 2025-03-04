@@ -165,8 +165,10 @@ end
 # Plot
 The solution object can be plotted
 ```
-plot(sol; nbinsy=30, xreal=nothing, dim=nothing, ploty=true)
+plot(sol; nbinsy=30, xreal=nothing, dim=nothing, ploty=true, q=nothing)
 ```
+
+By default, a weighted 2D histogram is plotted, one for each state variable. If a vector of quantiles are provided in `q`, the quantiles are plotted instead of the histogram. If `xreal` is provided, the true state is plotted as a scatter plot on top of the histogram. If `dim` is provided, only the specified dimension is plotted. If `ploty` is true, the measurements are plotted as well.
 """
 struct ParticleFilteringSolution{F,Tu,Ty,Tx,Tw,Twe,Tll} <: AbstractFilteringSolution
     f::F
@@ -185,38 +187,55 @@ end
 
 td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
 
-@recipe function plot(sol::ParticleFilteringSolution; nbinsy=30, xreal=nothing, dim=nothing, ploty=true)
+@recipe function plot(sol::ParticleFilteringSolution; nbinsy=30, xreal=nothing, dim=nothing, ploty=true, q=nothing)
     timevec = (0:size(sol.y,1)-1)*sol.f.Ts
     timevecm05 = timevec .- 0.5sol.f.Ts
     timevecp05 = timevec .+ 0.5sol.f.Ts
     if dim === nothing || dim === (:)
-        (; f,x,w,u,y) = sol
+        (; f,x,we,u,y) = sol
         p = parameters(f)
         N,T = size(x)
         D = length(x[1])
         P = length(y[1])
-        if sum(w) ≉ T
-            w = exp.(w)
-            w ./= sum(w, dims=1)
+        if sum(we) ≉ T
+            we ./= sum(we, dims=1)
         end
 
-        w = vec(w)
+        w = vec(we)
         vx = vec(x)
         background_color --> :black
 
         layout --> D+P*ploty
-        label := ""
         markercolor --> :cyan
         title --> reshape([["State[$d]" for d = 1:D];["Measurement $d" for d = 1:P]], 1, :)
+        if q isa Number
+            q = [q]
+        end
+        if q isa AbstractArray
+            Qs = map(q) do q
+                weighted_quantile(sol, q)
+            end
+        end
+
         for d = 1:D
             subplot := d
-            @series begin
-                seriestype := :histogram2d
-                bins --> (timevecp05,nbinsy)
-                weights --> w
-                repeat(timevecm05',N)[:], vec(getindex.(vx,d))
+            if q isa AbstractArray
+                for qi in eachindex(Qs)
+                    @series begin
+                        label --> "q = $(q[qi])"
+                        timevec, getindex.(Qs[qi], d)
+                    end
+                end
+            else
+                @series begin
+                    seriestype := :histogram2d
+                    bins --> (timevecp05,nbinsy)
+                    weights --> w
+                    repeat(timevecm05',N)[:], vec(getindex.(vx,d))
+                end
             end
             xreal === nothing || @series begin
+                label --> ""
                 seriestype := :scatter
                 timevec, (xreal isa AbstractVector{<:AbstractArray} ? getindex.(xreal,d) : xreal[:, d]) # Handle both vec of vec and matrix
             end
@@ -226,12 +245,14 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
             for d = 1:P
                 subplot := d+D
                 @series begin
+                    label --> ""
                     seriestype := :histogram2d
                     bins --> (timevecp05,nbinsy)
                     weights --> w
                     repeat(timevecm05',N)[:], vec(getindex.(yhat,d))
                 end
                 @series begin
+                    label --> ""
                     seriestype := :scatter
                     timevec, getindex.(y,d)
                 end
