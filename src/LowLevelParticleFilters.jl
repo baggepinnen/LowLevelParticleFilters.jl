@@ -19,7 +19,6 @@ using StaticArrays
 using Statistics
 using RecipesBase
 using ForwardDiff
-using Polyester
 using MaybeInplace
 
 # using SciMLBase

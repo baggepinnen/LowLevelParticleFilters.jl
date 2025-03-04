@@ -218,8 +218,14 @@ The main step of [`correct!`](@ref) for [`AdvancedParticleFilter`](@ref). This f
 Base.@propagate_inbounds function measurement_equation!(pf::AbstractParticleFilter, u, y, p, t, w = weights(pf); g = measurement_likelihood(pf))
     any(ismissing.(y)) && return w
     x = particles(pf)
-    @batch for i = 1:num_particles(pf)
-        @inbounds w[i] += g(x[i], u, y, p, t)
+    if pf.threads
+        Threads.@threads :static for i = 1:num_particles(pf)
+            @inbounds w[i] += g(x[i], u, y, p, t)
+        end
+    else
+        for i = 1:num_particles(pf)
+            @inbounds w[i] += g(x[i], u, y, p, t)
+        end
     end
     w
 end
@@ -231,8 +237,10 @@ Base.@propagate_inbounds function propagate_particles!(pf::AdvancedParticleFilte
     s = state(pf)
     x,xp = s.x, s.xprev
     if pf.threads
-        @batch for i = eachindex(x)
-            @inbounds x[i] = f(xp[j[i]], u, p, t, noise) # TODO: lots of allocations here
+        let f = f, xp=xp, j=j, u=u, p=p, t=t, noise=noise
+            Threads.@threads :static for i = eachindex(x)
+                @inbounds x[i] = f(xp[j[i]], u, p, t, noise) # TODO: lots of allocations here
+            end
         end
     else
         for i = eachindex(x)
@@ -246,7 +254,7 @@ Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilte
     f = pf.dynamics
     x,xp = particles(pf), state(pf).xprev
     if pf.threads
-        @batch for i = eachindex(x)
+        Threads.@threads :static for i = eachindex(x)
             @inbounds x[i] = f(xp[i], u, p, t)
         end
     else
@@ -261,7 +269,7 @@ Base.@propagate_inbounds function propagate_particles!(pf::AbstractParticleFilte
     f = pf.dynamics
     x,xp = particles(pf), state(pf).xprev
     if pf.threads
-        @batch for i = eachindex(x)
+        Threads.@threads :static for i = eachindex(x)
             @inbounds x[i] = f(xp[i], u, p, t, noise)
         end
     else
