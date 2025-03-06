@@ -446,7 +446,7 @@ function safe_mean(xs, weight_params)
     W = UKFWeights(weight_params, ns2L(n))
     m = xs[1]*W.wm
     for i = 2:length(xs)
-        m += xs[i]*W.wmi
+        @bangbang m .+= W.wmi .* xs[i]
     end
     m
 end
@@ -455,22 +455,20 @@ function safe_cov(xs, m, weight_params)
     @assert length(m) == length(xs[1])
     W = UKFWeights(weight_params, ns2L(length(xs)))
     X = reduce(hcat, xs) .- m
-    X[:,1] .*= sqrt(W.wc)
-    X[:,2:end] .*= sqrt(W.wci)
-    X*X'
+    d1 = (xs[1] .- m)
+    R = W.wc .* d1*d1'
+    @views X[:, 1] .= 0
+    @views X[:, 2:end] .*= sqrt(W.wci)
+    mul!(R, X, X', true, true)
+    R
 end
-
 
 
 function safe_cov(xs::Vector{<:SVector{N}}, m, weight_params) where N
     @assert length(m) == length(xs[1])
     W = UKFWeights(weight_params, ns2L(length(xs)))
     if N > 8
-        X = reduce(hcat, xs) .- m
-        X2 = copy(X) # TODO: fix this
-        X[:,1] .*= (W.wc)
-        X[:,2:end] .*= (W.wci)
-        X2*X'
+        return invoke(safe_cov, Tuple{Any, Any, Any}, xs, m, weight_params)
     else
         e = (xs[1] .- m)
         P = (W.wc*e)*e'
@@ -527,10 +525,10 @@ function correct!(
 
     sigmapoints_c!(kf, measurement_model, R2) # TODO: should this take other arguments?
     propagate_sigmapoints_c!(kf, u, p, t, R2, measurement_model)
-    ym = mean(ys, kf.weight_params)
-    C  = cross_cov(xsm, x, ys, ym, kf.weight_params)
+    ym = mean(ys, measurement_model.weight_params)
+    C  = cross_cov(xsm, x, ys, ym, measurement_model.weight_params)
     e  = innovation(y, ym)
-    S  = compute_S(measurement_model, R2, ym, kf.weight_params)
+    S  = compute_S(measurement_model, R2, ym)
     Sᵪ = cholesky(Symmetric(S); check = false)
     issuccess(Sᵪ) ||
         error("Cholesky factorization of innovation covariance failed at time step $(kf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got S = ", S)
@@ -550,7 +548,7 @@ function sigmapoints_c!(
 )
     sigma_point_cache = measurement_model.cache
     xsm = sigma_point_cache.x0
-    sigmapoints!(xsm, eltype(xsm)(kf.x), kf.R, kf.weight_params)
+    sigmapoints!(xsm, eltype(xsm)(kf.x), kf.R, measurement_model.weight_params)
 end
 
 function sigmapoints_c!(
@@ -565,7 +563,7 @@ function sigmapoints_c!(
     nv = size(R2, 1)
     xm = [x; 0 * R2[:, 1]]
     Raug = cat(R, R2, dims = (1, 2))
-    sigmapoints!(xsm, xm, Raug, kf.weight_params)
+    sigmapoints!(xsm, xm, Raug, measurement_model.weight_params)
 end
 
 # IPM = true, AUGM = false
@@ -646,11 +644,11 @@ function propagate_sigmapoints_c!(
     end
 end
 
-function compute_S(measurement_model::UKFMeasurementModel{<:Any, AUGM}, R2, ym, weight_params) where AUGM
+function compute_S(measurement_model::UKFMeasurementModel{<:Any, AUGM}, R2, ym) where AUGM
     sigma_point_cache = measurement_model.cache
     ys = sigma_point_cache.x1
     cov = measurement_model.cov
-    S = symmetrize(cov(ys, ym, weight_params))
+    S = symmetrize(cov(ys, ym, measurement_model.weight_params))
     if !AUGM
         if S isa SMatrix || S isa Symmetric{<:Any,<:SMatrix}
             S += R2

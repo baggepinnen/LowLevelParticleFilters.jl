@@ -195,6 +195,7 @@ resukfw2 = forward_trajectory(ukfw2, u, y)
 @test reduce(hcat, resukfw.x) ≈ reduce(hcat, resukfw2.x) atol=1e-6
 @test reduce(hcat, resukfw.R) ≈ reduce(hcat, resukfw2.R) atol=1e-6
 @test reduce(hcat, resukfw.Rt) ≈ reduce(hcat, resukfw2.Rt) atol=1e-6
+@test resukfw.ll ≈ resukfw2.ll rtol=1e-6
 
 # With small measurement noise, the covariance matrix becomes exactly singular. Not even a square-root formulation handles this since the standard Cholesky factorization cannot be computed. We handle that by using PositiveFactorizations.jl and providing a custom Cholesky factorization function.
 Bv = @SMatrix [0.1; 1]
@@ -211,7 +212,7 @@ resukfv2 = forward_trajectory(ukfv2, u, y)
 @test norm(reduce(hcat, resukfv.x) - reduce(hcat, resukfv2.x)) < 0.05
 @test norm(reduce(hcat, resukfv.R) - reduce(hcat, resukfv2.R)) < 0.1
 @test norm(reduce(hcat, resukfv.Rt) - reduce(hcat, resukfv2.Rt)) < 0.05
-@test resukfv.ll ≈ resukf.ll rtol=1e-1
+@test resukfv.ll ≈ resukfv2.ll rtol=1e-4
 
 plot(resukfv, plotyht=true) # Test that plotting works with augmented measurement model
 
@@ -368,8 +369,14 @@ obs = observability(kf, x[1], u[1], nothing)
 
 
 ##
-# ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), R2, d0; ny, nu)
-# ukfw  = UnscentedKalmanFilter{false,false,true,false}(dynamics_w, measurement, eye(nx), R2, d0; ny, nu)
+# weight_params = LowLevelParticleFilters.TrivialParams()
+# ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), R2, d0; ny, nu, weight_params)
+# ukfv  = UnscentedKalmanFilter{false,true,false,true}(dynamics, measurement_vs!, eye(nx), [1.0;;], d0; ny, nu, weight_params)#, cholesky! = R->cholesky!(Positive, Matrix(R)))
+# # ukfw  = UnscentedKalmanFilter{false,false,true,false}(dynamics_w, measurement, eye(nx), R2, d0; ny, nu)
+
 
 # predict!(ukf, u[1])
-# predict!(ukfw, u[1])
+# predict!(ukfv, u[1])
+# correct!(ukf, u[1], y[1])
+# correct!(ukfv, u[1], y[1])
+# # predict!(ukfw, u[1])
