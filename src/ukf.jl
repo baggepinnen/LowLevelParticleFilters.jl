@@ -55,6 +55,20 @@ Parameters representing a trivial choice of weights, where all weights are equal
 struct TrivialParams <: UTParams end
 
 
+"""
+    UKFWeights
+
+Weights for the Unscented Transform.
+
+Sigmapoints are by convention ordered such that the center (mean) point is first.
+
+# Fields
+- `wm`: center weight when computing mean
+- `wc`: center weight when computing covariance
+- `wmi`: off-center weight when computing mean
+- `wci`: off-center weight when computing covariance
+- `W`: Cholesky weight
+"""
 struct UKFWeights{T}
     "mean center weight"
     wm::T
@@ -262,8 +276,8 @@ By default, standard arithmetic mean and `e(y, yh) = y - yh` are used as mean an
 By passing and explicitly created [`UKFMeasurementModel`](@ref), one may provide custom functions that compute the mean, the covariance and the innovation. This is useful in situations where the state or a measurement lives on a manifold. One may further override the mean and covariance functions for the state sigma points by passing the keyword arguments `state_mean` and `state_cov` to the constructor.
 
 
-- `state_mean(xs::AbstractVector{<:AbstractVector})` computes the mean of the vector of vectors of state sigma points.
-- `state_cov(xs::AbstractVector{<:AbstractVector}, m = mean(xs))` where the first argument represent state sigma points and the second argument, which must be optional, represents the mean of those points. The function should return the covariance matrix of the state sigma points.
+- `state_mean(xs::AbstractVector{<:AbstractVector}, w::UKFWeights)` computes the weighted mean of the vector of vectors of state sigma points.
+- `state_cov(xs::AbstractVector{<:AbstractVector}, m, w::UKFWeights)` where the first argument represent state sigma points and the second argument, represents the weighted mean of those points. The function should return the covariance matrix of the state sigma points weighted by `w`.
 
 See [`UKFMeasurementModel`](@ref) for more details on how to set up a custom measurement model. Pass the custom measurement model as the second argument to the UKF constructor.
 
@@ -281,7 +295,7 @@ ERROR: PosDefException: matrix is not positive definite; Factorization failed.
 ```
 In such situations, it is advicable to reconsider the noise model and covariance matrices, alternatively, you may provide a custom Cholesky factorization function to the UKF constructor through the keyword argument `cholesky!`. The function should have the signature `cholesky!(A::AbstractMatrix)::Cholesky`. A useful alternative factorizaiton when covariance matrices are expected to be singular is `cholesky! = R->cholesky!(Positive, Matrix(R))` where the "positive" Cholesky factorization is provided by the package PositiveFactorizations.jl, which must be manually installed and loaded by the user.
 """
-function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::AbstractMeasurementModel, R1, d0=SimpleMvNormal(R1); Ts=1.0, p=NullParameters(), nu::Int, ny=measurement_model.ny, nw = nothing, reject=nothing, state_mean=safe_mean, state_cov=safe_cov, cholesky! = cholesky!, names=default_names(length(d0), nu, ny, "UKF"), weight_params = TrivialParams(), kwargs...) where {IPD,IPM,AUGD,AUGM}
+function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::AbstractMeasurementModel, R1, d0=SimpleMvNormal(R1); Ts=1.0, p=NullParameters(), nu::Int, ny=measurement_model.ny, nw = nothing, reject=nothing, state_mean=weighted_mean, state_cov=weighted_cov, cholesky! = cholesky!, names=default_names(length(d0), nu, ny, "UKF"), weight_params = TrivialParams(), kwargs...) where {IPD,IPM,AUGD,AUGM}
     nx = length(d0)
     
     T = promote_type(eltype(d0), eltype(R1))
@@ -299,6 +313,16 @@ function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::A
     end
     static = !(IPD || L > 50)
     predict_sigma_point_cache = SigmaPointCache{T}(nx, nw, nx, L, static)
+    if !hasmethod(state_mean, Tuple{AbstractVector, UKFWeights})
+        weight_params isa TrivialParams || error("Unweighted state mean may not be used with custom weights")
+        user_mean = state_mean
+        state_mean = (xs, w) -> user_mean(xs)
+    end
+    if !hasmethod(state_cov, Tuple{AbstractVector, AbstractVector, UKFWeights})
+        weight_params isa TrivialParams || error("Unweighted state covariance may not be used with custom weights")
+        user_cov = state_cov
+        state_cov = (xs, m, w) -> user_cov(xs)
+    end
 
     R = convert_cov_type(R1, d0.Σ)
     x0 = convert_x0_type(d0.μ)
@@ -307,7 +331,7 @@ function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::A
         dynamics, measurement_model, R1, d0, predict_sigma_point_cache, x0, R, 0, Ts, ny, nu, p, reject, state_mean, state_cov, cholesky!, names, weight_params)
 end
 
-function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement, R1, R2, d0=SimpleMvNormal(R1), args...; Ts = 1.0, p = NullParameters(), ny, nu, reject=nothing, state_mean=safe_mean, state_cov=safe_cov, cholesky! = cholesky!, kwargs...) where {IPD,IPM,AUGD,AUGM}
+function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement, R1, R2, d0=SimpleMvNormal(R1), args...; Ts = 1.0, p = NullParameters(), ny, nu, reject=nothing, state_mean=weighted_mean, state_cov=weighted_cov, cholesky! = cholesky!, kwargs...) where {IPD,IPM,AUGD,AUGM}
     nx = length(d0)
     T = promote_type(eltype(d0), eltype(R1), eltype(R2))
     measurement_model = UKFMeasurementModel{T,IPM,AUGM}(measurement, R2; nx, ny, kwargs...)
@@ -348,7 +372,7 @@ The prediction step for an [`UnscentedKalmanFilter`](@ref) allows the user to ov
 - `cov`: The function that computes the covariance of the state sigma points.
 """
 function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = parameters(ukf), t::Real = index(ukf)*ukf.Ts;
-        R1 = get_mat(ukf.R1, ukf.x, u, p, t), reject = ukf.reject, mean = ukf.state_mean, cov = ukf.state_cov, dynamics = ukf.dynamics) where {IPD,IPM,AUGD,AUGM}
+        R1 = get_mat(ukf.R1, ukf.x, u, p, t), reject = ukf.reject, mean::MF = ukf.state_mean, cov::CF = ukf.state_cov, dynamics = ukf.dynamics) where {IPD,IPM,AUGD,AUGM,MF,CF}
     (; dynamics,x,R,weight_params) = ukf
     sigma_point_cache = ukf.predict_sigma_point_cache
     xsd = sigma_point_cache.x1
@@ -366,11 +390,11 @@ function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = paramete
         end
     end
     if AUGD
-        ukf.x = mean(xsd,weight_params)[xinds]
-        @bangbang ukf.R .= symmetrize(cov([x[xinds] for x in xsd], ukf.x, weight_params)) #+ 1e-16I # TODO: optimize
+        ukf.x = mean_with_weights(mean, xsd,weight_params)[xinds]
+        @bangbang ukf.R .= symmetrize(cov_with_weights(cov, [x[xinds] for x in xsd], ukf.x, weight_params)) #+ 1e-16I # TODO: optimize
     else
-        ukf.x = mean(xsd,weight_params)
-        @bangbang ukf.R .= symmetrize(cov(xsd, ukf.x, weight_params)) .+ R1
+        ukf.x = mean_with_weights(mean, xsd, weight_params)
+        @bangbang ukf.R .= symmetrize(cov_with_weights(cov, xsd, ukf.x, weight_params)) .+ R1
     end
     ukf.t += 1
 end
@@ -441,9 +465,7 @@ function sigmapoints_p!(ukf::UnscentedKalmanFilter{<:Any,<:Any,false}, R1)
 end
 
 # The functions below are JET-safe from dynamic dispatch if called with static arrays
-function safe_mean(xs, weight_params)
-    n = length(xs)
-    W = UKFWeights(weight_params, ns2L(n))
+function weighted_mean(xs, W::UKFWeights)
     m = xs[1]*W.wm
     for i = 2:length(xs)
         @bangbang m .+= W.wmi .* xs[i]
@@ -451,24 +473,27 @@ function safe_mean(xs, weight_params)
     m
 end
 
-function safe_cov(xs, m, weight_params)
+function weighted_cov(xs, m, W::UKFWeights)
     @assert length(m) == length(xs[1])
-    W = UKFWeights(weight_params, ns2L(length(xs)))
     X = reduce(hcat, xs) .- m
-    d1 = (xs[1] .- m)
-    R = W.wc .* d1*d1'
-    @views X[:, 1] .= 0
     @views X[:, 2:end] .*= sqrt(W.wci)
-    mul!(R, X, X', true, true)
+    if W.wc < 0 # In this case we cannot square root the weight parameter
+        d1 = (xs[1] .- m)
+        R = d1*d1'
+        R .*= W.wc
+        @views X[:, 1] .= 0
+        mul!(R, X, X', true, true)
+    else
+        @views X[:, 1] .*= sqrt(W.wc)
+        R = X * X'
+    end
     R
 end
 
-
-function safe_cov(xs::Vector{<:SVector{N}}, m, weight_params) where N
+function weighted_cov(xs::Vector{<:SVector{N}}, m, W::UKFWeights) where N
     @assert length(m) == length(xs[1])
-    W = UKFWeights(weight_params, ns2L(length(xs)))
     if N > 8
-        return invoke(safe_cov, Tuple{Any, Any, Any}, xs, m, weight_params)
+        return invoke(weighted_cov, Tuple{Any, Any, typeof(W)}, xs, m, W)
     else
         e = (xs[1] .- m)
         P = (W.wc*e)*e'
@@ -478,6 +503,18 @@ function safe_cov(xs::Vector{<:SVector{N}}, m, weight_params) where N
         end
         P
     end
+end
+
+function mean_with_weights(mean, xs, weight_params)
+    n = length(xs)
+    W = UKFWeights(weight_params, ns2L(n))
+    mean(xs, W)
+end
+
+function cov_with_weights(cov, xs, m, weight_params)
+    n = length(xs)
+    W = UKFWeights(weight_params, ns2L(n))
+    cov(xs, m, W)
 end
 
 """
@@ -491,8 +528,8 @@ The correction step for an [`UnscentedKalmanFilter`](@ref) allows the user to ov
 - `p`: The parameters
 - `t`: The current time
 - `R2`: The measurement noise covariance matrix, or a function that returns the covariance matrix `(x,u,p,t)->R2`.
-- `mean`: The function that computes the mean of the output sigma points.
-- `cross_cov`: The function that computes the cross-covariance of the state and output sigma points.
+- `mean`: The function that computes the weighted mean of the output sigma points.
+- `cross_cov`: The function that computes the weighted cross-covariance of the state and output sigma points.
 - `innovation`: The function that computes the innovation between the measured output and the predicted output.
 
 # Extended help
@@ -512,11 +549,11 @@ function correct!(
     p = parameters(kf),
     t::Real = index(kf) * kf.Ts;
     R2 = get_mat(measurement_model.R2, kf.x, u, p, t),
-    mean = measurement_model.mean,
-    cross_cov = measurement_model.cross_cov,
-    innovation = measurement_model.innovation,
+    mean::MF = measurement_model.mean,
+    cross_cov::CCF = measurement_model.cross_cov,
+    innovation::IF = measurement_model.innovation,
     measurement = measurement_model.measurement,
-)
+) where {MF, CCF, IF}
 
     sigma_point_cache = measurement_model.cache
     xsm = sigma_point_cache.x0
@@ -525,8 +562,8 @@ function correct!(
 
     sigmapoints_c!(kf, measurement_model, R2) # TODO: should this take other arguments?
     propagate_sigmapoints_c!(kf, u, p, t, R2, measurement_model)
-    ym = mean(ys, measurement_model.weight_params)
-    C  = cross_cov(xsm, x, ys, ym, measurement_model.weight_params)
+    ym = mean_with_weights(mean, ys, measurement_model.weight_params)
+    C  = cross_cov_with_weights(cross_cov, xsm, x, ys, ym, measurement_model.weight_params)
     e  = innovation(y, ym)
     S  = compute_S(measurement_model, R2, ym)
     Sᵪ = cholesky(Symmetric(S); check = false)
@@ -549,6 +586,7 @@ function sigmapoints_c!(
     sigma_point_cache = measurement_model.cache
     xsm = sigma_point_cache.x0
     sigmapoints!(xsm, eltype(xsm)(kf.x), kf.R, measurement_model.weight_params)
+    nothing
 end
 
 function sigmapoints_c!(
@@ -564,6 +602,7 @@ function sigmapoints_c!(
     xm = [x; 0 * R2[:, 1]]
     Raug = cat(R, R2, dims = (1, 2))
     sigmapoints!(xsm, xm, Raug, measurement_model.weight_params)
+    nothing
 end
 
 # IPM = true, AUGM = false
@@ -581,6 +620,7 @@ function propagate_sigmapoints_c!(
     for i in eachindex(xsm, ys)
         measurement_model.measurement(ys[i], xsm[i], u, p, t)
     end
+    nothing
 end
 
 # IPM = true, AUGM = true
@@ -603,6 +643,7 @@ function propagate_sigmapoints_c!(
     for i in eachindex(xsm, ys)
         measurement_model.measurement(ys[i], xsm[i][xinds], u, p, t, xsm[i][vinds])
     end
+    nothing
 end
 
 # AUGM = true
@@ -625,6 +666,7 @@ function propagate_sigmapoints_c!(
     for i in eachindex(xsm, ys)
         ys[i] = measurement_model.measurement(xsm[i][xinds], u, p, t, xsm[i][vinds])
     end
+    nothing
 end
 
 # AUGM = false
@@ -642,13 +684,14 @@ function propagate_sigmapoints_c!(
     for i in eachindex(xsm, ys)
         ys[i] = measurement_model.measurement(xsm[i], u, p, t)
     end
+    nothing
 end
 
 function compute_S(measurement_model::UKFMeasurementModel{<:Any, AUGM}, R2, ym) where AUGM
     sigma_point_cache = measurement_model.cache
     ys = sigma_point_cache.x1
     cov = measurement_model.cov
-    S = symmetrize(cov(ys, ym, measurement_model.weight_params))
+    S = symmetrize(cov_with_weights(cov, ys, ym, measurement_model.weight_params))
     if !AUGM
         if S isa SMatrix || S isa Symmetric{<:Any,<:SMatrix}
             S += R2
@@ -660,15 +703,14 @@ function compute_S(measurement_model::UKFMeasurementModel{<:Any, AUGM}, R2, ym) 
 end
 
 """
-    cross_cov(xsm, x, ys, y)
+    cross_cov(xsm, x, ys, y, w::UKFWeights)
 
-Default `measurement_cov` function for `UnscentedKalmanFilter`. Computes the cross-covariance between the state and output sigma points.
+Default `measurement_cov` function for `UnscentedKalmanFilter`. Computes the weighted cross-covariance between the state and output sigma points.
 """
-function cross_cov(xsm, x, ys, y, weight_params)
+function cross_cov(xsm, x, ys, y, W::UKFWeights)
     T = eltype(x)
     nx = length(x)
     ny = length(y)
-    W = UKFWeights(weight_params, ns2L(length(xsm)))
     xinds = 1:nx
     if x isa SVector
         C = @SMatrix zeros(T,nx,ny)
@@ -682,6 +724,12 @@ function cross_cov(xsm, x, ys, y, weight_params)
         C = add_to_C!(C, xsm[i], x, d, xinds)
     end
     C
+end
+
+function cross_cov_with_weights(cross_cov, xsm, x, ys, y, weight_params)
+    n = length(xsm)
+    W = UKFWeights(weight_params, ns2L(n))
+    cross_cov(xsm, x, ys, y, W)
 end
 
 @inline function RmKSKT!(ukf, K, S)

@@ -1,6 +1,7 @@
 using LowLevelParticleFilters
-import LowLevelParticleFilters.resample
+using LowLevelParticleFilters: resample, mean_with_weights, cov_with_weights, weighted_mean, weighted_cov, UKFWeights
 using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions, Plots, PositiveFactorizations
+
 Random.seed!(0)
 
 mvnormal(d::Int, σ::Real) = MvNormal(LinearAlgebra.Diagonal(fill(float(σ) ^ 2, d)))
@@ -38,15 +39,15 @@ S2 = S2'S2
 for (m,S) in  [(m,S), (m2, S2)]
     for weight_params in weight_params
         @show weight_params
-        W = LowLevelParticleFilters.UKFWeights(weight_params, length(m))
+        W = UKFWeights(weight_params, length(m))
         @show W
         xs = LowLevelParticleFilters.sigmapoints(m, S, weight_params)
         X = reduce(hcat, xs)
         @test vec(mean(X, dims=2)) ≈ m
 
-        sm = LowLevelParticleFilters.safe_mean(xs, weight_params)
+        sm = mean_with_weights(weighted_mean, xs, weight_params)
         @test sm ≈ m
-        @test LowLevelParticleFilters.safe_cov(xs, m, weight_params) ≈ S
+        @test cov_with_weights(weighted_cov, xs, m, weight_params) ≈ S
     end
 end
 
@@ -380,3 +381,10 @@ obs = observability(kf, x[1], u[1], nothing)
 # correct!(ukf, u[1], y[1])
 # correct!(ukfv, u[1], y[1])
 # # predict!(ukfw, u[1])
+
+## test that we did not break the interface while introducing UT weights
+state_cov(x) = cov(x)
+state_mean(x) = mean(x)
+ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), R2, d0; ny, nu, state_mean, state_cov)
+res_mc = forward_trajectory(ukf, u, y)
+@test res_mc.xt ≈ resukf.xt
