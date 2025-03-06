@@ -1,9 +1,115 @@
+abstract type UTParams end
+"""
+    WikiParams(; α = 1, β = 0.0, κ = 0.0)
+
+Parameters suggested at https://en.wikipedia.org/wiki/Kalman_filter#Sigma_points 
+
+- `α`: Scaling parameter (0,1] for the spread of the sigma points. A typical value is 1.
+- `β`: Incorporates prior knowledge of the distribution of the state.
+- `κ`: Secondary scaling parameter that is usually set to 3nx/2 or 1. Smaller values result in a smaller spread of sigma points.
+
+If ``α^2 κ < L`` where ``L`` is the dimension ofthe sigma points, the center mean weight is negative. This is allowed, but may in some cases lead to an indefinite covariance matrix.
+"""
+struct WikiParams{T} <: UTParams
+    α::T
+    β::T
+    κ::T
+    function WikiParams(; α = 1.0, β = 0.0, κ = 1.0)
+        T = float(promote_type(typeof(α), typeof(β), typeof(κ)))
+        α > 0 || throw(ArgumentError("α must be positive"))
+        β >= 0 || throw(ArgumentError("β must be non-negative"))
+        κ > 0 || throw(ArgumentError("κ must be positive"))
+        new{T}(α, β, κ)
+    end
+end
+
+"""
+    MerweParams(; α = 1e-3, β = 2.0, κ = 0.0)
+
+Parameters suggested by van der Merwe et al.
+
+- `α`: Scaling parameter (0,1] for the spread of the sigma points. A typical value is 1e-3.
+- `β`: Incorporates prior knowledge of the distribution of the state.
+- `κ`: Secondary scaling parameter that is usually set to 0. Smaller values result in a smaller spread of sigma points.
+
+If ``α^2 (L + κ) < L`` where ``L`` is the dimension of the sigma points, the center mean weight is negative. This is allowed, but may in some cases lead to an indefinite covariance matrix.
+"""
+struct MerweParams{T} <: UTParams
+    α::T
+    β::T
+    κ::T
+    function MerweParams(; α = 1e-3, β = 2.0, κ = 0.0)
+        T = float(promote_type(typeof(α), typeof(β), typeof(κ)))
+        α > 0 || throw(ArgumentError("α must be positive"))
+        β >= 0 || throw(ArgumentError("β must be non-negative"))
+        κ >= 0 || throw(ArgumentError("κ must be non-negative"))
+        new{T}(α, β, κ)
+    end
+end
+
+"""
+    TrivialParams()
+
+Parameters representing a trivial choice of weights, where all weights are equal.
+"""
+struct TrivialParams <: UTParams end
+
+
+struct UKFWeights{T}
+    "mean center weight"
+    wm::T
+    "covariance center weight"
+    wc::T
+    "off-center mean weight"
+    wmi::T
+    "off-center cov weight"
+    wci::T
+    "Cholesky weight"
+    W::T
+end
+
+ns2L(n) = (n-1) ÷ 2
+
+function UKFWeights(W::WikiParams, L::Integer)
+    (; α, β, κ) = W
+    wm = (α^2 * κ - L) / (α^2 * κ)
+    wc = wm + 1 - α^2 + β
+    wi = 1 / (2 * α^2 * κ)
+    WC = α^2*κ # To be applied on the input of Cholesky, not on the output as in wiki page
+    isfinite(wm) || error("wm is not finite")
+    isfinite(wc) || error("wc is not finite")
+    isfinite(wi) || error("wi is not finite")
+    isfinite(WC) || error("WC is not finite")
+    UKFWeights(wm, wc, wi, wi, WC)
+end
+
+function UKFWeights(W::MerweParams, L::Integer)
+    (; α, β, κ) = W
+    λ = α^2 * (L + κ) - L
+    wm = λ / (L + λ)
+    wc = wm + 1 - α^2 + β
+    wi = 1 / (2 * (L + λ))
+    WC = L + λ
+    UKFWeights(wm, wc, wi, wi, WC)
+end
+
+function UKFWeights(::TrivialParams, L::Integer)
+    N = (2L+1)
+    wm = 1 / N
+    wc = 1 / (N-1)
+    UKFWeights(wm, wc, wm, wc, typeof(wm)(L))
+end
+
+
+
+
+
 """
     sigmapoints(m, Σ)
 
 Return a vector of (2n+1) static vectors, where `n` is the length of `m`, representing sigma points with mean `m` and covariance `Σ`.
 """
-@inline function sigmapoints(m, Σ; static = true, cholesky! = cholesky!)
+@inline function sigmapoints(m, Σ, weight_params=TrivialParams(); static = true, cholesky! = cholesky!)
     T = promote_type(eltype(m), eltype(Σ))
     n = max(length(m), size(Σ,1))
     if static
@@ -11,29 +117,32 @@ Return a vector of (2n+1) static vectors, where `n` is the length of `m`, repres
     else
         xs = [zeros(T, n) for _ in 1:(2n+1)]
     end
-    sigmapoints!(xs,m,Σ,cholesky!)
+    sigmapoints!(xs,m,Σ,weight_params,cholesky!)
 end
 
-function sigmapoints!(xs, m, Σ::AbstractMatrix, cholesky! = cholesky!)
+function sigmapoints!(xs, m, Σ::AbstractMatrix, weight_params, cholesky! = cholesky!)
     n = length(xs[1])
     @assert n == length(m)
-    # X = sqrt(Symmetric(n*Σ)) # 2.184 μs (16 allocations: 2.27 KiB)
+    @assert length(xs) == 2n+1
+    W = UKFWeights(weight_params, n)
+    CI = Symmetric(W.W*Σ)
     if cholesky! === LinearAlgebra.cholesky!
-        XX = cholesky!(Symmetric(n*Σ), check=false) # 170.869 ns (3 allocations: 176 bytes)
+        # X = sqrt(CI) # 2.184 μs (16 allocations: 2.27 KiB)
+        XX = cholesky!(CI, check=false) # 170.869 ns (3 allocations: 176 bytes)
         if !issuccess(XX)
             xs[1] = NaN*xs[1]
             return xs
         end
         X = XX.L
     else
-        X = cholesky!(Symmetric(n*Σ)).L
+        X = cholesky!(CI).L
     end
-    @inbounds @views for i in 1:n
-        @bangbang xs[i] .= X[:,i]
+    xs[1] = m
+    @inbounds @views for i in 2:n+1
+        @bangbang xs[i] .= X[:,i-1]
         @bangbang xs[i+n] .= .-xs[i] .+ m
         @bangbang xs[i] .= xs[i] .+ m
     end
-    xs[end] = m
     xs
 end
 
@@ -41,7 +150,7 @@ end
 
 abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
 
-mutable struct UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,RT,P,RJ,SMT,SCT,CH} <: AbstractUnscentedKalmanFilter
+mutable struct UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,RT,P,RJ,SMT,SCT,CH,WP} <: AbstractUnscentedKalmanFilter
     dynamics::DT
     measurement_model::MT
     R1::R1T
@@ -59,6 +168,7 @@ mutable struct UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,RT,P
     state_cov::SCT
     cholesky!::CH
     names::SignalNames
+    weight_params::WP
 end
 
 function Base.getproperty(ukf::UnscentedKalmanFilter, s::Symbol)
@@ -171,7 +281,7 @@ ERROR: PosDefException: matrix is not positive definite; Factorization failed.
 ```
 In such situations, it is advicable to reconsider the noise model and covariance matrices, alternatively, you may provide a custom Cholesky factorization function to the UKF constructor through the keyword argument `cholesky!`. The function should have the signature `cholesky!(A::AbstractMatrix)::Cholesky`. A useful alternative factorizaiton when covariance matrices are expected to be singular is `cholesky! = R->cholesky!(Positive, Matrix(R))` where the "positive" Cholesky factorization is provided by the package PositiveFactorizations.jl, which must be manually installed and loaded by the user.
 """
-function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::AbstractMeasurementModel, R1, d0=SimpleMvNormal(R1); Ts=1.0, p=NullParameters(), nu::Int, ny=measurement_model.ny, nw = nothing, reject=nothing, state_mean=safe_mean, state_cov=safe_cov, cholesky! = cholesky!, names=default_names(length(d0), nu, ny, "UKF"), kwargs...) where {IPD,IPM,AUGD,AUGM}
+function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::AbstractMeasurementModel, R1, d0=SimpleMvNormal(R1); Ts=1.0, p=NullParameters(), nu::Int, ny=measurement_model.ny, nw = nothing, reject=nothing, state_mean=safe_mean, state_cov=safe_cov, cholesky! = cholesky!, names=default_names(length(d0), nu, ny, "UKF"), weight_params = TrivialParams(), kwargs...) where {IPD,IPM,AUGD,AUGM}
     nx = length(d0)
     
     T = promote_type(eltype(d0), eltype(R1))
@@ -193,8 +303,8 @@ function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::A
     R = convert_cov_type(R1, d0.Σ)
     x0 = convert_x0_type(d0.μ)
     UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,typeof(dynamics),typeof(measurement_model),typeof(R1),typeof(d0),
-        typeof(predict_sigma_point_cache),typeof(x0),typeof(R),typeof(p),typeof(reject),typeof(state_mean),typeof(state_cov), typeof(cholesky!)}(
-        dynamics, measurement_model, R1, d0, predict_sigma_point_cache, x0, R, 0, Ts, ny, nu, p, reject, state_mean, state_cov, cholesky!, names)
+        typeof(predict_sigma_point_cache),typeof(x0),typeof(R),typeof(p),typeof(reject),typeof(state_mean),typeof(state_cov), typeof(cholesky!), typeof(weight_params)}(
+        dynamics, measurement_model, R1, d0, predict_sigma_point_cache, x0, R, 0, Ts, ny, nu, p, reject, state_mean, state_cov, cholesky!, names, weight_params)
 end
 
 function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement, R1, R2, d0=SimpleMvNormal(R1), args...; Ts = 1.0, p = NullParameters(), ny, nu, reject=nothing, state_mean=safe_mean, state_cov=safe_cov, cholesky! = cholesky!, kwargs...) where {IPD,IPM,AUGD,AUGM}
@@ -239,7 +349,7 @@ The prediction step for an [`UnscentedKalmanFilter`](@ref) allows the user to ov
 """
 function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = parameters(ukf), t::Real = index(ukf)*ukf.Ts;
         R1 = get_mat(ukf.R1, ukf.x, u, p, t), reject = ukf.reject, mean = ukf.state_mean, cov = ukf.state_cov, dynamics = ukf.dynamics) where {IPD,IPM,AUGD,AUGM}
-    (; dynamics,x,R) = ukf
+    (; dynamics,x,R,weight_params) = ukf
     sigma_point_cache = ukf.predict_sigma_point_cache
     xsd = sigma_point_cache.x1
     # xtyped = eltype(xsd)(x)
@@ -256,11 +366,11 @@ function predict!(ukf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, p = paramete
         end
     end
     if AUGD
-        ukf.x = mean(xsd)[xinds]
-        @bangbang ukf.R .= symmetrize(cov([x[xinds] for x in xsd])) #+ 1e-16I # TODO: optimize
+        ukf.x = mean(xsd,weight_params)[xinds]
+        @bangbang ukf.R .= symmetrize(cov([x[xinds] for x in xsd], ukf.x, weight_params)) #+ 1e-16I # TODO: optimize
     else
-        ukf.x = mean(xsd)
-        @bangbang ukf.R .= symmetrize(cov(xsd, ukf.x)) .+ R1
+        ukf.x = mean(xsd,weight_params)
+        @bangbang ukf.R .= symmetrize(cov(xsd, ukf.x, weight_params)) .+ R1
     end
     ukf.t += 1
 end
@@ -317,7 +427,7 @@ function sigmapoints_p!(ukf::UnscentedKalmanFilter{<:Any,<:Any,true}, R1)
     xsd0 = sigma_point_cache.x0
     m = [ukf.x; 0*R1[:, 1]]
     Raug = cat(ukf.R, R1, dims=(1,2))
-    sigmapoints!(xsd0, m, Raug, ukf.cholesky!)
+    sigmapoints!(xsd0, m, Raug, ukf.weight_params, ukf.cholesky!)
     isnan(xsd0[1][1]) && error("Cholesky factorization of augmented state covariance failed at time step $(ukf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got Raug = ", Raug)
     nothing
 end
@@ -325,43 +435,50 @@ end
 function sigmapoints_p!(ukf::UnscentedKalmanFilter{<:Any,<:Any,false}, R1)
     sigma_point_cache = ukf.predict_sigma_point_cache
     xsd0 = sigma_point_cache.x0
-    sigmapoints!(xsd0, ukf.x, ukf.R, ukf.cholesky!)
+    sigmapoints!(xsd0, ukf.x, ukf.R, ukf.weight_params, ukf.cholesky!)
     isnan(xsd0[1][1]) && error("Cholesky factorization of state covariance failed at time step $(ukf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got R = ", ukf.R)
     nothing
 end
 
 # The functions below are JET-safe from dynamic dispatch if called with static arrays
-safe_mean(xs) = mean(xs)
-function safe_mean(xs::Vector{<:SVector})
-    m = xs[1]
+function safe_mean(xs, weight_params)
+    n = length(xs)
+    W = UKFWeights(weight_params, ns2L(n))
+    m = xs[1]*W.wm
     for i = 2:length(xs)
-        m += xs[i]
+        m += xs[i]*W.wmi
     end
-    m ./ length(xs)
+    m
 end
 
-function safe_cov(xs, m=mean(xs))
-    # if length(m) > 100
-        Statistics.covm(reduce(hcat, xs), m, 2) # This is always faster :/
-    # else
-    #     Statistics.covm(xs, m)
-    # end
+function safe_cov(xs, m, weight_params)
+    @assert length(m) == length(xs[1])
+    W = UKFWeights(weight_params, ns2L(length(xs)))
+    X = reduce(hcat, xs) .- m
+    X[:,1] .*= sqrt(W.wc)
+    X[:,2:end] .*= sqrt(W.wci)
+    X*X'
 end
 
-safe_mean(xs::ColumnSlices) = vec(mean(xs.parent, dims=2))
-safe_cov(xs::ColumnSlices, m=mean(xs)) = Statistics.covm(xs.parent, m, 2)
 
-function safe_cov(xs::Vector{<:SVector{N}}, m = safe_mean(xs)) where N
+
+function safe_cov(xs::Vector{<:SVector{N}}, m, weight_params) where N
+    @assert length(m) == length(xs[1])
+    W = UKFWeights(weight_params, ns2L(length(xs)))
     if N > 8
-        Statistics.covm(reduce(hcat, xs), m, 2)
+        X = reduce(hcat, xs) .- m
+        X2 = copy(X) # TODO: fix this
+        X[:,1] .*= (W.wc)
+        X[:,2:end] .*= (W.wci)
+        X2*X'
     else
-        P = 0 .* m*m'
-        for i in eachindex(xs)
-            e = xs[i] .- m
-            P += e*e'
+        e = (xs[1] .- m)
+        P = (W.wc*e)*e'
+        for i in 2:length(xs)
+            e = (xs[i] .- m) 
+            P += (W.wci*e)*e'
         end
-        c = P ./ (length(xs) - 1)
-        c
+        P
     end
 end
 
@@ -408,17 +525,16 @@ function correct!(
     ys = sigma_point_cache.x1
     (; x, R) = kf
 
-    ns = length(xsm)
     sigmapoints_c!(kf, measurement_model, R2) # TODO: should this take other arguments?
     propagate_sigmapoints_c!(kf, u, p, t, R2, measurement_model)
-    ym = mean(ys)
-    C  = cross_cov(xsm, x, ys, ym)
+    ym = mean(ys, kf.weight_params)
+    C  = cross_cov(xsm, x, ys, ym, kf.weight_params)
     e  = innovation(y, ym)
-    S  = compute_S(measurement_model, R2, ym)
+    S  = compute_S(measurement_model, R2, ym, kf.weight_params)
     Sᵪ = cholesky(Symmetric(S); check = false)
     issuccess(Sᵪ) ||
         error("Cholesky factorization of innovation covariance failed at time step $(kf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got S = ", S)
-    K = (C ./ (ns - 1)) / Sᵪ # ns normalization to make it a covariance matrix
+    K = C / Sᵪ # ns normalization to make it a covariance matrix
     kf.x += K * e
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized
     RmKSKT!(kf, K, S)
@@ -434,7 +550,7 @@ function sigmapoints_c!(
 )
     sigma_point_cache = measurement_model.cache
     xsm = sigma_point_cache.x0
-    sigmapoints!(xsm, eltype(xsm)(kf.x), kf.R)
+    sigmapoints!(xsm, eltype(xsm)(kf.x), kf.R, kf.weight_params)
 end
 
 function sigmapoints_c!(
@@ -449,7 +565,7 @@ function sigmapoints_c!(
     nv = size(R2, 1)
     xm = [x; 0 * R2[:, 1]]
     Raug = cat(R, R2, dims = (1, 2))
-    sigmapoints!(xsm, xm, Raug)
+    sigmapoints!(xsm, xm, Raug, kf.weight_params)
 end
 
 # IPM = true, AUGM = false
@@ -530,11 +646,11 @@ function propagate_sigmapoints_c!(
     end
 end
 
-function compute_S(measurement_model::UKFMeasurementModel{<:Any, AUGM}, R2, ym) where AUGM
+function compute_S(measurement_model::UKFMeasurementModel{<:Any, AUGM}, R2, ym, weight_params) where AUGM
     sigma_point_cache = measurement_model.cache
     ys = sigma_point_cache.x1
     cov = measurement_model.cov
-    S = symmetrize(cov(ys, ym))
+    S = symmetrize(cov(ys, ym, weight_params))
     if !AUGM
         if S isa SMatrix || S isa Symmetric{<:Any,<:SMatrix}
             S += R2
@@ -550,23 +666,25 @@ end
 
 Default `measurement_cov` function for `UnscentedKalmanFilter`. Computes the cross-covariance between the state and output sigma points.
 """
-function cross_cov(xsm, x, ys, y)
+function cross_cov(xsm, x, ys, y, weight_params)
     T = eltype(x)
     nx = length(x)
     ny = length(y)
+    W = UKFWeights(weight_params, ns2L(length(xsm)))
     xinds = 1:nx
     if x isa SVector
         C = @SMatrix zeros(T,nx,ny)
     else
         C = zeros(T,nx,ny)
     end
-    @inbounds for i in eachindex(ys) # Cross cov between x and y
-        d   = ys[i]-y
+    d   = (ys[1]-y) * W.wc
+    add_to_C!(C, xsm[1], x, d, xinds)
+    @inbounds for i in 2:length(ys) # Cross cov between x and y
+        d   = (ys[i]-y) * W.wci
         C = add_to_C!(C, xsm[i], x, d, xinds)
     end
     C
 end
-
 
 @inline function RmKSKT!(ukf, K, S)
     R = ukf.R

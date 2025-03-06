@@ -23,6 +23,34 @@ X = reduce(hcat, xs)
 @test cov(X, dims=2) ≈ S
 
 
+weight_params = [
+    LowLevelParticleFilters.TrivialParams()
+    LowLevelParticleFilters.MerweParams(α=1.0, β=2.0, κ=1e-3)
+    LowLevelParticleFilters.MerweParams()
+    LowLevelParticleFilters.WikiParams()
+    LowLevelParticleFilters.WikiParams(κ=1.0)
+    LowLevelParticleFilters.WikiParams(κ=3*length(m)/2)
+]
+
+m2 = randn(10)
+S2 = randn(10,10)
+S2 = S2'S2
+for (m,S) in  [(m,S), (m2, S2)]
+    for weight_params in weight_params
+        @show weight_params
+        W = LowLevelParticleFilters.UKFWeights(weight_params, length(m))
+        @show W
+        xs = LowLevelParticleFilters.sigmapoints(m, S, weight_params)
+        X = reduce(hcat, xs)
+        @test vec(mean(X, dims=2)) ≈ m
+
+        sm = LowLevelParticleFilters.safe_mean(xs, weight_params)
+        @test sm ≈ m
+        @test LowLevelParticleFilters.safe_cov(xs, m, weight_params) ≈ S
+    end
+end
+
+
 ## Standard UKF
 
 eye(n) = SMatrix{n,n}(1.0I(n))
@@ -336,3 +364,12 @@ obs = observability(ukf, x[1], u[1], nothing)
 
 obs = observability(kf, x[1], u[1], nothing)
 @test obs.isobservable
+
+
+
+##
+# ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), R2, d0; ny, nu)
+# ukfw  = UnscentedKalmanFilter{false,false,true,false}(dynamics_w, measurement, eye(nx), R2, d0; ny, nu)
+
+# predict!(ukf, u[1])
+# predict!(ukfw, u[1])
