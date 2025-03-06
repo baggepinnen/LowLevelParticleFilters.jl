@@ -42,10 +42,10 @@ a = @allocated forward_trajectory(kf, u, y)
 
 sol_ukf = forward_trajectory(ukf, u, y) 
 a = @allocations forward_trajectory(ukf, u, y) 
-@test a <= 294609*2*1.1 # the x2 is for julia v1.11 vs. 1.10, the .1 is for 10% tolerance
+@test a <= 498418*1.1 # the .1 is for 10% tolerance
 
 a = @allocated forward_trajectory(ukf, u, y)
-@test a <=  527_397_952*1.1
+@test a <=  520_032_736*1.1
 
 sol_ekf = forward_trajectory(ekf, u, y)
 a = @allocations forward_trajectory(ekf, u, y)

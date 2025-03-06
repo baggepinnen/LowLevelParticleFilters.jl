@@ -72,7 +72,7 @@ function correct!(
     ll, e, S, Sᵪ, K
 end
 
-struct UKFMeasurementModel{IPM,AUGM,MT,RT,IT,MET,CT,CCT,CAT} <: AbstractMeasurementModel
+struct UKFMeasurementModel{IPM,AUGM,MT,RT,IT,MET,CT,CCT,CAT,WP} <: AbstractMeasurementModel
     measurement::MT
     R2::RT
     ny::Int
@@ -82,6 +82,7 @@ struct UKFMeasurementModel{IPM,AUGM,MT,RT,IT,MET,CT,CCT,CAT} <: AbstractMeasurem
     cov::CT
     cross_cov::CCT
     cache::CAT
+    weight_params::WP
 end
 
 isinplace(::UKFMeasurementModel{IPM}) where IPM = IPM
@@ -112,6 +113,7 @@ UKFMeasurementModel{IPM,AUGM}(
     cov,
     cross_cov,
     cache = nothing,
+    weight_params = TrivialParams(),
 ) where {IPM,AUGM} = UKFMeasurementModel{
     IPM,
     AUGM,
@@ -122,6 +124,7 @@ UKFMeasurementModel{IPM,AUGM}(
     typeof(cov),
     typeof(cross_cov),
     typeof(cache),
+    typeof(weight_params),
 }(
     measurement,
     R2,
@@ -132,10 +135,11 @@ UKFMeasurementModel{IPM,AUGM}(
     cov,
     cross_cov,
     cache,
+    weight_params,
 )
 
 """
-    UKFMeasurementModel{T,IPM,AUGM}(measurement, R2; nx, ny, ne = nothing, innovation = -, mean = safe_mean, cov = safe_cov, cross_cov = cross_cov, static = nothing)
+    UKFMeasurementModel{T,IPM,AUGM}(measurement, R2; nx, ny, ne = nothing, innovation = -, mean = weighted_mean, cov = weighted_cov, cross_cov = cross_cov, static = nothing)
 
 - `T` is the element type used for arrays
 - `IPM` is a boolean indicating if the measurement function is inplace
@@ -148,11 +152,12 @@ function UKFMeasurementModel{T,IPM,AUGM}(
     ny,
     ne = nothing,
     innovation = -,
-    mean = safe_mean,
-    cov = safe_cov,
+    mean = weighted_mean,
+    cov = weighted_cov,
     cross_cov = cross_cov,
     static = nothing,
     names = nothing, # throwaway
+    weight_params = TrivialParams(),
 ) where {T,IPM,AUGM}
 
     ne = if ne === nothing
@@ -189,6 +194,7 @@ function UKFMeasurementModel{T,IPM,AUGM}(
         typeof(cov),
         typeof(cross_cov),
         typeof(correct_sigma_point_cahce),
+        typeof(weight_params),
     }(
         measurement,
         R2,
@@ -199,6 +205,7 @@ function UKFMeasurementModel{T,IPM,AUGM}(
         cov,
         cross_cov,
         correct_sigma_point_cahce,
+        weight_params,
     )
 end
 

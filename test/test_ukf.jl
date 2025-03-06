@@ -1,6 +1,7 @@
 using LowLevelParticleFilters
-import LowLevelParticleFilters.resample
+using LowLevelParticleFilters: resample, mean_with_weights, cov_with_weights, weighted_mean, weighted_cov, UKFWeights
 using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions, Plots, PositiveFactorizations
+
 Random.seed!(0)
 
 mvnormal(d::Int, σ::Real) = MvNormal(LinearAlgebra.Diagonal(fill(float(σ) ^ 2, d)))
@@ -21,6 +22,34 @@ xs = LowLevelParticleFilters.sigmapoints(m, S)
 X = reduce(hcat, xs)
 @test vec(mean(X, dims=2)) ≈ m
 @test cov(X, dims=2) ≈ S
+
+
+weight_params = [
+    LowLevelParticleFilters.TrivialParams()
+    LowLevelParticleFilters.MerweParams(α=1.0, β=2.0, κ=1e-3)
+    LowLevelParticleFilters.MerweParams()
+    LowLevelParticleFilters.WikiParams()
+    LowLevelParticleFilters.WikiParams(κ=1.0)
+    LowLevelParticleFilters.WikiParams(κ=3*length(m)/2)
+]
+
+m2 = randn(10)
+S2 = randn(10,10)
+S2 = S2'S2
+for (m,S) in  [(m,S), (m2, S2)]
+    for weight_params in weight_params
+        @show weight_params
+        W = UKFWeights(weight_params, length(m))
+        @show W
+        xs = LowLevelParticleFilters.sigmapoints(m, S, weight_params)
+        X = reduce(hcat, xs)
+        @test vec(mean(X, dims=2)) ≈ m
+
+        sm = mean_with_weights(weighted_mean, xs, weight_params)
+        @test sm ≈ m
+        @test cov_with_weights(weighted_cov, xs, m, weight_params) ≈ S
+    end
+end
 
 
 ## Standard UKF
@@ -167,6 +196,7 @@ resukfw2 = forward_trajectory(ukfw2, u, y)
 @test reduce(hcat, resukfw.x) ≈ reduce(hcat, resukfw2.x) atol=1e-6
 @test reduce(hcat, resukfw.R) ≈ reduce(hcat, resukfw2.R) atol=1e-6
 @test reduce(hcat, resukfw.Rt) ≈ reduce(hcat, resukfw2.Rt) atol=1e-6
+@test resukfw.ll ≈ resukfw2.ll rtol=1e-6
 
 # With small measurement noise, the covariance matrix becomes exactly singular. Not even a square-root formulation handles this since the standard Cholesky factorization cannot be computed. We handle that by using PositiveFactorizations.jl and providing a custom Cholesky factorization function.
 Bv = @SMatrix [0.1; 1]
@@ -183,7 +213,7 @@ resukfv2 = forward_trajectory(ukfv2, u, y)
 @test norm(reduce(hcat, resukfv.x) - reduce(hcat, resukfv2.x)) < 0.05
 @test norm(reduce(hcat, resukfv.R) - reduce(hcat, resukfv2.R)) < 0.1
 @test norm(reduce(hcat, resukfv.Rt) - reduce(hcat, resukfv2.Rt)) < 0.05
-@test resukfv.ll ≈ resukf.ll rtol=1e-1
+@test resukfv.ll ≈ resukfv2.ll rtol=1e-4
 
 plot(resukfv, plotyht=true) # Test that plotting works with augmented measurement model
 
@@ -336,3 +366,25 @@ obs = observability(ukf, x[1], u[1], nothing)
 
 obs = observability(kf, x[1], u[1], nothing)
 @test obs.isobservable
+
+
+
+##
+# weight_params = LowLevelParticleFilters.TrivialParams()
+# ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), R2, d0; ny, nu, weight_params)
+# ukfv  = UnscentedKalmanFilter{false,true,false,true}(dynamics, measurement_vs!, eye(nx), [1.0;;], d0; ny, nu, weight_params)#, cholesky! = R->cholesky!(Positive, Matrix(R)))
+# # ukfw  = UnscentedKalmanFilter{false,false,true,false}(dynamics_w, measurement, eye(nx), R2, d0; ny, nu)
+
+
+# predict!(ukf, u[1])
+# predict!(ukfv, u[1])
+# correct!(ukf, u[1], y[1])
+# correct!(ukfv, u[1], y[1])
+# # predict!(ukfw, u[1])
+
+## test that we did not break the interface while introducing UT weights
+state_cov(x) = cov(x)
+state_mean(x) = mean(x)
+ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), R2, d0; ny, nu, state_mean, state_cov)
+res_mc = forward_trajectory(ukf, u, y)
+@test res_mc.xt ≈ resukf.xt
