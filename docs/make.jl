@@ -29,6 +29,7 @@ makedocs(
                   "Adaptive estimation and control" => "adaptive_control.md",
                   "Adaptive Neural-Network training" => "neural_network.md",
                   "Fault detection" => "fault_detection.md",
+                  "Unscented transform" => "ut.md",
             ],
             "API" => "api.md",
       ],
