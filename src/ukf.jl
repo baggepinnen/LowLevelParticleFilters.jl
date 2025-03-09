@@ -2,13 +2,25 @@ abstract type UTParams end
 """
     WikiParams(; α = 1, β = 0.0, κ = 0.0)
 
-Parameters suggested at https://en.wikipedia.org/wiki/Kalman_filter#Sigma_points 
+Unscented transform parameters suggested at [Wiki: Kalman_filter#Sigma_points](https://en.wikipedia.org/wiki/Kalman_filter#Sigma_points).
 
 - `α`: Scaling parameter (0,1] for the spread of the sigma points. A typical value is 1.
 - `β`: Incorporates prior knowledge of the distribution of the state.
 - `κ`: Secondary scaling parameter that is usually set to 3nx/2 or 1. Smaller values result in a smaller spread of sigma points.
 
 If ``α^2 κ < L`` where ``L`` is the dimension ofthe sigma points, the center mean weight is negative. This is allowed, but may in some cases lead to an indefinite covariance matrix.
+
+The spread of the points are ``α^2 κ``, that is, independent on the point dimension. Visualize the spread by
+```julia
+using Plots
+μ = [0.0, 0.0]
+Σ = [1.0 0.0; 0.0 1.0]
+pars = LowLevelParticleFilters.WikiParams(α = 1.0, β = 0.0, κ = 1.0)
+xs = LowLevelParticleFilters.sigmapoints(μ, Σ, pars)
+unscentedplot(xs, pars)
+```
+
+See also [`MerweParams`](@ref) and [`TrivialParams`](@ref)
 """
 struct WikiParams{T} <: UTParams
     α::T
@@ -17,7 +29,7 @@ struct WikiParams{T} <: UTParams
     function WikiParams(; α = 1.0, β = 0.0, κ = 1.0)
         T = float(promote_type(typeof(α), typeof(β), typeof(κ)))
         α > 0 || throw(ArgumentError("α must be positive"))
-        β >= 0 || throw(ArgumentError("β must be non-negative"))
+        # β >= 0 || throw(ArgumentError("β must be non-negative"))
         κ > 0 || throw(ArgumentError("κ must be positive"))
         new{T}(α, β, κ)
     end
@@ -26,13 +38,25 @@ end
 """
     MerweParams(; α = 1e-3, β = 2.0, κ = 0.0)
 
-Parameters suggested by van der Merwe et al.
+Unscented transform parameters suggested by van der Merwe et al.
 
 - `α`: Scaling parameter (0,1] for the spread of the sigma points. A typical value is 1e-3.
 - `β`: Incorporates prior knowledge of the distribution of the state.
 - `κ`: Secondary scaling parameter that is usually set to 0. Smaller values result in a smaller spread of sigma points.
 
 If ``α^2 (L + κ) < L`` where ``L`` is the dimension of the sigma points, the center mean weight is negative. This is allowed, but may in some cases lead to an indefinite covariance matrix.
+
+The spread of the points are ``α^2 (L + κ)`` where ``L`` is the dimension of each point. Visualize the spread by
+```julia
+using Plots
+μ = [0.0, 0.0]
+Σ = [1.0 0.0; 0.0 1.0]
+pars = LowLevelParticleFilters.MerweParams(α = 1e-3, β = 2.0, κ = 0.0)
+xs = LowLevelParticleFilters.sigmapoints(μ, Σ, pars)
+unscentedplot(xs, pars)
+```
+
+See also [`WikiParams`](@ref) and [`TrivialParams`](@ref)
 """
 struct MerweParams{T} <: UTParams
     α::T
@@ -41,7 +65,7 @@ struct MerweParams{T} <: UTParams
     function MerweParams(; α = 1e-3, β = 2.0, κ = 0.0)
         T = float(promote_type(typeof(α), typeof(β), typeof(κ)))
         α > 0 || throw(ArgumentError("α must be positive"))
-        β >= 0 || throw(ArgumentError("β must be non-negative"))
+        # β >= 0 || throw(ArgumentError("β must be non-negative"))
         κ >= 0 || throw(ArgumentError("κ must be non-negative"))
         new{T}(α, β, κ)
     end
@@ -50,7 +74,9 @@ end
 """
     TrivialParams()
 
-Parameters representing a trivial choice of weights, where all weights are equal.
+Unscented transform parameters representing a trivial choice of weights, where all weights are equal.
+
+See also [`WikiParams`](@ref) and [`MerweParams`](@ref)
 """
 struct TrivialParams <: UTParams end
 
@@ -1014,6 +1040,3 @@ y = h(x, z)
 #     (; ll, e, S, Sᵪ, K)
 # end
 
-
-function unscentedplot end
-function unscentedplot! end

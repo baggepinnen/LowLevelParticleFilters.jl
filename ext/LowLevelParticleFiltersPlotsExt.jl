@@ -130,10 +130,14 @@ import LowLevelParticleFilters: unscentedplot, unscentedplot!, covplot, covplot!
     if c.args[1] isa UnscentedKalmanFilter
         ukf = c.args[1]
         sigmapoints = ukf.predict_sigma_point_cache.x1
+        pars = ukf.weight_params
     else
         sigmapoints = c.args[1]
+        pars = length(c.args) >= 2 ? c.args[2] : TrivialParams()
     end
-    if length(sigmapoints[1]) == 2
+    if length(sigmapoints[1]) < 2
+        error("1D sigma points are not supported")
+    elseif length(sigmapoints[1]) == 2
         dims = 1:2
     else
         if dims === nothing
@@ -141,7 +145,9 @@ import LowLevelParticleFilters: unscentedplot, unscentedplot!, covplot, covplot!
             dims = 1:2
         end
     end
-    μ, S = gaussian_chol(mean(sigmapoints), cov(sigmapoints); n_std, dims)
+    μ = LowLevelParticleFilters.mean_with_weights(LowLevelParticleFilters.weighted_mean, sigmapoints, pars)
+    S = LowLevelParticleFilters.cov_with_weights(LowLevelParticleFilters.weighted_cov, sigmapoints, μ, pars)
+    μ, S = gaussian_chol(μ, S; n_std, dims)
 
     θ = range(0, 2π; length = N)
     A = S * [cos.(θ)'; sin.(θ)']
@@ -159,6 +165,13 @@ import LowLevelParticleFilters: unscentedplot, unscentedplot!, covplot, covplot!
         primary := false
         seriesalpha --> 0.3
         Plots.Shape(μ[1] .+ A[1, :], μ[2] .+ A[2, :])
+    end
+    @series begin
+        primary := false
+        seriestype --> :scatter
+        markershape --> :xcross
+        markersize --> 5
+        [μ[1]], [μ[2]]
     end
 
     
