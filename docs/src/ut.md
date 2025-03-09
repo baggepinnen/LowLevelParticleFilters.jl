@@ -11,6 +11,7 @@ The propagation of a Gaussian distribution through an affine (or linear) functio
 For comparison, we also show how the [`ExtendedKalmanFilter`](@ref) and [`ParticleFilter`](@ref) propagate the covariance. EKF uses linearization while particle filters propagate a large number of samples. We load the `ForwardDiff` package to compute the Jacobian of the function.
 
 ```@example UT
+using DisplayAs # hide
 using ForwardDiff, Distributions
 function ekf_propagate_plot(f, μ, Σ; kwargs...)
     x = μ
@@ -44,6 +45,7 @@ ekf_propagate_plot(f1, μ, Σ; lab="Output EKF", c=:orange)
 sample_propagate_plot(f1, μ, Σ; lab="Output particles", c=:green)
 # Plot lines from each input point to each output point
 plot!([first.(x)'; first.(y)'; fill(Inf, 1, n)][:], [last.(x)'; last.(y)'; fill(Inf, 1, n)][:], c=:black, alpha=0.5, primary=false)
+DisplayAs.PNG(Plots.current()) # hide
 ```
 For this first function, ``f_1(x) = [x_1^2+1, sin(x_2)]``, the UT and linearization-based propagation produce somewhat similar results, but the posterior distribution of the UT is much closer to the particle distribution than the EKF.
 
@@ -55,6 +57,7 @@ unscentedplot!(y; lab="Output UKF", c=:red, kwargs...)
 ekf_propagate_plot(f2, μ, Σ; lab="Output EKF", c=:orange)
 sample_propagate_plot(f2, μ, Σ; lab="Output particles", c=:green)
 plot!([first.(x)'; first.(y)'; fill(Inf, 1, n)][:], [last.(x)'; last.(y)'; fill(Inf, 1, n)][:], c=:black, alpha=0.5, primary=false, xlims=(-5, 12))
+DisplayAs.PNG(Plots.current()) # hide
 ```
 For the second function, ``f_2(x) = [x_1 x_2, x_1+x_2]``, the posterior distribution is highly non-Gaussian. Both the UT and EKF style propagation do reasonable jobs capturing the posterior mean, but the UT does a better, although far from perfect, job at capturing the posterior covariance.
 
@@ -67,6 +70,7 @@ unscentedplot!(y; lab="Output UKF", c=:red, kwargs...)
 ekf_propagate_plot(f3, μ, Σ; lab="Output EKF", c=:orange)
 sample_propagate_plot(f3, μ, Σ; lab="Output particles", c=:green)
 plot!([first.(x)'; first.(y)'; fill(Inf, 1, n)][:], [last.(x)'; last.(y)'; fill(Inf, 1, n)][:], c=:black, alpha=0.5, primary=false)
+DisplayAs.PNG(Plots.current()) # hide
 ```
 
 For the function ``f_3(x) = [\sqrt{(1 - x)^2 + (0.1 - y)^2}, \atan(0.9 - y, 1.0 - x)]``, the posterior distribution is once again highly non-Gaussian. The EKF misses to place any significant output probability mass in the region around the input, which the UT does by placing one sigma point in this region. When the particle distribution is approximated by a Gaussian, neither the UT or EKF does very well approximating this Gaussian.
