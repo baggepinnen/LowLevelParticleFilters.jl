@@ -12,7 +12,9 @@ For comparison, we also show how the [`ExtendedKalmanFilter`](@ref) and [`Partic
 
 ```@example UT
 using DisplayAs # hide
+using LowLevelParticleFilters
 using ForwardDiff, Distributions
+using LowLevelParticleFilters: sigmapoints
 function ekf_propagate_plot(f, μ, Σ; kwargs...)
     x = μ
     A = ForwardDiff.jacobian(f, x)
