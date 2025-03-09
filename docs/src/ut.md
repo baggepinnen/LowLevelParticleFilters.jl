@@ -11,7 +11,7 @@ The propagation of a Gaussian distribution through an affine (or linear) functio
 For comparison, we also show how the [`ExtendedKalmanFilter`](@ref) and [`ParticleFilter`](@ref) propagate the covariance. EKF uses linearization while particle filters propagate a large number of samples. We load the `ForwardDiff` package to compute the Jacobian of the function.
 
 ```@example UT
-using ForwardDiff, MonteCarloMeasurements, Distributions
+using ForwardDiff, Distributions
 function ekf_propagate_plot(f, μ, Σ; kwargs...)
     x = μ
     A = ForwardDiff.jacobian(f, x)
