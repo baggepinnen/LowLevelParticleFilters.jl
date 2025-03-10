@@ -248,8 +248,8 @@ end
 
 
 """
-    UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0=MvNormal(Matrix(R1)); p = NullParameters(), ny, nu)
-    UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::AbstractMeasurementModel, R1, d0=SimpleMvNormal(R1); p=NullParameters(), nu)
+    UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0=MvNormal(Matrix(R1)); p = NullParameters(), ny, nu, weight_params)
+    UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::AbstractMeasurementModel, R1, d0=SimpleMvNormal(R1); p=NullParameters(), nu, weight_params)
 
 A nonlinear state estimator propagating uncertainty using the unscented transform.
 
@@ -291,6 +291,9 @@ is used, where the Boolean type parameters have the following meaning
 - `augmented_measurement`: If `true` the measurement function is agumented with an additional noise input `e`, i.e., `measurement(x, u, p, t, e)`. Default is `false`. (If the measurement noise has fewer degrees of freedom than the number of measurements, you may failure in Cholesky factorizations, see "Custom Cholesky factorization" below).
 
 Use of augmented dynamics incurs extra computational cost. The number of sigma points used is `2L+1` where `L` is the length of the augmented state vector. Without augmentation, `L = nx`, with augmentation `L = nx + nw` and `L = nx + ne` for dynamics and measurement, respectively.
+
+# Weight tuning
+The spread of the sigma points is controlled by `weight_params::UTParams`. See [Docs: Unscented transform](https://baggepinnen.github.io/LowLevelParticleFilters.jl/dev/ut/) for a tutorial. The default is [`TrivialParams`](@ref) for unweighted sigma points, other options are [`WikiParams`](@ref) and [`MerweParams`](@ref).
 
 # Sigma-point rejection
 For problems with challenging dynamics, a mechanism for rejection of sigma points after the dynamics update is provided. A function `reject(x) -> Bool` can be provided through the keyword argument `reject` that returns `true` if a sigma point for ``x(t+1)`` should be rejected, e.g., if an instability or non-finite number is detected. A rejected point is replaced by the propagated mean point (the mean point cannot be rejected). This function may be provided either to the constructor of the UKF or passed to the [`predict!`](@ref) function.

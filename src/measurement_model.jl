@@ -89,7 +89,7 @@ isinplace(::UKFMeasurementModel{IPM}) where IPM = IPM
 has_oop(::UKFMeasurementModel{IPM}) where IPM = !IPM
 
 """
-    UKFMeasurementModel{inplace_measurement,augmented_measurement}(measurement, R2, ny, ne, innovation, mean, cov, cross_cov, cache = nothing)
+    UKFMeasurementModel{inplace_measurement,augmented_measurement}(measurement, R2, ny, ne, innovation, mean, cov, cross_cov, weight_params, cache = nothing)
 
 A measurement model for the Unscented Kalman Filter.
 
@@ -101,7 +101,8 @@ A measurement model for the Unscented Kalman Filter.
 - `innovation(y::AbstractVector, yh::AbstractVector)` where the arguments represent (measured output, predicted output)
 - `mean(ys::AbstractVector{<:AbstractVector})`: computes the mean of the vector of vectors of output sigma points.
 - `cov(ys::AbstractVector{<:AbstractVector}, y::AbstractVector)`: computes the covariance matrix of the output sigma points.
-- `cross_cov(xs::AbstractVector{<:AbstractVector}, x::AbstractVector, ys::AbstractVector{<:AbstractVector}, y::AbstractVector)` where the arguments represents (state sigma points, mean state, output sigma points, mean output). The function should return the **cross-covariance** matrix between the state and output sigma points.
+- `cross_cov(xs::AbstractVector{<:AbstractVector}, x::AbstractVector, ys::AbstractVector{<:AbstractVector}, y::AbstractVector, W::UKFWeights)` where the arguments represents (state sigma points, mean state, output sigma points, mean output, weights). The function should return the weighted **cross-covariance** matrix between the state and output sigma points.
+- `weight_params`: A type that holds the parameters for the unscented-transform weights. See [`UnscentedKalmanFilter`](@ref) and [Docs: Unscented transform](https://baggepinnen.github.io/LowLevelParticleFilters.jl/dev/ut/) for more information.
 """
 UKFMeasurementModel{IPM,AUGM}(
     measurement,
