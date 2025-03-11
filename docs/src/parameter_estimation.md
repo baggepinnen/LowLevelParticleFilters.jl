@@ -202,7 +202,6 @@ using StaticArrays
 using Plots, LinearAlgebra
 
 function quadtank(h,u,p,t)
-    kc = 0.5
     k1, k2, g = 1.6, 1.6, 9.81
     A1 = A3 = A2 = A4 = 4.9
     a1, a3, a2, a4 = 0.03, 0.03, 0.03, 0.03
@@ -255,7 +254,6 @@ plot(
 To perform the joint state and parameter estimation, we define a version of the dynamics that contains an extra state, corresponding to the unknown or time varying parameter, in this case ``a_1``. We do not have any apriori information about how this parameter changes, so we say that its derivative is 0 and it's thus only driven by noise:
 ```@example paramest
 function quadtank_paramest(h, u, p, t)
-    kc = 0.5
     k1, k2, g = 1.6, 1.6, 9.81
     A1 = A3 = A2 = A4 = 4.9
     a3, a2, a4 = 0.03, 0.03, 0.03
@@ -307,11 +305,10 @@ The state estimators in this package are all statistically motivated and thus co
 We now define the dynamics function such that it takes its parameters from the `p` input argument. We also define a variable `p_true` that contains the true values that we will use to simulate some estimation data
 ```@example paramest
 function quadtank(h, u, p, t)
-    kc = p[1]
-    k1, k2, g = p[2], p[3], 9.81
-    A1 = A3 = A2 = A4 = p[4]
-    a1 = a3 = a2 = a4 = p[5]
-    γ1 = γ2 = p[6]
+    k1, k2, g = p[1], p[2], 9.81
+    A1 = A3 = A2 = A4 = p[3]
+    a1 = a3 = a2 = a4 = p[4]
+    γ1 = γ2 = p[5]
 
     ssqrt(x) = √(max(x, zero(x)) + 1e-3) # For numerical robustness at x = 0
     
@@ -324,7 +321,7 @@ function quadtank(h, u, p, t)
 end
 
 discrete_dynamics = SeeToDee.Rk4(quadtank, Ts) # Discretize the dynamics using a 4:th order Runge-Kutta integrator
-p_true = [0.5, 1.6, 1.6, 4.9, 0.03, 0.2]
+p_true = [1.6, 1.6, 4.9, 0.03, 0.2]
 nothing # hide
 ```
 
@@ -413,6 +410,17 @@ p_opt_gn = res_gn.minimizer
 norm(p_true - p_opt_gn) / norm(p_true)
 ```
 
+When performing sum-of-squares minimization like here, we can, assuming that we converge to the global optimum, estimate the covariance of the estimated parameters. The _precision matrix_ ``Λ``, which is the inverse of the covariance matrix of the parameters, is given by a scaled Hessian of the cost function. The Gauss-Newton appoximation of the Hessian is given by ``J'J``, where ``J`` is the Jacobian of the residuals. 
+```@example paramest
+using ForwardDiff
+T = length(y)
+J = ForwardDiff.jacobian(residuals!, zeros(T * ny), res_gn.minimizer)
+Λ = (T - length(p_guess)) * Symmetric(J' * J) # Precision matrix of the estimated parameters
+# Σ = inv(Λ) # Covariance matrix of the estimated parameters (only compute this if precision matrix is well conditioned)
+svdvals(Λ)
+```
+In this case, the precision matrix is singular, indicating that there is at least one diretion in parameter space that yields no increase in cost, and we can thus not determine where along a line in this direction the true parameter lies.
+
 Gauss-Newton algorithms are often more efficient at sum-of-squares minimization than the more generic BFGS optimizer. This form of Gauss-Newton optimization of prediction errors is also available through [ControlSystemIdentification.jl](https://baggepinnen.github.io/ControlSystemIdentification.jl/dev/nonlinear/#Identification-of-nonlinear-models), which uses this package undernath the hood.
 
 ## Which method should I use?
@@ -427,7 +435,7 @@ The methods demonstrated above have slightly different applicability, here, we t
 
 When trying to optimize parameters of the noise distributions, most commonly the covariance matrices, maximum-likelihood (or MAP) is the only recommened method. Similarly, when parameters are time varying or you want an online estimate, the method that jointly estimates state and parameter is the only applicable method. When fitting standard parameters, all methods are applicable. In this case the joint state and parameter estimation tends to be inefficient and unneccesarily complex, and it is recommended to opt for maximum likelihood or prediction-error minimization. The prediction-error minimization (PEM) with a Gauss-Newtown optimizer is often the most efficient method for this type of problem.
 
-Maximum likelihood estimation tends to yeild an estimator with better estimates of posterior covariance since this is explicitly optimized for, while PEM tends to produce the smallest possible prediction errors.
+Maximum likelihood estimation tends to yield an estimator with better estimates of posterior covariance since this is explicitly optimized for, while PEM tends to produce the smallest possible prediction errors.
 
 ## Identifiability
 
