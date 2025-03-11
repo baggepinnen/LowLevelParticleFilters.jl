@@ -27,9 +27,12 @@ X = reduce(hcat, xs)
 weight_params = [
     LowLevelParticleFilters.TrivialParams()
     LowLevelParticleFilters.MerweParams(α=1.0, β=2.0, κ=1e-3)
+    LowLevelParticleFilters.MerweParams(ακ = 0.5)
+    LowLevelParticleFilters.MerweParams(ακ = 1.5)
     LowLevelParticleFilters.MerweParams()
     LowLevelParticleFilters.WikiParams()
-    LowLevelParticleFilters.WikiParams(κ=1.0)
+    LowLevelParticleFilters.WikiParams(ακ = 0.5)
+    LowLevelParticleFilters.WikiParams(ακ = 1.5)
     LowLevelParticleFilters.WikiParams(κ=3*length(m)/2)
 ]
 
