@@ -1,12 +1,13 @@
 abstract type UTParams end
 """
-    WikiParams(; α = 1, β = 0.0, κ = 0.0)
+    WikiParams(; α = 1.0, β = 0.0, κ = 1.0)
+    WikiParams(; ακ = 1.0, β = 0.0) # Simplified interface with only one parameter for ακ
 
 Unscented transform parameters suggested at [Wiki: Kalman_filter#Sigma_points](https://en.wikipedia.org/wiki/Kalman_filter#Sigma_points).
 
-- `α`: Scaling parameter (0,1] for the spread of the sigma points. A typical value is 1.
+- `α`: Scaling parameter (0,1] for the spread of the sigma points. Reduce `α` to reduce the spread.
 - `β`: Incorporates prior knowledge of the distribution of the state.
-- `κ`: Secondary scaling parameter that is usually set to 3nx/2 or 1. Smaller values result in a smaller spread of sigma points.
+- `κ`: Secondary scaling parameter that is usually set to 3nx/2 or 1. Increase `κ` to increase the spread of the sigma points.
 
 If ``α^2 κ < L`` where ``L`` is the dimension ofthe sigma points, the center mean weight is negative. This is allowed, but may in some cases lead to an indefinite covariance matrix.
 
@@ -20,29 +21,47 @@ xs = LowLevelParticleFilters.sigmapoints(μ, Σ, pars)
 unscentedplot(xs, pars)
 ```
 
+A simplified tuning rule 
+- If a decrease in the spread of the sigma points is desired, use ``κ = 1`` and ``α < 1``.
+- If an increase in the spread of the sigma points is desired, use ``κ > 1`` and ``α = 1``.
+
+This rule may be used when using the interface with only a single function argument ``ακ``. See Nielsen, K. et al., 2021, "UKF Parameter Tuning for Local Variation Smoothing" for more details.
+
 See also [`MerweParams`](@ref) and [`TrivialParams`](@ref)
 """
 struct WikiParams{T} <: UTParams
     α::T
     β::T
     κ::T
-    function WikiParams(; α = 1.0, β = 0.0, κ = 1.0)
+    function WikiParams(; α = 1.0, β = 0.0, κ = 1.0, ακ = nothing)
         T = float(promote_type(typeof(α), typeof(β), typeof(κ)))
-        α > 0 || throw(ArgumentError("α must be positive"))
+        if ακ !== nothing
+            ακ > 0 || throw(ArgumentError("ακ must be positive"))
+            if ακ < 1
+                α = ακ
+                κ = T(1.0)
+            else
+                α = T(1.0)
+                κ = ακ
+            end
+        else
+            α > 0 || throw(ArgumentError("α must be positive"))
+            κ == 0 && throw(ArgumentError("κ must be non-zero"))
+        end
         # β >= 0 || throw(ArgumentError("β must be non-negative"))
-        κ > 0 || throw(ArgumentError("κ must be positive"))
         new{T}(α, β, κ)
     end
 end
 
 """
-    MerweParams(; α = 1e-3, β = 2.0, κ = 0.0)
+    MerweParams(; α = 1.0, β = 2.0, κ = 0.0)
+    MerweParams(; ακ = 1.0, β = 2.0) # Simplified interface with only one parameter for ακ
 
 Unscented transform parameters suggested by van der Merwe et al.
 
-- `α`: Scaling parameter (0,1] for the spread of the sigma points. A typical value is 1e-3.
+- `α`: Scaling parameter (0,1] for the spread of the sigma points. Reduce `α` to reduce the spread.
 - `β`: Incorporates prior knowledge of the distribution of the state.
-- `κ`: Secondary scaling parameter that is usually set to 0. Smaller values result in a smaller spread of sigma points.
+- `κ`: Secondary scaling parameter that is usually set to 0. Increase `κ` to increase the spread of the sigma points.
 
 If ``α^2 (L + κ) < L`` where ``L`` is the dimension of the sigma points, the center mean weight is negative. This is allowed, but may in some cases lead to an indefinite covariance matrix.
 
@@ -56,17 +75,34 @@ xs = LowLevelParticleFilters.sigmapoints(μ, Σ, pars)
 unscentedplot(xs, pars)
 ```
 
+A simplified tuning rule 
+- If a decrease in the spread of the sigma points is desired, use ``κ = 0`` and ``α < 1``.
+- If an increase in the spread of the sigma points is desired, use ``κ > 0`` and ``α = 1``.
+
+This rule may be used when using the interface with only a single function argument ``ακ``. See Nielsen, K. et al., 2021, "UKF Parameter Tuning for Local Variation Smoothing" for more details.
+
 See also [`WikiParams`](@ref) and [`TrivialParams`](@ref)
 """
 struct MerweParams{T} <: UTParams
     α::T
     β::T
     κ::T
-    function MerweParams(; α = 1e-3, β = 2.0, κ = 0.0)
+    function MerweParams(; α = 1e-3, β = 2.0, κ = 0.0, ακ = nothing)
         T = float(promote_type(typeof(α), typeof(β), typeof(κ)))
-        α > 0 || throw(ArgumentError("α must be positive"))
+        if ακ !== nothing
+            ακ > 0 || throw(ArgumentError("ακ must be positive"))
+            if ακ < 1
+                α = ακ
+                κ = T(0.0)
+            else
+                α = T(1.0)
+                κ = ακ
+            end
+        else
+            α > 0 || throw(ArgumentError("α must be positive"))
+            # κ == 0 && throw(ArgumentError("κ must be non-zero"))
+        end
         # β >= 0 || throw(ArgumentError("β must be non-negative"))
-        κ >= 0 || throw(ArgumentError("κ must be non-negative"))
         new{T}(α, β, κ)
     end
 end
@@ -112,12 +148,12 @@ ns2L(n) = (n-1) ÷ 2
 
 function UKFWeights(W::WikiParams, L::Integer)
     (; α, β, κ) = W
-    wm = (α^2 * κ - L) / (α^2 * κ)
+    α2κ = α^2 * κ
+    wm = (α2κ - L) / (α2κ)
     wc = wm + 1 - α^2 + β
-    wi = 1 / (2 * α^2 * κ)
+    wi = 1 / (2 * α2κ)
     WC = α^2*κ # To be applied on the input of Cholesky, not on the output as in wiki page
     isfinite(wm) || error("wm is not finite")
-    isfinite(wc) || error("wc is not finite")
     isfinite(wi) || error("wi is not finite")
     isfinite(WC) || error("WC is not finite")
     UKFWeights(wm, wc, wi, wi, WC)
@@ -130,6 +166,9 @@ function UKFWeights(W::MerweParams, L::Integer)
     wc = wm + 1 - α^2 + β
     wi = 1 / (2 * (L + λ))
     WC = L + λ
+    isfinite(wm) || error("wm is not finite")
+    isfinite(wi) || error("wi is not finite")
+    isfinite(WC) || error("WC is not finite")
     UKFWeights(wm, wc, wi, wi, WC)
 end
 
