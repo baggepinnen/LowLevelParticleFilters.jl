@@ -415,6 +415,20 @@ norm(p_true - p_opt_gn) / norm(p_true)
 
 Gauss-Newton algorithms are often more efficient at sum-of-squares minimization than the more generic BFGS optimizer. This form of Gauss-Newton optimization of prediction errors is also available through [ControlSystemIdentification.jl](https://baggepinnen.github.io/ControlSystemIdentification.jl/dev/nonlinear/#Identification-of-nonlinear-models), which uses this package undernath the hood.
 
+## Which method should I use?
+The methods demonstrated above have slightly different applicability, here, we try to outline which methods to consider for different problems
+
+| Method                | Parameter Estimation | Covariance Estimation | Time Varying Parameters | Online Estimation |
+|-----------------------|----------------------|-----------------------|-------------------------|-------------------|
+| Maximum likelihood    | 🟢                   | 🟢                    | 🟥                      | 🟥                |
+| Joint state/par estim | 🔶                   | 🟥                    | 🟢                      | 🟢                |
+| Prediction-error opt. | 🟢                   | 🟥                    | 🟥                      | 🟥                |
+
+
+When trying to optimize parameters of the noise distributions, most commonly the covariance matrices, maximum-likelihood (or MAP) is the only recommened method. Similarly, when parameters are time varying or you want an online estimate, the method that jointly estimates state and parameter is the only applicable method. When fitting standard parameters, all methods are applicable. In this case the joint state and parameter estimation tends to be inefficient and unneccesarily complex, and it is recommended to opt for maximum likelihood or prediction-error minimization. The prediction-error minimization (PEM) with a Gauss-Newtown optimizer is often the most efficient method for this type of problem.
+
+Maximum likelihood estimation tends to yeild an estimator with better estimates of posterior covariance since this is explicitly optimized for, while PEM tends to produce the smallest possible prediction errors.
+
 ## Identifiability
 
 ### Polynomial methods
