@@ -22,8 +22,8 @@ unscentedplot(xs, pars)
 ```
 
 A simplified tuning rule 
-- If a decrease in the spread of the sigma points is desired, use ``κ = 0`` and ``α < 1``.
-- If an increase in the spread of the sigma points is desired, use ``κ > 0`` and ``α = 1``.
+- If a decrease in the spread of the sigma points is desired, use ``κ = 1`` and ``α < 1``.
+- If an increase in the spread of the sigma points is desired, use ``κ > 1`` and ``α = 1``.
 
 This rule may be used when using the interface with only a single function argument ``ακ``. See Nielsen, K. et al., 2021, "UKF Parameter Tuning for Local Variation Smoothing" for more details.
 
@@ -39,7 +39,7 @@ struct WikiParams{T} <: UTParams
             ακ > 0 || throw(ArgumentError("ακ must be positive"))
             if ακ < 1
                 α = ακ
-                κ = T(0.0)
+                κ = T(1.0)
             else
                 α = T(1.0)
                 κ = ακ
@@ -148,9 +148,10 @@ ns2L(n) = (n-1) ÷ 2
 
 function UKFWeights(W::WikiParams, L::Integer)
     (; α, β, κ) = W
-    wm = (α^2 * κ - L) / (α^2 * κ)
+    α2κ = α^2 * κ
+    wm = (α2κ - L) / (α2κ)
     wc = wm + 1 - α^2 + β
-    wi = 1 / (2 * α^2 * κ)
+    wi = 1 / (2 * α2κ)
     WC = α^2*κ # To be applied on the input of Cholesky, not on the output as in wiki page
     isfinite(wm) || error("wm is not finite")
     isfinite(wi) || error("wi is not finite")
