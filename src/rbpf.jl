@@ -95,9 +95,9 @@ where ``x^n`` is a subset of the state that has nonlinear dynamics, and ``x^l`` 
 - `kf`: The internal Kalman filter that will be used for the linear part. This encodes the dynamics of the linear subspace. The matrices ``A, B, C, D, R_1^l`` of the Kalman filter may be functions of `x, u, p, t` that return a matrix as usual.
 - `dynamics`: The nonlinear part of the dynamics of the nonlinear substate `f(xn, u, p, t)`
 - `nl_measurement_model`: An instance of [`RBMeasurementModel`](@ref)
-- `R1n`: The noise distribution of the nonlinear state, this may be a covariance matrix or a distribution
+- `R1n`: The noise distribution of the nonlinear state dynamics, this may be a covariance matrix or a distribution. If `An = nothing`, this may be any distribution, otherwise it must be an instance of `MvNormal` or `SimpleMvNormal`.
 - `d0n`: The initial distribution of the nonlinear state
-- `An`: The matrix that describes the linear effect on the nonlinear state, i.e., `An*xl`. This may be a matrix or a function of `x^n, u, p, t` that returns a matrix.
+- `An`: The matrix that describes the linear effect on the nonlinear state, i.e., `An*xl`. This may be a matrix or a function of `x^n, u, p, t` that returns a matrix. Pass `An = nothing` if there is no linear effect on the nonlinear state.
 - `nu`: The number of control inputs
 - `Ts`: The sampling time
 - `p`: Parameters
@@ -161,42 +161,47 @@ function predict!(pf::RBPF, u, p = parameters(pf), t = index(pf)*pf.Ts)
     if shouldresample(pf)
         j = resample(pf)
         reset_weights!(s)
+        # s.x .= s.x[j]
     else # Resample not needed
         s.j .= 1:N
         j = s.j
     end
 
+    zeroAn = pf.An === nothing || iszero(get_mat(pf.An, s.x[1].xn, u, p, t))
     
     for i = 1:N
-        xi = s.x[j[i]]
+        xi = s.xprev[j[i]]
+        # xi = s.x[i]
         Al = get_mat(pf.kf.A, xi, u, p, t)
         Bl = get_mat(pf.kf.B, xi, u, p, t)
-        An = get_mat(pf.An, xi.xn, u, p, t)
         R1l = get_mat(pf.kf.R1, xi, u, pf.kf.p, t)
         R = xi.R
 
 
         # Propagate particles
         fi = f(xi.xn, u, p, t)
-        z = An*xi.xl + rand(pf.rng, pf.R1n)
-        xn1 = fi + z
-
-        if An === nothing || iszero(An)
+        
+        if zeroAn
             xl1 = Al*xi.xl + Bl*u
-            R1 = Al*R*Al' + R1l - L*Nt*L'
+            R1 = Al*R*Al' + R1l
+            xn1 = fi + rand(pf.rng, pf.R1n) # This assumes additive noise, if An = 0, we could pass w into f instead
         else
+            An = get_mat(pf.An, xi.xn, u, p, t)
+            Axl = An*xi.xl
+            z = Axl + rand(pf.rng, pf.R1n) 
+            xn1 = fi + z
             Nt = An*R*An' + pf.R1n.Σ # Nonlinear state noise used in linear update if An != 0, must then be Gaussian
             L = Al*R*An' / Nt
             
-            # NOTE: this is not fully general, it requires kf to be a fully linear KF to have an A matrix
-            xl1 = Al*xi.xl + Bl*u + L*(z - An*xi.xl)
-            R1 = Al*R * Al' + R1l - L*Nt*L'
+            # NOTE: this is not general, it requires kf to be a fully linear KF to have an A matrix
+            xl1 = Al*xi.xl + Bl*u + L*(z - Axl)
+            R1 = Al*R*Al' + R1l - L*Nt*L'
         end
 
         s.x[i] = RBParticle(xn1, xl1, R1)
     end
 
-    # copyto!(s.xprev, s.x)
+    copyto!(s.xprev, s.x)
     pf.state.t[] += 1
     nothing
 end
@@ -204,9 +209,9 @@ end
 
 function correct!(pf::RBPF, u, y, p = parameters(pf), t = index(pf)*pf.Ts, args...; kwargs...)
 
-    d = to_mv_normal(pf.nl_measurement_model.R2)
     g = pf.nl_measurement_model.measurement
     w = pf.state.w
+    s = state(pf)
     x = particles(pf)
     kf = pf.kf
 
@@ -218,21 +223,26 @@ function correct!(pf::RBPF, u, y, p = parameters(pf), t = index(pf)*pf.Ts, args.
         yn = g(x[i].xn, u, p, t)
         yl = measurement(kf)(x[i].xl, u, p, t)
         yh = yn + yl
-        w[i] += extended_logpdf(d, y-yh)
 
         # KF correct adjusted with yn
         # We mutate the inner KF state to use the current particle
         if !zeroC
             kf.x = x[i].xl # Not thread safe
             kf.R = x[i].R
-            correct!(kf, u, y-yn, p, t; kwargs...)
+            (; ll) = correct!(kf, u, y-yn, p, t; kwargs...)
+            # we should ll the matrix S = CRC' + R2 (eq 13a) which is exactly what the KF does
+            w[i] += ll
+        else
+            # In this case CRC' = 0 and we have only R2 left
+            d = to_mv_normal(pf.nl_measurement_model.R2)
+            w[i] += extended_logpdf(d, y-yh)
         end
 
         x[i] = RBParticle(x[i].xn, kf.x, kf.R)
     end
 
-    ll = logsumexp!(state(pf))
-    ll, 0
+    copyto!(s.xprev, s.x)
+    logsumexp!(state(pf)), 0
 end
 
 

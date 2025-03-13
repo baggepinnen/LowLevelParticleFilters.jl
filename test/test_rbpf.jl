@@ -82,3 +82,76 @@ dm = LowLevelParticleFilters.measurement_density(pf)
 
 
 @test_throws ErrorException LowLevelParticleFilters.initial_density(pf)
+
+
+## Test simple linear setting where correct answer is known
+import LowLevelParticleFilters as LLPF
+using LinearAlgebra
+
+nx = 2   # Dimension of state
+nu = 1   # Dimension of input
+ny = 1   # Dimension of measurements
+
+# Define random linenar state-space system
+A = SA[1 0.1
+             0 1]
+B = SA[0.0; 1;;]
+C = SA[1 0.0]
+
+R1 = LLPF.double_integrator_covariance(0.1) + 1e-6I
+R2 = SMatrix{1,1}(10.0I(1))
+
+# dynamics(x,u,p,t) = A*x .+ B*u
+# measurement(x,u,p,t) = C*x
+
+T = 500 # Number of time steps
+
+d0 = SimpleMvNormal(SVector{nx}(randn(nx)),SMatrix{2,2}(2.0I(nx)))   # Initial state Distribution
+du = SimpleMvNormal(I(nu)) # Control input distribution
+kf = KalmanFilter(A, B, C, 0, R1, R2, d0)
+
+x,u,y = simulate(kf,T,du)
+
+solkf = forward_trajectory(kf, u, y)
+
+
+## RBPF (everything is linear)
+g = (xn,u,p,t) -> SA[0.0] # No nonlinear contribution
+An = nothing
+mm = RBMeasurementModel{false}(g, R2, ny)
+R1n = SA_F64[0.0;;] # One cannot rand of an empty distribution so we fake one nonlinear state variable
+d0n = SimpleMvNormal(R1n)
+
+pf = RBPF{false, false}(500, kf, f_n, mm, R1n, d0n; nu, An, Ts=1.0, names=SignalNames(x=["x1", "x2"], u=["u"], y=["y1"], name="RBPF"))
+
+solrb = forward_trajectory(pf, u, y)
+@test solkf.ll ≈ solrb.ll rtol=1e-2
+
+plot(solrb)
+plot!(solkf, plotu=false, ploty=false, plotyh=false, sp=[2 3], size=(1000,1000))
+
+## RBPF (everything is nonlinear)
+
+
+A0 = SA[0.0;;]
+B0 = SA[0.0;;]
+C0 = SA[0.0;;]
+R10 = SA[1.0;;]
+d00 = SimpleMvNormal(SA_F64[0.0;;]) # Fake linear state
+
+kf2 = KalmanFilter(A0, B0, C0, 0, R10, R2, d00)
+g = (xn,u,p,t) -> C*xn
+An = nothing
+dyn = (x,u,p,t) -> A*x + B*u
+mm = RBMeasurementModel{false}(g, R2, ny)
+R1n = R1
+
+d0n = d0
+pf2 = RBPF{false, false}(500, kf2, dyn, mm, R1n, d0n; nu, An, Ts=1.0, names=SignalNames(x=["x1", "x2"], u=["u"], y=["y1"], name="RBPF"))
+
+solrb2 = forward_trajectory(pf2, u, y)
+@test solkf.ll ≈ solrb2.ll rtol=1e-2
+
+
+plot(solrb2)
+plot!(solkf, plotu=false, ploty=false, plotyh=false, sp=[1 2], size=(1000,1000))
