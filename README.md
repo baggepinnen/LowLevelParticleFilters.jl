@@ -15,7 +15,9 @@ We provide a number of filter types
 - `SqKalmanFilter`. A standard Kalman filter on square-root form (slightly slower but more numerically stable with ill-conditioned covariance).
 - `ExtendedKalmanFilter`: For nonlinear systems, the EKF runs a regular Kalman filter on linearized dynamics. Uses ForwardDiff.jl for linearization. The noise model must be Gaussian.
 - `IteratedExtendedKalmanFilter`: Similar to EKF, but performs iteration in the measurement update for increased accuracy in the covariance update.
-- `UnscentedKalmanFilter`: The Unscented kalman filter often performs slightly better than the Extended Kalman filter but may be slightly more computationally expensive. The UKF handles nonlinear dynamics and measurement models, but still requires an Gaussian noise model (may be non additive). 
+- `UnscentedKalmanFilter`: The Unscented kalman filter often performs slightly better than the Extended Kalman filter but may be slightly more computationally expensive. The UKF handles nonlinear dynamics and measurement models, but still requires an Gaussian noise model (may be non additive).
+- `IMM`: The _Interacting Multiple Models_ filter switches between multiple internal filters based on a hidden Markov model.
+- `RBPF`: A Rao-Blackwellized particle filter that uses a Kalman filter for the linear part of the state and a particle filter for the nonlinear part.
 
 
 

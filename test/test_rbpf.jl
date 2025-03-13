@@ -53,14 +53,15 @@ a = @allocated forward_trajectory(pf, u, y)
 @test a < 200092592*1.1
 
 a = @allocations forward_trajectory(pf, u, y)
-@test a < 2010*1.1
+@test a < 10*1.1
 
 
 using Plots
 plot(sol, size=(1000,800), xreal=ps)
 
-
+# @time forward_trajectory(pf, u, y); with N = 500 and T=10000 
 # 0.257749 seconds (5.86 M allocations: 204.700 MiB, 6.52% gc time)
 # 0.006624 seconds (305.01 k allocations: 11.242 MiB) static arrays in dynamics and covs
 # 0.009420 seconds (103.01 k allocations: 5.078 MiB) new method for rand on SimpleMvNormal with static length
 # 0.005039 seconds (2.01 k allocations: 1.996 MiB)B also static
+# 0.003756 seconds (10 allocations: 1.927 MiB) SimpleMvNormal everywhere
