@@ -206,7 +206,7 @@ This differs slightly from the udpate step of other filters, where at the end of
 - `predict_kwargs`: An optional named tuple of keyword arguments that are sent to [`predict!`](@ref).
 - `interact`: Whether or not to run the interaction step.
 """
-function update!(imm::IMM, u, y, args...; correct_kwargs = (;), predict_kwargs = (;), interact = true)
+function update!(imm::IMM, u, y, args...; correct_kwargs = (;), predict_kwargs = (;), interact = imm.interact)
     ll, rest = correct!(imm, u, y, args...; correct_kwargs...)
     combine!(imm)
     interact && interact!(imm)
@@ -263,7 +263,7 @@ When performing batch filtering using an [`IMM`](@ref) filter, one may
 
 The returned solution object is of type [`KalmanFilteringSolution`](@ref) and has the following fields:
 """
-function forward_trajectory(imm::IMM, u::AbstractVector, y::AbstractVector, p=parameters(imm); interact = true)
+function forward_trajectory(imm::IMM, u::AbstractVector, y::AbstractVector, p=parameters(imm); interact = imm.interact)
     reset!(imm)
     T    = length(y)
     x    = Array{particletype(imm)}(undef,T)
