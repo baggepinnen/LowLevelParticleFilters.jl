@@ -82,9 +82,9 @@ end
 function Base.getproperty(pf::AbstractParticleFilter, s::Symbol)
     s ∈ fieldnames(typeof(pf)) && return getfield(pf, s)
     if s === :nx
-        return length(pf.dynamics_density)
+        return length(pf.state.x[1])
     elseif s === :ny
-        return length(pf.measurement_density)
+        return length(measurement_density(pf))
     elseif s === :nu
         return error("Input length unknown")
     else

@@ -34,19 +34,24 @@ Base.size(::RBParticle{nxl, nxn}, i) where {nxl, nxn} = i == 1 ? nxl + nxn : 1
 Base.length(::RBParticle{nxl, nxn}) where {nxl, nxn} = nxl + nxn
 
 """
-    RBMeasurementModel{IPM, MT, R2T}(measurement, R2, ny)
+    RBMeasurementModel{IPM}(measurement, R2, ny)
 
 A measurement model for the Rao-Blackwellized particle filter.
 
 # Fields:
-- `measurement::MT`: The contribution from the nonlinar state to the output, ``g`` in ``y = g(x^n, u, p, t) + C x^l + e``
-- `R2::R2T`: The probability distribution of the measurement noise. If `C == 0`, this may be any distribution, otherwise it must be an instance of `MvNormal` or `SimpleMvNormal`.
-- `ny::Int`: The number of outputs
+- `measurement`: The contribution from the nonlinar state to the output, ``g`` in ``y = g(x^n, u, p, t) + C x^l + e``
+- `R2`: The probability distribution of the measurement noise. If `C == 0`, this may be any distribution, otherwise it must be an instance of `MvNormal` or `SimpleMvNormal`.
+- `ny`: The number of outputs
 """
 struct RBMeasurementModel{IPM,MT,R2T} <: AbstractMeasurementModel
     measurement::MT
     R2::R2T                 # Measurement noise distribution
     ny::Int
+end
+
+function RBMeasurementModel{IPM}(measurement, R2, ny) where IPM
+    d_R2 = to_mv_normal(R2)
+    RBMeasurementModel{IPM,typeof(measurement),typeof(d_R2)}(measurement, d_R2, ny)
 end
 
 isinplace(::RBMeasurementModel{IPM}) where IPM = IPM
@@ -243,9 +248,13 @@ function measurement(pf::RBPF)
         h(x.xn, u, p, t) + measurement(pf.kf)(x.xl, u, p, t)
     end
 end
-@inline measurement_likelihood(pf::RBPF) = measurement_likelihood(pf.measurement_model)
-@inline dynamics_density(pf::RBPF) = error("not yet supported")
-@inline measurement_density(pf::RBPF) = measurement_density(pf.measurement_model)
-@inline initial_density(pf::RBPF) = error("not yet supported")
+# @inline measurement_likelihood(pf::RBPF) = measurement_likelihood(pf.nl_measurement_model)
+function dynamics_density(pf::RBPF)
+    dn = pf.R1n
+    dl = SimpleMvNormal(pf.kf.R1)
+    SimpleMvNormal([dn.μ; dl.μ], cat(dn.Σ, dl.Σ, dims=(1,2)))
+end
+@inline measurement_density(pf::RBPF) = pf.nl_measurement_model.R2
+@inline initial_density(pf::RBPF) = error("Not yet supported. The initial density of the RBPF is complicated, it's a combination of the initial density of nl and the initial density of the linear part, including its covariance matrix.")
 @inline resampling_strategy(pf::RBPF) = ResampleSystematic
 

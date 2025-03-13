@@ -45,7 +45,7 @@ u = [SA_F64[] for y in y]
 
 kf = KalmanFilter(A, B, C2, D, R1l, R2, d0l)
 
-mm = RBMeasurementModel{false, typeof(h), typeof(R2)}(h, R2, 1)
+mm = RBMeasurementModel{false}(h, R2, 1)
 pf = RBPF{false, false}(500, kf, f_n, mm, R1n, d0n; nu, An=A_n, Ts=1.0, names=SignalNames(x=["x1", "x2"], u=[], y=["y1"], name="RBPF"))
 
 sol = forward_trajectory(pf, u, y)
@@ -65,3 +65,20 @@ plot(sol, size=(1000,800), xreal=ps)
 # 0.009420 seconds (103.01 k allocations: 5.078 MiB) new method for rand on SimpleMvNormal with static length
 # 0.005039 seconds (2.01 k allocations: 1.996 MiB)B also static
 # 0.003756 seconds (10 allocations: 1.927 MiB) SimpleMvNormal everywhere
+
+@test sol.x[1] isa RBParticle
+@test length(sol.x[1]) == pf.nx == 2
+
+dd = LowLevelParticleFilters.dynamics_density(pf)
+@test dd isa SimpleMvNormal
+@test length(dd) == 2
+
+@test !LowLevelParticleFilters.isinplace(pf.nl_measurement_model)
+@test LowLevelParticleFilters.has_oop(pf.nl_measurement_model)
+@test LowLevelParticleFilters.to_mv_normal(dd) === dd
+
+dm = LowLevelParticleFilters.measurement_density(pf)
+@test dm == SimpleMvNormal(R2)
+
+
+@test_throws ErrorException LowLevelParticleFilters.initial_density(pf)
