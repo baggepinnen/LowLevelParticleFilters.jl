@@ -53,7 +53,7 @@ a = @allocated forward_trajectory(pf, u, y)
 @test a < 200092592*1.1
 
 a = @allocations forward_trajectory(pf, u, y)
-@test a < isinteractive() ? 10*1.1 : 59936*1.1 # For some reason, CI gives worse performance
+@test a < (isinteractive() ? 10*1.1 : 59936*1.1) # For some reason, CI gives worse performance
 
 
 using Plots
