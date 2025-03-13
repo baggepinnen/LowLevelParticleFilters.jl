@@ -84,7 +84,7 @@ The filter assumes that the dynamics follow "model 2" in the reference below, i.
      y_t &= g(x_t^n, u, p, t) + C x_t^l + e_t, \\quad e_t \\sim \\mathcal{N}(0, R_2)
  \\end{align}
 ```
-where ``x^n`` is a subset of the state that has nonlinear dynamics, and ``x^l`` is the linear part of the state. The filter is effectively a particle filter where each particle is a Kalman filter that is responsible for the estimation of the linear sub structure.
+where ``x^n`` is a subset of the state that has nonlinear dynamics, and ``x^l`` is the linear part of the state. The entire state vector is reprsented by a special type [`RBParticle`](@ref) that behaves like the vector `[xn; xl]`, but stores `xn, xl` and the covariance `R` or `xl` separately. The filter is effectively a particle filter where each particle is a Kalman filter that is responsible for the estimation of the linear sub structure.
 
 - `N`: Number of particles
 - `kf`: The internal Kalman filter that will be used for the linear part. This encodes the dynamics of the linear subspace. The matrices ``A, B, C, D, R_1^l`` of the Kalman filter may be functions of `x, u, p, t` that return a matrix as usual.
@@ -92,7 +92,7 @@ where ``x^n`` is a subset of the state that has nonlinear dynamics, and ``x^l`` 
 - `nl_measurement_model`: An instance of [`RBMeasurementModel`](@ref)
 - `R1n`: The noise distribution of the nonlinear state, this may be a covariance matrix or a distribution
 - `d0n`: The initial distribution of the nonlinear state
-- `An`: The matrix that describes the linear effect on the nonlinear state, i.e., `An*xl`. This may be a matrix or a function of `x, u, p, t` that returns a matrix.
+- `An`: The matrix that describes the linear effect on the nonlinear state, i.e., `An*xl`. This may be a matrix or a function of `x^n, u, p, t` that returns a matrix.
 - `nu`: The number of control inputs
 - `Ts`: The sampling time
 - `p`: Parameters
@@ -166,7 +166,7 @@ function predict!(pf::RBPF, u, p = parameters(pf), t = index(pf)*pf.Ts)
         xi = s.x[j[i]]
         Al = get_mat(pf.kf.A, xi, u, p, t)
         Bl = get_mat(pf.kf.B, xi, u, p, t)
-        An = get_mat(pf.An, xi, u, p, t)
+        An = get_mat(pf.An, xi.xn, u, p, t)
         R1l = get_mat(pf.kf.R1, xi, u, pf.kf.p, t)
         R = xi.R
 
