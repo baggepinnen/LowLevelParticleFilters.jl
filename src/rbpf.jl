@@ -84,20 +84,20 @@ Rao-Blackwellized particle filter, also called "Marginalized particle filter".
 The filter assumes that the dynamics follow "model 2" in the reference below, i.e., the dynamics is described by
 ```math
  \\begin{align}
-     x_{t+1}^n &= f_n(x_t^n, u, p, t) + A_n(x_t^n, u, p, t) x_t^l + w_t^n, \\quad w_t^n \\sim \\mathcal{N}(0, R_1^n) \\\\
-     x_{t+1}^l &= A x_t^l + Bu w_t^l, \\quad w_t^l \\sim \\mathcal{N}(0, R_1^l) \\\\
-     y_t &= g(x_t^n, u, p, t) + C x_t^l + e_t, \\quad e_t \\sim \\mathcal{N}(0, R_2)
+     x_{t+1}^n &= f_n(x_t^n, u, p, t) + A_n(x_t^n, u, p, t) x_t^l + w_t^n, \\quad &w_t^n \\sim \\mathcal{N}(0, R_1^n) \\\\
+     x_{t+1}^l &= A(...) x_t^l + Bu + w_t^l, \\quad &w_t^l \\sim \\mathcal{N}(0, R_1^l) \\\\
+     y_t &= g(x_t^n, u, p, t) + C(...) x_t^l + e_t, \\quad &e_t \\sim \\mathcal{N}(0, R_2)
  \\end{align}
 ```
 where ``x^n`` is a subset of the state that has nonlinear dynamics, and ``x^l`` is the linear part of the state. The entire state vector is reprsented by a special type [`RBParticle`](@ref) that behaves like the vector `[xn; xl]`, but stores `xn, xl` and the covariance `R` or `xl` separately. The filter is effectively a particle filter where each particle is a Kalman filter that is responsible for the estimation of the linear sub structure.
 
 - `N`: Number of particles
-- `kf`: The internal Kalman filter that will be used for the linear part. This encodes the dynamics of the linear subspace. The matrices ``A, B, C, D, R_1^l`` of the Kalman filter may be functions of `x, u, p, t` that return a matrix as usual.
-- `dynamics`: The nonlinear part of the dynamics of the nonlinear substate `f(xn, u, p, t)`
-- `nl_measurement_model`: An instance of [`RBMeasurementModel`](@ref)
+- `kf`: The internal Kalman filter that will be used for the linear part. This encodes the dynamics of the linear subspace. The matrices ``A, B, C, D, R_1^l`` of the Kalman filter may be functions of `x, u, p, t` that return a matrix.
+- `dynamics`: The nonlinear part ``f_n`` of the dynamics of the nonlinear substate `f(xn, u, p, t)`
+- `nl_measurement_model`: An instance of [`RBMeasurementModel`](@ref) that stores ``g`` and the measurement noise distribution ``R_2``.
 - `R1n`: The noise distribution of the nonlinear state dynamics, this may be a covariance matrix or a distribution. If `An = nothing`, this may be any distribution, otherwise it must be an instance of `MvNormal` or `SimpleMvNormal`.
-- `d0n`: The initial distribution of the nonlinear state
-- `An`: The matrix that describes the linear effect on the nonlinear state, i.e., `An*xl`. This may be a matrix or a function of `x^n, u, p, t` that returns a matrix. Pass `An = nothing` if there is no linear effect on the nonlinear state.
+- `d0n`: The initial distribution of the nonlinear state ``x_0^n``.
+- `An`: The matrix that describes the linear effect on the nonlinear state, i.e., ``A_n x^l``. This may be a matrix or a function of ``x^n, u, p, t`` that returns a matrix. Pass `An = nothing` if there is no linear effect on the nonlinear state.
 - `nu`: The number of control inputs
 - `Ts`: The sampling time
 - `p`: Parameters
@@ -246,10 +246,6 @@ function correct!(pf::RBPF, u, y, p = parameters(pf), t = index(pf)*pf.Ts, args.
 end
 
 
-
-
-
-
 @forward RBPF.state num_particles, weights, particles, particletype
 
 function measurement(pf::RBPF)
@@ -265,6 +261,27 @@ function dynamics_density(pf::RBPF)
     SimpleMvNormal([dn.μ; dl.μ], cat(dn.Σ, dl.Σ, dims=(1,2)))
 end
 @inline measurement_density(pf::RBPF) = pf.nl_measurement_model.R2
-@inline initial_density(pf::RBPF) = error("Not yet supported. The initial density of the RBPF is complicated, it's a combination of the initial density of nl and the initial density of the linear part, including its covariance matrix.")
+function initial_density(pf::RBPF)
+    dn = pf.d0n
+    dl = pf.kf.d0
+    SimpleMvNormal([dn.μ; dl.μ], cat(dn.Σ, dl.Σ, dims=(1,2)))
+end
 @inline resampling_strategy(pf::RBPF) = ResampleSystematic
 
+function sample_measurement(pf::RBPF, x, u, p, t; noise=true)
+    part = pf.state.x[1]
+    xpart = RBParticle(x[1:length(part.xn)], x[length(part.xn)+1:end], part.R)
+    y = measurement(pf)(xpart, u, p, t) .+ noise*rand(pf.rng, pf.nl_measurement_model.R2)
+end
+    
+
+function sample_state(pf::RBPF, x, u, p, t; noise=true)
+    part = pf.state.x[1]
+    xpart = RBParticle(x[1:length(part.xn)], x[length(part.xn)+1:end], part.R)
+    xn = pf.dynamics(xpart.xn, u, p, t) + noise*rand(pf.rng, pf.R1n)
+    if pf.An !== nothing
+        xn += get_mat(pf.An, xpart.xn, u, p, t)*xpart.xl
+    end
+    xl = get_mat(pf.kf.A, xpart.xl, u, p, t)*xpart.xl + get_mat(pf.kf.B, xpart.xl, u, p, t)*u + noise*rand(pf.rng, SimpleMvNormal(pf.kf.R1))
+    RBParticle(xn, xl, copy(xpart.R))
+end

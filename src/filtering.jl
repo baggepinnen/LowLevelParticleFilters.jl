@@ -404,10 +404,13 @@ function simulate(f::AbstractFilter, T::Int, du, p=parameters(f); dynamics_noise
 end
 
 function simulate(f::AbstractFilter,u,p=parameters(f); dynamics_noise=true, measurement_noise=true, sample_initial=false)
-    y = similar(u)
-    x = similar(u)
-    x[1] = sample_state(f, p; noise=sample_initial)
     T = length(u)
+    x1 = sample_state(f, p; noise=sample_initial)
+    y1 = sample_measurement(f,x1, u[1], p, 0; noise=measurement_noise)
+    y = Vector{typeof(y1)}(undef, T)
+    x = Vector{typeof(x1)}(undef, T)
+    y[1] = y1
+    x[1] = x1
     for t = 1:T-1
         ti = (t-1)*f.Ts
         y[t] = sample_measurement(f,x[t], u[t], p, ti; noise=measurement_noise)
