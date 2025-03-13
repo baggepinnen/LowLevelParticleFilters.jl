@@ -82,9 +82,9 @@ end
 function Base.getproperty(pf::AbstractParticleFilter, s::Symbol)
     s ∈ fieldnames(typeof(pf)) && return getfield(pf, s)
     if s === :nx
-        return length(pf.dynamics_density)
+        return length(pf.state.x[1])
     elseif s === :ny
-        return length(pf.measurement_density)
+        return length(measurement_density(pf))
     elseif s === :nu
         return error("Input length unknown")
     else
@@ -291,8 +291,8 @@ end
 @forward AuxiliaryParticleFilter.pf state, particles, weights, expweights, reset!, weighted_mean, measurement_equation!, sample_state, sample_measurement, index, num_particles, particletype, dynamics, measurement, dynamics_density, measurement_density, initial_density, resample_threshold, resampling_strategy, rng, mode_trajectory, mean_trajectory
 
 
-sample_state(pf::AbstractParticleFilter, p=parameters(pf); noise=true) = noise ? rand(pf.rng, pf.initial_density) : mean(pf.initial_density)
-sample_state(pf::ParticleFilter, x, u, p, t; noise=true) = dynamics(pf)(x,u,p,t) + noise*rand(pf.rng, pf.dynamics_density)
+sample_state(pf::AbstractParticleFilter, p=parameters(pf); noise=true) = noise ? rand(pf.rng, initial_density(pf)) : mean(initial_density(pf))
+sample_state(pf::ParticleFilter, x, u, p, t; noise=true) = dynamics(pf)(x,u,p,t) + noise*rand(pf.rng, dynamics_density(pf))
 sample_state(pf::AdvancedParticleFilter, x, u, p, t; noise=true) = dynamics(pf)(x,u,p,t,noise)
 sample_measurement(pf::AdvancedParticleFilter, x, u, p, t; noise=true) = measurement(pf)(x, u, p, t, noise)
 sample_measurement(pf::AbstractParticleFilter, x, u, p, t; noise=true) = measurement(pf)(x, u, p, t) .+ noise*rand(pf.rng, pf.measurement_density)
@@ -304,6 +304,7 @@ weights(s::PFstate)                    = s.w
 expweights(s::PFstate)                 = s.we
 index(pf::AbstractParticleFilter)      = pf.state.t[]
 
+num_particles(pf::AbstractParticleFilter) = num_particles(state(pf))
 num_particles(s::PFstate)              = num_particles(s.x)
 num_particles(s::AbstractArray)        = length(s)
 particles(s::PFstate)                  = s.x

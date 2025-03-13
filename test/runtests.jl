@@ -451,6 +451,11 @@ end
     include("test_measurement_models.jl")
 end
 
+@testset "rbpf" begin
+    @info "Testing rbpf"
+    include("test_rbpf.jl")
+end
+
 
 end
 

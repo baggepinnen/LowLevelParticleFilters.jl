@@ -49,7 +49,7 @@ function Base.show(io::IO, sol::KalmanFilteringSolution)
     println(io, "KalmanFilteringSolution:")
     println(io, "  Filter: ", sol.f.names.name, " ", typeof(sol.f))
     println(io, "  length: ", length(sol.x))
-    println(io, "  nx: ", sol.f.nx)
+    println(io, "  nx: ", length(sol.x[1]))
     println(io, "  ll: ", sol.ll)
 end
 
