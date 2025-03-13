@@ -3,6 +3,7 @@ module LowLevelParticleFilters
 export KalmanFilter, SqKalmanFilter, UnscentedKalmanFilter, DAEUnscentedKalmanFilter, ExtendedKalmanFilter, IteratedExtendedKalmanFilter, ParticleFilter, AuxiliaryParticleFilter, AdvancedParticleFilter, SignalNames, PFstate, index, state, covariance, num_particles, effective_particles, weights, expweights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, mode_trajectory, weighted_mean, weighted_cov, weighted_quantile, update!, predict!, correct!, reset!, metropolis, shouldresample, TupleProduct
 export UKFWeights, TrivialParams, MerweParams, WikiParams
 export IMM, interact!, combine!
+export RBPF, RBParticle, RBMeasurementModel
 export LinearMeasurementModel, EKFMeasurementModel, IEKFMeasurementModel, UKFMeasurementModel, CompositeMeasurementModel
 export KalmanFilteringSolution, ParticleFilteringSolution
 @deprecate weigthed_mean weighted_mean
@@ -31,6 +32,16 @@ struct ResampleSystematic <: ResamplingStrategy end
 abstract type AbstractFilter end
 abstract type AbstractKalmanFilter <: AbstractFilter end
 
+macro maybe_threads(flag, expr)
+    quote
+        if $(flag)
+            Threads.@threads $expr
+        else
+            $expr
+        end
+    end |> esc
+end
+
 include("signalnames.jl")
 include("PFtypes.jl")
 include("solutions.jl")
@@ -46,6 +57,7 @@ include("ekf.jl")
 include("iekf.jl")
 include("sq_kalman.jl")
 include("imm.jl")
+include("rbpf.jl")
 
 index(f::AbstractFilter) = f.t
 

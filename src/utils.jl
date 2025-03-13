@@ -166,6 +166,9 @@ end
 
 
 Base.rand(rng::AbstractRNG, d::SimpleMvNormal) = d.μ + cholesky(d.Σ).L*randn(rng, length(d.μ))
+
+Base.rand(rng::AbstractRNG, d::SimpleMvNormal{<:SVector{N}}) where N = d.μ + cholesky(d.Σ).L*@SVector(randn(rng, N))
+
 function Random.rand!(rng::AbstractRNG, d::SimpleMvNormal, out)
     randn!(rng, out)
     mul!(out, cholesky(d.Σ).L, out) # This might work due to L being lower triangular

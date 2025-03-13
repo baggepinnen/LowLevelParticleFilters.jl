@@ -205,6 +205,7 @@ function predict!(pf::AuxiliaryParticleFilter{<:AdvancedParticleFilter},u, y, p=
     expnormalize!(s.w) # w used as buffer
     j = resample(ResampleSystematic, s.w , s.j, s.bins)
     reset_weights!(s)
+    # NOTE: this can be sped by letting the user implement `add_noise` and call that here, rather than propagating again
     propagate_particles!(pf.pf, u, j, p, t)# Propagate with noise and permutation
 
     s.t[] += 1
