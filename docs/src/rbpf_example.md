@@ -50,7 +50,7 @@ Since this is a tracking problem without control inputs, and there are no parame
 Below, we define functions that return the matrix ``A_n`` despite that it is constant, we do this to illustrate that this matrix may in general be a function of the nonlinear state, parameter and time. If the matrix is constant, it's okay to let `An` be a `Matrix` or `SMatrix` instead of a function.
 
 ```@example RBPF
-using LowLevelParticleFilters
+using LowLevelParticleFilters, LinearAlgebra
 using LowLevelParticleFilters: SimpleMvNormal
 using DisplayAs # hide
 nxn = 1         # Dimension of nonlinear state
@@ -102,7 +102,7 @@ plot(sol, size=(800,600), xreal=x, markersize=1, nbinsy=50, colorbar=false)
 for i = 1:nx
     plot!(ylims = extrema(getindex.(x, i)) .+ (-1, 1), sp=i)
 end
-isinteractive() ? current() : DisplayAs.PNG(Plots.current()) # hide
+DisplayAs.PNG(Plots.current()) # hide
 ```
 The cyan markers represent the true state in the state plots, and the measurements in the measurement plots. The heatmap represents the particle estimate.
 
