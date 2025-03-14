@@ -136,3 +136,6 @@ solrb2 = forward_trajectory(pf2, u, y)
 
 plot(solrb2)
 plot!(solkf, plotu=false, ploty=false, plotyh=false, sp=[1 2], size=(1000,1000))
+
+
+# TODO: test give the inner kf a nonlinear measurement model
