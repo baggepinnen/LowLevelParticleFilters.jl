@@ -227,6 +227,7 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
         for d = 1:D
             subplot := d
             if q isa AbstractArray
+                eltype(vx) <: RBParticle && @warn "The estimated quantiles for the linear sub state does not take the covariance matrix of each particle into account. Interpret plot with caution."
                 for qi in eachindex(Qs)
                     @series begin
                         label --> "q = $(q[qi])"
@@ -237,8 +238,24 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
                 @series begin
                     seriestype := :histogram2d
                     bins --> (timevecp05,nbinsy)
-                    weights --> w
-                    repeat(timevecm05',N)[:], vec(getindex.(vx,d))
+                    xs = vec(getindex.(vx,d))
+                    if eltype(vx) <: RBParticle && d > length(vx[1].xn) 
+                        # @show Particles(10, permute=false).particles
+                        systematic_normal_sample = [-1.6448536269514729, -1.0364333894937896, -0.6744897501960818, -0.3853204664075677, -0.12566134685507402, 0.12566134685507416, 0.3853204664075677, 0.6744897501960818, 1.0364333894937896, 1.6448536269514717]
+                        nxn = length(vx[1].xn)
+                        # In this case we sample from the Gaussian distribution of the particle as well
+                        Nsamples = length(systematic_normal_sample)
+                        perturbations = reduce(hcat, [sqrt(x.R[d-nxn,d-nxn])*systematic_normal_sample for x in vx])'
+                        xs = vec((xs .+ perturbations)')
+                        ws = vec(repeat(w, 1, Nsamples)')
+
+                    else
+                        ws = w
+                        Nsamples = 1
+                    end
+                    weights --> ws
+
+                    repeat(timevecm05, inner=N*Nsamples)[:], xs
                 end
             end
             xreal === nothing || @series begin
