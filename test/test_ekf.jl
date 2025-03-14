@@ -17,8 +17,8 @@ C = SA[1 0.0]
 R1 = LLPF.double_integrator_covariance(0.1) + 1e-6I
 R2 = 1e-3I(1)
 
-dynamics(x,u,p,t) = A*x .+ B*u
-measurement(x,u,p,t) = C*x
+dynamics_ekf(x,u,p,t) = A*x .+ B*u
+measurement_ekf(x,u,p,t) = C*x
 
 T = 5000 # Number of time steps
 
@@ -35,9 +35,9 @@ kf2 = KalmanFilter(ss(A, B, C, 0, 1), R1, R2, d0, α=1.01)
 @test kf2.R2 == kf.R2
 @test kf2.d0 == kf.d0
 
-ekf = LLPF.ExtendedKalmanFilter(kf, dynamics, measurement)
-ekf2 = LLPF.ExtendedKalmanFilter(dynamics, measurement, R1, R2, d0, α=1.01, nu=nu)
-ukf = LLPF.UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0, nu=nu, ny=ny)
+ekf = LLPF.ExtendedKalmanFilter(kf, dynamics_ekf, measurement_ekf)
+ekf2 = LLPF.ExtendedKalmanFilter(dynamics_ekf, measurement_ekf, R1, R2, d0, α=1.01, nu=nu)
+ukf = LLPF.UnscentedKalmanFilter(dynamics_ekf, measurement_ekf, R1, R2, d0, nu=nu, ny=ny)
 @test ekf2.kf.R1 == ekf.kf.R1
 @test ekf2.kf.R2 == ekf.kf.R2
 @test ekf2.kf.d0 == ekf.kf.d0
@@ -52,15 +52,15 @@ x,u,y = LLPF.simulate(kf,T,du)
 @test kf.nu == nu
 @test kf.ny == ny
 
-@test LowLevelParticleFilters.measurement(kf)(x[1],u[1],0,0) ≈ measurement(x[1],u[1],0,0)
-@test LowLevelParticleFilters.dynamics(kf)(x[1],u[1],0,0) ≈ dynamics(x[1],u[1],0,0)
+@test LowLevelParticleFilters.measurement(kf)(x[1],u[1],0,0) ≈ measurement_ekf(x[1],u[1],0,0)
+@test LowLevelParticleFilters.dynamics(kf)(x[1],u[1],0,0) ≈ dynamics_ekf(x[1],u[1],0,0)
 
 
 sol = forward_trajectory(kf, u, y)
 sol2 = forward_trajectory(ekf, u, y)
 
 
-# When the dynamics is linear, these should be the same
+# When the dynamics_ekf is linear, these should be the same
 @test reduce(hcat, sol.x) ≈ reduce(hcat, sol2.x)
 @test reduce(hcat, sol.xt) ≈ reduce(hcat, sol2.xt)
 @test reduce(hcat, sol.R)  ≈ reduce(hcat, sol2.R)
@@ -68,9 +68,9 @@ sol2 = forward_trajectory(ekf, u, y)
 @test sol.ll ≈ sol2.ll
 
 
-## add nonlinear dynamics
-dynamics2(x,u,p,t) = A*x - 0.01*sin.(x) .+ B*u
-ekf = LLPF.ExtendedKalmanFilter(kf, dynamics2, measurement)
+## add nonlinear dynamics_ekf
+dynamics_ekf2(x,u,p,t) = A*x - 0.01*sin.(x) .+ B*u
+ekf = LLPF.ExtendedKalmanFilter(kf, dynamics_ekf2, measurement_ekf)
 x,u,y = LLPF.simulate(ekf,T,du)
 
 sol = forward_trajectory(kf, u, y)
@@ -90,8 +90,8 @@ xT,RT,ll = smooth(ekf, u, y)
 
 ## Compare all
 kf = KalmanFilter(A, B, C, 0, R1, R2, d0)
-ekf = LLPF.ExtendedKalmanFilter(kf, dynamics, measurement)
-ukf = LLPF.UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0, nu=nu, ny=ny)
+ekf = LLPF.ExtendedKalmanFilter(kf, dynamics_ekf, measurement_ekf)
+ukf = LLPF.UnscentedKalmanFilter(dynamics_ekf, measurement_ekf, R1, R2, d0, nu=nu, ny=ny)
 
 x,u,y = LLPF.simulate(kf,20,du)
 
@@ -181,13 +181,13 @@ xT3,RT3,ll3 = smooth(sol3, ukf, u, y)
 
 # @test Rs ≈ sol.Rt
 # @test Xs ≈ sol.xt # tested with sol = forward_trajectory(kf, 0 .* u, y)
-measurement(x,u,p,t) = C*x
+measurement_ekf(x,u,p,t) = C*x
 
 function error_dynamics(x,u,p,t)
     error()
 end
 
-ekf = LLPF.ExtendedKalmanFilter(kf, error_dynamics, measurement)
+ekf = LLPF.ExtendedKalmanFilter(kf, error_dynamics, measurement_ekf)
 @test_throws ErrorException forward_trajectory(ekf, u, y)
 
 @test_logs (:error,r"State estimation failed") forward_trajectory(ekf, u, y, debug=true)
