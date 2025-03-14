@@ -174,13 +174,21 @@ function predict!(pf::RBPF{IPD,IPM,AUGD}, u, p = parameters(pf), t = index(pf)*p
     end
 
     zeroAn = pf.An === nothing || iszero(get_mat(pf.An, s.x[1].xn, u, p, t))
+    singleR = (zeroAn || (pf.An isa AbstractMatrix)) && (pf.kf.A isa AbstractMatrix) && (pf.kf.R1 isa AbstractMatrix) # && (pf.R1n isa AbstractMatrix) # Special case around eq 28 in which a single Riccati recursion is enough. We currently do not handle pf.R1n depending on the state, which is otherwise an option
+
+    local L, An
     
     for i = 1:N
         xi = s.xprev[j[i]]
         # xi = s.x[i]
         Al = get_mat(pf.kf.A, xi, u, p, t)
         Bl = get_mat(pf.kf.B, xi, u, p, t)
-        R1l = get_mat(pf.kf.R1, xi, u, pf.kf.p, t)
+        if i == 1 || !singleR
+            R1l = get_mat(pf.kf.R1, xi, u, pf.kf.p, t)
+        else
+            # Just reuse already computed R1
+            R1 = s.x[1].R
+        end
         R = xi.R
 
 
@@ -195,20 +203,24 @@ function predict!(pf::RBPF{IPD,IPM,AUGD}, u, p = parameters(pf), t = index(pf)*p
             end
 
             xl1 = Al*xi.xl + Bl*u
-            R1 = Al*R*Al' + R1l
+            if i == 1 || !singleR
+                R1 = Al*R*Al' + R1l
+            end
         else
             fi = (IPD ? f(similar(xi.xn), xi.xn, u, p, t) : f(xi.xn, u, p, t)) |> typeof(xi.xn)
 
-            An = get_mat(pf.An, xi.xn, u, p, t)
+            if i == 1 || !singleR
+                # These computations can be reused if singleR
+                An = get_mat(pf.An, xi.xn, u, p, t)
+                Nt = An*R*An' + pf.R1n.Σ # Nonlinear state noise used in linear update if An != 0, must then be Gaussian
+                L = Al*R*An' / Nt
+                R1 = Al*R*Al' + R1l - L*Nt*L'
+            end
             Axl = An*xi.xl
             z = Axl + rand(pf.rng, pf.R1n) 
             xn1 = fi + z
-            Nt = An*R*An' + pf.R1n.Σ # Nonlinear state noise used in linear update if An != 0, must then be Gaussian
-            L = Al*R*An' / Nt
-            
             # NOTE: this is not general, it requires kf to be a fully linear KF to have an A matrix
             xl1 = Al*xi.xl + Bl*u + L*(z - Axl)
-            R1 = Al*R*Al' + R1l - L*Nt*L'
         end
 
         s.x[i] = RBParticle(xn1, xl1, R1)
@@ -231,6 +243,10 @@ function correct!(pf::RBPF{IPD,IPM}, u, y, p = parameters(pf), t = index(pf)*pf.
 
     C = get_mat(kf.C, x[1], u, p, t)
     zeroC = C === nothing || iszero(C)
+    zeroAn = pf.An === nothing || iszero(get_mat(pf.An, s.x[1].xn, u, p, t))
+    singleR = (zeroC || kf.C isa AbstractMatrix) && (zeroAn || (pf.An isa AbstractMatrix)) && (pf.kf.A isa AbstractMatrix) && (pf.kf.R1 isa AbstractMatrix) # && (pf.R1n isa AbstractMatrix) # Special case around eq 28 in which a single Riccati recursion is enough. We currently do not handle pf.R1n depending on the state, which is otherwise an option
+
+    local K, S, Sᵪ
 
     # PF correct
     for i = 1:num_particles(pf)
@@ -243,7 +259,14 @@ function correct!(pf::RBPF{IPD,IPM}, u, y, p = parameters(pf), t = index(pf)*pf.
         if !zeroC
             kf.x = x[i].xl # Not thread safe
             kf.R = x[i].R
-            (; ll) = correct!(kf, u, y-yn, p, t; kwargs...)
+            if i == 1 || !singleR
+                (; ll, e, S, Sᵪ, K) = correct!(kf, u, y-yn, p, t; kwargs...)
+            else
+                e = y-yh
+                kf.x = x[i].xl + K*e
+                kf.R = x[1].R # Reuse the already computed R
+                ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), e)
+            end
             # we should ll the matrix S = CRC' + R2 (eq 13a) which is exactly what the KF does
             w[i] += ll
         else
