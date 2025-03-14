@@ -85,10 +85,9 @@ d0l = SimpleMvNormal(x0l, R0l)
 d0n = SimpleMvNormal(x0n, R0n)
 
 kf    = KalmanFilter(Al, Bl, Cl, 0, R1l, R2, d0l; ny, nu) # Since we are providing a function instead of a matrix for C, we also provide the number of outputs ny
-mm    = RBMeasurementModel{false}(g, R2, ny)
-```julia
+mm    = RBMeasurementModel(g, R2, ny)
 names = SignalNames(x=["\$x^n_1\$", "\$x^l_2\$", "\$x^l_3\$", "\$x^l_4\$"], u=[], y=["\$y_1\$", "\$y_2\$"], name="RBPF") # For nicer labels in the plot
-pf    = RBPF{false, false}(N, kf, fn, mm, R1n, d0n; nu, An, Ts=1.0, names)
+pf    = RBPF(N, kf, fn, mm, R1n, d0n; nu, An, Ts=1.0, names)
 
 # Simulate some data from the filter dynamics
 u     = [zeros(nu) for _ in 1:100]
@@ -102,6 +101,7 @@ plot(sol, size=(800,600), xreal=x, markersize=1, nbinsy=50, colorbar=false)
 for i = 1:nx
     plot!(ylims = extrema(getindex.(x, i)) .+ (-1, 1), sp=i)
 end
+current()
 DisplayAs.PNG(Plots.current()) # hide
 ```
 The cyan markers represent the true state in the state plots, and the measurements in the measurement plots. The heatmap represents the particle estimate.
