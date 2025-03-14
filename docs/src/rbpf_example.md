@@ -6,11 +6,11 @@ This filter is effectively a particle filter where each particle is a Kalman fil
 
 The filter assumes that the dynamics follow "model 2" in the article ["Marginalized Particle Filters for Mixed Linear/Nonlinear State-space Models" by Thomas Schön, Fredrik Gustafsson, and Per-Johan Nordlund](https://people.isy.liu.se/rt/schon/Publications/SchonGN2004.pdf), i.e., the dynamics is described by
 ```math
- \\begin{align}
-     x_{t+1}^n &= f_n(x_t^n, u, p, t) + A_n(x_t^n, u, p, t) x_t^l + w_t^n, \\quad &w_t^n \\sim \\mathcal{N}(0, R_1^n) \\\\
-     x_{t+1}^l &= A(...) x_t^l + Bu + w_t^l, \\quad &w_t^l \\sim \\mathcal{N}(0, R_1^l) \\\\
-     y_t &= g(x_t^n, u, p, t) + C(...) x_t^l + e_t, \\quad &e_t \\sim \\mathcal{N}(0, R_2)
- \\end{align}
+\begin{align}
+    x_{t+1}^n &= f_n(x_t^n, u, p, t) + A_n(x_t^n, u, p, t) x_t^l + w_t^n, \quad &w_t^n \sim \mathcal{N}(0, R_1^n) \\
+    x_{t+1}^l &= A(...) x_t^l + Bu + w_t^l, \quad &w_t^l \sim \mathcal{N}(0, R_1^l) \\
+    y_t &= g(x_t^n, u, p, t) + C(...) x_t^l + e_t, \quad &e_t \sim \mathcal{N}(0, R_2)
+\end{align}
 ```
 where ``x^n`` is a subset of the state that has nonlinear dynamics or measurement function, and ``x^l`` is a subset of the state where both dynamics and measurement function are linear and Gaussian. The entire state vector is represented by a special type [`RBParticle`](@ref) that behaves like the vector `[xn; xl]`, but stores `xn, xl` and the covariance `R` or `xl` separately.
 
