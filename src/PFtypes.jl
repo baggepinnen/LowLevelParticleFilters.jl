@@ -31,6 +31,8 @@ PFstate(N::Integer) = PFstate([zeros(N)],[zeros(N)],fill(-log(N), N),fill(1/N, N
     p::P = NullParameters()
     threads::Bool = false
     Ts::Float64 = 1.0
+    nu::Int = -1
+    ny::Int = length(measurement_density)
 end
 
 struct AuxiliaryParticleFilter{T<:AbstractParticleFilter} <: AbstractParticleFilter
@@ -84,9 +86,13 @@ function Base.getproperty(pf::AbstractParticleFilter, s::Symbol)
     if s === :nx
         return length(pf.state.x[1])
     elseif s === :ny
-        return length(measurement_density(pf))
+        ny = getfield(pf, :ny)
+        ny < 0 && @error("ny is not specified")
+        return ny
     elseif s === :nu
-        return error("Input length unknown")
+        nu = getfield(pf, :nu)
+        nu < 0 && @error("nu is not specified")
+        return nu
     else
         throw(ArgumentError("$(typeof(pf)) has no property named $s"))
     end
@@ -166,6 +172,8 @@ end
     p::P = NullParameters()
     threads::Bool = false
     Ts::Float64 = 1.0
+    nu::Int = -1
+    ny::Int = -1
 end
 
 

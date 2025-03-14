@@ -103,7 +103,7 @@ mm = RBMeasurementModel{false}(g, R2, ny)
 R1n = SA_F64[0.0;;] # One cannot rand of an empty distribution so we fake one nonlinear state variable
 d0n = SimpleMvNormal(R1n)
 
-pf = RBPF{false, false}(500, kf, f_n, mm, R1n, d0n; nu, An, Ts=1.0, names=SignalNames(x=["x1", "x2"], u=["u"], y=["y1"], name="RBPF"))
+pf = RBPF{false, false}(500, kf, f_n, mm, R1n, d0n; nu, An, Ts=1.0, names=SignalNames(x=["", "x1", "x2"], u=["u"], y=["y1"], name="RBPF"))
 
 solrb = forward_trajectory(pf, u, y)
 @test solkf.ll ≈ solrb.ll rtol=1e-2
@@ -128,7 +128,7 @@ mm = RBMeasurementModel{false}(g, R2, ny)
 R1n = R1
 
 d0n = d0
-pf2 = RBPF{false, false}(500, kf2, dyn, mm, R1n, d0n; nu, An, Ts=1.0, names=SignalNames(x=["x1", "x2"], u=["u"], y=["y1"], name="RBPF"))
+pf2 = RBPF{false, false}(500, kf2, dyn, mm, R1n, d0n; nu, An, Ts=1.0, names=SignalNames(x=["x1", "x2", ""], u=["u"], y=["y1"], name="RBPF"))
 
 solrb2 = forward_trajectory(pf2, u, y)
 @test solkf.ll ≈ solrb2.ll rtol=1e-2

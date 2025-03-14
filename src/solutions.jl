@@ -48,8 +48,11 @@ KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e) = KalmanFilteringSolution(f,u,y,x,
 function Base.show(io::IO, sol::KalmanFilteringSolution)
     println(io, "KalmanFilteringSolution:")
     println(io, "  Filter: ", sol.f.names.name, " ", typeof(sol.f))
-    println(io, "  length: ", length(sol.x))
-    println(io, "  nx: ", length(sol.x[1]))
+    l = length(sol.x)
+    println(io, "  length: ", l)
+    if l >= 1
+        println(io, "  nx: ", length(sol.x[1]))
+    end
     println(io, "  ll: ", sol.ll)
 end
 
@@ -192,7 +195,7 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
     timevec = (0:size(sol.y,1)-1)*f.Ts
     timevecm05 = timevec .- 0.5f.Ts
     timevecp05 = timevec .+ 0.5f.Ts
-    names = hasproperty(f, :names) ? f.names : default_names(f.nx, f.nu, f.ny)
+    names = hasproperty(f, :names) ? f.names : default_names(f.nx, length(sol.u[1]), length(sol.y[1]))
     name = names.name
     isempty(name) || (name = name*" ")
     if dim === nothing || dim === (:)
