@@ -27,8 +27,8 @@ d0n = SimpleMvNormal(x0n, R1n) # Initial distribution for the nonlinear part
 
 kf = KalmanFilter(A, B, C2, D, R1l, R2, d0l) # Inner Kalman filter for the linear part
 
-mm = RBMeasurementModel{false}(h, R2, ny) # Measurement model
-pf = RBPF{false, false}(500, kf, f_n, mm, R1n, d0n; nu, An=A_n, Ts=1.0, names=SignalNames(x=["x1", "x2"], u=[], y=["y1"], name="RBPF"))
+mm = RBMeasurementModel(h, R2, ny) # Measurement model
+pf = RBPF(500, kf, f_n, mm, R1n, d0n; nu, An=A_n, Ts=1.0, names=SignalNames(x=["x1", "x2"], u=[], y=["y1"], name="RBPF"))
 
 u = [SA_F64[] for _ in 1:10000]
 x,u,y = simulate(pf, u)
@@ -103,7 +103,7 @@ mm = RBMeasurementModel{false}(g, R2, ny)
 R1n = SA_F64[0.0;;] # One cannot rand of an empty distribution so we fake one nonlinear state variable
 d0n = SimpleMvNormal(R1n)
 
-pf = RBPF{false, false}(500, kf, f_n, mm, R1n, d0n; nu, An, Ts=1.0, names=SignalNames(x=["", "x1", "x2"], u=["u"], y=["y1"], name="RBPF"))
+pf = RBPF(500, kf, f_n, mm, R1n, d0n; nu, An, Ts=1.0, names=SignalNames(x=["", "x1", "x2"], u=["u"], y=["y1"], name="RBPF"))
 
 solrb = forward_trajectory(pf, u, y)
 @test solkf.ll ≈ solrb.ll rtol=1e-2
@@ -128,7 +128,7 @@ mm = RBMeasurementModel{false}(g, R2, ny)
 R1n = R1
 
 d0n = d0
-pf2 = RBPF{false, false}(500, kf2, dyn, mm, R1n, d0n; nu, An, Ts=1.0, names=SignalNames(x=["x1", "x2", ""], u=["u"], y=["y1"], name="RBPF"))
+pf2 = RBPF(500, kf2, dyn, mm, R1n, d0n; nu, An, Ts=1.0, names=SignalNames(x=["x1", "x2", ""], u=["u"], y=["y1"], name="RBPF"))
 
 solrb2 = forward_trajectory(pf2, u, y)
 @test solkf.ll ≈ solrb2.ll rtol=1e-2
@@ -139,3 +139,21 @@ plot!(solkf, plotu=false, ploty=false, plotyh=false, sp=[1 2], size=(1000,1000))
 
 
 # TODO: test give the inner kf a nonlinear measurement model
+
+## Test variants of inplace and augmented dynamics
+dyn_augd = (x,u,p,t,w) -> A*x + B*u + w
+pf2 = RBPF{false,false,true}(500, kf2, dyn_augd, mm, R1n, d0n; nu, An, Ts=1.0, names=SignalNames(x=["x1", "x2", ""], u=["u"], y=["y1"], name="RBPF"))
+
+solrb2 = forward_trajectory(pf2, u, y)
+@test solkf.ll ≈ solrb2.ll rtol=1e-2
+
+dyn_augd_ip = (xo,x,u,p,t,w) -> xo .= A*x + B*u + w
+pf2 = RBPF{true,false,true}(500, kf2, dyn_augd_ip, mm, R1n, d0n; nu, An, Ts=1.0, names=SignalNames(x=["x1", "x2", ""], u=["u"], y=["y1"], name="RBPF"))
+solrb2 = forward_trajectory(pf2, u, y)
+@test solkf.ll ≈ solrb2.ll rtol=1e-2
+
+
+dyn_ip = (xo,x,u,p,t) -> xo .= A*x + B*u
+pf2 = RBPF{true,false,false}(500, kf2, dyn_ip, mm, R1n, d0n; nu, An, Ts=1.0, names=SignalNames(x=["x1", "x2", ""], u=["u"], y=["y1"], name="RBPF"))
+solrb2 = forward_trajectory(pf2, u, y)
+@test solkf.ll ≈ solrb2.ll rtol=1e-2

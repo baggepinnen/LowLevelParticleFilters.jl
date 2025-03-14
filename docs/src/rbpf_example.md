@@ -6,11 +6,11 @@ This filter is effectively a particle filter where each particle is a Kalman fil
 
 The filter assumes that the dynamics follow "model 2" in the article ["Marginalized Particle Filters for Mixed Linear/Nonlinear State-space Models" by Thomas Schön, Fredrik Gustafsson, and Per-Johan Nordlund](https://people.isy.liu.se/rt/schon/Publications/SchonGN2004.pdf), i.e., the dynamics is described by
 ```math
- \\begin{align}
-     x_{t+1}^n &= f_n(x_t^n, u, p, t) + A_n(x_t^n, u, p, t) x_t^l + w_t^n, \\quad &w_t^n \\sim \\mathcal{N}(0, R_1^n) \\\\
-     x_{t+1}^l &= A(...) x_t^l + Bu + w_t^l, \\quad &w_t^l \\sim \\mathcal{N}(0, R_1^l) \\\\
-     y_t &= g(x_t^n, u, p, t) + C(...) x_t^l + e_t, \\quad &e_t \\sim \\mathcal{N}(0, R_2)
- \\end{align}
+\begin{align}
+    x_{t+1}^n &= f_n(x_t^n, u, p, t) + A_n(x_t^n, u, p, t) x_t^l + w_t^n, \quad &w_t^n \sim \mathcal{N}(0, R_1^n) \\
+    x_{t+1}^l &= A(...) x_t^l + Bu + w_t^l, \quad &w_t^l \sim \mathcal{N}(0, R_1^l) \\
+    y_t &= g(x_t^n, u, p, t) + C(...) x_t^l + e_t, \quad &e_t \sim \mathcal{N}(0, R_2)
+\end{align}
 ```
 where ``x^n`` is a subset of the state that has nonlinear dynamics or measurement function, and ``x^l`` is a subset of the state where both dynamics and measurement function are linear and Gaussian. The entire state vector is represented by a special type [`RBParticle`](@ref) that behaves like the vector `[xn; xl]`, but stores `xn, xl` and the covariance `R` or `xl` separately.
 
@@ -85,10 +85,9 @@ d0l = SimpleMvNormal(x0l, R0l)
 d0n = SimpleMvNormal(x0n, R0n)
 
 kf    = KalmanFilter(Al, Bl, Cl, 0, R1l, R2, d0l; ny, nu) # Since we are providing a function instead of a matrix for C, we also provide the number of outputs ny
-mm    = RBMeasurementModel{false}(g, R2, ny)
-```julia
+mm    = RBMeasurementModel(g, R2, ny)
 names = SignalNames(x=["\$x^n_1\$", "\$x^l_2\$", "\$x^l_3\$", "\$x^l_4\$"], u=[], y=["\$y_1\$", "\$y_2\$"], name="RBPF") # For nicer labels in the plot
-pf    = RBPF{false, false}(N, kf, fn, mm, R1n, d0n; nu, An, Ts=1.0, names)
+pf    = RBPF(N, kf, fn, mm, R1n, d0n; nu, An, Ts=1.0, names)
 
 # Simulate some data from the filter dynamics
 u     = [zeros(nu) for _ in 1:100]
@@ -102,6 +101,7 @@ plot(sol, size=(800,600), xreal=x, markersize=1, nbinsy=50, colorbar=false)
 for i = 1:nx
     plot!(ylims = extrema(getindex.(x, i)) .+ (-1, 1), sp=i)
 end
+current()
 DisplayAs.PNG(Plots.current()) # hide
 ```
 The cyan markers represent the true state in the state plots, and the measurements in the measurement plots. The heatmap represents the particle estimate.

@@ -54,11 +54,13 @@ function RBMeasurementModel{IPM}(measurement, R2, ny) where IPM
     RBMeasurementModel{IPM,typeof(measurement),typeof(d_R2)}(measurement, d_R2, ny)
 end
 
+RBMeasurementModel(args...) = RBMeasurementModel{false}(args...)
+
 isinplace(::RBMeasurementModel{IPM}) where IPM = IPM
 has_oop(::RBMeasurementModel{IPM}) where IPM = !IPM
 
 
-struct RBPF{IPD, IPM, ST, KFT <: AbstractKalmanFilter, FT, MT, ANT, R1NT, D0NT, TS, P, RNG} <: AbstractParticleFilter # QUESTION: AbstractKalmanFilter?
+struct RBPF{IPD, IPM, AUGD, ST, KFT <: AbstractKalmanFilter, FT, MT, ANT, R1NT, D0NT, TS, P, RNG} <: AbstractParticleFilter # QUESTION: AbstractKalmanFilter?
     state::ST
     kf::KFT
     dynamics::FT          # Nonlinear dynamics
@@ -77,7 +79,7 @@ to_mv_normal(d::AbstractMatrix) = SimpleMvNormal(d)
 to_mv_normal(d) = d
 
 """
-    RBPF{IPD,IPM}(N::Int, kf, dynamics, nl_measurement_model::AbstractMeasurementModel, R1n, d0n; An, nu::Int, Ts=1.0, p=NullParameters(), names, rng = Xoshiro(), resample_threshold=0.1)
+    RBPF{IPD,IPM,AUGD}(N::Int, kf, dynamics, nl_measurement_model::AbstractMeasurementModel, R1n, d0n; An, nu::Int, Ts=1.0, p=NullParameters(), names, rng = Xoshiro(), resample_threshold=0.1)
 
 Rao-Blackwellized particle filter, also called "Marginalized particle filter". The filter is effectively a particle filter where each particle is a Kalman filter that is responsible for the estimation of a linear sub structure.
 
@@ -117,7 +119,7 @@ The paper contains an even more general model, where the linear part is linearly
 - If `C == 0` and `D == 0`, the measurement is not used by the Kalman filter and we may thus have an arbitrary probability distribution for the measurement noise.
 - If `An == 0`, the nonlinear state is not affected by the linear state and we may have an arbitrary probability distribution for the nonlinear state noise `R1n`. Otherwise `R1n` must be Gaussian.
 """
-function RBPF{IPD,IPM}(N::Int, kf, dynamics, nl_measurement_model::AbstractMeasurementModel, R1n, d0n; An, nu::Int, Ts=1.0, p=NullParameters(), names, rng = Xoshiro(), resample_threshold=0.1) where {IPD, IPM}
+function RBPF{IPD,IPM,AUGD}(N::Int, kf, dynamics, nl_measurement_model::AbstractMeasurementModel, R1n, d0n; An, nu::Int, Ts=1.0, p=NullParameters(), names, rng = Xoshiro(), resample_threshold=0.1) where {IPD, IPM,AUGD}
 
     nxn = length(d0n)
     nxl = length(kf.d0.μ)
@@ -136,8 +138,10 @@ function RBPF{IPD,IPM}(N::Int, kf, dynamics, nl_measurement_model::AbstractMeasu
     d_R1n = to_mv_normal(R1n)
 
 
-    RBPF{IPD,IPM,typeof(s),typeof(kf),typeof(dynamics),typeof(nl_measurement_model),typeof(An),typeof(d_R1n),typeof(d0n),typeof(Ts),typeof(p), typeof(rng)}(s, kf, dynamics, nl_measurement_model, An, d_R1n, d0n, Ts, p, rng, resample_threshold, names)
+    RBPF{IPD,IPM,AUGD,typeof(s),typeof(kf),typeof(dynamics),typeof(nl_measurement_model),typeof(An),typeof(d_R1n),typeof(d0n),typeof(Ts),typeof(p), typeof(rng)}(s, kf, dynamics, nl_measurement_model, An, d_R1n, d0n, Ts, p, rng, resample_threshold, names)
 end
+
+RBPF(args...; kwargs...) = RBPF{false, false, false}(args...; kwargs...)
 
 function reset!(pf::RBPF)
     s = state(pf)
@@ -156,7 +160,7 @@ function reset!(pf::RBPF)
 end
 
 
-function predict!(pf::RBPF, u, p = parameters(pf), t = index(pf)*pf.Ts)
+function predict!(pf::RBPF{IPD,IPM,AUGD}, u, p = parameters(pf), t = index(pf)*pf.Ts) where {IPD, IPM, AUGD}
     s = pf.state
     N = num_particles(s)
     f = dynamics(pf)
@@ -181,13 +185,20 @@ function predict!(pf::RBPF, u, p = parameters(pf), t = index(pf)*pf.Ts)
 
 
         # Propagate particles
-        fi = f(xi.xn, u, p, t)
-        
         if zeroAn
+            if AUGD
+                w = rand(pf.rng, pf.R1n)
+                xn1 = (IPD ? f(similar(xi.xn), xi.xn, u, p, t, w) : f(xi.xn, u, p, t, w)) |> typeof(xi.xn)
+            else
+                fi = (IPD ? f(similar(xi.xn), xi.xn, u, p, t) : f(xi.xn, u, p, t)) |> typeof(xi.xn)
+                xn1 = fi + rand(pf.rng, pf.R1n) # This assumes additive noise, if An = 0, we could pass w into f instead
+            end
+
             xl1 = Al*xi.xl + Bl*u
             R1 = Al*R*Al' + R1l
-            xn1 = fi + rand(pf.rng, pf.R1n) # This assumes additive noise, if An = 0, we could pass w into f instead
         else
+            fi = (IPD ? f(similar(xi.xn), xi.xn, u, p, t) : f(xi.xn, u, p, t)) |> typeof(xi.xn)
+
             An = get_mat(pf.An, xi.xn, u, p, t)
             Axl = An*xi.xl
             z = Axl + rand(pf.rng, pf.R1n) 
@@ -209,8 +220,9 @@ function predict!(pf::RBPF, u, p = parameters(pf), t = index(pf)*pf.Ts)
 end
 
 
-function correct!(pf::RBPF, u, y, p = parameters(pf), t = index(pf)*pf.Ts, args...; kwargs...)
+function correct!(pf::RBPF{IPD,IPM}, u, y, p = parameters(pf), t = index(pf)*pf.Ts, args...; kwargs...) where {IPD, IPM}
 
+    IPM && error("Inplace measurement model not yet supported for RBPF")
     g = pf.nl_measurement_model.measurement
     w = pf.state.w
     s = state(pf)
