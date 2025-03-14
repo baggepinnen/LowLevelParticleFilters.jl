@@ -104,7 +104,7 @@ end
 current()
 DisplayAs.PNG(Plots.current()) # hide
 ```
-The cyan markers represent the true state in the state plots, and the measurements in the measurement plots. The heatmap represents the particle estimate.
+The cyan markers represent the true state in the state plots, and the measurements in the measurement plots. The heatmap represents the particle distribution. Note, since each particle has an additional covariance estimate for the linear sub state, the heatmaps for the linear sub state are constructed by drawing a small number of samples from this marginal distribution. Formally, the marginal distribution over the linear sub state is a gaussian-mixture model where the weight of each gaussian is the weight of the particle.
 
 
 In this example, we made use of standard julia arrays for the dynamics and covariances etc., for optimum performance (the difference may be dramatic), make use of static arrays from [StaticArrays.jl](https://github.com/JuliaArrays/StaticArrays.jl). 
