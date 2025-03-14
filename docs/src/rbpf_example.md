@@ -111,16 +111,22 @@ In this example, we made use of standard julia arrays for the dynamics and covar
 
 The paper referenced above mention a lot of special cases in which the filter can be simplified, it's worth a read if you are considering using this filter.
 
-```julia
+
+## Details of the marginal distribution over the linear sub state
+We can create a distribution object that represents the Gaussian mixture model that represents the marginal distribution over the linear sub state. This may be useful to compute confidence intervals or quantiles etc.
+```@example RBPF
 using Distributions
-we = sol.we[:, end]
-sum(we)
-x = getindex.(sol.x[:, end], 2)
-Rv = [sol.x[i, end].R[1,1] for i = 1:num_particles(pf)]
+time_step = 100 # The time step at which to access the solution object from above
+we = sol.we[:, time_step] # Extract the weights of the particles at the desired time step
+linear_state_inds = nxn+1:nx
+xl = getindex.(sol.x[:, time_step], Ref(linear_state_inds)) # Extract the linear sub state from the particles at the desired time step
+Rv = [sol.x[i, time_step].R for i = 1:num_particles(pf)] # Extract the covariance of each mixture component
 
-components = [Normal(x[i], sqrt(Rv[i])) for i = 1:num_particles(pf)]
-prior = we
-D = Distributions.MixtureModel(components, prior)
+components = [MvNormal(xl[i], Rv[i]) for i = 1:num_particles(pf)] # The component distribution in the mixture model
 
-plot(D)
+D = Distributions.MixtureModel(components, we)
+
+cov(D)
 ```
+
+Above, we showed how to compute the covariance of the mixture distribution. If we consider the marginal distribution of a single dimension of the linear sub state, we can compute, e.g., quantiles as well by calling `quantile(D, q)`.
