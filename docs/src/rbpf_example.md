@@ -12,7 +12,7 @@ The filter assumes that the dynamics follow "model 2" in the article ["Marginali
     y_t &= g(x_t^n, u, p, t) + C(...) x_t^l + e_t, \quad &e_t \sim \mathcal{N}(0, R_2)
 \end{align}
 ```
-where ``x^n`` is a subset of the state that has nonlinear dynamics or measurement function, and ``x^l`` is a subset of the state where both dynamics and measurement function are linear and Gaussian. The entire state vector is represented by a special type [`RBParticle`](@ref) that behaves like the vector `[xn; xl]`, but stores `xn, xl` and the covariance `R` or `xl` separately.
+where ``x^n`` is a subset of the state that has nonlinear dynamics or measurement function, and ``x^l`` is a subset of the state where both dynamics and measurement function are linear and Gaussian. The entire state vector is represented by a special type [`RBParticle`](@ref) that behaves like the vector `[xn; xl]`, but stores `xn, xl` and the covariance `R` of `xl` separately.
 
 !!! warning "Experimental"
     This filter is currently considered experimental and the user interface may change in the future without respecting semantic versioning.
@@ -60,8 +60,8 @@ nu  = 0         # Dimension of control input
 ny  = 2         # Dimension of measurement
 N   = 200       # Number of particles
 fn(xn, args...) = atan.(xn)         # Nonlinear part of nonlinear state dynamics
-An(x, args...)  = [1.0 0.0 0.0]     # Linear part of nonlinear state dynamics
-Al(x, args...)  = [1.0  0.3   0.0;  # Linear part of linear state dynamics (the standard Kalman-filter A matrix). It's defined as a function here, but it can also be a constant matrix 
+An  = [1.0 0.0 0.0]     # Linear part of nonlinear state dynamics
+Al  = [1.0  0.3   0.0;  # Linear part of linear state dynamics (the standard Kalman-filter A matrix). It's defined as a matrix here, but it can also be a function of (x, u, p, t)
                    0.0  0.92 -0.3; 
                    0.0  0.3   0.92] # 3x3 matrix
 Cl = [0.0  0.0 0.0; 
@@ -104,9 +104,29 @@ end
 current()
 DisplayAs.PNG(Plots.current()) # hide
 ```
-The cyan markers represent the true state in the state plots, and the measurements in the measurement plots. The heatmap represents the particle distribution. Note, since each particle has an additional covariance estimate for the linear sub state, the heatmaps for the linear sub state are constructed by drawing a small number of samples from this marginal distribution. Formally, the marginal distribution over the linear sub state is a gaussian-mixture model where the weight of each gaussian is the weight of the particle.
+The cyan markers represent the true state in the state plots, and the measurements in the measurement plots. The heatmap represents the particle distribution. Note, since each particle has an additional covariance estimate for the linear sub state, the heatmaps for the linear sub state are constructed by drawing a small number of samples from this marginal distribution. Formally, the marginal distribution over the linear sub state is a gaussian-mixture model where the weight of each gaussian is the weight of the particle. This fact is not taken into account when the heat map for the predicted measurement is constructed, so interpret this heatmap with caution.
 
 
 In this example, we made use of standard julia arrays for the dynamics and covariances etc., for optimum performance (the difference may be dramatic), make use of static arrays from [StaticArrays.jl](https://github.com/JuliaArrays/StaticArrays.jl). 
 
 The paper referenced above mention a lot of special cases in which the filter can be simplified, it's worth a read if you are considering using this filter.
+
+
+## Details of the marginal distribution over the linear sub state
+We can create a distribution object that represents the Gaussian mixture model that represents the marginal distribution over the linear sub state. This may be useful to compute confidence intervals or quantiles etc.
+```@example RBPF
+using Distributions
+time_step = 100 # The time step at which to access the solution object from above
+we = sol.we[:, time_step] # Extract the weights of the particles at the desired time step
+linear_state_inds = nxn+1:nx
+xl = getindex.(sol.x[:, time_step], Ref(linear_state_inds)) # Extract the linear sub state from the particles at the desired time step
+Rv = [sol.x[i, time_step].R for i = 1:num_particles(pf)] # Extract the covariance of each mixture component
+
+components = [MvNormal(xl[i], Rv[i]) for i = 1:num_particles(pf)] # The component distribution in the mixture model
+
+D = Distributions.MixtureModel(components, we)
+
+cov(D)
+```
+
+Above, we showed how to compute the covariance of the mixture distribution. If we consider the marginal distribution of a single dimension of the linear sub state, we can compute, e.g., quantiles as well by calling `quantile(D, q)`.

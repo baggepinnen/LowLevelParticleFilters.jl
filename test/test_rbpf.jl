@@ -3,7 +3,7 @@ using LowLevelParticleFilters: SimpleMvNormal
 using Random, StaticArrays, Test
 
 f_n(xn, args...) = xn   # Identity function for demonstration
-A_n(xn, args...) = SA[0.5;;]  # Example matrix (1x1)
+A_n = SA[0.5;;]  # Example matrix (1x1)
 A = SA[0.95;;]  # Example matrix (1x1)
 C2 = SA[1.0;;]    # Example matrix (1x1)
 h(xn, args...) = xn       # Nonlinear measurement function (the example is actually linear for simplicity)
@@ -44,12 +44,14 @@ a = @allocations forward_trajectory(pf, u, y)
 using Plots
 plot(sol, size=(1000,800), xreal=x)
 
-# @time forward_trajectory(pf, u, y); with N = 500 and T=10000 
+# @time forward_trajectory(pf, u, y); with N = 500 and T=100 
 # 0.257749 seconds (5.86 M allocations: 204.700 MiB, 6.52% gc time)
 # 0.006624 seconds (305.01 k allocations: 11.242 MiB) static arrays in dynamics and covs
 # 0.009420 seconds (103.01 k allocations: 5.078 MiB) new method for rand on SimpleMvNormal with static length
 # 0.005039 seconds (2.01 k allocations: 1.996 MiB)B also static
 # 0.003756 seconds (10 allocations: 1.927 MiB) SimpleMvNormal everywhere
+# 0.003995 seconds (10 allocations: 1.908 MiB)
+# 1.775 ms (10 allocations: 1.91 MiB) same as above
 
 @test sol.x[1] isa RBParticle
 @test length(sol.x[1]) == pf.nx == 2
@@ -107,6 +109,11 @@ pf = RBPF(500, kf, f_n, mm, R1n, d0n; nu, An, Ts=1.0, names=SignalNames(x=["", "
 
 solrb = forward_trajectory(pf, u, y)
 @test solkf.ll ≈ solrb.ll rtol=1e-2
+
+# @btime forward_trajectory(pf, u, y);
+# 17.894 ms (10 allocations: 17.17 MiB)
+# 14.856 ms (10 allocations: 17.17 MiB) # singlR in predict
+# 9.543 ms (10 allocations: 17.17 MiB) # singlR also in correct
 
 plot(solrb)
 plot!(solkf, plotu=false, ploty=false, plotyh=false, sp=[2 3], size=(1000,1000))
