@@ -67,6 +67,13 @@ Base.extrema(d::TupleProductType) = minimum.(d.v), maximum.(d.v)
     end
 end
 
+@generated function Random.rand!(rng::AbstractRNG, d::TupleProductType{N}, out::AbstractMatrix{<:Real}) where N
+    quote
+        Base.Cartesian.@nexprs $N i->(rand!(rng, d.v[i], view(out, i, :)))
+        out
+    end
+end
+
 LowLevelParticleFilters.extended_logpdf(d::Distribution, args...) = Distributions.logpdf(d, args...)
 
 # resolve ambiguity

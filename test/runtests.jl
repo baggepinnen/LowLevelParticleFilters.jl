@@ -120,6 +120,11 @@ out = zeros(2, 10000)
         @test extrema(dt) == ((-Inf, -Inf), (Inf, Inf))
         @test entropy(dt) == entropy(d)
 
+        out = zeros(2, 10000)
+        rand!(Random.default_rng(), dt, out)
+        @test cov(out, dims=2) ≈ cov(dt) atol = 0.5
+
+
     end
 
 
