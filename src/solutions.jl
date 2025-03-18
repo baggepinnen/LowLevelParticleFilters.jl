@@ -1,5 +1,19 @@
 abstract type AbstractFilteringSolution end
 
+Base.length(sol::AbstractFilteringSolution) = length(getfield(sol, :u))
+
+function Base.getproperty(sol::AbstractFilteringSolution, s::Symbol)
+    s ∈ fieldnames(typeof(sol)) && return getfield(sol, s)
+    if s === :t
+        return range(0, step=sol.f.Ts, length=length(sol))
+    else
+        throw(ArgumentError("$(typeof(sol)) has no property named $s"))
+    end
+end
+
+Base.propertynames(sol::AbstractFilteringSolution) = (fieldnames(typeof(sol))..., :t)
+
+
 """
     KalmanFilteringSolution{Tx,Txt,TR,TRt,Tll} <: AbstractFilteringSolution
 
@@ -149,8 +163,7 @@ end
 end
 
 @recipe function plot(sol::KalmanFilteringSolution)
-    timevec = (0:length(sol.y)-1)*sol.f.Ts
-    @series timevec, sol
+    @series sol.t, sol
 end
 
 """
@@ -192,7 +205,7 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
 
 @recipe function plot(sol::ParticleFilteringSolution; nbinsy=30, xreal=nothing, dim=nothing, ploty=true, q=nothing)
     f = sol.f
-    timevec = (0:size(sol.y,1)-1)*f.Ts
+    timevec = sol.t
     timevecm05 = timevec .- 0.5f.Ts
     timevecp05 = timevec .+ 0.5f.Ts
     names = hasproperty(f, :names) ? f.names : default_names(f.nx, length(sol.u[1]), length(sol.y[1]))
