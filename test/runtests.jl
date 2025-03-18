@@ -228,6 +228,8 @@ out = zeros(2, 10000)
         # x,u,y = simulate(kf,T,du)
         ksol = forward_trajectory(kf, u, y)
         plot(ksol)
+        @test :t ∈ propertynames(ksol)
+        @test length(ksol.t) == T
         xT,R,lls = smooth(kf, u, y)
 
         @test_skip mean(abs2, xm) > mean(abs2, xm - reduce(hcat,ksol.x)) > mean(abs2, xm - reduce(hcat,ksol.xt)) #> mean(abs2, xm - reduce(hcat,xT)) # Kalman: prediction > filtering > smoothing
