@@ -366,7 +366,7 @@ In such situations, it is advicable to reconsider the noise model and covariance
 function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::AbstractMeasurementModel, R1, d0=SimpleMvNormal(R1); Ts=1.0, p=NullParameters(), nu::Int, ny=measurement_model.ny, nw = nothing, reject=nothing, state_mean=weighted_mean, state_cov=weighted_cov, cholesky! = cholesky!, names=default_names(length(d0), nu, ny, "UKF"), weight_params = TrivialParams(), kwargs...) where {IPD,IPM,AUGD,AUGM}
     nx = length(d0)
     
-    T = promote_type(eltype(d0), eltype(R1))
+    T = eltype(d0)
 
     if AUGD
         if nw === nothing && R1 isa AbstractArray
@@ -401,7 +401,7 @@ end
 
 function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement, R1, R2, d0=SimpleMvNormal(R1), args...; Ts = 1.0, p = NullParameters(), ny, nu, reject=nothing, state_mean=weighted_mean, state_cov=weighted_cov, cholesky! = cholesky!, kwargs...) where {IPD,IPM,AUGD,AUGM}
     nx = length(d0)
-    T = promote_type(eltype(d0), eltype(R1), eltype(R2))
+    T = eltype(d0)
     measurement_model = UKFMeasurementModel{T,IPM,AUGM}(measurement, R2; nx, ny, kwargs...)
     UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model, R1, d0, args...; Ts, p, nu, reject, state_mean, state_cov, cholesky!, kwargs...)
 end

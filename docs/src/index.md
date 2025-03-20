@@ -206,7 +206,7 @@ for t = 1:T
 end
 ```
 
-The matrices in the Kalman filter may be *time varying*, such that `A[:, :, t]` is ``A(t)``. They may also be provided as functions on the form ``A(t) = A(x, u, p, t)``. This works for both dynamics and covariance matrices.
+The matrices in the Kalman filter may be *time varying*, such that `A[:, :, t]` is ``A(t)``. They may also be provided as functions on the form ``A(t) = A(x, u, p, t)``. This works for both dynamics and covariance matrices. When providing functions, the dimensions of the state, input and output, `nx, nu, ny`, must be provided as keyword arguments to the filter constructor since these cannot be inferred from the function signature.
 
 The numeric type used in the Kalman filter is determined from the mean of the initial state distribution, so make sure that this has the correct type if you intend to use, e.g., `Float32` or `ForwardDiff.Dual` for automatic differentiation.
 
@@ -236,7 +236,7 @@ The [`UnscentedKalmanFilter`](@ref) represents posterior distributions over ``x`
 
 The UKF takes the same arguments as a regular [`KalmanFilter`](@ref), but the matrices defining the dynamics are replaced by two functions, `dynamics` and `measurement`, working in the same way as for the `ParticleFilter` above (unless the augmented form is used).
 ```@example lingauss
-ukf = UnscentedKalmanFilter(dynamics, measurement, cov(df), cov(dg), MvNormal(SA[1.,1.]); nu=nu, ny=ny)
+ukf = UnscentedKalmanFilter(dynamics, measurement, cov(df), cov(dg), MvNormal(SA[1.,1.]); nu, ny)
 ```
 !!! info
     If your function `dynamics` describes a continuous-time ODE, do not forget to **discretize** it before passing it to the UKF. See [Discretization](@ref) for more information.
