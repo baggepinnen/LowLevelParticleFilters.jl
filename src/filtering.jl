@@ -254,17 +254,23 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
     Rt   = Array{covtype(kf)}(undef,T)
     e    = similar(y)
     ll   = zero(eltype(particletype(kf)))
-    local t
+    local t, S, K
     try
         for outer t = 1:T
             ti = (t-1)*kf.Ts
             x[t]  = state(kf)      |> copy
             R[t]  = covariance(kf) |> copy
-            lli, ei = correct!(kf, u[t], y[t], p, ti)
+            lli, ei, _, Sᵪi, Ki = correct!(kf, u[t], y[t], p, ti)
             ll += lli
             e[t] = ei
             xt[t] = state(kf)      |> copy
             Rt[t] = covariance(kf) |> copy
+            if t == 1
+                S = Vector{typeof(Sᵪi)}(undef, T)
+                K = Vector{typeof(Ki)}(undef, T)
+            end
+            S[t] = Sᵪi
+            K[t] = Ki
             predict!(kf, u[t], p, ti)
         end
     catch err
@@ -277,7 +283,7 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
             rethrow()
         end
     end
-    KalmanFilteringSolution(kf,u,y,x,xt,R,Rt,ll,e)
+    KalmanFilteringSolution(kf,u,y,x,xt,R,Rt,ll,e,K,S)
 end
 
 
