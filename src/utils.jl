@@ -154,6 +154,7 @@ end
 
 SimpleMvNormal(Σ::Union{SMatrix, PDMats.PDMat{<:Any, <:SMatrix}, Diagonal{<:Any, <:SVector}}) = SimpleMvNormal(@SVector(zeros(size(Σ,1))), Σ)
 SimpleMvNormal(Σ::AbstractMatrix) = SimpleMvNormal(zeros(size(Σ,1)), Σ)
+SimpleMvNormal(Σ::Function) = error("A SimpleMvNormal distribution must be initialized with a covariance matrix, not a function. If this error is a result of calling a Kalman-filter type constructor where the dynamics-noise covariance is provided as a non-matrix type, you must also explicitly provide the distribution `d0` of the initial state, since the default choice of `d0` cannot be created from a function.")
 
 
 # We define this new function extended_logpdf and overload that for Distributions.jl in the extension

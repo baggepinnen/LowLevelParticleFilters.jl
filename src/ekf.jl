@@ -29,6 +29,13 @@ They can also be given as functions on the form
 ```
 Rfun(x, u, p, t) -> R
 ```
+This allows for, e.g., handling functions where the dynamics disturbance ``w`` is an input argument to the function, by linearizing the dynamics w.r.t. the disturbance input in a function for ``R_1``, like this (assuming the dynamics have the function signalture `f(x, u, p, t, w)`):
+```
+function R1fun(x,u,p,t)
+    Bw = ForwardDiff.jacobian(w->f(x, u, p, t, w), zeros(length(w)))
+    Bw * R1 * Bw'
+end
+```
 When providing functions, the dimensions of the state, input and output, `nx, nu, ny` must be provided as keyword arguments to the `ExtendedKalmanFilter` constructor since these cannot be inferred from the function signature.
 For maximum performance, provide statically sized matrices from StaticArrays.jl
 
@@ -36,7 +43,7 @@ See also [`UnscentedKalmanFilter`](@ref) which is typically more accurate than `
 """
 ExtendedKalmanFilter
 
-function ExtendedKalmanFilter(dynamics, measurement_model::AbstractMeasurementModel, R1,d0=SimpleMvNormal(Matrix(R1)); nu::Int, ny=measurement_model.ny, nx=length(d0), Ts = 1.0, p = NullParameters(), α = 1.0, check = true, Ajac = nothing, kwargs...)
+function ExtendedKalmanFilter(dynamics, measurement_model::AbstractMeasurementModel, R1,d0=SimpleMvNormal(R1); nu::Int, ny=measurement_model.ny, nx=length(d0), Ts = 1.0, p = NullParameters(), α = 1.0, check = true, Ajac = nothing, kwargs...)
     T = eltype(d0)
     R2 = measurement_model.R2
     if R1 isa SMatrix
@@ -56,7 +63,7 @@ function ExtendedKalmanFilter(dynamics, measurement_model::AbstractMeasurementMo
     return ExtendedKalmanFilter(kf, dynamics, measurement_model; Ajac, kwargs...)
 end
 
-function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Matrix(R1)); nu::Int, ny=size(R2,1), nx::Int=size(R1,1), Cjac = nothing, kwargs...)
+function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(R1); nu::Int, ny=size(R2,1), nx::Int=size(R1,1), Cjac = nothing, kwargs...)
     IPM = !has_oop(measurement)
     T = promote_type(eltype(R1), eltype(R2), eltype(d0))
     measurement_model = EKFMeasurementModel{T, IPM}(measurement, R2; nx, ny, Cjac)

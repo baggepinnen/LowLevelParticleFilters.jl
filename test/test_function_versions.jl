@@ -27,10 +27,12 @@ T = 200 # Number of time steps
 d0 = SimpleMvNormal(randn(nx),2.0I(nx))   # Initial state Distribution
 du = SimpleMvNormal(I(nu)) # Control input distribution
 kf = KalmanFilter(fw(A), fw(B), fw(C), 0, fw(R1), fw(R2), d0; nx, nu, ny)
-ekf = LLPF.ExtendedKalmanFilter(dynamics_fun, measurement_fun, fw(R1), fw(R2), d0; nu, ny, nx)
-ukf = LLPF.UnscentedKalmanFilter(dynamics_fun, measurement_fun, fw(R1), fw(R2), d0; nu, ny)
+ekf = ExtendedKalmanFilter(dynamics_fun, measurement_fun, fw(R1), fw(R2), d0; nu, ny, nx)
+ukf = UnscentedKalmanFilter(dynamics_fun, measurement_fun, fw(R1), fw(R2), d0; nu, ny)
 
 x,u,y = LLPF.simulate(kf,T,du)
+x,u,y = LLPF.simulate(ekf,T,du)
+x,u,y = LLPF.simulate(ukf,T,du)
 solkf = forward_trajectory(kf, u, y)
 solekf = forward_trajectory(ekf, u, y)
 solukf = forward_trajectory(ukf, u, y)
@@ -40,3 +42,13 @@ solukf = forward_trajectory(ukf, u, y)
 
 @test solkf.Rt ≈ solekf.Rt
 @test solkf.Rt ≈ solukf.Rt
+
+plot(solkf)
+plot(solekf)
+plot(solukf)
+
+##
+
+@test_throws "A SimpleMvNormal distribution must be initialized with a covariance matrix, not a function." KalmanFilter(fw(A), fw(B), fw(C), 0, fw(R1), fw(R2); nx, nu, ny)
+@test_throws "A SimpleMvNormal distribution must be initialized with a covariance matrix, not a function." ExtendedKalmanFilter(dynamics_fun, measurement_fun, fw(R1), fw(R2); nu, ny, nx)
+@test_throws "A SimpleMvNormal distribution must be initialized with a covariance matrix, not a function." UnscentedKalmanFilter(dynamics_fun, measurement_fun, fw(R1), fw(R2); nu, ny)
