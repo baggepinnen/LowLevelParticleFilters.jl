@@ -231,15 +231,28 @@ out = zeros(2, 10000)
         @test :t ∈ propertynames(ksol)
         @test length(ksol.t) == T
         xT,R,lls = smooth(kf, u, y)
+        xTmbf,Rmbf,_,lt,lh,r = LowLevelParticleFilters.smooth_mbf(ksol, kf)
+        @test sum(abs, sum(xTmbf .- xT)) < 1e-10
+        @test sum(abs, sum(Rmbf .- R)) < 1e-10
 
         @test_skip mean(abs2, xm) > mean(abs2, xm - reduce(hcat,ksol.x)) > mean(abs2, xm - reduce(hcat,ksol.xt)) #> mean(abs2, xm - reduce(hcat,xT)) # Kalman: prediction > filtering > smoothing
         @test_skip mean(abs2, xm) > mean(abs2, xm - reduce(hcat,xpf)) #> mean(abs2, xm - reduce(hcat,xT)) # particle filtering improves but not as good as kalman smoothing
         @test_skip mean(abs2, xm - reduce(hcat,xpf)) > mean(abs2, xm - xbm) # particle smoothing improves over filtering
         # NOTE: smoothing sometimes fails to improve so some tests are deactivated
         # plot(xm', layout=2)
-        # plot!(reduce(hcat,xf)')
-        # plot!(reduce(hcat,xt)')
-        # plot!(reduce(hcat,xT)')
+
+        w = [x[i+1] - (A_test*x[i] + B_test*u[i]) for i = 1:T-1]
+        w_pred = [ksol.x[i+1] - (A_test*ksol.x[i] + B_test*u[i]) for i = 1:T-1]
+        w_filt = [ksol.xt[i+1] - (A_test*ksol.xt[i] + B_test*u[i]) for i = 1:T-1]
+        w_pf = [ksol.xt[i] - ksol.x[i] for i = 1:T-1] # This is almost the same as w_filt
+        w_smooth = [xT[i+1] - (A_test*xT[i] + B_test*u[i]) for i = 1:T-1]
+        w_smooth_mbf = [xTmbf[i+1] - (A_test*xTmbf[i] + B_test*u[i]) for i = 1:T-1]
+        e = [y[i] - C_test*x[i] for i = 1:T]
+        e_smooth = [y[i] - C_test*xT[i] for i = 1:T]
+
+        @test cov(w) ≈ 0.01*eye(n) atol=0.004
+        @test cov(e) ≈ eye(1) rtol=0.3
+        @test cov(e_smooth) ≈ eye(1) rtol=0.3
 
 
         sqkf   = SqKalmanFilter(A_test, B_test, C_test, 0, 0.01eye(n), eye(p), d0)

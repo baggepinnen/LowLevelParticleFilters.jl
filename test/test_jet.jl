@@ -66,11 +66,11 @@ ekf = ExtendedKalmanFilter(dynamics_jet, measurement_jet, eye(nx), eye(ny), d0; 
 ## Test allocations ============================================================
 forward_trajectory(kf, u, y) 
 a = @allocations forward_trajectory(kf, u, y) 
-@test a <= 16*1.1 # Allocations occur when the arrays are allocated for saving the data, the important thing is that the number of allocations do not grow with the length of the trajectory (T = 200)
+@test a <= 22*1.1 # Allocations occur when the arrays are allocated for saving the data, the important thing is that the number of allocations do not grow with the length of the trajectory (T = 200)
 
 forward_trajectory(ukf, u, y) 
 a = @allocations forward_trajectory(ukf, u, y) 
-@test a <= 16*1.1
+@test a <= 22*1.1
 
 forward_trajectory(skf, u, y)
 a = @allocations forward_trajectory(skf, u, y)
@@ -83,4 +83,4 @@ end
 
 forward_trajectory(ekf, u, y)
 a = @allocations forward_trajectory(ekf, u, y)
-@test a <= 16*1.1
+@test a <= 22*1.1

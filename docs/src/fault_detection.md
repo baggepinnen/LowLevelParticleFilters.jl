@@ -158,21 +158,25 @@ function special_forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector,
     e    = zeros(eltype(particletype(kf)), length(y))
 	σs   = zeros(eltype(particletype(kf)), length(y))
     ll   = zero(eltype(particletype(kf)))
+    S    = Vector{Any}(undef, T)
+    K    = Vector{Any}(undef, T)
     for t = 1:T
         ti = (t-1)*kf.Ts
         x[t]  = state(kf)      |> copy
         R[t]  = covariance(kf) |> copy
 		if !any(ismissing, y[t])
-        	lli, ei, S, Sᵪ = correct!(kf, u[t], y[t], p, ti)
-			σs[t] = √(ei'*(Sᵪ\ei)) # Compute the Z-score
+        	lli, ei, Si, Sᵪi, Ki = correct!(kf, u[t], y[t], p, ti)
+			σs[t] = √(ei'*(Sᵪi\ei)) # Compute the Z-score
 			e[t] = ei[]
 			ll += lli
+            S[t] = Sᵪi
+            K[t] = Ki
 		end
         xt[t] = state(kf)      |> copy
         Rt[t] = covariance(kf) |> copy
         predict!(kf, u[t], p, ti)
     end
-    KalmanFilteringSolution(kf,u,y,x,xt,R,Rt,ll,e), σs
+    KalmanFilteringSolution(kf,u,y,x,xt,R,Rt,ll,vcat.(e),K,S), σs
 end
 
 u_full = [@SVector(zeros(0)) for y in y_full];
@@ -360,7 +364,7 @@ plot(timevec, σs2); hline!([1 2 3 4], label=false)
 DisplayAs.PNG(Plots.current()) # hide
 ```
 
-Z-scores may not capture large outliners if they occur when the estimator is very uncertain
+Z-scores may not capture large outliers if they occur when the estimator is very uncertain
 Does Z-score correlate with "velocity", i.e., are faults correlated with large continuous slopes in the data?
 ```@example FAULT_DETECTION
 sol_full, σs_full = special_forward_trajectory(kf2, u_full, y_full)
@@ -372,6 +376,7 @@ not really, it looks like large Z-scores can appear even when the estimated velo
 ## Summary
 - A state estimator can indicate faults when the error is larger than _expected_
 - What is _expected_ is determined by the model
+- An article suggesting several consistency checks similar to the Z-score check used here is "New Kalman filter and smoother consistency tests" by Gibbs, all of which can be readily computed from the quantities saved in the `KalmanFilteringSolution` object and the result of `smooth`. One suggestion is to use the filter error and associated filter-error covariance instead of the prediction error, another one is similar but using a smoothed error instead. The last suggestion is to use the smoothed stat error in a similar check.
 
 
 The notebook used in the tutorial is available here:
