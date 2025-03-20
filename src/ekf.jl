@@ -24,13 +24,27 @@ y      = measurement(x, u, p, t) + e
 ```
 where `w ~ N(0, R1)`, `e ~ N(0, R2)` and `x(0) ~ d0`
 
+The matrices `R1, R2` can be time varying such that, e.g., `R1[:, :, t]` contains the ``R_1`` matrix at time index `t`.
+They can also be given as functions on the form
+```
+Rfun(x, u, p, t) -> R
+```
+This allows for, e.g., handling functions where the dynamics disturbance ``w`` is an input argument to the function, by linearizing the dynamics w.r.t. the disturbance input in a function for ``R_1``, like this (assuming the dynamics have the function signalture `f(x, u, p, t, w)`):
+```
+function R1fun(x,u,p,t)
+    Bw = ForwardDiff.jacobian(w->f(x, u, p, t, w), zeros(length(w)))
+    Bw * R1 * Bw'
+end
+```
+When providing functions, the dimensions of the state, input and output, `nx, nu, ny` must be provided as keyword arguments to the `ExtendedKalmanFilter` constructor since these cannot be inferred from the function signature.
+For maximum performance, provide statically sized matrices from StaticArrays.jl
+
 See also [`UnscentedKalmanFilter`](@ref) which is typically more accurate than `ExtendedKalmanFilter`. See [`KalmanFilter`](@ref) for detailed instructions on how to set up a Kalman filter `kf`.
 """
 ExtendedKalmanFilter
 
-function ExtendedKalmanFilter(dynamics, measurement_model::AbstractMeasurementModel, R1,d0=SimpleMvNormal(Matrix(R1)); nu::Int, ny=measurement_model.ny, Ts = 1.0, p = NullParameters(), α = 1.0, check = true, Ajac = nothing, kwargs...)
-    nx = size(R1,1)
-    T = eltype(R1)
+function ExtendedKalmanFilter(dynamics, measurement_model::AbstractMeasurementModel, R1,d0=SimpleMvNormal(R1); nu::Int, ny=measurement_model.ny, nx=length(d0), Ts = 1.0, p = NullParameters(), α = 1.0, check = true, Ajac = nothing, kwargs...)
+    T = eltype(d0)
     R2 = measurement_model.R2
     if R1 isa SMatrix
         x = @SVector zeros(T, nx)
@@ -44,17 +58,16 @@ function ExtendedKalmanFilter(dynamics, measurement_model::AbstractMeasurementMo
     B = zeros(nx, nu) # This one is never needed
     C = zeros(ny, nx) # This one is never needed
     D = zeros(ny, nu) # This one is never needed
-    kf = KalmanFilter(A,B,C,D,R1,R2,d0; Ts, p, α, check)
+    kf = KalmanFilter(A,B,C,D,R1,R2,d0; Ts, p, α, check, nx, nu, ny)
 
     return ExtendedKalmanFilter(kf, dynamics, measurement_model; Ajac, kwargs...)
 end
 
-function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(Matrix(R1)); nu::Int, ny=size(R2,1), Cjac = nothing, kwargs...)
+function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(R1); nu::Int, ny=size(R2,1), nx::Int=size(R1,1), Cjac = nothing, kwargs...)
     IPM = !has_oop(measurement)
     T = promote_type(eltype(R1), eltype(R2), eltype(d0))
-    nx = size(R1,1)
     measurement_model = EKFMeasurementModel{T, IPM}(measurement, R2; nx, ny, Cjac)
-    return ExtendedKalmanFilter(dynamics, measurement_model, R1, d0; nu, kwargs...)
+    return ExtendedKalmanFilter(dynamics, measurement_model, R1, d0; nu, nx, ny, kwargs...)
 end
 
 

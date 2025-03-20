@@ -237,9 +237,34 @@ out = zeros(2, 10000)
         @test_skip mean(abs2, xm - reduce(hcat,xpf)) > mean(abs2, xm - xbm) # particle smoothing improves over filtering
         # NOTE: smoothing sometimes fails to improve so some tests are deactivated
         # plot(xm', layout=2)
-        # plot!(reduce(hcat,xf)')
-        # plot!(reduce(hcat,xt)')
-        # plot!(reduce(hcat,xT)')
+        # plot(reduce(hcat,x)', layout=2, lab="True")
+        # plot!(reduce(hcat,ksol.x)', lab="pred")
+        # plot!(reduce(hcat,ksol.xt)', lab="filt")
+        # plot!(reduce(hcat,xT)', lab="smooth")
+        # plot!(reduce(hcat,xTmbf)', lab="smooth_mbf")
+
+        w = [x[i+1] - (A_test*x[i] + B_test*u[i]) for i = 1:T-1]
+        w_pred = [ksol.x[i+1] - (A_test*ksol.x[i] + B_test*u[i]) for i = 1:T-1]
+        w_filt = [ksol.xt[i+1] - (A_test*ksol.xt[i] + B_test*u[i]) for i = 1:T-1]
+        w_pf = [ksol.xt[i] - ksol.x[i] for i = 1:T-1] # This is almost the same as w_filt
+        w_smooth = [xT[i+1] - (A_test*xT[i] + B_test*u[i]) for i = 1:T-1]
+        # w_smooth_mbf = [xTmbf[i+1] - (A_test*xTmbf[i] + B_test*u[i]) for i = 1:T-1]
+        e = [y[i] - C_test*x[i] for i = 1:T]
+        e_smooth = [y[i] - C_test*xT[i] for i = 1:T]
+
+        @test cov(w) ≈ 0.01*eye(n) atol=0.004
+        @test cov(e) ≈ eye(1) rtol=0.3
+        @test cov(e_smooth) ≈ eye(1) rtol=0.3
+
+        # plot(reduce(hcat, w)', layout=2, lab="w")
+        # plot!(reduce(hcat, w_pred)', lab="wp")
+        # plot!(reduce(hcat, w_filt)', lab="wf")
+        # plot!((kf.R1*reduce(hcat, r))', lab="r")
+        # # plot!(reduce(hcat, w_pf)', lab="wpf")
+        # plot!(reduce(hcat, w_smooth)', lab="ws")
+
+        # plot(reduce(hcat, e)', lab="e")
+        # plot!(reduce(hcat, e_smooth)', lab="ê")
 
 
         sqkf   = SqKalmanFilter(A_test, B_test, C_test, 0, 0.01eye(n), eye(p), d0)
@@ -461,6 +486,11 @@ end
 @testset "rbpf" begin
     @info "Testing rbpf"
     include("test_rbpf.jl")
+end
+
+@testset "function_versions" begin
+    @info "Testing function_versions"
+    include("test_function_versions.jl")
 end
 
 
