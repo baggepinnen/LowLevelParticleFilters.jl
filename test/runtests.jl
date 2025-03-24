@@ -301,7 +301,7 @@ out = zeros(2, 10000)
             kfs = KalmanFilter(A, B, C, 0, s^2*eye(nx), eye(ny), d0)
             loglik(kfs, u, y, xs, p)
         end
-        plot(svec, [llspf llspfa llskf, llskfx], xscale=:log10, lab=["PF" "APF" "KF", "KF known x"])
+        plot(svec, [llspf llspfa llskf llskfx], xscale=:log10, lab=["PF" "APF" "KF", "KF known x"])
         vline!([0.1])
 
         m,mi = findmax(llspf)
