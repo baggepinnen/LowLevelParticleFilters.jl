@@ -59,16 +59,21 @@ vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue), primary=false)
 ```
 the correct value for the simulated data is 1 (the simulated system is the same as on the front page of the docs).
 
-We can do the same with a Kalman filter
-
+We can do the same with a Kalman filter, shown below. When using Kalman-type filters, one may also provide a known state sequence if one is available, such as when the data is obtained from a simulation or in an instrumented lab setting. If the state sequence is provided, state-prediction errors are used for log-likelihood estimation instead of output-prediction errors.
 ```@example ml_map
 eye(n) = SMatrix{n,n}(1.0I(n))
 llskf = map(svec) do s
     kfs = KalmanFilter(A, B, C, 0, s^2*eye(nx), eye(ny), d0)
     loglik(kfs, u, y, p)
 end
+llskfx = map(svec) do s # Kalman filter with known state sequence, possible when data is simulated
+    kfs = KalmanFilter(A, B, C, 0, s^2*eye(nx), eye(ny), d0)
+    loglik(kfs, u, y, xs, p)
+end
 plot!(svec, llskf, yscale=:identity, xscale=:log10, lab="Kalman", c=:red)
 vline!([svec[findmax(llskf)[2]]], l=(:dash,:red), primary=false)
+plot!(svec, llskfx, yscale=:identity, xscale=:log10, lab="Kalman with known state sequence", c=:purple)
+vline!([svec[findmax(llskfx)[2]]], l=(:dash,:purple), primary=false)
 ```
 
 the result can be quite noisy due to the stochastic nature of particle filtering. The particle filter likelihood agrees with the Kalman-filter estimate, which is optimal for the linear example system we are simulating here, apart for when the noise variance is small. Due to particle depletion, particle filters often struggle when dynamics-noise is too small. This problem is mitigated by using a greater number of particles, or simply by not using a too small covariance.

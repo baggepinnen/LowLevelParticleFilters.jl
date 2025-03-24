@@ -297,7 +297,11 @@ out = zeros(2, 10000)
             kfs = KalmanFilter(A_test, B_test, C_test, 0, s^2*eye(n), eye(p), d0)
             loglik(kfs,u,y)
         end
-        plot(svec, [llspf llspfa llskf], xscale=:log10, lab=["PF" "APF" "KF"])
+        llskfx = map(svec) do s # Kalman filter with known state sequence, possible when data is simulated
+            kfs = KalmanFilter(A, B, C, 0, s^2*eye(nx), eye(ny), d0)
+            loglik(kfs, u, y, xs, p)
+        end
+        plot(svec, [llspf llspfa llskf, llskfx], xscale=:log10, lab=["PF" "APF" "KF", "KF known x"])
         vline!([0.1])
 
         m,mi = findmax(llspf)
@@ -309,8 +313,12 @@ out = zeros(2, 10000)
         m,mi = findmax(llskf)
         @test 5 ≤ mi ≤ 7
 
+        m,mi = findmax(llskfx)
+        @test 5 ≤ mi ≤ 7
+
         @test maximum(abs, llskf .- llspf) < 20
         @test maximum(abs, llskf .- llspfa) < 20
+        @test maximum(llskfx) > maximum(llskf)
 
         @testset "Metropolis" begin
             @info "testing Metropolis"
