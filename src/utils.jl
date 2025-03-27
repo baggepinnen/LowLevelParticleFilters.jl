@@ -1,5 +1,11 @@
 export logsumexp!, smoothed_mean, smoothed_cov, smoothed_trajs
 
+function exp_map!(we, w)
+    @inbounds @simd ivdep for i in eachindex(we, w)
+        we[i] = SLEEFPirates.exp(w[i])
+    end
+end
+
 """
     ll = logsumexp!(w, we [, maxw])
 Normalizes the weight vector `w` and returns the weighted log-likelihood
@@ -10,7 +16,7 @@ https://discourse.julialang.org/t/fast-logsumexp/22827/7?u=baggepinnen for stabl
 function logsumexp!(w,we,maxw=Ref(zero(eltype(w))))::eltype(w)
     offset,maxind = findmax(w)
     w  .-= offset
-    LoopVectorization.vmap!(exp,we,w)
+    exp_map!(we,w)
     s    = sum_all_but(we,maxind) # s = ∑wₑ-1
     we .*= 1/(s+1)
     w  .-= log1p(s)
@@ -21,7 +27,7 @@ end
 # function logsumexp!(w,we)::eltype(w)
 #     offset,maxind = findmax(w)
 #     w  .-= offset
-#     LoopVectorization.vmap!(exp,we,w)
+#     exp_map!(we,w)
 #     s    = sum_all_but(we,maxind) # s = ∑wₑ-1
 #     we .*= 1/(s+1)
 #     w  .-= log1p(s)
@@ -40,7 +46,7 @@ end
 function expnormalize!(we,w)
     offset,maxind = findmax(w)
     w .-= offset
-    LoopVectorization.vmap!(exp,we,w)
+    exp_map!(we,w)
     w .+= offset
     s    = sum_all_but(we,maxind) # s = ∑wₑ-1
     we .*= 1/(s+1)
@@ -49,7 +55,7 @@ end
 function expnormalize!(w)
     offset,maxind = findmax(w)
     w .-= offset
-    LoopVectorization.vmap!(exp,w,w)
+    exp_map!(w,w)
     s    = sum_all_but(w,maxind) # s = ∑wₑ-1
     w .*= 1/(s+1)
 end
