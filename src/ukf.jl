@@ -627,7 +627,6 @@ function correct!(
     xsm = sigma_point_cache.x0
     ys = sigma_point_cache.x1
     (; x, R) = kf
-
     sigmapoints_c!(kf, measurement_model, R2) # TODO: should this take other arguments?
     propagate_sigmapoints_c!(kf, u, p, t, R2, measurement_model)
     ym = mean_with_weights(mean, ys, measurement_model.weight_params)

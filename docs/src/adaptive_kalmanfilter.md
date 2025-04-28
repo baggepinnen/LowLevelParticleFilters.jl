@@ -44,8 +44,8 @@ fig = plot(Y, lab="Measurement")
 for σw in σws
     R1 = σw*[Ts^3/3 Ts^2/2; Ts^2/2 Ts] # The dynamics noise covariance matrix is σw*Bw*Bw' where Bw = [Ts^2/2; Ts]
     kf = KalmanFilter(A, B, C, D, R1, R2)
-    yh = []
     measure = LowLevelParticleFilters.measurement(kf)
+    yh = [measure(state(kf), u[1], nothing, 1)] 
     for t = 1:T # Main filter loop
         kf(u[t], y[t]) # Performs both prediction and correction
         xh = state(kf)
@@ -63,6 +63,9 @@ When ``R_1`` is small (controlled by ``σ_w``), we get a nice and smooth filter 
 ## Adaptive noise covariance
 
 Below, we will implement an adaptive filter, where we keep the dynamics noise covariance low by default, but increase it if the filter prediction error is too large. We will use a Z-score to determine if the prediction error is too large. The Z-score is defined as the number of standard deviations the prediction error is away from the estimated mean. This time around we use separate [`correct!`](@ref) and [`predict!`](@ref) calls, so that we can access the prediction error as well as the prior covariance of the prediction error, ``S``. ``S`` (or the Cholesky factor ``Sᵪ``) will be used to compute the Z-score.
+
+When implementing behavior such as time varying covariance, we may either implement the filtering loop manually, like we do below, or make use of the callback functionality available in [`forward_trajectory`](@ref), which we do in the next code snippet.
+
 ```@example ADAPTIVE_KALMAN
 σw = 1e-5 # Set the covariance to a low value by default
 R1 = σw*[Ts^3/3 Ts^2/2; Ts^2/2 Ts]
@@ -75,6 +78,9 @@ es = Float64[]
 σs = Float64[]
 for t = 1:T # Main filter loop
     ll, e, S, Sᵪ = correct!(kf, u[t], y[t], nothing, t) # Manually call the prediction step
+    xh = state(kf)
+    yht = measure(xh, u[t], nothing, t)
+
     σ = √(e'*(Sᵪ\e)) # Compute the Z-score
     push!(es, e[]) # Save for plotting
     push!(σs, σ)
@@ -84,8 +90,7 @@ for t = 1:T # Main filter loop
     else
         predict!(kf, u[t], nothing, t)
     end
-    xh = state(kf)
-    yht = measure(xh, u[t], nothing, t)
+
     push!(yh, yht)
 end
 
@@ -100,6 +105,8 @@ plot([es σs], lab=["Prediction error" "Z-score"])
 
 Notice how the prediction errors, that should ideally be centered around zero, remain predominantly negative for a long time interval after the transition. This can be attributed to an overshoot in the velocity state of the estimator, but the rapid decrease of the covariance after the transition makes the filter slow at correcting its overshoot. If we want, we could mitigate this and make the adaptation even more sophisticated by letting the covariance remain large for a while after a transition in operating mode has been detected. Below, we implement a simple version of this, where we use a multiplier ``σ_{wt}`` that defaults to 1, but is increase to a very large value of 1000 if a transition is detected. When no transition is detected, ``σ_{wt}`` is decreased exponentially back down to 1.
 
+As mentioned above, in this code snippet we make use of the callback functionality of [`forward_trajectory`](@ref) rather than implementing the filtering loop manually, we thus add the logic for modifying the covariance in the `pre_predict_cb` callback function. 
+
 ```@example ADAPTIVE_KALMAN
 σw  = 1e-5 # Set the covariance to a low value by default
 σwt = 1.0
@@ -107,30 +114,26 @@ R1  = σw*[Ts^3/3 Ts^2/2; Ts^2/2 Ts]
 kf  = KalmanFilter(A, B, C, D, R1, R2)
 measure = LowLevelParticleFilters.measurement(kf)
 
-# Some arrays to store simulation data
-yh = []
-es = Float64[]
-σs = Float64[]
-σwts = Float64[]
-for t = 1:T # Main filter loop
-    global σwt # Note, do not make use of global variables in performance critical code
-    ll, e, S, Sᵪ = correct!(kf, u[t], y[t], nothing, t) # Manually call the prediction step
+function pre_predict_cb(kf, u, y, p, t, ll, e, S, Sᵪ)
     σ = √(e'*(Sᵪ\e)) # Compute the Z-score
-    push!(es, e[]) # Save for plotting
-    push!(σs, σ)
+    global σwt
     if σ > 3 # If the Z-score is too high
         σwt = 1000.0 # Set the R1 multiplier to a very large value
     else
-        σwt = max(0.7σwt, 1.0) # Decrease exponentially back to 1
+        σwt = max(0.9σwt, 1.0) # Decrease exponentially back to 1
     end
+    push!(σs, σ)
     push!(σwts, σwt)
-    predict!(kf, u[t], nothing, t; R1 = σwt*kf.R1) 
-    xh = state(kf)
-    yht = measure(xh, u[t], nothing, t)
-    push!(yh, yht)
+    σwt*kf.R1 # The pre_predict_cb may return either nothing (operate through side effects) or a modified R1 matrix to use for this particular time step. Here, we make use of both approaches.
 end
 
-Yh = reduce(hcat, yh)
+# Some arrays to store simulation data
+σs = Float64[]
+σwts = Float64[]
+
+sol = forward_trajectory(kf, u, y; pre_predict_cb)
+es = reduce(vcat, sol.e) # Extract prediciton errors
+Yh = reduce(hcat, measure.(sol.xt, sol.u, nothing, nothing)) # Extract predicted outputs
 plot([Y Yh'], lab=["Measurement" "Adaptive estimate"])
 ```
 
