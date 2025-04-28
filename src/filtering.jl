@@ -272,13 +272,13 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
             x[t]  = state(kf)      |> copy
             R[t]  = covariance(kf) |> copy
             R2 = pre_correct_cb(kf, u[t], y[t], p, ti)
-            lli, ei, S, Sᵪ = correct!(kf, u[t], y[t], p, ti; R2 = something(R2, kf.R2))
+            lli, ei, S, Sᵪ = correct!(kf, u[t], y[t], p, ti; R2 = something(R2, get_mat(kf.R2, kf.x, u[t], p, ti)))
             ll += lli
             e[t] = ei
             xt[t] = state(kf)      |> copy
             Rt[t] = covariance(kf) |> copy
             R1 = pre_predict_cb(kf, u[t], y[t], p, ti, lli, ei, S, Sᵪ)
-            predict!(kf, u[t], p, ti; R1 = something(R1, kf.R1))
+            predict!(kf, u[t], p, ti; R1 = something(R1, get_mat(kf.R1, kf.x, u[t], p, ti)))
         end
     catch err
         if debug
