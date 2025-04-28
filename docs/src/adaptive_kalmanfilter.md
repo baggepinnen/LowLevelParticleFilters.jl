@@ -44,8 +44,8 @@ fig = plot(Y, lab="Measurement")
 for σw in σws
     R1 = σw*[Ts^3/3 Ts^2/2; Ts^2/2 Ts] # The dynamics noise covariance matrix is σw*Bw*Bw' where Bw = [Ts^2/2; Ts]
     kf = KalmanFilter(A, B, C, D, R1, R2)
-    yh = [measure(state(kf), u[1], nothing, 1)] 
     measure = LowLevelParticleFilters.measurement(kf)
+    yh = [measure(state(kf), u[1], nothing, 1)] 
     for t = 1:T # Main filter loop
         kf(u[t], y[t]) # Performs both prediction and correction
         xh = state(kf)
