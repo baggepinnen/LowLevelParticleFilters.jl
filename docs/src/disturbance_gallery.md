@@ -360,3 +360,20 @@ If the disturbance is heteroschedastic, i.e., the variance of the disturbance de
 
 ## Non-Gaussian driving noise
 All Kalman-type estimators assume that the driving noise is Gaussian. Particle filters are not limited to this assumption and can generally be used with any distribution that can be sampled from, see [Smoothing the track of a moving beetle](@ref) for an example, where the mode is affected by Binomial noise.
+
+
+## Dynamical models of measurement disturbance
+When using any of the _dynamical_ models above to model _measurement disturbances_, the noise driving the disturbance dynamics must be sourced from the dynamics noise, e.g., for a Kalman filter for the model
+```math
+x' = Ax + Bu + w
+y  = Cx + Du + e
+```
+we must let the dynamics noise ``w`` drive the disturbance model, and design ``C`` such that the estimated disturbance has the desired effect on the measurement. This model leaves no room to let the measurement noise ``e`` pass through a dynamical system, and this is thus only useful to model white Gaussian measurement noise. See [How to tune a Kalman filter](@ref) for more insights.
+
+Dynamical models of measurement disturbances are useful in a lot of situations, such as
+- Periodic measurement noise, such as 50Hz noise from the electrical grid.
+- Slow sensor drift, such as gyroscopic drift.
+- Calibration errors.
+- Sensor misalignment in rotating systems.
+- Complimentary filtering for accelerometers and gyroscopes.
+- Sensor degradation, such as deposition of dust or algae growth.
