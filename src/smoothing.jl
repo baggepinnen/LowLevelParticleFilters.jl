@@ -21,6 +21,8 @@ function smooth(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractVecto
     xT,RT,ll
 end
 
+smooth(sol::KalmanFilteringSolution) = smooth(sol, sol.f)
+
 function smooth(kf::KalmanFilter, args...)
     reset!(kf)
     sol = forward_trajectory(kf, args...)

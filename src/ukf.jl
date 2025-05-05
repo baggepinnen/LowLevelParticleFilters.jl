@@ -417,6 +417,11 @@ end
 
 sample_state(kf::AbstractUnscentedKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
 sample_state(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf)*kf.Ts; noise=true) = kf.dynamics(x,u,p,t) .+ noise.*rand(SimpleMvNormal(get_mat(kf.R1, x, u, p, t)))
+
+function sample_state(kf::UnscentedKalmanFilter{false,<:Any,true,<:Any}, x, u, p=parameters(kf), t=index(kf)*kf.Ts; noise=true)
+    kf.dynamics(x,u,p,t, noise.*rand(SimpleMvNormal(get_mat(kf.R1, x, u, p, t))))
+end
+
 sample_measurement(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf)*kf.Ts; noise=true) = kf.measurement(x, u, p, t) .+ noise.*rand(SimpleMvNormal(get_mat(kf.R2, x, u, p, t)))
 measurement(kf::AbstractUnscentedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
