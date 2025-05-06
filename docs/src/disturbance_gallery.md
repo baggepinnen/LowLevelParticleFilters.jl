@@ -111,8 +111,10 @@ This is a second-order dynamical disturbance model that is white noise integrate
 ```
 **Discrete time**
 ```math
-x_{k+1} = x_k + v_k \\
-v_{k+1} = v_k + w_k
+\begin{aligned}
+x_{k+1} &= x_k + T_s v_k + \frac{T_s^2}{2}w_k \\
+v_{k+1} &= v_k + T_s w_k
+\end{aligned}
 ```
 **Frequency domain**
 ```math
@@ -122,7 +124,7 @@ G(s) = \frac{1}{s^2}
 ```@example DISTGALLERY
 using ControlSystemsBase, Plots
 Ts = 0.01 # Sampling time
-sys = ss([1 1; 0 1], [0; 1], [1 0], 0, Ts) # Discrete-time double integrator
+sys = ss([1 Ts; 0 1], [Ts^2/2; Ts], [1 0], 0, Ts) # Discrete-time double integrator
 res = map(1:10) do i
     w = randn(1, 1000) # White noise input
     lsim(sys, w)
@@ -164,7 +166,7 @@ res = map(1:10) do i
     lsim(sys, w)
 end
 figsim = plot(res)
-hline!(2*sqrt.(covar(sys, I(1))) .* [1 -1], color=:black, linestyle=:dash, linewidth=2, label="2σ") # Stationary standard deviation
+hline!(2*sqrt.(covar(sys, I(1))) .* [1 -1], color=:black, linestyle=:dash, linewidth=2, label="2σ(∞)") # Stationary standard deviation
 plot!(res[1].t, [1 -1] .* covariance_dynamics(sys), lab="2σ(t)", color=:black, linestyle=:dash)
 figspec = bodeplot(sys, plotphase=false)
 figimp = plot(impulse(sys, 10), title="Impulse response")
