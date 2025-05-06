@@ -57,7 +57,7 @@ R_0 &= \mathbf{0} \\
 implemented in the function `covariance_dynamics`. 
 
 ```@example DISTGALLERY
-using ControlSystemsBase, Plots
+using ControlSystemsBase, Plots, LinearAlgebra
 
 function covariance_dynamics(sys, N=1000)
     # Calculate the covariance of the dynamics noise
@@ -317,7 +317,7 @@ res = map(1:10) do i
     x = LowLevelParticleFilters.rollout(discrete_dynamics, x0, w)
     reduce(hcat, measurement.(x[1:end-1], w, nothing, t))'
 end
-plot(t, res, title="One sided random bumps", lw=[5 ones(1,9)])
+plot(t, res, title="One-sided random bumps", lw=[5 ones(1,9)])
 ```
 Note how the samples are all nonnegative, achieved by the nonlinearity. The first sample is the impulse response of the system, and this is drawn with a greater linewidth.
 
@@ -355,7 +355,7 @@ res = map(1:10) do i
     x = LowLevelParticleFilters.rollout(discrete_dynamics, x0, w)
     reduce(hcat, measurement.(x[1:end-1], w, nothing, t))'
 end
-plot(t, res, title="One sided random bumps (softplus)")
+plot(t, res, title="One-sided random bumps (softplus)")
 ```
 This produces a very similar result to the previous model, but adds a tunable hardness parameter that can trade off observability and tendency to output values that are closer to zero.
 
