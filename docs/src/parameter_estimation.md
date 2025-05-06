@@ -459,11 +459,11 @@ ode = @ODEmodel(
     y2(t) = h2(t),
 )
 
-local_id = assess_local_identifiability(ode, 0.99)
+local_id = assess_local_identifiability(ode)
 ```
 where we have made the substitution ``\sqrt h \rightarrow h`` due to a limitation of the tool (it currently only handles rational ODEs). The output of the above analysis is 
 ```julia
-julia> local_id = assess_local_identifiability(ode, 0.99)
+julia> local_id = assess_local_identifiability(ode)
 Dict{Nemo.fmpq_mpoly, Bool} with 15 entries:
   a3  => 0
   gam => 1
