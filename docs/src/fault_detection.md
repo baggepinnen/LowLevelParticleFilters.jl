@@ -200,7 +200,7 @@ x(k \,|\, k-1)
 ```
 
 ```@example FAULT_DETECTION
-xT,RT = smooth(sol, kf, sol.u, sol.y)
+smoothsol = smooth(sol)
 nothing # hide
 ```
 
@@ -209,15 +209,17 @@ nothing # hide
 ```@example FAULT_DETECTION
 timevec = range(0, step=Ts, length=length(sol.y))
 
-plot(sol,
-    plotx   = false,
-    plotxt  = true,
+plot(smoothsol,
+    plotx   = false, # prediction
+    plotxt  = true,  # filtered
+    plotxT  = true,  # smoothed
     plotRt  = true,
+    plotRT  = true,
     plotyh  = false,
     plotyht = true,
-    size = (650,600), seriestype = [:line :line :scatter], link = :x,
+    size = (650,600), seriestype = [:line :line :scatter :line], link = :x,
 )
-plot!(timevec, reduce(hcat, xT)[1,:], sp=3, label="Smoothed")
+plot!(timevec, reduce(hcat, smoothsol.xT)[1,:], sp=3, label="Smoothed")
 DisplayAs.PNG(Plots.current()) # hide
 ```
 
