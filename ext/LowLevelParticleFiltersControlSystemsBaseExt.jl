@@ -9,14 +9,15 @@ import ControlSystemsBase
 
 Construct a `KalmanFilter` from a predefined `StateSpace` system from ControlSystems.jl
 """
-function KalmanFilter(sys::AbstractStateSpace{<:ControlSystemsBase.Discrete}, R1, R2, d0=SimpleMvNormal(Matrix(R1)); kwargs...)
+function KalmanFilter(sys::AbstractStateSpace{<:ControlSystemsBase.Discrete}, R1, R2, d0=SimpleMvNormal(R1); kwargs...)
     A, B, C, D = ssdata(sys)
     name = ControlSystemsBase.system_name(sys)
     x = ControlSystemsBase.state_names(sys)
     u = ControlSystemsBase.input_names(sys)
     y = ControlSystemsBase.output_names(sys)
     names = SignalNames(x, u, y, name)
-    KalmanFilter(A, B, C, D, R1, R2, d0; names, kwargs...)
+    Ts = sys.Ts
+    KalmanFilter(A, B, C, D, R1, R2, d0; names, Ts, kwargs...)
 end
 
 """

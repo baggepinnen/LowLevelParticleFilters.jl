@@ -37,7 +37,7 @@ This simplest dynamical disturbance model is white noise integrated once. This i
 ```
 **Discrete time**
 ```math
-x[k+1] = x[k] + w[k]
+x[k+1] = x[k] + T_s w[k]
 ```
 
 **Frequency domain**
@@ -49,15 +49,16 @@ G(s) = \frac{1}{s}
 ```@example DISTGALLERY
 using ControlSystemsBase, Plots
 Ts = 0.01 # Sampling time
-sys = ss([1], [1], [1], 0, Ts) # Discrete-time integrator
+sys = ss([1], [Ts], [1], 0, Ts) # Discrete-time integrator
 res = map(1:10) do i
     w = randn(1, 1000) # White noise input
     lsim(sys, w)
 end
 figsim = plot(res)
-plot!(res[1].t, 2 .* sqrt.(res[1].t ./ Ts) .* [1 -1], label="2σ", color=:black, linestyle=:dash, linewidth=2) # Non-stationary process, variance is growing over time.
+plot!(res[1].t, 2 .* sqrt.(Ts .* res[1].t) .* [1 -1], label="2σ", color=:black, linestyle=:dash, linewidth=2) # Non-stationary process, variance is growing over time.
 figspec = bodeplot(sys, plotphase=false)
-plot(figsim, figspec, plot_title="Integrated white noise")
+figimp = plot(impulse(sys, 10), title="Impulse response")
+plot(figsim, figspec, figimp, plot_title="Integrated white noise")
 ```
 
 Note, the samples from this process do not look random and step like, but a random step-like process can nevertheless be well modeled by such a process (this is hinted at by the transfer function ``1/s`` which is identical to the Laplace transform of the step function). This model is used in a number of examples that demonstrate this property:
@@ -141,7 +142,8 @@ figsim = plot(res)
 (; B,C) = sys
 hline!(2*sqrt.(C*(lyap(sys, B*B'))*C') .* [1 -1], color=:black, linestyle=:dash, linewidth=2, label="2σ") # Stationary standard deviation
 figspec = bodeplot(sys, plotphase=false)
-plot(figsim, figspec, plot_title="Low-pass filtered white noise")
+figimp = plot(impulse(sys, 10), title="Impulse response")
+plot(figsim, figspec, figimp, plot_title="Low-pass filtered white noise")
 ```
 
 ### Suitable for
@@ -189,7 +191,8 @@ figsim = plot(res)
 (; B,C) = sys
 hline!(2*sqrt.(C*(lyap(sys, B*B'))*C') .* [1 -1], color=:black, linestyle=:dash, linewidth=2, label="2σ") # Stationary standard deviation
 figspec = bodeplot(sys, plotphase=false)
-plot(figsim, figspec, plot_title="Low-pass (second order) filtered white noise")
+figimp = plot(impulse(sys, 10), title="Impulse response")
+plot(figsim, figspec, figimp, plot_title="Low-pass (second order) filtered white noise")
 ```
 Note how this produces smoother signals compared to the first-order low-pass filter. The Matérn covariance function with ``ν=5/2`` can be modeled by adding a third state to the system above, and so on.
 
@@ -235,7 +238,8 @@ figsim = plot(res)
 (; B,C) = sys
 hline!(2*sqrt.(C*(lyap(sys, B*B'))*C') .* [1 -1], color=:black, linestyle=:dash, linewidth=2) # Stationary standard deviation
 figspec = bodeplot(sys, plotphase=false)
-plot(figsim, figspec, plot_title="Periodic disturbance")
+figimp = plot(impulse(sys, 10), title="Impulse response")
+plot(figsim, figspec, figimp, plot_title="Periodic disturbance")
 ```
 
 ## One sided random bumps
@@ -255,7 +259,7 @@ y &= x_2
 ### Samples
 Since this is a nonlinear model, we cannot use the `lsim` function to simulate it. Instead, we use the package [`SeeToDee.jl`](https://github.com/baggepinnen/SeeToDee.jl/) to discretize the nonlinear dynamics model, learn more under [Discretization](@ref).
 ```@example DISTGALLERY
-using LowLevelParticleFilters, SeeToDee, Plots
+using LowLevelParticleFilters, SeeToDee, Plots, Random
 Ts = 0.1 # Sampling time
 a = 1 # Low-pass filter (inverse) time constant, controls how often the bumps appear (higher value ⟹ more often)
 b = 2 # Bump decay (inverse) time constant
@@ -276,16 +280,60 @@ end
 # Simulate the model
 t = 0:Ts:20 # Time vector
 x0 = [0.0; 0.0] # Initial state
+Random.seed!(0) # For reproducibility
+res = map(1:10) do i
+    if i == 1
+        w = [(j==0)/Ts for j in t] # Pulse input for first sample
+    else
+        w = [randn(1) for j in t] # White noise input
+    end
+    x = LowLevelParticleFilters.rollout(discrete_dynamics, x0, w)
+    reduce(hcat, measurement.(x[1:end-1], w, nothing, t))'
+end
+plot(t, res, title="One sided random bumps", lw=[5 ones(1,9)])
+```
+Note how the samples are all nonnegative, achieved by the nonlinearity. The first sample is the impulse response of the system, and this is drawn with a greater linewidth.
+
+### Observability
+This is a nonlinear model, but it is piecewise linear and we may use linear observability tests to check if the system is observable in each mode.
+```@example DISTGALLERY
+Ap = [-a 0; 1 -b]
+An = [-a 0; 0 -b]
+B = [1.0; 0]
+C = [0 1]
+sysp = ss(Ap, B, C, 0)
+sysn = ss(An, B, C, 0)
+
+observability(sysp)
+```
+When ``x_2`` is positive, the system is observable, but when ``x_2`` is negative
+```@example DISTGALLERY
+observability(sysn)
+```
+we have lost observability of the first state variable. This may pose a problem for, e.g., an ExtendedKalmanFilter, which performs linearization around the current state estimate. To mitigate the observability issue, we may change the nonlinearity to, e.g., a softplus function:
+```@example DISTGALLERY
+softplus(x, hardness=10) = log(1 + exp(hardness*x))/hardness # A softer version of ReLU
+
+function dynamics(x, w, p, t) # We assume that the noise is coming in through the second argument here. When using this model with an UnscentedKalmanFilter, we may instead add w as the 5:th argument and let the second argument be the control input.
+    x1, x2 = x
+    dx1 = -a * x1 + w[1]
+    dx2 = -b * x2 + softplus(x1)^n
+    return [dx1, dx2]
+end
+discrete_dynamics = SeeToDee.Rk4(dynamics, Ts)
+Random.seed!(0) # For reproducibility
 
 res = map(1:10) do i
     w = [randn(1) for i in t] # White noise input
     x = LowLevelParticleFilters.rollout(discrete_dynamics, x0, w)
     reduce(hcat, measurement.(x[1:end-1], w, nothing, t))'
 end
-plot(t, res, title="One sided random bumps")
+plot(t, res, title="One sided random bumps (softplus)")
 ```
-Note how the samples are all nonnegative, achieved by the nonlinearity.
+This produces a very similar result to the previous model, but adds a tunable hardness parameter that can trade off observability and tendency to output values that are closer to zero.
 
+!!! note "Tip"
+    The function `ControlSystemsBase.observability(f::AbstractKalmanFilter, x, u, p, t=0.0)` is overloaded for nonlinear state estimators from this package.
 
 ## One sided periodic bumps
 This is similar to the previous model, but with a periodic disturbance driving the nonlinear integrator, causing the bumps to have a dominant period.
@@ -335,15 +383,20 @@ t = 0:Ts:120 # Time vector
 x0 = [0.0; 0.0; 0.0] # Initial state
 
 res = map(1:10) do i
-    w = [randn(1) for i in t] # White noise input
+    if i == 1
+        w = [2*(j==0)/Ts for j in t] # Pulse input for first sample
+    else
+        w = [randn(1) for j in t] # White noise input
+    end
     x = LowLevelParticleFilters.rollout(discrete_dynamics, x0, w)
     reduce(hcat, measurement.(x[1:end-1], w, nothing, t))'
 end
-plot(t, res, title="One sided periodic bumps")
+plot(t, res, title="One sided periodic bumps", lw=[5 ones(1,9)])
 ```
+The first sample is one possible impulse response of the system (the system is nonlinear and does not have a single unique impulse response), and this is drawn with a greater linewidth.
 
 ### Useful for
-- One sided periodic disturbances
+- One-sided periodic disturbances
 - Example: Sunlight hitting a thermometer once per day, but only if it is sunny
 
 
@@ -365,10 +418,12 @@ All Kalman-type estimators assume that the driving noise is Gaussian. Particle f
 ## Dynamical models of measurement disturbance
 When using any of the _dynamical_ models above to model _measurement disturbances_, the noise driving the disturbance dynamics must be sourced from the dynamics noise, e.g., for a Kalman filter for the model
 ```math
-x' = Ax + Bu + w
-y  = Cx + Du + e
+\begin{aligned}
+x' &= Ax + Bu + w \\
+y  &= Cx + Du + e
+\end{aligned}
 ```
-we must let the dynamics noise ``w`` drive the disturbance model, and design ``C`` such that the estimated disturbance has the desired effect on the measurement. This model leaves no room to let the measurement noise ``e`` pass through a dynamical system, and this is thus only useful to model white Gaussian measurement noise. See [How to tune a Kalman filter](@ref) for more insights.
+we must let the dynamics noise ``w`` drive the disturbance model, and design ``C`` such that the estimated disturbance has the desired effect on the measurement. This model leaves no room to let the measurement noise ``e`` to pass through a dynamical system, and this is thus only useful (and required) to model white Gaussian measurement noise. See [How to tune a Kalman filter](@ref) for more insights.
 
 Dynamical models of measurement disturbances are useful in a lot of situations, such as
 - Periodic measurement noise, such as 50Hz noise from the electrical grid.
