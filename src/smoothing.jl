@@ -1,10 +1,11 @@
 
 """
-    xT,RT,ll = smooth(sol, kf)
-    xT,RT,ll = smooth(kf::KalmanFilter, u::Vector, y::Vector, p=parameters(kf))
-    xT,RT,ll = smooth(kf::ExtendedKalmanFilter, u::Vector, y::Vector, p=parameters(kf))
+    sol = smooth(filtersol)
+    sol = smooth(kf::AbstractKalmanFilter, u::Vector, y::Vector, p=parameters(kf))
 
-Returns smoothed estimates of state `x` and covariance `R` given all input output data `u,y` or an existing solution `sol` obtained from [`forward_trajectory`](@ref).
+Returns a [`KalmanSmoothingSolution`](@ref) with smoothed estimates of state `xT` and covariance `RT` given all input output data `u,y` or an existing filtering solution `filtersol` obtained from [`forward_trajectory`](@ref).
+
+The return smoothing can be plotted using `plot(sol)`, see [`KalmanSmoothingSolution`](@ref) and [`KalmanFilteringSolution`](@ref) for details.
 """
 function smooth(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractVector=sol.u, y::AbstractVector=sol.y,  p=parameters(kf))
     (; x,xt,R,Rt,ll) = sol
@@ -18,7 +19,7 @@ function smooth(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractVecto
         xT[t] = xt[t] .+ C*(xT[t+1] .- x[t+1])
         RT[t] = Rt[t] .+ symmetrize(C*(RT[t+1] .- R[t+1])*C')
     end
-    xT,RT,ll
+    KalmanSmoothingSolution(sol, xT, RT)
 end
 
 smooth(sol::KalmanFilteringSolution) = smooth(sol, sol.f)

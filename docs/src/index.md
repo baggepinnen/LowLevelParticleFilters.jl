@@ -214,14 +214,15 @@ The numeric type used in the Kalman filter is determined from the mean of the in
 Kalman filters can also be used for smoothing 
 ```@example lingauss
 kf = KalmanFilter(A, B, C, 0, cov(df), cov(dg), d0)
-xT,R,lls = smooth(kf, u, y) # Returns smoothed state, smoothed cov, loglik
+smoothsol = smooth(kf, u, y) # Returns a smoothing solution including smoothed state and smoothed cov
 nothing # hide
 ```
 
 Plot and compare PF and KF
 
 ```@example lingauss
-plot(vecvec_to_mat(xT), lab="Kalman smooth", layout=2)
+# plot(smoothsol) The smoothing solution object can also be plotted directly
+plot(vecvec_to_mat(smoothsol.xT), lab="Kalman smooth", layout=2)
 plot!(xbm', lab="pf smooth")
 plot!(vecvec_to_mat(x), lab="true")
 ```

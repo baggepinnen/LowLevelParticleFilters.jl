@@ -430,10 +430,18 @@ d0 = SimpleMvNormal([0.0,0], R1)   # Initial state Distribution
 ukfw  = UnscentedKalmanFilter{false,false,true,false}(dist_dynamics, dist_measurement, R1, R2, d0; ny, nu)
 resukfw = forward_trajectory(ukfw, u, y)
 
-xT, RT = smooth(resukfw)
-xT = reduce(hcat, xT)
+ssol = smooth(resukfw)
+xT = reduce(hcat, ssol.xT)
 
-# plot(resukfw, plotRt=true)
-# plot!(reduce(hcat, x_true)', lab="True", sp=1)
-# plot!(reduce(hcat, w)[2, :], lab="True", sp=2)
-# plot!(xT', lab="Smoothed", sp=[1 2])
+plot(ssol)
+plot!(reduce(hcat, x_true)', lab="True", sp=1)
+plot!(reduce(hcat, w)[2, :], lab="True", sp=2)
+
+
+X = [reduce(hcat, x_true)' reduce(hcat, w)[2, :]]
+
+eT = sum(abs2, X .- xT')
+eF = sum(abs2, X .- reduce(hcat, ssol.xt)')
+eP = sum(abs2, X .- reduce(hcat, ssol.x)')
+
+@test eT < eF < eP

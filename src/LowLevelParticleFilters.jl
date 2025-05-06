@@ -5,7 +5,7 @@ export UKFWeights, TrivialParams, MerweParams, WikiParams
 export IMM, interact!, combine!
 export RBPF, RBParticle, RBMeasurementModel
 export LinearMeasurementModel, EKFMeasurementModel, IEKFMeasurementModel, UKFMeasurementModel, CompositeMeasurementModel
-export KalmanFilteringSolution, ParticleFilteringSolution
+export KalmanFilteringSolution, KalmanSmoothingSolution, ParticleFilteringSolution
 @deprecate weigthed_mean weighted_mean
 @deprecate weigthed_cov weighted_cov
 
