@@ -417,6 +417,11 @@ end
 
 sample_state(kf::AbstractUnscentedKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
 sample_state(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf)*kf.Ts; noise=true) = kf.dynamics(x,u,p,t) .+ noise.*rand(SimpleMvNormal(get_mat(kf.R1, x, u, p, t)))
+
+function sample_state(kf::UnscentedKalmanFilter{false,<:Any,true,<:Any}, x, u, p=parameters(kf), t=index(kf)*kf.Ts; noise=true)
+    kf.dynamics(x,u,p,t, noise.*rand(SimpleMvNormal(get_mat(kf.R1, x, u, p, t))))
+end
+
 sample_measurement(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf)*kf.Ts; noise=true) = kf.measurement(x, u, p, t) .+ noise.*rand(SimpleMvNormal(get_mat(kf.R2, x, u, p, t)))
 measurement(kf::AbstractUnscentedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
@@ -627,7 +632,6 @@ function correct!(
     xsm = sigma_point_cache.x0
     ys = sigma_point_cache.x1
     (; x, R) = kf
-
     sigmapoints_c!(kf, measurement_model, R2) # TODO: should this take other arguments?
     propagate_sigmapoints_c!(kf, u, p, t, R2, measurement_model)
     ym = mean_with_weights(mean, ys, measurement_model.weight_params)
@@ -888,7 +892,7 @@ function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter{IPD,IPM,
         xT[t] = m + D*(xT[t+1]-m⁻[xi])
         RT[t] = Rt[t] + symmetrize(D*(RT[t+1] .- P⁻)*D')
     end
-    xT,RT,ll
+    KalmanSmoothingSolution(sol, xT, RT)
 end
 
 

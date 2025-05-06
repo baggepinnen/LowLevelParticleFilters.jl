@@ -1,4 +1,4 @@
-# Adaptive Neural-Network training
+# Adaptive Estimation and Control
 
 This tutorial is [hosted as a notebook](https://juliahub.com/ui/Notebooks/fredrik-carlson2/system_identification/identification_11_adaptive_control.jl).
 

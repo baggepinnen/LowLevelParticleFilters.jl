@@ -31,6 +31,7 @@ makedocs(
                   "Adaptive Neural-Network training" => "neural_network.md",
                   "Fault detection" => "fault_detection.md",
                   "Unscented transform" => "ut.md",
+                  "Disturbance gallery" => "disturbance_gallery.md",
             ],
             "API" => "api.md",
       ],

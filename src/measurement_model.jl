@@ -52,7 +52,9 @@ function correct!(
     y,
     p = parameters(kf),
     t::Real = index(kf) * kf.Ts;
+    R2 = nothing,
 )
+    R2 === nothing || @warn("correct! with a composite measurement model ignores the custom R2 argument, open an issue if you need this feature.", maxlog=3)
     ll = 0.0
     e = zeros(measurement_model.ny)
     S = []

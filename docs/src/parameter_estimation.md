@@ -35,6 +35,7 @@ xs,u,y = simulate(pf,300,df)
 ```
 
 ### Compute likelihood for various values of the parameters
+Since this example looks for a single parameter only, we can plot the likelihood as a function of this parameter. If we had been looking for more than 2 parameters, we typically use an optimizer instead (see further below).
 ```@example ml_map
 p = nothing
 svec = exp10.(LinRange(-0.8, 1.2, 60))
@@ -79,7 +80,7 @@ vline!([svec[findmax(llskfx)[2]]], l=(:dash,:purple), primary=false)
 the result can be quite noisy due to the stochastic nature of particle filtering. The particle filter likelihood agrees with the Kalman-filter estimate, which is optimal for the linear example system we are simulating here, apart for when the noise variance is small. Due to particle depletion, particle filters often struggle when dynamics-noise is too small. This problem is mitigated by using a greater number of particles, or simply by not using a too small covariance.
 
 ## MAP estimation
-In this example, we will estimate the variance of the noises in the dynamics and the measurement functions.
+Maximum a posteriori estimation (MAP) is similar to maximum likelihood (ML), but includes also prior knowledge of the distribution of the parameters in a way that is similar to parameter regularization. In this example, we will estimate the variance of the noises in the dynamics and the measurement functions.
 
 To solve a MAP estimation problem, we need to define a function that takes a parameter vector and returns a filter, the parameters are used to construct the covariance matrices:
 ```@example ml_map
@@ -100,7 +101,7 @@ ll = log_likelihood_fun(filter_from_parameters, priors, u, y, p)
 nothing # hide
 ```
 
-Since this is a low-dimensional problem, we can plot the LL on a 2d-grid
+Since this is once again a low-dimensional problem, we can plot the LL on a 2d-grid
 
 ```@example ml_map
 function meshgrid(a,b)
@@ -458,11 +459,11 @@ ode = @ODEmodel(
     y2(t) = h2(t),
 )
 
-local_id = assess_local_identifiability(ode, 0.99)
+local_id = assess_local_identifiability(ode)
 ```
 where we have made the substitution ``\sqrt h \rightarrow h`` due to a limitation of the tool (it currently only handles rational ODEs). The output of the above analysis is 
 ```julia
-julia> local_id = assess_local_identifiability(ode, 0.99)
+julia> local_id = assess_local_identifiability(ode)
 Dict{Nemo.fmpq_mpoly, Bool} with 15 entries:
   a3  => 0
   gam => 1

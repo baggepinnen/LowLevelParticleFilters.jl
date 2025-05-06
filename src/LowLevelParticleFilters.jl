@@ -5,7 +5,7 @@ export UKFWeights, TrivialParams, MerweParams, WikiParams
 export IMM, interact!, combine!
 export RBPF, RBParticle, RBMeasurementModel
 export LinearMeasurementModel, EKFMeasurementModel, IEKFMeasurementModel, UKFMeasurementModel, CompositeMeasurementModel
-export KalmanFilteringSolution, ParticleFilteringSolution
+export KalmanFilteringSolution, KalmanSmoothingSolution, ParticleFilteringSolution
 @deprecate weigthed_mean weighted_mean
 @deprecate weigthed_cov weighted_cov
 
@@ -14,7 +14,7 @@ export unscentedplot, unscentedplot!, covplot, covplot!
 
 using StatsAPI
 import StatsAPI: weights, predict!
-using StatsBase, Parameters, Lazy, Random, LinearAlgebra, Printf, LoopVectorization
+using StatsBase, Parameters, Lazy, Random, LinearAlgebra, Printf, SLEEFPirates
 import PDMats # To extend some methods on static arrays
 import PDMats: PDMat
 using StaticArrays

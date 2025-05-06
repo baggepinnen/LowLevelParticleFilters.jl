@@ -202,7 +202,7 @@ function smooth(sol, kf::AbstractExtendedKalmanFilter, u::AbstractVector=sol.u, 
         end
         RT[t] = @bangbang R0 .+= Rt[t]
     end
-    xT,RT,ll
+    KalmanSmoothingSolution(sol, xT, RT)
 end
 
 

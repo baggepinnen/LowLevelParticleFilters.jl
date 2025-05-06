@@ -77,7 +77,7 @@ parr = ComponentArray(ps)
 nothing # hide
 ```
 
-The dynamics of our black-box model will call the neural network to predict the next state given the current state and input. We bias the dynamics towards low frequencies by adding a multiple of the current state to the prediction of the next state, `0.95*x`. We also add a small amount of weight decay to the parameters of the neural network for regularization, `0.995*p`.
+The dynamics of our black-box model will call the neural network to predict the next state given the current state and input. We bias the dynamics towards low frequencies by adding a multiple of the current state to the prediction of the next state, `0.95*x` (motivated in [Tangent-Space Regularization for Neural-Network Models of Dynamical Systems](https://arxiv.org/abs/1806.09919)). We also add a small amount of weight decay to the parameters of the neural network for regularization, `0.995*p`.
 ```@example ADAPTIVE_NN
 function dynamics(out0, xp0, u, _, t)
     xp = ComponentArray(xp0, getaxes(s0))

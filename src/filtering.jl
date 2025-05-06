@@ -220,7 +220,7 @@ end
 
 
 """
-    sol = forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector, p=parameters(kf))
+    sol = forward_trajectory(kf::AbstractKalmanFilter, u::Vector, y::Vector, p=parameters(kf); debug=false)
 
 Run a Kalman filter forward to perform (offline / batch) filtering along an entire trajectory `u, y`.
 
@@ -244,8 +244,19 @@ If your system is very large, i.e., the dimension of the state is very large, an
 - [`LowLevelParticleFilters.sse`](@ref)
 - [`LowLevelParticleFilters.prediction_errors!`](@ref)
 That store significantly less information. The amount of computation performed by all of these functions is identical, the only difference lies in what is stored and returned.
+
+## Callbacks
+For advanced usage, such as implementing conditional resetting and adaptive covariance, one may make use of the callback functions
+- `pre_correct_cb(kf, u, y, p, t)`: called before the correction step, returns either `nothing` or a covariance matrix `R2` to use in the correction step.
+- `pre_predict_cb(kf, u, y, p, t, ll, e, S, Sᵪ)`: called before the prediction step, returns either `nothing` or a covariance matrix `R1` to use in the prediction step. The arguments to this callback are `filter, input, measurement, parameters, time, loglikelihood, prediction error, innovation covariance and Cholesky factor of the innovation covariance`, essentially all the information available after the correct step.
+
+The filter loop consists of the following steps, in this order:
+1. `pre_correct_cb`
+2. `correct!`
+3. `pre_predict_cb`
+4. `predict!`
 """
-function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf); debug=false)
+function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf); debug=false, pre_correct_cb=(args...)->nothing, pre_predict_cb=(args...)->nothing)
     reset!(kf)
     T    = length(y)
     x    = Array{particletype(kf)}(undef,T)
@@ -260,12 +271,14 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
             ti = (t-1)*kf.Ts
             x[t]  = state(kf)      |> copy
             R[t]  = covariance(kf) |> copy
-            lli, ei = correct!(kf, u[t], y[t], p, ti)
+            R2 = pre_correct_cb(kf, u[t], y[t], p, ti)
+            lli, ei, S, Sᵪ = correct!(kf, u[t], y[t], p, ti; R2 = something(R2, get_mat(kf.R2, kf.x, u[t], p, ti)))
             ll += lli
             e[t] = ei
             xt[t] = state(kf)      |> copy
             Rt[t] = covariance(kf) |> copy
-            predict!(kf, u[t], p, ti)
+            R1 = pre_predict_cb(kf, u[t], y[t], p, ti, lli, ei, S, Sᵪ)
+            predict!(kf, u[t], p, ti; R1 = something(R1, get_mat(kf.R1, kf.x, u[t], p, ti)))
         end
     catch err
         if debug
