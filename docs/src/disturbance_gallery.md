@@ -37,7 +37,7 @@ This simplest dynamical disturbance model is white noise integrated once. This i
 ```
 **Discrete time**
 ```math
-x[k+1] = x[k] + T_s w[k]
+x_{k+1} = x_k + T_s w_k
 ```
 
 **Frequency domain**
@@ -46,8 +46,32 @@ G(s) = \frac{1}{s}
 ```
 
 ### Samples
+Below, we draw samples from the disturbance model by creating a linear statespace system from ControlSystemsBase.jl and call `lsim` to simulate the system with white noise ``w \sim \mathcal{N}(0, 1)`` input. We also compute the time-varying covariance of the disturbance process, assuming that the covariance of the initial state is zero. This is done by solving the discrete time-varying Lyapunov equation
+```math
+\begin{aligned}
+R_{k+1} &= A R_k A^T + BB^T \\
+R_0 &= \mathbf{0} \\
+{R_y}_k &= C R_k C^T
+\end{aligned}
+```
+implemented in the function `covariance_dynamics`. 
+
 ```@example DISTGALLERY
 using ControlSystemsBase, Plots
+
+function covariance_dynamics(sys, N=1000)
+    # Calculate the covariance of the dynamics noise
+    (; A, B, C) = sys
+    Q = B * B' # Covariance of the dynamics noise
+    R = 0*I(size(A, 1)) # Initial covariance
+    Ry = [(C*R*C')[]] # Covariance of the output
+    for i = 1:N-1
+        R = A*R*A' + Q # Discrete-time Lyapunov equation
+        push!(Ry, (C*R*C')[])
+    end
+    return 2 .* sqrt.(Ry) # 2σ(t)
+end
+
 Ts = 0.01 # Sampling time
 sys = ss([1], [Ts], [1], 0, Ts) # Discrete-time integrator
 res = map(1:10) do i
@@ -55,7 +79,7 @@ res = map(1:10) do i
     lsim(sys, w)
 end
 figsim = plot(res)
-plot!(res[1].t, 2 .* sqrt.(Ts .* res[1].t) .* [1 -1], label="2σ", color=:black, linestyle=:dash, linewidth=2) # Non-stationary process, variance is growing over time.
+plot!(res[1].t, [1 -1] .* covariance_dynamics(sys), lab="2σ(t)", color=:black, linestyle=:dash)
 figspec = bodeplot(sys, plotphase=false)
 figimp = plot(impulse(sys, 10), title="Impulse response")
 plot(figsim, figspec, figimp, plot_title="Integrated white noise")
@@ -87,8 +111,8 @@ This is a second-order dynamical disturbance model that is white noise integrate
 ```
 **Discrete time**
 ```math
-x[k+1] = x[k] + v[k] \\
-v[k+1] = v[k] + w[k]
+x_{k+1} = x_k + v_k \\
+v_{k+1} = v_k + w_k
 ```
 **Frequency domain**
 ```math
@@ -104,6 +128,7 @@ res = map(1:10) do i
     lsim(sys, w)
 end
 figsim = plot(res)
+plot!(res[1].t, [1 -1] .* covariance_dynamics(sys), lab="2σ(t)", color=:black, linestyle=:dash)
 figspec = bodeplot(sys, plotphase=false)
 plot(figsim, figspec, plot_title="Double integrated white noise")
 ```
@@ -113,7 +138,7 @@ plot(figsim, figspec, plot_title="Double integrated white noise")
 - Smoothly varying disturbances
 
 ## Low-pass filtered white noise
-If we pass white noise through a low-pass filter, we get a signal that is random but primarily contains low frequencies. This is a stationary process, which means that the variance does not grow over time, and we can calculate the stationary covariance of the process by solving a Lyapunov equation. We do this below in order to indicate the stationary standard deviation of the process in the plot of the samples. This model is associated with a tuning parameter that determines the cutoff frequency of the low-pass filter, ```\tau``. 
+If we pass white noise through a low-pass filter, we get a signal that is random but primarily contains low frequencies. This is a stationary process, which means that the variance does not grow indefinitely over time, and we can calculate the stationary covariance of the process by solving a Lyapunov equation (done by `ControlSystemsBase.covar`). We do this below in order to indicate the stationary standard deviation of the process in the plot of the samples. This model is associated with a tuning parameter that determines the cutoff frequency of the low-pass filter, ```\tau``. 
 
 ### Model
 **Continuous time**
@@ -122,7 +147,7 @@ If we pass white noise through a low-pass filter, we get a signal that is random
 ```
 **Discrete time**
 ```math
-x[k+1] = (1 - \frac{1}{\tau}) x[k] + w[k]
+x_{k+1} = (1 - \frac{1}{\tau}) x_k + w_k
 ```
 ### Transfer function 
 ```math
@@ -139,8 +164,8 @@ res = map(1:10) do i
     lsim(sys, w)
 end
 figsim = plot(res)
-(; B,C) = sys
-hline!(2*sqrt.(C*(lyap(sys, B*B'))*C') .* [1 -1], color=:black, linestyle=:dash, linewidth=2, label="2σ") # Stationary standard deviation
+hline!(2*sqrt.(covar(sys, I(1))) .* [1 -1], color=:black, linestyle=:dash, linewidth=2, label="2σ") # Stationary standard deviation
+plot!(res[1].t, [1 -1] .* covariance_dynamics(sys), lab="2σ(t)", color=:black, linestyle=:dash)
 figspec = bodeplot(sys, plotphase=false)
 figimp = plot(impulse(sys, 10), title="Impulse response")
 plot(figsim, figspec, figimp, plot_title="Low-pass filtered white noise")
@@ -189,7 +214,7 @@ res = map(1:10) do i
 end
 figsim = plot(res)
 (; B,C) = sys
-hline!(2*sqrt.(C*(lyap(sys, B*B'))*C') .* [1 -1], color=:black, linestyle=:dash, linewidth=2, label="2σ") # Stationary standard deviation
+plot!(res[1].t, [1 -1] .* covariance_dynamics(sys), lab="2σ(t)", color=:black, linestyle=:dash)
 figspec = bodeplot(sys, plotphase=false)
 figimp = plot(impulse(sys, 10), title="Impulse response")
 plot(figsim, figspec, figimp, plot_title="Low-pass (second order) filtered white noise")
@@ -236,7 +261,7 @@ res = map(1:10) do i
 end
 figsim = plot(res)
 (; B,C) = sys
-hline!(2*sqrt.(C*(lyap(sys, B*B'))*C') .* [1 -1], color=:black, linestyle=:dash, linewidth=2) # Stationary standard deviation
+plot!(res[1].t, [1 -1] .* covariance_dynamics(sys, length(res[1].t)), lab="2σ(t)", color=:black, linestyle=:dash)
 figspec = bodeplot(sys, plotphase=false)
 figimp = plot(impulse(sys, 10), title="Impulse response")
 plot(figsim, figspec, figimp, plot_title="Periodic disturbance")
