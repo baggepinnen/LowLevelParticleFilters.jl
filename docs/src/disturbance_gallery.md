@@ -59,10 +59,11 @@ implemented in the function `covariance_dynamics`.
 ```@example DISTGALLERY
 using ControlSystemsBase, Plots, LinearAlgebra
 
-function covariance_dynamics(sys, N=1000)
+function covariance_dynamics(sys, N=1000; R1=I)
     # Calculate the covariance of the dynamics noise
+    iscontinuous(sys) && error("Only discrete-time systems are supported")
     (; A, B, C) = sys
-    Q = B * B' # Covariance of the dynamics noise
+    Q = B * R1 * B' # Covariance of the dynamics noise
     R = 0*I(size(A, 1)) # Initial covariance
     Ry = [(C*R*C')[]] # Covariance of the output
     for i = 1:N-1
@@ -145,11 +146,11 @@ If we pass white noise through a low-pass filter, we get a signal that is random
 ### Model
 **Continuous time**
 ```math
-\dot{x} = -\frac{1}{\tau} x + w
+\dot{x} = \frac{1}{\tau}(-x + w)
 ```
 **Discrete time**
 ```math
-x_{k+1} = (1 - \frac{1}{\tau}) x_k + w_k
+x_{k+1} = α x_k + (1-α) w_k, \qquad α = e^{-T_s/\tau}
 ```
 ### Transfer function 
 ```math
@@ -459,3 +460,8 @@ Dynamical models of measurement disturbances are useful in a lot of situations, 
 - Sensor misalignment in rotating systems.
 - Complimentary filtering for accelerometers and gyroscopes.
 - Sensor degradation, such as deposition of dust or algae growth.
+
+
+
+## Continuous vs. discrete time covariance
+See Discretization: [Covariance matrices](@ref).
