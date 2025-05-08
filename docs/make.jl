@@ -32,6 +32,7 @@ makedocs(
                   "Fault detection" => "fault_detection.md",
                   "Unscented transform" => "ut.md",
                   "Disturbance gallery" => "disturbance_gallery.md",
+                  "Influence of sample rate on performance" => "sample_rate.md",
             ],
             "API" => "api.md",
       ],
