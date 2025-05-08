@@ -35,7 +35,7 @@ import ControlSystemsBase.MatrixEquations
 function kalman_are(sys::AbstractStateSpace{<:Discrete}, R1, R2)
     A,B,C,D = ssdata(sys)
     R∞, p, K, args... = MatrixEquations.ared(A', C', R2, R1)
-    K', R∞
+    K', R∞, args...
 end
 ```
 
@@ -119,4 +119,26 @@ in this case, the variance of the position prediction goes to infinity for large
 ```@example SAMPLERATE
 velocity_dynamics = ss(-0.02, 1, 1, 0)
 R∞s[end][end] ≈ lyap(velocity_dynamics, [1;;])[]
+```
+
+### Convergence of time-varying Kalman filter
+When the dynamics is time invariant and the noise process is stationary, the time-varying Kalman filter converges to the stationary Kalman filter irrespective of what the inputs and outputs are. We can confirm this by running a simulation of the time-varying Kalman filter and checking that the stationary covariance converges to the stationary covariance we computed above. 
+
+```@example SAMPLERATE
+using LowLevelParticleFilters
+Ts    = 1
+sysd  = c2d(sysc, Ts)
+R1d   = c2d(sysc, R1c, Ts)
+_, R∞ = kalman_are(sysd, R1d, R2)
+kf    = KalmanFilter(sysd, R1d, R2) # A Kalman filter can be constructed from a discrete-time system statespace model
+for i = 1:1000 # Perform 1000 prediction and measurement updates to let the filter converge
+    update!(kf, [0], [0])
+end
+@test kf.R ≈ R∞ # The Kalman filter prediction error covariance converges to the stationary covariance
+```
+
+```@example SAMPLERATE
+(; K) = correct!(kf, [0], [0])   # Perform a measurement update
+@test K ≈ (R∞*C')/(R2 + C*R∞*C') # The time varying Kalman gain converges to the stationary Kalman gain (direct form)
+@test kf.R ≈ (I-K*C)*R∞          # The time varying Kalman filter filtering error covariance (after measurement update) converges to the stationary covariance
 ```
