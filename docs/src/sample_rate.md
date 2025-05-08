@@ -29,7 +29,7 @@ By incorporating the measurement, we form a _filtering estimate_ ``ε(t|t)`` and
     Due to the exact formulation of ``K`` returned by the Riccati solver in MatrixEquations.jl, we must either use ``A^{-1}K`` or compute ``K = RC^T (R_2 + C R C^T)^{-1}`` ourselves. `MatrixEquations.ared` solves the Riccati equation corresponding to the filter form, but returns the ``K`` matrix for the prediction form. 
 
 ```@example SAMPLERATE
-using ControlSystemsBase
+using ControlSystemsBase, LinearAlgebra
 import ControlSystemsBase.MatrixEquations
 
 function kalman_are(sys::AbstractStateSpace{<:Discrete}, R1, R2)
