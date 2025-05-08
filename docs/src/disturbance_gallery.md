@@ -74,7 +74,7 @@ function covariance_dynamics(sys, N=1000; R1=I)
 end
 
 Ts = 0.01 # Sampling time
-sys = ss([1], [Ts], [1], 0, Ts) # Discrete-time integrator
+sys = ss(1, Ts, 1, 0, Ts) # Discrete-time integrator
 res = map(1:10) do i
     w = randn(1, 1000) # White noise input
     lsim(sys, w)
@@ -91,6 +91,8 @@ Note, the samples from this process do not look random and step like, but a rand
 - [Fault detection](@ref)
 - [LQG control with integral action](https://juliacontrol.github.io/RobustAndOptimalControl.jl/dev/lqg_disturbance/)
 
+
+When the noise ``w`` has the variance 1, this leads to a process that has a linearly increasing variance with slope ``BB^T / T_s = T_s^2 / T_s = T_s``, that is, after 10 seconds the variance is ``10T_s = 0.1``. To make the covariance dynamics invariant to the choice of sample interval, we can use the variance `R1 = σ² / Ts`, in which case the variance is ``σ²`` after 1 second and ``10σ²`` after 10 seconds, irrespective of the choice of sample interval ``T_s``.
 
 ### Suitable for
 - Random-step like disturbances
