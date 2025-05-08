@@ -28,6 +28,16 @@ By incorporating the measurement, we form a _filtering estimate_ ``ε(t|t)`` and
 !!! note
     Due to the exact formulation of ``K`` returned by the Riccati solver in MatrixEquations.jl, we must either use ``A^{-1}K`` or compute ``K = RC^T (R_2 + C R C^T)^{-1}`` ourselves. `MatrixEquations.ared` solves the Riccati equation corresponding to the filter form, but returns the ``K`` matrix for the prediction form. 
 
+```@example SAMPLERATE
+import ControlSystemsBase.MatrixEquations
+
+function kalman_are(sys::AbstractStateSpace{<:Discrete}, R1, R2)
+    A,B,C,D = ssdata(sys)
+    R∞, p, K, args... = MatrixEquations.ared(A', C', R2, R1)
+    K', R∞
+end
+```
+
 
 To perform an analysis of the performance as a function of the sample rate, we will assume that we have a continuous-time LTI system with a continuous-time Gaussian noise process driving the system. This will allow us to discretize both the system dynamics and noise process at varying sample rates and compute the stationary Kalman filter and associated stationary covariance matrix (see [Discretization](@ref) for more details). We assume that the measurement noise is a _discrete-time_ noise process with a fixed covariance, representing a scenario where the sensor equipment is predetermined but the sample rate is not. 
 
@@ -43,7 +53,7 @@ R2  = [1;;]                             # Measurement noise covariance
 Ts    = 1                               # Sample interval
 sysd  = c2d(sysc, Ts)                   # Discretize the system
 R1d   = c2d(sysc, R1c, Ts)              # Discretize the process noise covariance
-K, R∞ = kalman(sysd, R1d, R2, extra=Val(true)) # Compute the stationary Kalman gain and covariance
+K, R∞ = kalman_are(sysd, R1d, R2)       # Compute the stationary Kalman gain and covariance
 R∞
 ```
 
@@ -59,12 +69,10 @@ For this system, we expect the stationary _filtering covariance_ ``R_∞(t|t)`` 
 ```@example SAMPLERATE
 Tss = exp10.(LinRange(-3, 3, 30))
 R∞s = map(Tss) do Ts
-    sysd = c2d(sysc, Ts)
+    sysd    = c2d(sysc, Ts)
     A,B,C,D = ssdata(sysd)
-
-    R1d = c2d(sysc, R1c, Ts)
-
-    AK, R∞ = kalman(sysd, R1d, R2, extra=Val(true))
+    R1d     = c2d(sysc, R1c, Ts)
+    AK, R∞  = kalman_are(sysd, R1d, R2)
 
     # diag((I-A\AK*C)*R∞) # This also works
 
@@ -83,14 +91,11 @@ If we take the same system as above, but introduce some friction in the system, 
 sysc = ss([0 1; 0 -0.02], [0; 1], [1 0], 0) # Continuous-time double integrator with friction
 
 R∞s = map(Tss) do Ts
-    sysd = c2d(sysc, Ts)
+    sysd    = c2d(sysc, Ts)
     A,B,C,D = ssdata(sysd)
-
-    R1d = c2d(sysc, R1c, Ts)
-
-    AK, R∞ = kalman(sysd, R1d, R2, extra=Val(true))
-
-    K = (R∞*C')/(R2 + C*R∞*C')
+    R1d     = c2d(sysc, R1c, Ts)
+    AK, R∞  = kalman_are(sysd, R1d, R2)
+    K       = (R∞*C')/(R2 + C*R∞*C')
     diag((I-K*C)*R∞)
 end
 plot(Tss, reduce(hcat, R∞s)', label=["\$σ^2 p\$" "\$σ^2 v\$"], xlabel="Sample interval [s]", ylabel="Stationary filtering variance", title="Double integrator with friction", xscale=:log10, yscale=:log10)
@@ -101,9 +106,9 @@ Nice, it did.
 If we instead look at the prediction-error covariance, we see the opposite behavior
 ```@example SAMPLERATE
 R∞s = map(Tss) do Ts
-    sysd = c2d(sysc, Ts)
-    R1d = c2d(sysc, R1c, Ts)
-    AK, R∞ = kalman(sysd, R1d, R2, extra=Val(true))
+    sysd   = c2d(sysc, Ts)
+    R1d    = c2d(sysc, R1c, Ts)
+    AK, R∞ = kalman_are(sysd, R1d, R2)
     diag(R∞)
 end
 plot(Tss, reduce(hcat, R∞s)', label=["\$σ^2 p\$" "\$σ^2 v\$"], xlabel="Sample interval [s]", ylabel="Stationary filtering variance", title="Double integrator with friction", xscale=:log10, yscale=:log10)
