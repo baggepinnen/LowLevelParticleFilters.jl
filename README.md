@@ -7,7 +7,7 @@
 This is a library for state estimation, smoothing and parameter estimation.
 
 # Estimator Types
-We provide a number of filter types
+We provide a number of Kalman and particle filter types
 - `ParticleFilter`: This filter is simple to use and assumes that both dynamics noise and measurement noise are additive.
 - `AuxiliaryParticleFilter`: This filter is identical to `ParticleFilter`, but uses a slightly different proposal mechanism for new particles.
 - `AdvancedParticleFilter`: This filter gives you more flexibility, at the expense of having to define a few more functions.
