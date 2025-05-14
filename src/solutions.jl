@@ -15,7 +15,7 @@ Base.propertynames(sol::AbstractFilteringSolution) = (fieldnames(typeof(sol))...
 
 
 """
-    KalmanFilteringSolution{Tx,Txt,TR,TRt,Tll} <: AbstractFilteringSolution
+    KalmanFilteringSolution <: AbstractFilteringSolution
 
 # Fields
 - `x`: predictions ``x(t+1|t)`` (plotted if `plotx=true`)
@@ -24,6 +24,8 @@ Base.propertynames(sol::AbstractFilteringSolution) = (fieldnames(typeof(sol))...
 - `Rt`: filter covariances ``R(t|t)`` (plotted if `plotRt=true`)
 - `ll`: loglikelihood
 - `e`: prediction errors ``e(t|t-1) = y - ŷ(t|t-1)`` (plotted if `plote=true`)
+- `K`: Kalman gain
+- `S`: Cholesky factorization of innovation covariance
 
 # Plot
 The solution object can be plotted
@@ -44,7 +46,7 @@ where
 
 To modify the signal names used in legend entries, construct an instance of [`SignalNames`](@ref) and pass this to the filter (or directly to the plot command) using the `names` keyword argument.
 """
-struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll,Te,Et} <: AbstractFilteringSolution
+struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll,Te,TK,TS,Et} <: AbstractFilteringSolution
     f::F
     u::Tu
     y::Ty
@@ -54,10 +56,12 @@ struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll,Te,Et} <: AbstractFilte
     Rt::TRt
     ll::Tll
     e::Te
+    K::TK
+    S::TS
     extra::Et
 end
 
-KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e) = KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e,nothing)
+KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e,K,S) = KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e,K,S,nothing)
 
 function Base.show(io::IO, sol::KalmanFilteringSolution)
     println(io, "KalmanFilteringSolution:")

@@ -30,6 +30,61 @@ function smooth(kf::KalmanFilter, args...)
     smooth(sol, kf, args...)
 end
 
+# This smoother appears to have issues when there are missing measurements. It also requires more information to be stored from the forward pass, K and S. The benefit of this implementation is that it does not invert the state covariance matrix, instead, it inverts the residual covariance. Pick the smoother that inverts the smallest matrix.
+"""
+    xT,RT,ll,λ̃,λ̂,r = smooth_mbf(sol, kf)
+
+Implements the "modified Bryson-Frazier smoother" which is a variant of the Rauch-Tung-Striebel smoother used in [`smooth`](@ref) that does not require the inversion of the state covariance matrix. The smoother is described in "New Kalman filter and smoother consistency tests" by Gibbs.
+"""
+function smooth_mbf(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractVector=sol.u, y::AbstractVector=sol.y,  p=parameters(kf))
+    (; x,xt,R,Rt,ll) = sol
+    T            = length(y)
+    xT           = similar(xt)
+    RT           = similar(Rt)
+    xT[end]      = xt[end]      |> copy
+    RT[end]      = Rt[end]      |> copy
+    λ̃           = similar(xt)
+    λ̂           = similar(xt)
+    Λ̃           = similar(Rt)
+    Λ̂           = similar(Rt) # Λ̂ is the covariance of λ̂
+    Λ̂[end] = zero(Rt[end])
+    λ̂[end] = zero(xt[end])
+    r = similar(λ̂)
+    for t = T:-1:1
+        F = kf.A
+        H = kf.C
+        if !isassigned(sol.K, t)
+            xT[t] = xt[t]
+            RT[t] = Rt[t]
+            r[t] = zero(x[t])
+            λ̂[t-1] = zero(xt[t])
+            Λ̂[t-1] = zero(Rt[t])
+            continue
+        end
+
+        K = sol.K[t]
+        S = sol.S[t]
+        C = I-K*H
+
+        HTS = H'/S
+        r[t] = C'λ̂[t]
+        λ̃[t] = -HTS*sol.e[t] + C'λ̂[t] # Wikipedia wrong here, it should be residual instead of measurement
+        Λ̃[t] = HTS*H + C'Λ̂[t]*C
+        if t > 1
+            λ̂[t-1] = F'*λ̃[t]
+            Λ̂[t-1] = F'Λ̃[t]*F
+        end
+        
+        xT[t] = xt[t] .- Rt[t]*λ̂[t]
+        RT[t] = Rt[t] .- symmetrize(Rt[t]*Λ̂[t]*Rt[t])
+
+        # The alternative formulation below is bad when there are missing values in the measurement sequence
+        # xT[t] = x[t] .- R[t]*λ̃[t]
+        # RT[t] = R[t] .- symmetrize(R[t]*Λ̃[t]*R[t])
+    end
+    xT,RT,ll,λ̃,λ̂,r
+end
+
 function smooth(pf::AbstractParticleFilter, M, u, y, p=parameters(pf))
     sol = forward_trajectory(pf, u, y, p)
     smooth(pf::AbstractParticleFilter, sol.x, sol.w, sol.we, sol.ll, M, u, y, p)

@@ -288,5 +288,5 @@ function forward_trajectory(imm::IMM, u::AbstractVector, y::AbstractVector, p=pa
         Rt[t] = covariance(imm) |> copy
         predict!(imm, u[t], p, ti)
     end
-    KalmanFilteringSolution(imm,u,y,x,xt,R,Rt,ll,e,μ)
+    KalmanFilteringSolution(imm,u,y,x,xt,R,Rt,ll,e,nothing,nothing,μ)
 end
