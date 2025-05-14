@@ -284,7 +284,6 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
             end
             S[t] = Sᵪi
             K[t] = Ki
-            predict!(kf, u[t], p, ti)
             R1 = pre_predict_cb(kf, u[t], y[t], p, ti, lli, ei, Si, Sᵪi)
             predict!(kf, u[t], p, ti; R1 = something(R1, get_mat(kf.R1, kf.x, u[t], p, ti)))
         end
