@@ -204,7 +204,7 @@ x(k \,|\, k-1)
 ```
 
 ```@example FAULT_DETECTION
-xT,RT = smooth(sol, kf, sol.u, sol.y)
+smoothsol = smooth(sol)
 nothing # hide
 ```
 
@@ -213,15 +213,17 @@ nothing # hide
 ```@example FAULT_DETECTION
 timevec = range(0, step=Ts, length=length(sol.y))
 
-plot(sol,
-    plotx   = false,
-    plotxt  = true,
+plot(smoothsol,
+    plotx   = false, # prediction
+    plotxt  = true,  # filtered
+    plotxT  = true,  # smoothed
     plotRt  = true,
+    plotRT  = true,
     plotyh  = false,
     plotyht = true,
-    size = (650,600), seriestype = [:line :line :scatter], link = :x,
+    size = (650,600), seriestype = [:line :line :scatter :line], link = :x,
 )
-plot!(timevec, reduce(hcat, xT)[1,:], sp=3, label="Smoothed")
+plot!(timevec, reduce(hcat, smoothsol.xT)[1,:], sp=3, label="Smoothed")
 DisplayAs.PNG(Plots.current()) # hide
 ```
 
@@ -293,7 +295,7 @@ function get_opt_kf(logp)
 	vel = p[4]
 	vel > 1 && (return T(Inf))
 	A = SA[1 1; 0 vel]
-	d0T = LowLevelParticleFilters.SimpleMvNormal(T.(d0.μ), T.(d0.Σ + I))
+	d0T = LowLevelParticleFilters.SimpleMvNormal(T.(d0.μ), T.(d0.Σ + 0.01I))
 	kf = KalmanFilter(A,B,C,D,R1,R2,d0T; Ts, check=false)
 end
 
@@ -346,10 +348,10 @@ exp.([params res.minimizer])
 kf2 = get_opt_kf(res.minimizer)
 sol2, σs2 = special_forward_trajectory(kf2, u_full[(1:N) .+ (start-1)], y_full[(1:N) .+ (start-1)])
 
-xT2,RT2 = smooth(sol2, kf2, sol2.u, sol2.y)
+smoothsol2 = smooth(sol2, kf2, sol2.u, sol2.y)
 
-plot(sol2, plotx=false, plotxt=true, plotRt=true, plotyh=false, plotyht=true, size=(650,600), seriestype=[:line :line :scatter], link=:x)
-plot!(timevec, reduce(hcat, xT2)[1,:], sp=3, label="Smoothed")
+plot(smoothsol2, plotx=false, plotxt=true, plotRt=true, plotyh=false, plotyht=true, size=(650,600), seriestype=[:line :line :scatter :line], link=:x)
+plot!(timevec, reduce(hcat, smoothsol2.xT)[1,:], sp=3, label="Smoothed")
 
 outliers = findall(σs2 .> 5)
 vline!([timevec[outliers]], sp=3)
@@ -363,6 +365,7 @@ We implement a simple fault detector using Z-scores. When the Z-score is higher 
 plot(timevec, σs2); hline!([1 2 3 4], label=false)
 DisplayAs.PNG(Plots.current()) # hide
 ```
+(change the value of the variable `start` to see different parts of the data set, e.g., set `start = 30_000`)
 
 Z-scores may not capture large outliers if they occur when the estimator is very uncertain
 Does Z-score correlate with "velocity", i.e., are faults correlated with large continuous slopes in the data?

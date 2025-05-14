@@ -301,7 +301,7 @@ y  = measurement(x, u, p, t) + e
 x' = dynamics(x, u, p, t, w)
 y  = measurement(x, u, p, t, e)
 ```
-where `w ~ N(0, R1)`, `e ~ N(0, R2)` and `x(0) ~ d0`. The former (default) assums that the noise is additive and added _after_ the dynamics and measurement updates, while the latter assumes that the dynamics functions take an additional argument corresponding to the noise term. The latter form (sometimes refered to as the "augmented" form) is useful when the noise is multiplicative or when the noise is added _before_ the dynamics and measurement updates. See "Augmented UKF" below for more details on how to use this form.
+where `w ~ N(0, R1)`, `e ~ N(0, R2)` and `x(0) ~ d0`. The former (default) assums that the noise is additive and added _after_ the dynamics and measurement updates, while the latter assumes that the dynamics functions take an additional argument corresponding to the noise term. The latter form (sometimes refered to as the "augmented" form) is useful when the noise is multiplicative or when the noise is added _before_ the dynamics and measurement updates. See "Augmented UKF" below for more details on how to use this form. In both cases should the noise be modeled as discrete-time white noise, see Discretization: [Covariance matrices](@ref).
 
 The matrices `R1, R2` can be time varying such that, e.g., `R1[:, :, t]` contains the ``R_1`` matrix at time index `t`.
 They can also be given as functions on the form
@@ -366,7 +366,7 @@ In such situations, it is advicable to reconsider the noise model and covariance
 function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::AbstractMeasurementModel, R1, d0=SimpleMvNormal(R1); Ts=1.0, p=NullParameters(), nu::Int, ny=measurement_model.ny, nw = nothing, reject=nothing, state_mean=weighted_mean, state_cov=weighted_cov, cholesky! = cholesky!, names=default_names(length(d0), nu, ny, "UKF"), weight_params = TrivialParams(), kwargs...) where {IPD,IPM,AUGD,AUGM}
     nx = length(d0)
     
-    T = promote_type(eltype(d0), eltype(R1))
+    T = eltype(d0)
 
     if AUGD
         if nw === nothing && R1 isa AbstractArray
@@ -401,7 +401,7 @@ end
 
 function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement, R1, R2, d0=SimpleMvNormal(R1), args...; Ts = 1.0, p = NullParameters(), ny, nu, reject=nothing, state_mean=weighted_mean, state_cov=weighted_cov, cholesky! = cholesky!, kwargs...) where {IPD,IPM,AUGD,AUGM}
     nx = length(d0)
-    T = promote_type(eltype(d0), eltype(R1), eltype(R2))
+    T = eltype(d0)
     measurement_model = UKFMeasurementModel{T,IPM,AUGM}(measurement, R2; nx, ny, kwargs...)
     UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model, R1, d0, args...; Ts, p, nu, reject, state_mean, state_cov, cholesky!, kwargs...)
 end
@@ -417,6 +417,11 @@ end
 
 sample_state(kf::AbstractUnscentedKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
 sample_state(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf)*kf.Ts; noise=true) = kf.dynamics(x,u,p,t) .+ noise.*rand(SimpleMvNormal(get_mat(kf.R1, x, u, p, t)))
+
+function sample_state(kf::UnscentedKalmanFilter{false,<:Any,true,<:Any}, x, u, p=parameters(kf), t=index(kf)*kf.Ts; noise=true)
+    kf.dynamics(x,u,p,t, noise.*rand(SimpleMvNormal(get_mat(kf.R1, x, u, p, t))))
+end
+
 sample_measurement(kf::AbstractUnscentedKalmanFilter, x, u, p=parameters(kf), t=index(kf)*kf.Ts; noise=true) = kf.measurement(x, u, p, t) .+ noise.*rand(SimpleMvNormal(get_mat(kf.R2, x, u, p, t)))
 measurement(kf::AbstractUnscentedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractUnscentedKalmanFilter) = kf.dynamics
@@ -627,7 +632,6 @@ function correct!(
     xsm = sigma_point_cache.x0
     ys = sigma_point_cache.x1
     (; x, R) = kf
-
     sigmapoints_c!(kf, measurement_model, R2) # TODO: should this take other arguments?
     propagate_sigmapoints_c!(kf, u, p, t, R2, measurement_model)
     ym = mean_with_weights(mean, ys, measurement_model.weight_params)
@@ -888,7 +892,7 @@ function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter{IPD,IPM,
         xT[t] = m + D*(xT[t+1]-m⁻[xi])
         RT[t] = Rt[t] + symmetrize(D*(RT[t+1] .- P⁻)*D')
     end
-    xT,RT,ll
+    KalmanSmoothingSolution(sol, xT, RT)
 end
 
 

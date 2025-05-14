@@ -1,5 +1,5 @@
 using LowLevelParticleFilters
-using LowLevelParticleFilters: resample, mean_with_weights, cov_with_weights, weighted_mean, weighted_cov, UKFWeights
+using LowLevelParticleFilters: resample, mean_with_weights, cov_with_weights, weighted_mean, weighted_cov, UKFWeights, SimpleMvNormal
 using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions, Plots, PositiveFactorizations
 
 Random.seed!(0)
@@ -391,3 +391,57 @@ state_mean(x) = mean(x)
 ukf  = UnscentedKalmanFilter(dynamics, measurement, eye(nx), R2, d0; ny, nu, state_mean, state_cov)
 res_mc = forward_trajectory(ukf, u, y)
 @test res_mc.xt ≈ resukf.xt
+
+
+
+## Bumpy disturbance
+T = 150
+w = [[sqrt(0.1)*randn(), sin(0.1t)^2] for t = 1:T]
+x_true = [1.0]
+y = [[1.0]]
+for i = 1:T-1
+    push!(x_true, 0.8x_true[i] + w[i][1] + w[i][2])
+    push!(y, [x_true[i] + sqrt(0.1)*randn()])
+end
+u = fill([], T) 
+##
+# using Plots; default(size=(1200, 800))
+function dist_dynamics(xd, u, p, t, w)
+    x,d = xd
+    wx, wd = w
+    SA[
+        0.8x + d + wx
+        # abs(d*(wd + 1)) # Multiplicative dynamics noise, biased to be around 1 instead of around 0
+        # alternatives
+        abs(d*(wd^2+1))
+        # d*abs(wd+1.2)
+        # abs(d + 1wd)
+    ]
+end
+
+dist_measurement(xd, u, p, t) = SA[xd[1]]
+nx,nu,ny = 2,0,1
+R1 = 0.1*I(nx)
+R2 = 0.1*I(ny)
+d0 = SimpleMvNormal([0.0,0], R1)   # Initial state Distribution
+
+
+
+ukfw  = UnscentedKalmanFilter{false,false,true,false}(dist_dynamics, dist_measurement, R1, R2, d0; ny, nu)
+resukfw = forward_trajectory(ukfw, u, y)
+
+ssol = smooth(resukfw)
+xT = reduce(hcat, ssol.xT)
+
+plot(ssol)
+plot!(reduce(hcat, x_true)', lab="True", sp=1)
+plot!(reduce(hcat, w)[2, :], lab="True", sp=2)
+
+
+X = [reduce(hcat, x_true)' reduce(hcat, w)[2, :]]
+
+eT = sum(abs2, X .- xT')
+eF = sum(abs2, X .- reduce(hcat, ssol.xt)')
+eP = sum(abs2, X .- reduce(hcat, ssol.x)')
+
+@test eT < eF < eP

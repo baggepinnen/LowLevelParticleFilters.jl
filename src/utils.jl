@@ -1,5 +1,11 @@
 export logsumexp!, smoothed_mean, smoothed_cov, smoothed_trajs
 
+function exp_map!(we, w)
+    @inbounds @simd ivdep for i in eachindex(we, w)
+        we[i] = SLEEFPirates.exp(w[i])
+    end
+end
+
 """
     ll = logsumexp!(w, we [, maxw])
 Normalizes the weight vector `w` and returns the weighted log-likelihood
@@ -10,7 +16,7 @@ https://discourse.julialang.org/t/fast-logsumexp/22827/7?u=baggepinnen for stabl
 function logsumexp!(w,we,maxw=Ref(zero(eltype(w))))::eltype(w)
     offset,maxind = findmax(w)
     w  .-= offset
-    LoopVectorization.vmap!(exp,we,w)
+    exp_map!(we,w)
     s    = sum_all_but(we,maxind) # s = ∑wₑ-1
     we .*= 1/(s+1)
     w  .-= log1p(s)
@@ -21,7 +27,7 @@ end
 # function logsumexp!(w,we)::eltype(w)
 #     offset,maxind = findmax(w)
 #     w  .-= offset
-#     LoopVectorization.vmap!(exp,we,w)
+#     exp_map!(we,w)
 #     s    = sum_all_but(we,maxind) # s = ∑wₑ-1
 #     we .*= 1/(s+1)
 #     w  .-= log1p(s)
@@ -40,7 +46,7 @@ end
 function expnormalize!(we,w)
     offset,maxind = findmax(w)
     w .-= offset
-    LoopVectorization.vmap!(exp,we,w)
+    exp_map!(we,w)
     w .+= offset
     s    = sum_all_but(we,maxind) # s = ∑wₑ-1
     we .*= 1/(s+1)
@@ -49,7 +55,7 @@ end
 function expnormalize!(w)
     offset,maxind = findmax(w)
     w .-= offset
-    LoopVectorization.vmap!(exp,w,w)
+    exp_map!(w,w)
     s    = sum_all_but(w,maxind) # s = ∑wₑ-1
     w .*= 1/(s+1)
 end
@@ -107,23 +113,31 @@ end
 function TupleProduct end
 
 """
-    C = double_integrator_covariance(h, σ2=1)
+    R = double_integrator_covariance(Ts, σ2=1)
 
-Returns the covariance matrix of a discrete-time integrator with piecewise constant force as input.
-Assumes the state [x; ẋ]. `h` is the sample time. `σ2` scales the covariance matrix with the variance of the noise.
+Returns the covariance matrix of a discrete-time integrator with piecewise constant stochastic force as input.
+Assumes the state [x; ẋ]. `Ts` is the sample time. `σ2` scales the covariance matrix with the variance of the noise.
 
-This matrix is rank deficient and some applications might require a small increase in the diagonal to make it positive definite.
+This matrix is rank deficient and some applications might require a small increase in the diagonal to make it positive definite (or use [`double_integrator_covariance_smooth`](@ref)).
 
-See also `double_integrator_covariance_smooth`](@ref) for the version that does not assume piecewise constant noise.
+See also [`double_integrator_covariance_smooth`](@ref) for the version that does not assume piecewise constant noise, leading to a full-rank covariance matrix that results in sample-tiem invariant covariance dynamics (often favorable).
 """
-function double_integrator_covariance(h, σ2=1)
-    σ2*SA[h^4/4 h^3/2
-    h^3/2  h^2]
+function double_integrator_covariance(Ts, σ2=1)
+    σ2*SA[Ts^4/4 Ts^3/2
+    Ts^3/2  Ts^2]
 end
 
-function double_integrator_covariance_smooth(h, σ2=1)
-    σ2*SA[h^3/3 h^2/2
-    h^2/2  h]
+"""
+    R = double_integrator_covariance_smooth(Ts, σ2=1)
+
+Returns the covariance matrix of a discrete-time integrator with continuous noise as input.
+Assumes the state [x; ẋ]. `Ts` is the sample time. `σ2` scales the covariance matrix with the variance of the noise.
+
+This matrix is full rank, but can be well approximated by a rank-1 matrix as `double_integrator_covariance(h, σ2) ./ Ts`. I.e., to make use of a single random number per step for augmented UKFs, but be have a resulting covariance dynamics that is approximately invariant to the sample interval, you can use `double_integrator_covariance(h, σ2) ./ Ts` instead of this function.
+"""
+function double_integrator_covariance_smooth(Ts, σ2=1)
+    σ2*SA[Ts^3/3 Ts^2/2
+    Ts^2/2  Ts]
 end
 
 function rk4(f::F, Ts0; supersample::Integer = 1) where {F}
@@ -154,6 +168,7 @@ end
 
 SimpleMvNormal(Σ::Union{SMatrix, PDMats.PDMat{<:Any, <:SMatrix}, Diagonal{<:Any, <:SVector}}) = SimpleMvNormal(@SVector(zeros(size(Σ,1))), Σ)
 SimpleMvNormal(Σ::AbstractMatrix) = SimpleMvNormal(zeros(size(Σ,1)), Σ)
+SimpleMvNormal(Σ::Function) = error("A SimpleMvNormal distribution must be initialized with a covariance matrix, not a function. If this error is a result of calling a Kalman-filter type constructor where the dynamics-noise covariance is provided as a non-matrix type, you must also explicitly provide the distribution `d0` of the initial state, since the default choice of `d0` cannot be created from a function.")
 
 
 # We define this new function extended_logpdf and overload that for Distributions.jl in the extension

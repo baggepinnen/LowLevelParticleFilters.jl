@@ -246,6 +246,7 @@ out = zeros(2, 10000)
         w_filt = [ksol.xt[i+1] - (A_test*ksol.xt[i] + B_test*u[i]) for i = 1:T-1]
         w_pf = [ksol.xt[i] - ksol.x[i] for i = 1:T-1] # This is almost the same as w_filt
         w_smooth = [xT[i+1] - (A_test*xT[i] + B_test*u[i]) for i = 1:T-1]
+
         w_smooth_mbf = [xTmbf[i+1] - (A_test*xTmbf[i] + B_test*u[i]) for i = 1:T-1]
         e = [y[i] - C_test*x[i] for i = 1:T]
         e_smooth = [y[i] - C_test*xT[i] for i = 1:T]
@@ -253,6 +254,17 @@ out = zeros(2, 10000)
         @test cov(w) ≈ 0.01*eye(n) atol=0.004
         @test cov(e) ≈ eye(1) rtol=0.3
         @test cov(e_smooth) ≈ eye(1) rtol=0.3
+
+
+        # plot(reduce(hcat, w)', layout=2, lab="w")
+        # plot!(reduce(hcat, w_pred)', lab="wp")
+        # plot!(reduce(hcat, w_filt)', lab="wf")
+        # plot!((kf.R1*reduce(hcat, r))', lab="r")
+        # # plot!(reduce(hcat, w_pf)', lab="wpf")
+        # plot!(reduce(hcat, w_smooth)', lab="ws")
+
+        # plot(reduce(hcat, e)', lab="e")
+        # plot!(reduce(hcat, e_smooth)', lab="ê")
 
 
         sqkf   = SqKalmanFilter(A_test, B_test, C_test, 0, 0.01eye(n), eye(p), d0)
@@ -285,7 +297,11 @@ out = zeros(2, 10000)
             kfs = KalmanFilter(A_test, B_test, C_test, 0, s^2*eye(n), eye(p), d0)
             loglik(kfs,u,y)
         end
-        plot(svec, [llspf llspfa llskf], xscale=:log10, lab=["PF" "APF" "KF"])
+        llskfx = map(svec) do s # Kalman filter with known state sequence, possible when data is simulated
+            kfs = KalmanFilter(A_test, B_test, C_test, 0, s^2*eye(n), eye(p), d0)
+            loglik(kfs, u, y, x)
+        end
+        plot(svec, [llspf llspfa llskf llskfx], xscale=:log10, lab=["PF" "APF" "KF" "KF known x"])
         vline!([0.1])
 
         m,mi = findmax(llspf)
@@ -297,8 +313,12 @@ out = zeros(2, 10000)
         m,mi = findmax(llskf)
         @test 5 ≤ mi ≤ 7
 
+        m,mi = findmax(llskfx)
+        @test 5 ≤ mi ≤ 7
+
         @test maximum(abs, llskf .- llspf) < 20
         @test maximum(abs, llskf .- llspfa) < 20
+        @test maximum(llskfx) > maximum(llskf)
 
         @testset "Metropolis" begin
             @info "testing Metropolis"
@@ -474,6 +494,11 @@ end
 @testset "rbpf" begin
     @info "Testing rbpf"
     include("test_rbpf.jl")
+end
+
+@testset "function_versions" begin
+    @info "Testing function_versions"
+    include("test_function_versions.jl")
 end
 
 

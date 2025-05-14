@@ -1,11 +1,12 @@
 module LowLevelParticleFilters
 
 export KalmanFilter, SqKalmanFilter, UnscentedKalmanFilter, DAEUnscentedKalmanFilter, ExtendedKalmanFilter, IteratedExtendedKalmanFilter, ParticleFilter, AuxiliaryParticleFilter, AdvancedParticleFilter, SignalNames, PFstate, index, state, covariance, num_particles, effective_particles, weights, expweights, particles, particletype, smooth, sample_measurement, simulate, loglik, log_likelihood_fun, forward_trajectory, mean_trajectory, mode_trajectory, weighted_mean, weighted_cov, weighted_quantile, update!, predict!, correct!, reset!, metropolis, shouldresample, TupleProduct
+export double_integrator_covariance, double_integrator_covariance_smooth
 export UKFWeights, TrivialParams, MerweParams, WikiParams
 export IMM, interact!, combine!
 export RBPF, RBParticle, RBMeasurementModel
 export LinearMeasurementModel, EKFMeasurementModel, IEKFMeasurementModel, UKFMeasurementModel, CompositeMeasurementModel
-export KalmanFilteringSolution, ParticleFilteringSolution
+export KalmanFilteringSolution, KalmanSmoothingSolution, ParticleFilteringSolution
 @deprecate weigthed_mean weighted_mean
 @deprecate weigthed_cov weighted_cov
 
@@ -14,7 +15,7 @@ export unscentedplot, unscentedplot!, covplot, covplot!
 
 using StatsAPI
 import StatsAPI: weights, predict!
-using StatsBase, Parameters, Lazy, Random, LinearAlgebra, Printf, LoopVectorization
+using StatsBase, Parameters, Lazy, Random, LinearAlgebra, Printf, SLEEFPirates
 import PDMats # To extend some methods on static arrays
 import PDMats: PDMat
 using StaticArrays

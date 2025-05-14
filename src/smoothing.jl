@@ -1,10 +1,11 @@
 
 """
-    xT,RT,ll = smooth(sol, kf)
-    xT,RT,ll = smooth(kf::KalmanFilter, u::Vector, y::Vector, p=parameters(kf))
-    xT,RT,ll = smooth(kf::ExtendedKalmanFilter, u::Vector, y::Vector, p=parameters(kf))
+    sol = smooth(filtersol)
+    sol = smooth(kf::AbstractKalmanFilter, u::Vector, y::Vector, p=parameters(kf))
 
-Returns smoothed estimates of state `x` and covariance `R` given all input output data `u,y` or an existing solution `sol` obtained from [`forward_trajectory`](@ref).
+Returns a [`KalmanSmoothingSolution`](@ref) with smoothed estimates of state `xT` and covariance `RT` given all input output data `u,y` or an existing filtering solution `filtersol` obtained from [`forward_trajectory`](@ref).
+
+The return smoothing can be plotted using `plot(sol)`, see [`KalmanSmoothingSolution`](@ref) and [`KalmanFilteringSolution`](@ref) for details.
 """
 function smooth(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractVector=sol.u, y::AbstractVector=sol.y,  p=parameters(kf))
     (; x,xt,R,Rt,ll) = sol
@@ -18,12 +19,18 @@ function smooth(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractVecto
         xT[t] = xt[t] .+ C*(xT[t+1] .- x[t+1])
         RT[t] = Rt[t] .+ symmetrize(C*(RT[t+1] .- R[t+1])*C')
     end
-    xT,RT,ll
+    KalmanSmoothingSolution(sol, xT, RT)
+end
+
+smooth(sol::KalmanFilteringSolution) = smooth(sol, sol.f)
+
+function smooth(kf::KalmanFilter, args...)
+    reset!(kf)
+    sol = forward_trajectory(kf, args...)
+    smooth(sol, kf, args...)
 end
 
 # This smoother appears to have issues when there are missing measurements. It also requires more information to be stored from the forward pass, K and S. The benefit of this implementation is that it does not invert the state covariance matrix, instead, it inverts the residual covariance. Pick the smoother that inverts the smallest matrix.
-
-
 """
     xT,RT,ll,λ̃,λ̂,r = smooth_mbf(sol, kf)
 
@@ -76,12 +83,6 @@ function smooth_mbf(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractV
         # RT[t] = R[t] .- symmetrize(R[t]*Λ̃[t]*R[t])
     end
     xT,RT,ll,λ̃,λ̂,r
-end
-
-function smooth(kf::KalmanFilter, args...)
-    reset!(kf)
-    sol = forward_trajectory(kf, args...)
-    smooth(sol, kf, args...)
 end
 
 function smooth(pf::AbstractParticleFilter, M, u, y, p=parameters(pf))
@@ -170,8 +171,11 @@ end
 
 """
     ll = loglik(filter, u, y, p=parameters(filter))
+    ll = loglik(filter, u, y, x, p=parameters(filter))
 
-Calculate log-likelihood for entire sequences `u,y`
+Calculate log-likelihood for entire sequences `u,y`.
+
+For Kalman-type filters when an accurate state sequence `x` is available, such as when data is obtained from a simulation or in a lab setting, the log-likelihood can be calculated using the state prediction errors rather than the output prediction errors. In this case, `logpdf(f.R, x-x̂)` is used rather than `logpdf(S, y-ŷ)`.
 """
 function loglik(f::AbstractFilter,u,y,p=parameters(f); kwargs...)
     reset!(f)
@@ -184,12 +188,30 @@ function loglik(pf::AuxiliaryParticleFilter,u,y,p=parameters(pf))
     ll + pf.pf(u[end],y[end], p, (length(u)-1)*pf.Ts)[1]
 end
 
+function loglik(f::AbstractFilter,u,y,x::AbstractVector,p=parameters(f); kwargs...)
+    length(u) == length(y) == length(x) || throw(ArgumentError("u, y, and x must have the same length"))
+    reset!(f)
+    sum(1:length(u)-1) do i
+        ui,yi,xi = u[i],y[i],x[i]
+        xh = f.x
+        xe = xi .- xh
+        # The paper https://liu.diva-portal.org/smash/get/diva2:1641373/FULLTEXT01.pdf suggests performing the correct step before calculating the logpdf, but the example https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Maximum-likelihood-estimation where the data is simulated with dynamics_noise=false
+        # xs,u,y = simulate(pf,300,df, dynamics_noise=false)
+        # suggests that one shall use the prediction errors rather than the filtering errors. With prediciton errors, ll increases as s gets smaller and decreases as s gets bigger. With filtering errors, ll plateaus for large s which is not what we want
+        correct!(f,ui,yi,p; kwargs...)
+        predict!(f,ui,p; kwargs...)
+        ll = extended_logpdf(SimpleMvNormal(f.R), xe)
+        ll
+    end
+end
+
 """
     ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors::Vector{Distribution}, u, y, p)
+    ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors::Vector{Distribution}, u, y, x, p)
 
 returns function θ -> p(y|θ)p(θ)
 """
-function log_likelihood_fun(filter_from_parameters,priors::AbstractVector,u,y, p)
+function log_likelihood_fun(filter_from_parameters,priors::AbstractVector,args...)
     n = numargs(filter_from_parameters)
     pf = nothing
     function (θ)
@@ -199,7 +221,7 @@ function log_likelihood_fun(filter_from_parameters,priors::AbstractVector,u,y, p
         isfinite(ll) || return eltype(θ)(-Inf)
         pf = filter_from_parameters(θ,pf)
         try
-            return ll + loglik(pf,u,y,p)
+            return ll + loglik(pf,args...)
         catch
             return eltype(θ)(-Inf)
         end

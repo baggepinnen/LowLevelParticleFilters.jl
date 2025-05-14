@@ -170,6 +170,74 @@ end
     @series sol.t, sol
 end
 
+
+"""
+    struct KalmanSmoothingSolution
+
+A structure representing the solution to a Kalman smoothing problem.
+
+# Fields
+- `sol`: A solution object containing the results of the _filtering_ process.
+- `xT`: The smoothed state estimate.
+- `RT`: The smoothed state covariance.
+
+The solution object can be plotted
+```
+plot(sol; plotxT=true, plotRT=true, kwargs...)
+```
+where
+- `plotxT`: Plot the smoothed estimates `x(t|T)`
+- `plotRT`: Plot the smoothed covariances `R(t|T)` as ribbons at ±2σ (1.96 σ to be precise)
+- The rest of the keyword arguments are the same as for [`KalmanFilteringSolution`](@ref)
+
+When plotting a smoothing solution, the filtering solution is also plotted. The same keyword arguments as for [`KalmanFilteringSolution`](@ref) may be used to control which signals are plotted
+"""
+struct KalmanSmoothingSolution
+    sol
+    xT
+    RT
+end
+
+function Base.getproperty(sol::KalmanSmoothingSolution, s::Symbol)
+    s ∈ fieldnames(typeof(sol)) && return getfield(sol, s)
+    return getproperty(getfield(sol, :sol), s)
+end
+
+Base.iterate(r::KalmanSmoothingSolution)               = (r.xT, Val(:RT))
+Base.iterate(r::KalmanSmoothingSolution, ::Val{:RT})   = (r.RT, Val(:ll))
+Base.iterate(r::KalmanSmoothingSolution, ::Val{:ll})   = (r.x, Val(:done))
+Base.iterate(r::KalmanSmoothingSolution, ::Val{:done}) = nothing
+
+
+@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanSmoothingSolution; plotxT = true, plotRT=true, names = sol.f.names, name = names.name)
+    isempty(name) || (name = name*" ")
+    kf = sol.f
+    nx, nu, ny = length(sol.x[1]), length(sol.u[1]), length(sol.y[1])
+    xnames = names.x
+
+    @series sol.sol
+
+    if plotxT
+        m = reduce(hcat, sol.xT)'
+        twoσ = 1.96 .* sqrt.(reduce(hcat, diag.(sol.RT))')
+        for i = 1:nx
+            @series begin
+                label --> "$(name)$(xnames[i])(t|T)"
+                subplot --> i
+                if plotRT
+                    ribbon := twoσ[:,i]
+                end
+                timevec, m[:,i]
+            end
+        end
+    end
+end
+
+
+@recipe function plot(sol::KalmanSmoothingSolution)
+    @series sol.t, sol
+end
+
 """
     ParticleFilteringSolution{F, Tu, Ty, Tx, Tw, Twe, Tll} <: AbstractFilteringSolution
 

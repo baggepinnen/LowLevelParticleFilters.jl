@@ -34,6 +34,9 @@ mutable struct KalmanFilter{AT,BT,CT,DT,R1T,R2T,D0T,XT,RT,TS,P,αT} <: AbstractK
     Ts::TS
     p::P
     α::αT
+    nx::Int
+    nu::Int
+    ny::Int
     names::SignalNames
 end
 
@@ -53,6 +56,7 @@ They can also be given as functions on the form
 ```
 Afun(x, u, p, t) -> A
 ```
+When providing functions, the dimensions of the state, input and output, `nx, nu, ny` must be provided as keyword arguments to the `KalmanFilter` constructor since these cannot be inferred from the function signature.
 For maximum performance, provide statically sized matrices from StaticArrays.jl
 
 α is an optional "forgetting factor", if this is set to a value > 1, such as 1.01-1.2, the filter will, in addition to the covariance inflation due to ``R_1``, exhibit "exponential forgetting" similar to a [Recursive Least-Squares (RLS) estimator](https://en.wikipedia.org/wiki/Recursive_least_squares_filter). It is thus possible to get a RLS-like algorithm by setting ``R_1=0, R_2 = 1/α`` and ``α > 1`` (``α`` is the inverse of the traditional RLS parameter ``α = 1/λ``). The exact form of the covariance update is
@@ -65,7 +69,7 @@ If `check = true (default)` the function will check that the eigenvalues of `A` 
 # Tutorials on Kalman filtering
 The tutorial ["How to tune a Kalman filter"](https://juliahub.com/pluto/editor.html?id=ad9ecbf9-bf83-45e7-bbe8-d2e5194f2240) details how to figure out appropriate covariance matrices for the Kalman filter, as well as how to add disturbance models to the system model. See also the [tutorial in the documentation](https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/adaptive_kalmanfilter/)
 """
-function KalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(Matrix(R1)); Ts = 1, p = NullParameters(), α = 1.0, check = true, ny = size(C,1), nu = size(B,2), names = default_names(length(d0), nu, ny, "KF"))
+function KalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(R1); Ts = 1, p = NullParameters(), α = 1.0, check = true, nx = length(d0), ny = size(C,1), nu = size(B,2), names = default_names(length(d0), nu, ny, "KF"))
     if check
         α ≥ 1 || @warn "α should be > 1 for exponential forgetting. An α < 1 will lead to exponential loss of adaptation over time."
         (A isa AbstractMatrix) && maximum(abs, eigvals(A isa SMatrix ? Matrix(A) : A)) ≥ 2 && @warn "The dynamics matrix A has eigenvalues with absolute value ≥ 2. This is either a highly unstable system, or you have forgotten to discretize a continuous-time model. If you are sure that the system is provided in discrete time, you can disable this warning by setting check=false." maxlog=1
@@ -75,7 +79,7 @@ function KalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(Matrix(R1)); Ts = 1, p = N
     if D == 0
         D = zeros(eltype(x0), ny, nu)
     end
-    KalmanFilter(A,B,C,D,R1,R2, d0, x0, R, 0, Ts, p, α, names)
+    KalmanFilter(A,B,C,D,R1,R2, d0, x0, R, 0, Ts, p, α, nx, nu, ny, names)
 end
 
 function Base.propertynames(kf::KF, private::Bool=false) where KF <: AbstractKalmanFilter
@@ -97,8 +101,8 @@ function Base.getproperty(kf::AbstractKalmanFilter, s::Symbol)
 end
 
 sample_state(kf::AbstractKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
-sample_state(kf::AbstractKalmanFilter, x, u, p=parameters(kf), t=0; noise=true) = kf.A*x .+ kf.B*u .+ noise*rand(SimpleMvNormal(get_mat(kf.R1, x, u, p, t)))
-sample_measurement(kf::AbstractKalmanFilter, x, u, p=parameters(kf), t=0; noise=true) = kf.C*x .+ kf.D*u .+ noise*rand(SimpleMvNormal(get_mat(kf.R2, x, u, p, t)))
+sample_state(kf::AbstractKalmanFilter, x, u, p=parameters(kf), t=0; noise=true) = get_mat(kf.A, u,u,p,t)*x .+ get_mat(kf.B, u,u,p,t)*u .+ noise*rand(SimpleMvNormal(get_mat(kf.R1, x, u, p, t)))
+sample_measurement(kf::AbstractKalmanFilter, x, u, p=parameters(kf), t=0; noise=true) = get_mat(kf.C, u,u,p,t)*x .+ get_mat(kf.D, u,u,p,t)*u .+ noise*rand(SimpleMvNormal(get_mat(kf.R2, x, u, p, t)))
 particletype(kf::AbstractKalmanFilter) = typeof(kf.x)
 covtype(kf::AbstractKalmanFilter)      = typeof(kf.R)
 state(kf::AbstractKalmanFilter)        = kf.x
