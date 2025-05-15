@@ -338,6 +338,19 @@ The spread of the sigma points is controlled by `weight_params::UTParams`. See [
 # Sigma-point rejection
 For problems with challenging dynamics, a mechanism for rejection of sigma points after the dynamics update is provided. A function `reject(x) -> Bool` can be provided through the keyword argument `reject` that returns `true` if a sigma point for ``x(t+1)`` should be rejected, e.g., if an instability or non-finite number is detected. A rejected point is replaced by the propagated mean point (the mean point cannot be rejected). This function may be provided either to the constructor of the UKF or passed to the [`predict!`](@ref) function.
 
+# Enforcing contraints using sigma-point projection
+Constraints on the state (or output) may be enforced by projecting the sigma points onto the constraint set during the dynamics (or measurement) update. In general, two projections per update are required, one after the generation of the sigma points but before the dynamics is applied, and one after the dynamics update. No functionality for this is provided in this package, but the projection may be readibly implemented manually in the dynamics function, e.g.,
+```julia
+function dynamics(x, u, p, t)
+    x  = project(x)  # Sigma points may have been generated outside the constraint set
+    xp = f(x, u, p, t)
+    xp = project(xp) # The dynamics may have moved the points outside the constraint set
+    return xp
+end
+```
+
+Equality constraints can alternatively be handled by making use of a pseudo-measurement ``0 = C_{con}x`` with close to zero covariance.
+
 # Custom measurement models
 
 By default, standard arithmetic mean and `e(y, yh) = y - yh` are used as mean and innovation functions.

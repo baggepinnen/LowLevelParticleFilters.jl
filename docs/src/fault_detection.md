@@ -376,10 +376,19 @@ DisplayAs.PNG(Plots.current()) # hide
 ```
 not really, it looks like large Z-scores can appear even when the estimated velocity is small.
 
+### Alternative fault-detection strategies
+
+In this tutorial, we used the Z-score of the prediction error to detect faults. A Kalman filter, being a statistical estimator, maintains a _belief_ about the state of the system, whenever this belief is inconsistent with fault-free operation, we may experiencing a fault. Below are some alternative ways in which we can detect faults using a Kalman filter:
+
+- A single measurement has a Z-score larger than a threshold. The benefit of this approach is that it can isolate issues to a single sensor.
+- The entire measurement vector has a large Z-score. This can detect issues that cause unexpected correlation in the output, but where each individual output looks as expected on its own.
+- The filter may be augmented with a _disturbance model_. If the estimated disturbance is larger than expected, e.g., significantly different from zero, it may indicate a fault. See [How to tune a Kalman filter](@ref) and [Disturbance gallery](@ref) for more information on how to do this.
+- Parameters of the system may be modeled as time-varying and estimated online. If, e.g., an estimated gain parameter decreases significantly, it may indicate a fault. This is similar in spirit to adding a disturbance model, but instead of estimating an input disturbance, we estimate a property of the system. See [Joint state and parameter estimation](@ref) for an example of this.
+- An article suggesting several consistency checks similar to the Z-score check used here is "New Kalman filter and smoother consistency tests" by Gibbs, all of which can be readily computed from the quantities saved in the `KalmanFilteringSolution` object and the result of `smooth`. One suggestion is to use the filter error and associated filter-error covariance instead of the prediction error, another one is similar but using a smoothed error instead. The last suggestion is to use the smoothed stat error in a similar check.
+
 ## Summary
 - A state estimator can indicate faults when the error is larger than _expected_
 - What is _expected_ is determined by the model
-- An article suggesting several consistency checks similar to the Z-score check used here is "New Kalman filter and smoother consistency tests" by Gibbs, all of which can be readily computed from the quantities saved in the `KalmanFilteringSolution` object and the result of `smooth`. One suggestion is to use the filter error and associated filter-error covariance instead of the prediction error, another one is similar but using a smoothed error instead. The last suggestion is to use the smoothed stat error in a similar check.
 
 
 The notebook used in the tutorial is available here:
