@@ -659,7 +659,8 @@ function sigmapoints_c!(
 )
     sigma_point_cache = measurement_model.cache
     xsm = sigma_point_cache.x0
-    sigmapoints!(xsm, eltype(xsm)(kf.x), kf.R, measurement_model.weight_params, kf.cholesky!)
+    chol = hasproperty(kf, :cholesky!) ? kf.cholesky! : cholesky!
+    sigmapoints!(xsm, eltype(xsm)(kf.x), kf.R, measurement_model.weight_params, chol)
     isnan(xsm[1][1]) && error("Cholesky factorization of state covariance failed at time step $(kf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got R = ", kf.R)
     nothing
 end
