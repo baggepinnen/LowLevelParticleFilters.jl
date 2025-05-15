@@ -229,7 +229,7 @@ end
 
 abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
 
-mutable struct UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,RT,P,RJ,SMT,SCT,CH,WP} <: AbstractUnscentedKalmanFilter
+mutable struct UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,RT,P,RJ,SMT,SCT,CH,WP,R1XT} <: AbstractUnscentedKalmanFilter
     dynamics::DT
     measurement_model::MT
     R1::R1T
@@ -248,6 +248,7 @@ mutable struct UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,RT,P
     cholesky!::CH
     names::SignalNames
     weight_params::WP
+    R1x::R1XT
 end
 
 function Base.getproperty(ukf::UnscentedKalmanFilter, s::Symbol)
@@ -363,7 +364,7 @@ ERROR: PosDefException: matrix is not positive definite; Factorization failed.
 ```
 In such situations, it is advicable to reconsider the noise model and covariance matrices, alternatively, you may provide a custom Cholesky factorization function to the UKF constructor through the keyword argument `cholesky!`. The function should have the signature `cholesky!(A::AbstractMatrix)::Cholesky`. A useful alternative factorizaiton when covariance matrices are expected to be singular is `cholesky! = R->cholesky!(Positive, Matrix(R))` where the "positive" Cholesky factorization is provided by the package PositiveFactorizations.jl, which must be manually installed and loaded by the user.
 """
-function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::AbstractMeasurementModel, R1, d0=SimpleMvNormal(R1); Ts=1.0, p=NullParameters(), nu::Int, ny=measurement_model.ny, nw = nothing, reject=nothing, state_mean=weighted_mean, state_cov=weighted_cov, cholesky! = cholesky!, names=default_names(length(d0), nu, ny, "UKF"), weight_params = TrivialParams(), kwargs...) where {IPD,IPM,AUGD,AUGM}
+function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::AbstractMeasurementModel, R1, d0=SimpleMvNormal(R1); Ts=1.0, p=NullParameters(), nu::Int, ny=measurement_model.ny, nw = nothing, reject=nothing, state_mean=weighted_mean, state_cov=weighted_cov, cholesky! = cholesky!, names=default_names(length(d0), nu, ny, "UKF"), weight_params = TrivialParams(), R1x=nothing, kwargs...) where {IPD,IPM,AUGD,AUGM}
     nx = length(d0)
     
     T = eltype(d0)
@@ -395,8 +396,8 @@ function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::A
     R = convert_cov_type(R1, d0.Σ)
     x0 = convert_x0_type(d0.μ)
     UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,typeof(dynamics),typeof(measurement_model),typeof(R1),typeof(d0),
-        typeof(predict_sigma_point_cache),typeof(x0),typeof(R),typeof(p),typeof(reject),typeof(state_mean),typeof(state_cov), typeof(cholesky!), typeof(weight_params)}(
-        dynamics, measurement_model, R1, d0, predict_sigma_point_cache, x0, R, 0, Ts, ny, nu, p, reject, state_mean, state_cov, cholesky!, names, weight_params)
+        typeof(predict_sigma_point_cache),typeof(x0),typeof(R),typeof(p),typeof(reject),typeof(state_mean),typeof(state_cov), typeof(cholesky!), typeof(weight_params), typeof(R1x)}(
+        dynamics, measurement_model, R1, d0, predict_sigma_point_cache, x0, R, 0, Ts, ny, nu, p, reject, state_mean, state_cov, cholesky!, names, weight_params, R1x)
 end
 
 function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement, R1, R2, d0=SimpleMvNormal(R1), args...; Ts = 1.0, p = NullParameters(), ny, nu, reject=nothing, state_mean=weighted_mean, state_cov=weighted_cov, cholesky! = cholesky!, kwargs...) where {IPD,IPM,AUGD,AUGM}
@@ -523,6 +524,7 @@ function sigmapoints_p!(ukf::UnscentedKalmanFilter{<:Any,<:Any,true}, R1)
     sigma_point_cache = ukf.predict_sigma_point_cache
     xsd0 = sigma_point_cache.x0
     m = [ukf.x; 0*R1[:, 1]]
+    ukf.R1x === nothing || (ukf.R += ukf.R1x)# # Ability to regularize the state covariance when R1 applies to explicit disturbance inputs
     Raug = cat(ukf.R, R1, dims=(1,2))
     sigmapoints!(xsd0, m, Raug, ukf.weight_params, ukf.cholesky!)
     isnan(xsd0[1][1]) && error("Cholesky factorization of augmented state covariance failed at time step $(ukf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got Raug = ", Raug)
@@ -657,7 +659,9 @@ function sigmapoints_c!(
 )
     sigma_point_cache = measurement_model.cache
     xsm = sigma_point_cache.x0
-    sigmapoints!(xsm, eltype(xsm)(kf.x), kf.R, measurement_model.weight_params)
+    chol = hasproperty(kf, :cholesky!) ? kf.cholesky! : cholesky!
+    sigmapoints!(xsm, eltype(xsm)(kf.x), kf.R, measurement_model.weight_params, chol)
+    isnan(xsm[1][1]) && error("Cholesky factorization of state covariance failed at time step $(kf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got R = ", kf.R)
     nothing
 end
 
@@ -673,7 +677,8 @@ function sigmapoints_c!(
     nv = size(R2, 1)
     xm = [x; 0 * R2[:, 1]]
     Raug = cat(R, R2, dims = (1, 2))
-    sigmapoints!(xsm, xm, Raug, measurement_model.weight_params)
+    sigmapoints!(xsm, xm, Raug, measurement_model.weight_params, kf.cholesky!)
+    isnan(xsm[1][1]) && error("Cholesky factorization of augmented state covariance failed at time step $(kf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got R = ", R)
     nothing
 end
 
