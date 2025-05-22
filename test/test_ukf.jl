@@ -166,8 +166,9 @@ resukf2 = forward_trajectory(ukf2, vu, vy)
 
 
 ## Augmented dynamics
+R1 = eye(nx)
 dynamics_w(x,u,p,t,w) = _A*x .+ _B*u .+ w
-ukfw  = UnscentedKalmanFilter{false,false,true,false}(dynamics_w, measurement, eye(nx), R2, d0; ny, nu)
+ukfw  = UnscentedKalmanFilter{false,false,true,false}(dynamics_w, measurement, R1, R2, d0; ny, nu)
 resukfw = forward_trajectory(ukfw, u, y)
 @test reduce(hcat, resukfw.xt) ≈ reduce(hcat, resukf.xt) atol=1e-6
 @test reduce(hcat, resukfw.x) ≈ reduce(hcat, resukf.x) atol=1e-6
@@ -175,9 +176,44 @@ resukfw = forward_trajectory(ukfw, u, y)
 @test reduce(hcat, resukfw.Rt) ≈ reduce(hcat, resukf.Rt) atol=1e-6
 @test resukfw.ll ≈ resukf.ll rtol=1e-6
 
+# test augmented dynamics with RK4 integration. Predict several steps in a row and investigate covariance, compare with EKF
+# To make this equivalent, we must also d2c the noise input, which is chol of R1. QUESTION: Does this mean that AUGD UKF needs to use some form of continuous-time noise covariance?
+for Ts = [0.1, 1.0, 10.0]
+    sys_cont = d2c(ss(_A, [_B cholesky(R1).L], _C, 0, Ts))
+    # This causes the Bw part to scale as 1 / Ts
+    dynamics_w_cont(x,u,p,t,w) = sys_cont.A*x .+ sys_cont.B*[u; w]
+    dynamics_w_disc = LowLevelParticleFilters.rk4(dynamics_w_cont, Ts, supersample=100)
+    ukfw2  = UnscentedKalmanFilter{false,false,true,false}(dynamics_w_disc, measurement, R1, R2, d0; ny, nu)
+    resukfw2 = forward_trajectory(ukfw2, u, y)
+    @test reduce(hcat, resukfw2.xt) ≈ reduce(hcat, resukf.xt) atol=1e-6
+    @test reduce(hcat, resukfw2.x) ≈ reduce(hcat, resukf.x) atol=1e-6
+    @test reduce(hcat, resukfw2.R) ≈ reduce(hcat, resukf.R) atol=1e-6
+    @test reduce(hcat, resukfw2.Rt) ≈ reduce(hcat, resukf.Rt) atol=1e-6
+    @test resukfw2.ll ≈ resukf.ll rtol=1e-6
+
+
+
+    # Divide by R1 ./ Ts^2 gives the smallest error here, and sample-rate invariant
+    sys_disc = ss(_A, _B, _C, 0, Ts)
+    sys_cont = d2c(sys_disc)
+    dynamics_w_cont(x,u,p,t,w) = sys_cont.A*x .+ sys_cont.B*u + w
+    dynamics_w_disc = LowLevelParticleFilters.rk4(dynamics_w_cont, Ts, supersample=100)
+    ukfw2  = UnscentedKalmanFilter{false,false,true,false}(dynamics_w_disc, measurement, R1 ./ Ts^2, R2, d0; ny, nu)
+    resukfw2 = forward_trajectory(ukfw2, u, y)
+    # @show norm(reduce(hcat, resukfw2.xt) - reduce(hcat, resukf.xt))
+
+    # sys_disc1 = ss(_A, _B, _C, 0, 1.0)
+    # R1c = d2c(sys_disc, R1)
+    # R1d = c2d(sys_cont, R1c, Ts)
+    # R1d = c2d(sys_disc1, R1c) ./ Ts
+    # ukfw2  = UnscentedKalmanFilter{false,false,true,false}(dynamics_w_disc, measurement, R1d, R2, d0; ny, nu)
+    # resukfw2 = forward_trajectory(ukfw2, u, y)
+    # @show norm(reduce(hcat, resukfw2.xt) - reduce(hcat, resukf.xt))
+end
+
 
 measurement_v(x,u,p,t,v) = _C*x .+ v
-ukfv  = UnscentedKalmanFilter{false,false,false,true}(dynamics, measurement_v, eye(nx), R2, d0; ny, nu)
+ukfv  = UnscentedKalmanFilter{false,false,false,true}(dynamics, measurement_v, R1, R2, d0; ny, nu)
 resukfv = forward_trajectory(ukfv, u, y)
 @test reduce(hcat, resukfv.xt) ≈ reduce(hcat, resukf.xt) atol=1e-6
 @test reduce(hcat, resukfv.x) ≈ reduce(hcat, resukf.x) atol=1e-6
@@ -445,3 +481,75 @@ eF = sum(abs2, X .- reduce(hcat, ssol.xt)')
 eP = sum(abs2, X .- reduce(hcat, ssol.x)')
 
 @test eT < eF < eP
+
+
+## Sample-time invariance covariance tuning
+Ac = [0;;]
+Bc = [1;;]
+Cc = [1;;]
+sys_cont = ss(Ac, Bc, Cc, 0)
+d0 = SimpleMvNormal([0.0], [1e-8;;])
+
+function covariance_evol(ukf)
+    reset!(ukf)
+    r1 = zeros(100)
+    for i = 1:100
+        r1[i] = ukf.R[]
+        predict!(ukf, [0.0], [0.0])
+    end
+    r1
+end
+
+ny = nu = 1
+Ts = 10.0
+
+for Ts = [0.1, 1.0, 10.0]
+
+    timevec = range(0, step=Ts, length=100)
+    sys_disc = c2d(sys_cont, Ts)
+    dynamics(x,u,p,t) = sys_disc.A*x .+ sys_disc.B*u
+    measurement(x,u,p,t) = sys_disc.C*x
+
+    dynamics_w_cont(x,u,p,t,w) = sys_cont.A*x .+ sys_cont.B*u + w
+    dynamics_w_disc = LowLevelParticleFilters.rk4(dynamics_w_cont, Ts, supersample=100)
+
+    sys_cont_aug = ss(Ac, [Bc cholesky(R1).L], Cc, 0)
+    sys_disc_aug = c2d(sys_cont_aug, Ts)
+    # This causes the Bw part to scale as 1 / Ts
+    dynamics_w_disc_aug(x,u,p,t,w) = sys_disc_aug.A*x .+ sys_disc_aug.B*[u; w]
+
+
+    R1 = [1.0;;]
+    R2 = [1.0;;]
+
+    T    = 200 # Number of time steps
+    kf   = KalmanFilter(sys_disc.A, sys_disc.B, sys_disc.C, 0, R1*Ts, R2, d0; Ts)
+    ukf  = UnscentedKalmanFilter(dynamics, measurement, R1*Ts, R2, d0; ny, nu, Ts)
+    ukfw2  = UnscentedKalmanFilter{false,false,true,false}(dynamics_w_disc, measurement, R1./Ts, R2, d0; ny, nu)
+    ukfw_aug  = UnscentedKalmanFilter{false,false,true,false}(dynamics_w_disc_aug, measurement, R1 ./ Ts, R2, d0; ny, nu)
+
+    Nd = sys_disc_aug.B[:,2]
+    kf_aug   = KalmanFilter(sys_disc_aug.A, sys_disc_aug.B[:,1:1], sys_disc_aug.C, 0, Nd*R1*Nd' ./ Ts, R2, d0; Ts)
+
+    r0 = covariance_evol(kf)
+    r1 = covariance_evol(ukf)
+    r2 = covariance_evol(ukfw2)
+    r3 = covariance_evol(ukfw_aug)
+    r4 = covariance_evol(kf_aug)
+
+    @test r0 ≈ r1
+    @test r0 ≈ r2
+    @test r0 ≈ r3
+    @test r0 ≈ r4
+
+    # plot(timevec, r0, lab="KF")
+    # plot!(timevec, r1, lab="UKF")
+    # plot!(timevec, r2, lab="UKFW")
+    # plot!(timevec, r3, lab="UKFW aug")
+    # plot!(timevec, r4, lab="KF aug")
+    # display(current())
+end
+
+## Conclusion
+# If the noise input is discretized, such as when using rk4 with augmented dynamics, or if the noise inputs are explicitly added to c2d, then we should scale R1 by 1/Ts
+# If the noise input is not discretized, i.e., when using `Ax + Bu + w, or dynamics(x,u,p,t), we should instead scale R1 by Ts

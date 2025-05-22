@@ -45,7 +45,7 @@ The method used comes from theorem 5 in the reference below.
 > Differential Lyapunov Equation With Applications to Kalman Filtering", 
 > Patrik Axelsson and Fredrik Gustafsson
 
-**On singular covariance matrices:** The traditional double integrator with covariance matrix `Q = diagm([0,σ²])` warrants special consideration since it is rank-deficient, i.e., it indicates that there is a single source of randomness only, despite the presence of two state variables. If we assume that the noise is piecewise constant, we can use the input matrix ("Cholesky factor") of `Q`, e.g., the noise of variance `σ²` enters like `N = [0, 1]` which is sampled using ZoH and becomes `Nd = [Ts^2 / 2; Ts]` which results in the covariance matrix `σ² * Nd * Nd'` (see example below). If we assume that the noise is a continuous-time white noise process, the discretized covariance matrix is full rank and can be computed by `c2d(sys::StateSpace{Continuous}, R1c, Ts)` or directly by the function [`double_integrator_covariance_smooth`](@ref). In some applications, a rank-1 approximation to this matrix is favored, notably, when using an augmented [`UnscentedKalmanFilter`](@ref). In such case, a good rank-1 approximation to this matrix is obtained by `double_integrator_covariance(Ts, σ2) ./ Ts`. This has the benefit of being both low rank, and produce covariance dynamics that are approximately invariant to the choice of sample interval. If the ZoH assumption is made, the covariance matrix is rank 1 but the covariance dynamics are not invariant to the choice of sample interval.`
+**On singular covariance matrices:** The traditional double integrator with covariance matrix `Q = diagm([0,σ²])` warrants special consideration since it is rank-deficient, i.e., it indicates that there is a single source of randomness only, despite the presence of two state variables. If we assume that the noise is piecewise constant, we can use the input matrix ("Cholesky factor") of `Q`, e.g., the noise of variance `σ²` enters like `N = [0, 1]` which is sampled using ZoH and becomes `Nd = [Ts^2 / 2; Ts]` which results in the covariance matrix `σ² * Nd * Nd'` (see example below). If we instead assume that the noise is a continuous-time white noise process, the discretized covariance matrix is full rank and can be computed by `c2d(sys::StateSpace{Continuous}, R1c, Ts)` or directly by the function [`double_integrator_covariance_smooth`](@ref).
 
 ## Example
 The following example will discretize a linear double integrator system. Double integrators arise when the position of an object is controlled by a force, i.e., when Newtons second law ``f = ma`` governs the dynamics. The system can be written on the form
@@ -91,7 +91,34 @@ If the noise is not piecewise constant the discretized covariance matrix will be
 For a nonlinear system, we could adopt a similar strategy by first linearizing the system around a suitable operating point. Alternatively, we could make use of the fact that some of the state estimators in this package allows the covariance matrices to be functions of the state, and thus compute a new discretized covariance matrix using a linearization around the current state.
 
 ## Sample-interval insensitive tuning
-When the dynamics covariance of a state estimator is tuned, it may be desirable to have the covariance dynamics be approximately invariant to the choice of sample interval ``T_s``. To achieve this, construct the covariance matrix as `R1 = [...] ./ Ts`, i.e., tune a matrix that is scaled by the inverse of the sample interval. If you later change `Ts`, you'll get approximately the same performance of the estimator for prediction intervals during which there are no measurements available.
+When the dynamics covariance of a state estimator is tuned, it may be desirable to have the covariance dynamics be approximately invariant to the choice of sample interval ``T_s``. How to achieve this depends on what formulation of the dynamics is used, in particular, whether the noise inputs are included in the discretization procedure or not. Note, when a higher sample-rate implies the use of more frequent measurements, the covariance dynamics will not be rendered invariant to the sample interval using the methods below, only the covariance dynamics during prediction only will have this property.
+
+### Noise inputs are not discretized
+This case arises when using the standard [`KalmanFilter`](@ref) with dynamics equation
+```math
+x^+ = Ax + Bu + w
+```
+or a nonlinear version with `dynamics(x, u, p, t)`. To achieve sample-rate invariant tuning, construct the covariance matrix as `R1 = [...] .* Ts`, i.e., tune a matrix that is scaled by the the sample interval. If you later change `Ts`, you'll get approximately the same performance of the estimator for prediction intervals during which there are no measurements available.
+
+
+### Noise inputs are discretized
+This case arises when using an augmented [`UnscentedKalmanFilter`](@ref) with dynamics `dynamics(x, u, p, t, w)` which is discretized using an integrator, such as
+```julia
+disc_dynamics = SeeToDee.Rk4(dynamics, Ts)
+```
+In this case, the integrator integrates also the noise process, and we instead achieve sample-rate invariant tuning by constructing the covariance matrix as `R1 = [...] ./ Ts`, i.e., tune a matrix that is scaled by the **inverse** of the sample interval. 
+
+This case can also arise when using a linear system with noise input, i.e., the dynamics equation
+```math
+\dot x = Ax + Bu + Nw
+```
+where `N` is the input matrix for the noise process. When this system is discretized with the input matrix `[B N]`
+and the `R1` matrix is derived as $R_1^d = N_d R_1^c N_d^T$, we need to further scale the covariance matrix by `1/Ts`, i.e., use $R_1^d = \frac{1}{T_s} N_d R_1^c N_d^T$.
+
+### When using `double_integrator_covariance_smooth`
+The function [`double_integrator_covariance_smooth`](@ref) already has the desired scaling with `Ts` built in, and this is thus to be used with additive noise that is not discretized.
+
+[`double_integrator_covariance`](@ref) is for piecewise constant noise and this does generally not lead to sample-rate invariant tuning, however `double_integrator_covariance(Ts) ./ Ts` does.
 
 ## Non-uniform sample rates
 Special care is needed if the sample rate is not constant, i.e., the time interval between measurements varies. 
