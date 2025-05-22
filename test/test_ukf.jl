@@ -402,6 +402,8 @@ Al, Bl, Cl, Dl = ControlSystemsBase.linearize(kf, x[1], u[1], nothing)
 
 obs = observability(ukf, x[1], u[1], nothing)
 @test obs.isobservable
+OB = obsv(ukf, x[1], u[1], nothing)
+@test rank(OB) == length(x[1])
 
 obs = observability(kf, x[1], u[1], nothing)
 @test obs.isobservable
