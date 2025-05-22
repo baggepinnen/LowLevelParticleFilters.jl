@@ -1,7 +1,7 @@
 module LowLevelParticleFiltersControlSystemsBaseExt
 import LowLevelParticleFilters.KalmanFilter
 using LowLevelParticleFilters: AbstractFilter, AbstractKalmanFilter, AbstractExtendedKalmanFilter, AbstractUnscentedKalmanFilter, AbstractParticleFilter, SimpleMvNormal, SignalNames, get_mat
-using ControlSystemsBase: AbstractStateSpace, ssdata, ss, observability, linearize
+using ControlSystemsBase: AbstractStateSpace, ssdata, ss, observability, linearize, obsv
 import ControlSystemsBase
 
 """
@@ -56,6 +56,18 @@ Linearize (if needed) the filter and call `ControlSystemsBase.observability` on 
 - `t`: The time at which to linearize the system
 """
 ControlSystemsBase.observability(f::AbstractFilter, x, u, p, t=0.0) = observability(ss(linearize(f, x, u, p, t)..., f.Ts))
+
+"""
+    ControlSystemsBase.obsv(f::AbstractKalmanFilter, x, u, p, t=0.0)
+
+Linearize (if needed) the filter and call `ControlSystemsBase.obsv` on the resulting system.
+# Arguments:
+- `x`: The state in which to linearize the system
+- `u`: The input in which to linearize the system
+- `p`: The parameter vector
+- `t`: The time at which to linearize the system
+"""
+ControlSystemsBase.obsv(f::AbstractFilter, x, u, p, t=0.0) = obsv(ss(linearize(f, x, u, p, t)..., f.Ts))
 
 
 end
