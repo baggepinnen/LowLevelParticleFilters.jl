@@ -492,6 +492,8 @@ Cc = [1;;]
 sys_cont = ss(Ac, Bc, Cc, 0)
 d0 = SimpleMvNormal([0.0], [1e-8;;])
 R1 = [1.0;;]
+R2 = [1.0;;]
+
 
 function covariance_evol(ukf)
     reset!(ukf)
@@ -522,8 +524,6 @@ for Ts = [0.1, 1.0, 10.0]
     dynamics_w_disc_aug(x,u,p,t,w) = sys_disc_aug.A*x .+ sys_disc_aug.B*[u; w]
 
 
-    R1 = [1.0;;]
-    R2 = [1.0;;]
 
     T    = 200 # Number of time steps
     kf   = KalmanFilter(sys_disc.A, sys_disc.B, sys_disc.C, 0, R1*Ts, R2, d0; Ts)
