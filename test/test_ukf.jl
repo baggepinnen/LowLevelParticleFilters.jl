@@ -196,8 +196,8 @@ for Ts = [0.1, 1.0, 10.0]
     # Divide by R1 ./ Ts^2 gives the smallest error here, and sample-rate invariant
     sys_disc = ss(_A, _B, _C, 0, Ts)
     sys_cont = d2c(sys_disc)
-    dynamics_w_cont(x,u,p,t,w) = sys_cont.A*x .+ sys_cont.B*u + w
-    dynamics_w_disc = LowLevelParticleFilters.rk4(dynamics_w_cont, Ts, supersample=100)
+    dynamics_w_cont2(x,u,p,t,w) = sys_cont.A*x .+ sys_cont.B*u + w
+    dynamics_w_disc = LowLevelParticleFilters.rk4(dynamics_w_cont2, Ts, supersample=100)
     ukfw2  = UnscentedKalmanFilter{false,false,true,false}(dynamics_w_disc, measurement, R1 ./ Ts^2, R2, d0; ny, nu)
     resukfw2 = forward_trajectory(ukfw2, u, y)
     # @show norm(reduce(hcat, resukfw2.xt) - reduce(hcat, resukf.xt))
@@ -491,6 +491,7 @@ Bc = [1;;]
 Cc = [1;;]
 sys_cont = ss(Ac, Bc, Cc, 0)
 d0 = SimpleMvNormal([0.0], [1e-8;;])
+R1 = [1.0;;]
 
 function covariance_evol(ukf)
     reset!(ukf)
