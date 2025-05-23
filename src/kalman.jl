@@ -153,8 +153,9 @@ end
 
 Reset the initial distribution of the state. Optionally, a new mean vector `x0` can be provided.
 """
-function reset!(kf::AbstractKalmanFilter; x0 = kf.d0.μ)
+function reset!(kf::AbstractKalmanFilter; x0 = kf.d0.μ, t=0)
     kf.x = convert_x0_type(x0)
     kf.R = convert_cov_type(kf.R1, kf.d0.Σ)# typeof(kf.R1)(kf.d0.Σ)
-    kf.t = 0
+    kf.t = t
+    nothing
 end
