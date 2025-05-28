@@ -299,7 +299,7 @@ out = zeros(2, 10000)
         end
         llskfx = map(svec) do s # Kalman filter with known state sequence, possible when data is simulated
             kfs = KalmanFilter(A_test, B_test, C_test, 0, s^2*eye(n), eye(p), d0)
-            loglik(kfs, u, y, x)
+            loglik_x(kfs, u, y, x)
         end
         plot(svec, [llspf llspfa llskf llskfx], xscale=:log10, lab=["PF" "APF" "KF" "KF known x"])
         vline!([0.1])

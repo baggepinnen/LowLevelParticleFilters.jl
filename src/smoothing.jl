@@ -171,11 +171,11 @@ end
 
 """
     ll = loglik(filter, u, y, p=parameters(filter))
-    ll = loglik(filter, u, y, x, p=parameters(filter))
 
 Calculate log-likelihood for entire sequences `u,y`.
 
-For Kalman-type filters when an accurate state sequence `x` is available, such as when data is obtained from a simulation or in a lab setting, the log-likelihood can be calculated using the state prediction errors rather than the output prediction errors. In this case, `logpdf(f.R, x-x̂)` is used rather than `logpdf(S, y-ŷ)`.
+
+See also [`loglik_x`](@ref) for Kalman-type filters when an accurate state sequence `x` is available.
 """
 function loglik(f::AbstractFilter,u,y,p=parameters(f); kwargs...)
     reset!(f)
@@ -188,7 +188,12 @@ function loglik(pf::AuxiliaryParticleFilter,u,y,p=parameters(pf))
     ll + pf.pf(u[end],y[end], p, (length(u)-1)*pf.Ts)[1]
 end
 
-function loglik(f::AbstractFilter,u,y,x::AbstractVector,p=parameters(f); kwargs...)
+"""
+    ll = loglik_x(kf, u, y, x, p=parameters(kf))
+
+For Kalman-type filters when an accurate state sequence `x` is available, such as when data is obtained from a simulation or in a lab setting, the log-likelihood can be calculated using the state prediction errors rather than the output prediction errors. In this case, `logpdf(f.R, x-x̂)` is used rather than `logpdf(S, y-ŷ)`.
+"""
+function loglik_x(f::AbstractKalmanFilter,u,y,x::AbstractVector,p=parameters(f); kwargs...)
     length(u) == length(y) == length(x) || throw(ArgumentError("u, y, and x must have the same length"))
     reset!(f)
     sum(1:length(u)-1) do i
