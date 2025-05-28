@@ -69,7 +69,7 @@ llskf = map(svec) do s
 end
 llskfx = map(svec) do s # Kalman filter with known state sequence, possible when data is simulated
     kfs = KalmanFilter(A, B, C, 0, s^2*eye(nx), eye(ny), d0)
-    loglik(kfs, u, y, xs, p)
+    loglik_x(kfs, u, y, xs, p)
 end
 plot!(svec, llskf, yscale=:identity, xscale=:log10, lab="Kalman", c=:red)
 vline!([svec[findmax(llskf)[2]]], l=(:dash,:red), primary=false)
