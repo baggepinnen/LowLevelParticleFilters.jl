@@ -35,6 +35,8 @@ They can also be given as functions on the form
 Afun(x, u, p, t) -> A
 ```
 
+The covariance matrices `R1` and `R2` are the covariance matrices of the process noise and measurement noise, respectively. They can be provided as a matrix, as an `UpperTriangular` matrix representing the Cholesky factor. If `R1` or `R2` is a function, it must return the upper triangular Cholesky factor of the covariance matrix at the given time index.
+
 The internal fields storing covariance matrices are for this filter storing the upper-triangular Cholesky factor.
 
 α is an optional "forgetting factor", if this is set to a value > 1, such as 1.01-1.2, the filter will, in addition to the covariance inflation due to ``R_1``, exhibit "exponential forgetting" similar to a [Recursive Least-Squares (RLS) estimator](https://en.wikipedia.org/wiki/Recursive_least_squares_filter). It is thus possible to get a RLS-like algorithm by setting ``R_1=0, R_2 = 1/α`` and ``α > 1`` (``α`` is the inverse of the traditional RLS parameter ``α = 1/λ``). The form of the covariance update is
@@ -50,8 +52,12 @@ function SqKalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(Matrix(R1)); p = NullPar
         maximum(abs, eigvals(A isa SMatrix ? Matrix(A) : A)) ≥ 2 && @warn "The dynamics matrix A has eigenvalues with absolute value ≥ 2. This is either a highly unstable system, or you have forgotten to discretize a continuous-time model. If you are sure that the system is provided in discrete time, you can disable this warning by setting check=false." maxlog=1
     end
     R = UpperTriangular(convert_cov_type(R1, cholesky(d0.Σ).U))
-    R1 = cholesky(R1).U
-    R2 = cholesky(R2).U
+    if !(R1 isa UpperTriangular)
+        R1 = cholesky(R1).U
+    end
+    if !(R2 isa UpperTriangular)
+        R2 = cholesky(R2).U
+    end
     
     x0 = convert_x0_type(d0.μ)
 
