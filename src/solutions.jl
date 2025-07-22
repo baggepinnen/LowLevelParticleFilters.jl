@@ -43,6 +43,7 @@ where
 - `plotyh`: Plot the predicted measurements `ŷ(t|t-1)`
 - `plotyht`: Plot the filtered measurements `ŷ(t|t)`
 - `name`: a string that is prepended to the labels of the plots, which is useful when plotting multiple solutions in the same plot.
+- `σ = 1.96` The number of standard deviations covered by covariance ribbons
 
 To modify the signal names used in legend entries, construct an instance of [`SignalNames`](@ref) and pass this to the filter (or directly to the plot command) using the `names` keyword argument.
 """
@@ -74,7 +75,7 @@ function Base.show(io::IO, sol::KalmanFilteringSolution)
     println(io, "  ll: ", sol.ll)
 end
 
-@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotR=false, plotRt=false, names = sol.f.names, name = names.name)
+@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotR=false, plotRt=false, names = sol.f.names, name = names.name, σ=1.96)
     isempty(name) || (name = name*" ")
     kf = sol.f
     nx, nu, ny = length(sol.x[1]), length(sol.u[1]), length(sol.y[1])
@@ -82,7 +83,7 @@ end
     xnames = names.x
     if plotx
         m = reduce(hcat, sol.x)'
-        twoσ = 1.96 .* sqrt.(reduce(hcat, diag.(sol.R))')
+        twoσ = σ .* sqrt.(reduce(hcat, diag.(sol.R))')
         for i = 1:nx
             @series begin
                 label --> "$(name)$(xnames[i])(t|t-1)"
@@ -96,7 +97,7 @@ end
     end
     if plotxt
         m = reduce(hcat, sol.xt)'
-        twoσ = 1.96 .* sqrt.(reduce(hcat, diag.(sol.Rt))')
+        twoσ = σ .* sqrt.(reduce(hcat, diag.(sol.Rt))')
         for i = 1:nx
             @series begin
                 label --> "$(name)$(xnames[i])(t|t)"
