@@ -26,7 +26,7 @@ By incorporating the measurement, we form a _filtering estimate_ ``ε(t|t)`` and
 
 
 !!! note
-    Due to the exact formulation of ``K`` returned by the Riccati solver in MatrixEquations.jl, we must either use ``A^{-1}K`` or compute ``K = RC^T (R_2 + C R C^T)^{-1}`` ourselves. `MatrixEquations.ared` solves the Riccati equation corresponding to the filter form, but returns the ``K`` matrix for the prediction form. 
+    Due to the exact formulation of ``K`` returned by the Riccati solver in MatrixEquations.jl, we must either use ``A^{-1}K`` or compute ``K = RC^T (R_2 + C R C^T)^{-1}`` ourselves. `MatrixEquations.ared` solves the Riccati equation corresponding to the filter form, but returns the ``K`` matrix for the prediction form. The matrix ``A`` is invertible as long as the system has no poles in the origin, which physical systems does not tend to have since this would correspond to either a pole at ``-\infty`` in continuous time, i.e., a non-proper system, or a pole with much faster dynamics than the chosen discretization time.
 
 ```@example SAMPLERATE
 using ControlSystemsBase, LinearAlgebra
@@ -47,14 +47,14 @@ To perform an analysis of the performance as a function of the sample rate, we w
 A double integrator can be thought of as a particle subject to a force, the continuous-time dynamics are ``\ddot x = w``.
 ```@example SAMPLERATE
 using ControlSystemsBase, Plots, Test
-sysc = ss([0 1; 0 0], [0; 1], [1 0], 0) # Continuous-time double integrator
-R1c = [0 0; 0 1]                        # Continuous-time process noise covariance
-R2  = [1;;]                             # Measurement noise covariance
+sysc  = ss([0 1; 0 0], [0; 1], [1 0], 0) # Continuous-time double integrator
+R1c   = [0 0; 0 1]                       # Continuous-time process noise covariance
+R2    = [1;;]                            # Measurement noise covariance
 
-Ts    = 1                               # Sample interval
-sysd  = c2d(sysc, Ts)                   # Discretize the system
-R1d   = c2d(sysc, R1c, Ts)              # Discretize the process noise covariance
-K, R∞ = kalman_are(sysd, R1d, R2)       # Compute the stationary Kalman gain and covariance
+Ts    = 1                                # Sample interval
+sysd  = c2d(sysc, Ts)                    # Discretize the system
+R1d   = c2d(sysc, R1c, Ts)               # Discretize the process noise covariance
+K, R∞ = kalman_are(sysd, R1d, R2)        # Compute the stationary Kalman gain and covariance
 R∞
 ```
 
