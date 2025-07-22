@@ -267,7 +267,7 @@ out = zeros(2, 10000)
         # plot!(reduce(hcat, e_smooth)', lab="ê")
 
 
-        sqkf   = SqKalmanFilter(A_test, B_test, C_test, 0, 0.01eye(n), eye(p), d0)
+        sqkf   = SqKalmanFilter(A_test, B_test, C_test, 0, cholesky(0.01eye(n)).U, eye(p), d0)
         sqksol = forward_trajectory(sqkf, u, y)
         @test ksol.x ≈ sqksol.x
         @test ksol.xt ≈ sqksol.xt
