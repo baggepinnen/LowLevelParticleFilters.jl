@@ -156,7 +156,7 @@ function correct!(ukf::AbstractExtendedKalmanFilter, u, y, p, t::Real; kwargs...
     correct!(ukf, measurement_model, u, y, p, t::Real; kwargs...)    
 end
 
-function correct!(kf::AbstractKalmanFilter,  measurement_model::EKFMeasurementModel{IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(measurement_model.R2, kf.x, u, p, t)) where IPM
+function correct!(kf::AbstractKalmanFilter,  measurement_model::EKFMeasurementModel{IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(measurement_model.R2, kf.x, u, p, t), innovation_method=:kf) where IPM
     (; x,R) = kf
     (; measurement, Cjac) = measurement_model
     C = Cjac(x, u, p, t)
@@ -169,10 +169,24 @@ function correct!(kf::AbstractKalmanFilter,  measurement_model::EKFMeasurementMo
     end
     S   = symmetrize(C*R*C') + R2
     Sᵪ  = cholesky(Symmetric(S); check=false)
-    issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed, got S = ", S)
-    K   = (R*C')/Sᵪ
-    kf.x += vec(K*e)
-    kf.R  = symmetrize((I - K*C)*R) # WARNING against I .- A
+    if innovation_method === :kf
+        issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed, got S = ", S)
+        K   = (R*C')/Sᵪ
+        kf.x += vec(K*e)
+        kf.R  = symmetrize((I - K*C)*R) # WARNING against I .- A
+    elseif innovation_method === :sif # sliding innovation filter, does not appear to work very well at all
+        δ = 10*(diag(R2))
+        K = pinv(C) * diagm(clamp.(abs.(e) ./ δ, -1, 1))
+        kf.x += vec(K*e)
+        IKC = (I - K*C)
+        kf.R  = symmetrize(IKC*R*IKC' + K*R2*K')
+    else innovation_method === :smo # sliding mode observer
+        δ = 10*(diag(R2))
+        ν = pinv(C) * clamp.(abs.(e) ./ δ, -1, 1)
+        kf.x += vec(K*e) + ν
+        IKC = (I - K*C)
+        kf.R  = symmetrize(IKC*R*IKC' + K*R2*K')
+    end
     ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), e)[]# - 1/2*logdet(S) # logdet is included in logpdf
     (; ll, e, S, Sᵪ, K)
 end

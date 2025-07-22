@@ -641,6 +641,7 @@ function correct!(
     cross_cov::CCF = measurement_model.cross_cov,
     innovation::IF = measurement_model.innovation,
     measurement = measurement_model.measurement,
+    innovation_method = :kf,
 ) where {MF, CCF, IF}
 
     sigma_point_cache = measurement_model.cache
@@ -657,7 +658,15 @@ function correct!(
     issuccess(Sᵪ) ||
         error("Cholesky factorization of innovation covariance failed at time step $(kf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got S = ", S)
     K = C / Sᵪ # ns normalization to make it a covariance matrix
-    kf.x += K * e
+    if innovation_method === :kf
+        kf.x += K * e
+    elseif innovation_method === :sif # Kind of works, but cannot find a case where the reduction in RMSE is more than 20%
+        # sliding innovation filter
+        δ = 1*(diag(R2))
+        ν = 100*C * diagm(clamp.(abs.(e) ./ δ, -1, 1))
+        kf.x += ν*e
+    end
+    
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized
     RmKSKT!(kf, K, S)
     ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), e) #- 1/2*logdet(S) # logdet is included in logpdf
