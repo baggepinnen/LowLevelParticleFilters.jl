@@ -15,7 +15,7 @@ export unscentedplot, unscentedplot!, covplot, covplot!
 
 using StatsAPI
 import StatsAPI: weights, predict!
-using StatsBase, Parameters, Lazy, Random, LinearAlgebra, Printf, SLEEFPirates
+using StatsBase, Parameters, Lazy, Random, LinearAlgebra, Printf
 import PDMats # To extend some methods on static arrays
 import PDMats: PDMat
 using StaticArrays

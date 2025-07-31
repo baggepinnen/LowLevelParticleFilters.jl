@@ -2,7 +2,7 @@ export logsumexp!, smoothed_mean, smoothed_cov, smoothed_trajs
 
 function exp_map!(we, w)
     @inbounds @simd ivdep for i in eachindex(we, w)
-        we[i] = SLEEFPirates.exp(w[i])
+        we[i] = exp(w[i])
     end
 end
 
