@@ -42,7 +42,7 @@ If `R1` stored in `kf` is a function `R1(x, u, p, t)`, this function is evaluate
 The dynamics noise covariance matrix `R1` stored in `kf` can optionally be overridden by passing the argument `R1`, in this case `R1` must be a matrix.
 """
 function predict!(kf::AbstractKalmanFilter, u, p=parameters(kf), t::Real = index(kf)*kf.Ts; R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α, At = get_mat(kf.A, kf.x, u, p, t), Bt = get_mat(kf.B, kf.x, u, p, t))
-    @unpack A,B,x,R = kf
+    (; A,B,x,R) = kf
     if length(u) == 0
         # Special case useful since empty input is common special case
         kf.x = At*x
