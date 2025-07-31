@@ -1,4 +1,4 @@
-@with_kw mutable struct SqKalmanFilter{AT,BT,CT,DT,R1T,R2T,D0T,XT,RT,TS,P,αT} <: AbstractKalmanFilter
+@kwdef mutable struct SqKalmanFilter{AT,BT,CT,DT,R1T,R2T,D0T,XT,RT,TS,P,αT} <: AbstractKalmanFilter
     A::AT
     B::BT
     C::CT
@@ -102,7 +102,7 @@ end
 For the square-root Kalman filter, a custom provided `R1` must be the upper triangular Cholesky factor of the covariance matrix of the process noise.
 """
 function predict!(kf::SqKalmanFilter, u, p=parameters(kf), t::Real = index(kf)*kf.Ts; R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α)
-    @unpack A,B,x,R = kf
+    (; A,B,x,R) = kf
     At = get_mat(A, x, u, p, t)
     Bt = get_mat(B, x, u, p, t)
     kf.x = At*x .+ Bt*u |> vec
@@ -131,7 +131,7 @@ end
 For the square-root Kalman filter, a custom provided `R2` must be the upper triangular Cholesky factor of the covariance matrix of the measurement noise.
 """
 function correct!(kf::SqKalmanFilter, u, y, p=parameters(kf), t::Real = index(kf)*kf.Ts; R2 = get_mat(kf.R2, kf.x, u, p, t))
-    @unpack C,D,x,R = kf
+    (; C,D,x,R) = kf
     Ct = get_mat(C, x, u, p, t)
     Dt = get_mat(D, x, u, p, t)
     e   = y .- Ct*x

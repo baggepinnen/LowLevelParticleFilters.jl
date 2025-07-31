@@ -18,7 +18,7 @@ end
 
 PFstate(N::Integer) = PFstate([zeros(N)],[zeros(N)],fill(-log(N), N),fill(1/N, N),Ref(0.),collect(1:N),zeros(N), Ref(0))
 
-@with_kw struct ParticleFilter{ST,FT,GT,FDT,GDT,IDT,RST<:DataType,RNGT,P} <: AbstractParticleFilter
+@kwdef struct ParticleFilter{ST,FT,GT,FDT,GDT,IDT,RST<:DataType,RNGT,P} <: AbstractParticleFilter
     state::ST
     dynamics::FT
     measurement::GT
@@ -159,7 +159,7 @@ end
 
 
 
-@with_kw struct AdvancedParticleFilter{ST,FT,GT,GLT,FDT,IDT,RST<:DataType,RNGT,P} <: AbstractParticleFilter
+@kwdef struct AdvancedParticleFilter{ST,FT,GT,GLT,FDT,IDT,RST<:DataType,RNGT,P} <: AbstractParticleFilter
     state::ST
     dynamics::FT
     measurement::GT
