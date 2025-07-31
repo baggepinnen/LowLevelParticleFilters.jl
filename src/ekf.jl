@@ -134,7 +134,7 @@ end
 
 
 function predict!(kf::AbstractExtendedKalmanFilter{IPD}, u, p = parameters(kf), t::Real = index(kf)*kf.Ts; R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α) where IPD
-    (; x,R) = kf
+    (; x, R) = kf
     A = kf.Ajac(x, u, p, t)
     if IPD
         xp = similar(x)
