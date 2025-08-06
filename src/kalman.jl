@@ -12,13 +12,11 @@ function convert_cov_type(R1, R)
         return Matrix(R)
     end
 end
-function convert_x0_type(μ)
-    if μ isa Vector || μ isa SVector
-        return copy(μ)
-    else
-        return Vector(μ)
-    end
-end
+
+convert_x0_type(μ::Vector) = copy(μ)
+convert_x0_type(μ::SVector) = μ
+convert_x0_type(μ) = copy(μ)
+
 
 mutable struct KalmanFilter{AT,BT,CT,DT,R1T,R2T,D0T,XT,RT,TS,P,αT} <: AbstractKalmanFilter
     A::AT
