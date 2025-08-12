@@ -150,7 +150,7 @@ In some situations, such as in event-based systems, the sample rate is truly sto
 - A conceptually simple approach is to choose a very small sample interval ``T_s`` which is smaller than the smallest occurring sample interval in the data, and approximate each sample interval by rounding it to the nearest integer multiple of ``T_s``. This transforms the problem to an instance of the "dropped samples" problem described above.
 - Make use of an adaptive integrator instead of the fixed-step `rk4` supplied in this package, and manually keep track of the step length that needs to be taken as well as the adjustment to the dynamics covariance.
 
-#### Example: EKF with stochastic sample rate
+## Example: EKF with stochastic sample rate
 
 The following example demonstrates how to perform EKF filtering when data arrives at stochastic time intervals. We simulate a Dubin's car model (a simple kinematic vehicle model) and filter the data using an Extended Kalman Filter that adapts to varying sample rates. The control inputs are assumed to be updated at a fixed time interval `Ts`, while measurements arrive stochastically with an interval chosen uniformly at random between 0 and 2s.
 
@@ -279,7 +279,6 @@ Tf = 20 # Final time, duration of the simulation
 T, X, Xf, U, Y, Ty = simulate_stochastic_ekf!(
     ekf, adaptive_step_dynamics, u_func, x0, Tf
 )
-```
 
 # Plot true and filtered estimate
 using Plots
