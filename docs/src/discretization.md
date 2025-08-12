@@ -229,8 +229,9 @@ ekf = ExtendedKalmanFilter(
 
 ## Simulation
 function simulate_stochastic_ekf!(
-    ekf, adaptive_step_dynamics, measurement, u_func, x0, Ts, Tf, ny
+    ekf, adaptive_step_dynamics, u_func, x0, Tf
 )
+    (; measurement, Ts) = ekf
     next_control_t  = Ts
     next_sample_t   = 2rand()
     t               = 0.0
@@ -251,7 +252,7 @@ function simulate_stochastic_ekf!(
             x_true = adaptive_step_dynamics(x_true, u, dt, t)
             predict!(ekf, u, dt, t)                             # Step the filter forward dt time units as well
             t = next_sample_t                                   # Update the current time
-            y = measurement(x_true, u, nothing, t) + 0.3*randn(ny) # Simulate a measurement
+            y = measurement(x_true, u, nothing, t) + 0.3*randn(ekf.ny) # Simulate a measurement
             correct!(ekf, u, y, dt, t)                          # Apply filter measurement update
             push!(Y, y)                                         # Store measurement data for plotting
             push!(Ty, t)
@@ -274,8 +275,9 @@ function simulate_stochastic_ekf!(
 end
 
 # Run the simulation
+Tf = 20 # Final time, duration of the simulation
 T, X, Xf, U, Y, Ty = simulate_stochastic_ekf!(
-    ekf, adaptive_step_dynamics, measurement, u_func, x0, Ts, Tf, ny
+    ekf, adaptive_step_dynamics, u_func, x0, Tf
 )
 ```
 
