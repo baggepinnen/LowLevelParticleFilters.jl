@@ -228,46 +228,56 @@ ekf = ExtendedKalmanFilter(
 
 
 ## Simulation
-Tf = 20 # Final time (length of simulation)
-next_control_t  = Ts
-next_sample_t   = 2rand()
-t               = 0.0
-x_true          = x0
-u               = u_func(t)
-# Arrays for storing simulation data
-U               = [u]
-X               = [x_true]
-Xf              = [x0]
-Y               = [measurement(x_true, u, nothing, t)]
-T               = [t] # Array with all time points
-Ty              = [t] # Array with only time points with new measurements
-while t < Tf
-    # We choose how long step to take depending on whether the next event is a measurement arrival or control update
-    if next_sample_t < next_control_t
-        # Step forward to next_sample_t and sample a measurement
-        dt = next_sample_t - t                              # Step length to take, pass this as the parameter
-        x_true = adaptive_step_dynamics(x_true, u, dt, t)
-        predict!(ekf, u, dt, t)                             # Step the filter forward dt time units as well
-        t = next_sample_t                                   # Update the current time
-        y = measurement(x_true, u, nothing, t) + 0.3*randn(ny) # Simulate a measurement
-        correct!(ekf, u, y, dt, t)                          # Apply filter measurement update
-        push!(Y, y)                                         # Store measurement data for plotting
-        push!(Ty, t)
-        next_sample_t += 2rand()
-    else
-        # Step forward to next_control_t, in this branch there is no new measurement
-        dt      = next_control_t - t
-        x_true  = adaptive_step_dynamics(x_true, u, dt, t)
-        t       = next_control_t
-        predict!(ekf, u, dt, t)
-        u       = u_func(t)
-        next_control_t += Ts
+function simulate_stochastic_ekf!(
+    ekf, adaptive_step_dynamics, measurement, u_func, x0, Ts, Tf, ny
+)
+    next_control_t  = Ts
+    next_sample_t   = 2rand()
+    t               = 0.0
+    x_true          = x0
+    u               = u_func(t)
+    # Arrays for storing simulation data
+    U               = [u]
+    X               = [x_true]
+    Xf              = [x0]
+    Y               = [measurement(x_true, u, nothing, t)]
+    T               = [t] # Array with all time points
+    Ty              = [t] # Array with only time points with new measurements
+    while t < Tf
+        # We choose how long step to take depending on whether the next event is a measurement arrival or control update
+        if next_sample_t < next_control_t
+            # Step forward to next_sample_t and sample a measurement
+            dt = next_sample_t - t                              # Step length to take, pass this as the parameter
+            x_true = adaptive_step_dynamics(x_true, u, dt, t)
+            predict!(ekf, u, dt, t)                             # Step the filter forward dt time units as well
+            t = next_sample_t                                   # Update the current time
+            y = measurement(x_true, u, nothing, t) + 0.3*randn(ny) # Simulate a measurement
+            correct!(ekf, u, y, dt, t)                          # Apply filter measurement update
+            push!(Y, y)                                         # Store measurement data for plotting
+            push!(Ty, t)
+            next_sample_t += 2rand()
+        else
+            # Step forward to next_control_t, in this branch there is no new measurement
+            dt      = next_control_t - t
+            x_true  = adaptive_step_dynamics(x_true, u, dt, t)
+            t       = next_control_t
+            predict!(ekf, u, dt, t)
+            u       = u_func(t)
+            next_control_t += Ts
+        end
+        push!(X, x_true)
+        push!(Xf, ekf.x)
+        push!(T, t)
+        push!(U, u)
     end
-    push!(X, x_true)
-    push!(Xf, ekf.x)
-    push!(T, t)
-    push!(U, u)
+    return (T, X, Xf, U, Y, Ty)
 end
+
+# Run the simulation
+T, X, Xf, U, Y, Ty = simulate_stochastic_ekf!(
+    ekf, adaptive_step_dynamics, measurement, u_func, x0, Ts, Tf, ny
+)
+```
 
 # Plot true and filtered estimate
 using Plots
