@@ -149,3 +149,138 @@ In some situations, such as in event-based systems, the sample rate is truly sto
 - If the filtering is performed offline on a batch of data, time-varying dynamics can be used, for instance by supplying matrices to a [`KalmanFilter`](@ref) on the form `A[:, :, t], R1[:, :, t]`. Each `A` and `R1` is then computed as the discretization with the sample time given as the time between measurement `t` and measurement `t+1`.
 - A conceptually simple approach is to choose a very small sample interval ``T_s`` which is smaller than the smallest occurring sample interval in the data, and approximate each sample interval by rounding it to the nearest integer multiple of ``T_s``. This transforms the problem to an instance of the "dropped samples" problem described above.
 - Make use of an adaptive integrator instead of the fixed-step `rk4` supplied in this package, and manually keep track of the step length that needs to be taken as well as the adjustment to the dynamics covariance.
+
+#### Example: EKF with stochastic sample rate
+
+The following example demonstrates how to perform EKF filtering when data arrives at stochastic time intervals. We simulate a Dubin's car model (a simple kinematic vehicle model) and filter the data using an Extended Kalman Filter that adapts to varying sample rates. The control inputs are assumed to be updated at a fixed time interval `Ts`, while measurements arrive stochastically with an interval chosen uniformly at random between 0 and 2s.
+
+```@example stochastic_ekf
+using LowLevelParticleFilters
+using LowLevelParticleFilters: SimpleMvNormal
+using SeeToDee
+using Random, Statistics, LinearAlgebra
+using StaticArrays
+using Plots
+Random.seed!(42)
+
+# Dubin's car continuous-time dynamics
+# State: [x, y, θ, v] - position, heading angle, velocity
+# Input: [a, ω] - acceleration, angular velocity
+function dubins_car(x, u, p, t)
+    θ = x[3]
+    v = x[4]
+    a = u[1]
+    ω = u[2]
+    SA[
+        v * cos(θ),    # ẋ
+        v * sin(θ),    # ẏ
+        ω,             # θ̇
+        a              # v̇
+    ]
+end
+
+# Measurement function - observe position only
+measurement(x, u, p, t) = SA[x[1], x[2]]
+
+# System parameters
+nx = 4  # state dimension
+nu = 2  # input dimension
+ny = 2  # output dimension
+
+# Base sample time for the filter, the control input is updated at this interval
+Ts = 0.1
+
+# Create discretized dynamics
+discrete_dynamics = SeeToDee.Rk4(dubins_car, Ts)
+
+# Wrapper that uses the Ts from the parameter
+function adaptive_step_dynamics(x, u, p, t)
+    Ts = p # The sample step duration is passed as the parameter
+    return discrete_dynamics(x, u, nothing, t; Ts)
+end
+
+# Control input function of time
+u_func(t) = SA[0.5 * cos(0.5 * t) - 0.1, 0.3 * cos(0.3 * t)]
+
+x0 = SA[0.0, 0.0, 0.0, 1.0]  # Initial state
+
+# Setup EKF
+# Base process noise covariance (will be scaled by Ts during filtering)
+R1_base = Diagonal([0.001, 0.001, 0.001, 0.001])  # Process noise per unit time
+R2 = Diagonal([0.3^2, 0.3^2])                    # Measurement noise
+d0 = SimpleMvNormal(x0, 0.1 * I(4))              # Initial state distribution
+
+# For the EKF constructor, use the base rate scaled according to advice above
+R1 = R1_base * Ts
+
+# Create EKF with adaptive dynamics
+# The dynamics function will receive the time step through the parameter p
+ekf = ExtendedKalmanFilter(
+    adaptive_step_dynamics,
+    measurement,
+    R1,
+    R2,
+    d0;
+    nu,
+    ny,
+    p = Ts  # Default time step
+)
+
+
+## Simulation
+Tf = 20 # Final time (length of simulation)
+next_control_t  = Ts
+next_sample_t   = 2rand()
+t               = 0.0
+x_true          = x0
+u               = u_func(t)
+# Arrays for storing simulation data
+U               = [u]
+X               = [x_true]
+Xf              = [x0]
+Y               = [measurement(x_true, u, nothing, t)]
+T               = [t] # Array with all time points
+Ty              = [t] # Array with only time points with new measurements
+while t < Tf
+    # We choose how long step to take depending on whether the next event is a measurement arrival or control update
+    if next_sample_t < next_control_t
+        # Step forward to next_sample_t and sample a measurement
+        dt = next_sample_t - t                              # Step length to take, pass this as the parameter
+        x_true = adaptive_step_dynamics(x_true, u, dt, t)
+        predict!(ekf, u, dt, t)                             # Step the filter forward dt time units as well
+        t = next_sample_t                                   # Update the current time
+        y = measurement(x_true, u, nothing, t) + 0.3*randn(ny) # Simulate a measurement
+        correct!(ekf, u, y, dt, t)                          # Apply filter measurement update
+        push!(Y, y)                                         # Store measurement data for plotting
+        push!(Ty, t)
+        next_sample_t += 2rand()
+    else
+        # Step forward to next_control_t, in this branch there is no new measurement
+        dt      = next_control_t - t
+        x_true  = adaptive_step_dynamics(x_true, u, dt, t)
+        t       = next_control_t
+        predict!(ekf, u, dt, t)
+        u       = u_func(t)
+        next_control_t += Ts
+    end
+    push!(X, x_true)
+    push!(Xf, ekf.x)
+    push!(T, t)
+    push!(U, u)
+end
+
+# Plot true and filtered estimate
+using Plots
+
+# Xf at Ty times
+Xy = reduce(hcat, [x for (t, x) in zip(T, X) if t in Ty])'
+Xfy = reduce(hcat, [x for (t, x) in zip(T, Xf) if t in Ty])'
+
+# Compute filtering errors 
+Ef = (Xy .- Xfy)[:, 1:2]
+Ey = (Xy[:, 1:2] .- reduce(hcat, Y)')
+
+plot(T, reduce(hcat, X)', label="\$x\$", layout=4)
+scatter!(Ty, Xfy, label="\$x(t|t)\$", markersize=3, markerstrokewidth=0, sp=1:4)
+scatter!(Ty, reduce(hcat, Y)', label="\$y\$", markersize=3, markerstrokewidth=0, sp=1:2)
+```
