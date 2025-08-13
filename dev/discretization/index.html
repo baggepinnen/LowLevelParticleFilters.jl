@@ -90,8 +90,8 @@ x0 = SA[0.0, 0.0, 0.0, 1.0]  # Initial state
 # Setup EKF
 # Base process noise covariance (will be scaled by Ts during filtering)
 R1_base = Diagonal([0.001, 0.001, 0.001, 0.001])  # Process noise per unit time
-R2 = Diagonal([0.3^2, 0.3^2])                    # Measurement noise
-d0 = SimpleMvNormal(x0, 0.1 * I(4))              # Initial state distribution
+R2 = Diagonal([0.3^2, 0.3^2])                     # Measurement noise
+d0 = SimpleMvNormal(x0, 0.1 * I(4))               # Initial state distribution
 
 # For the EKF constructor, use the base rate scaled according to advice above
 R1 = R1_base * Ts
@@ -107,11 +107,7 @@ ekf = ExtendedKalmanFilter(
     nu,
     ny,
     p = Ts  # Default time step
-)
-
-
-## Simulation
-function simulate_stochastic_ekf!(
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ExtendedKalmanFilter{false, false, KalmanFilter{Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, LinearAlgebra.Diagonal{Float64, Vector{Float64}}, LinearAlgebra.Diagonal{Float64, Vector{Float64}}, LowLevelParticleFilters.SimpleMvNormal{StaticArraysCore.SVector{4, Float64}, LinearAlgebra.Diagonal{Float64, Vector{Float64}}}, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Float64, Float64, Float64}, typeof(Main.adaptive_step_dynamics), EKFMeasurementModel{false, typeof(Main.measurement), LinearAlgebra.Diagonal{Float64, Vector{Float64}}, LowLevelParticleFilters.var&quot;#99#103&quot;{typeof(Main.measurement)}, Nothing}, LowLevelParticleFilters.var&quot;#225#229&quot;{typeof(Main.adaptive_step_dynamics)}}(KalmanFilter{Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, LinearAlgebra.Diagonal{Float64, Vector{Float64}}, LinearAlgebra.Diagonal{Float64, Vector{Float64}}, LowLevelParticleFilters.SimpleMvNormal{StaticArraysCore.SVector{4, Float64}, LinearAlgebra.Diagonal{Float64, Vector{Float64}}}, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Float64, Float64, Float64}([0.0 0.0 0.0 0.0; 0.0 0.0 0.0 0.0; 0.0 0.0 0.0 0.0; 0.0 0.0 0.0 0.0], [0.0 0.0; 0.0 0.0; 0.0 0.0; 0.0 0.0], [0.0 0.0 0.0 0.0; 0.0 0.0 0.0 0.0], [0.0 0.0; 0.0 0.0], [0.0001 0.0 0.0 0.0; 0.0 0.0001 0.0 0.0; 0.0 0.0 0.0001 0.0; 0.0 0.0 0.0 0.0001], [0.09 0.0; 0.0 0.09], LowLevelParticleFilters.SimpleMvNormal{StaticArraysCore.SVector{4, Float64}, LinearAlgebra.Diagonal{Float64, Vector{Float64}}}([0.0, 0.0, 0.0, 1.0], [0.1 0.0 0.0 0.0; 0.0 0.1 0.0 0.0; 0.0 0.0 0.1 0.0; 0.0 0.0 0.0 0.1]), [0.0, 0.0, 0.0, 1.0], [0.1 0.0 0.0 0.0; 0.0 0.1 0.0 0.0; 0.0 0.0 0.1 0.0; 0.0 0.0 0.0 0.1], 0, 1.0, 0.1, 1.0, 4, 2, 2, SignalNames([&quot;x1&quot;, &quot;x2&quot;, &quot;x3&quot;, &quot;x4&quot;], [&quot;u1&quot;, &quot;u2&quot;], [&quot;y1&quot;, &quot;y2&quot;], &quot;KF&quot;)), Main.adaptive_step_dynamics, EKFMeasurementModel{false, typeof(Main.measurement), LinearAlgebra.Diagonal{Float64, Vector{Float64}}, LowLevelParticleFilters.var&quot;#99#103&quot;{typeof(Main.measurement)}, Nothing}(Main.measurement, [0.09 0.0; 0.0 0.09], 2, LowLevelParticleFilters.var&quot;#99#103&quot;{typeof(Main.measurement)}(Main.measurement), nothing), LowLevelParticleFilters.var&quot;#225#229&quot;{typeof(Main.adaptive_step_dynamics)}(Main.adaptive_step_dynamics), SignalNames([&quot;x1&quot;, &quot;x2&quot;, &quot;x3&quot;, &quot;x4&quot;], [&quot;u1&quot;, &quot;u2&quot;], [&quot;y1&quot;, &quot;y2&quot;], &quot;EKF&quot;))</code></pre><h3 id="Simulation"><a class="docs-heading-anchor" href="#Simulation">Simulation</a><a id="Simulation-1"></a><a class="docs-heading-anchor-permalink" href="#Simulation" title="Permalink"></a></h3><p>The function <code>simulate_stochastic_ekf!</code> implements both simulation of the plant by means of propagating the true state and filtering the measurements using the EKF. At each time step, a decision is made whether to update the control input or to take a measurement, depending on which event occurs first.</p><pre><code class="language-julia hljs">function simulate_stochastic_ekf!(
     ekf, adaptive_step_dynamics, u_func, x0, Tf
 )
     (; measurement, Ts) = ekf
@@ -132,8 +128,9 @@ function simulate_stochastic_ekf!(
         if next_sample_t &lt; next_control_t
             # Step forward to next_sample_t and sample a measurement
             dt = next_sample_t - t                              # Step length to take, pass this as the parameter
+            R1t = R1_base * dt                                  # Scale process noise covariance by step length. Note the advice above regarding how to perform this scaling depending on discretization context.
             x_true = adaptive_step_dynamics(x_true, u, dt, t)
-            predict!(ekf, u, dt, t)                             # Step the filter forward dt time units as well
+            predict!(ekf, u, dt, t, R1=R1t)                     # Step the filter forward dt time units as well
             t = next_sample_t                                   # Update the current time
             y = measurement(x_true, u, nothing, t) + 0.3*randn(ekf.ny) # Simulate a measurement
             correct!(ekf, u, y, dt, t)                          # Apply filter measurement update
@@ -143,9 +140,10 @@ function simulate_stochastic_ekf!(
         else
             # Step forward to next_control_t, in this branch there is no new measurement
             dt      = next_control_t - t
+            R1t     = R1_base * dt # Scale process noise covariance by step length. Note the advice above regarding how to perform this scaling depending on discretization context.
             x_true  = adaptive_step_dynamics(x_true, u, dt, t)
             t       = next_control_t
-            predict!(ekf, u, dt, t)
+            predict!(ekf, u, dt, t, R1=R1t)
             u       = u_func(t)
             next_control_t += Ts
         end
@@ -176,4 +174,4 @@ Ey = (Xy[:, 1:2] .- reduce(hcat, Y)&#39;)
 
 plot(T, reduce(hcat, X)&#39;, label=&quot;\$x\$&quot;, layout=4)
 scatter!(Ty, Xfy, label=&quot;\$x(t|t)\$&quot;, markersize=3, markerstrokewidth=0, sp=1:4)
-scatter!(Ty, reduce(hcat, Y)&#39;, label=&quot;\$y\$&quot;, markersize=3, markerstrokewidth=0, sp=1:2)</code></pre><img src="a35a5675.svg" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Home</a><a class="docs-footer-nextpage" href="../measurement_models/">Multiple measurement models »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Tuesday 12 August 2025 19:24">Tuesday 12 August 2025</span>. Using Julia version 1.11.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+scatter!(Ty, reduce(hcat, Y)&#39;, label=&quot;\$y\$&quot;, markersize=3, markerstrokewidth=0, sp=1:2)</code></pre><img src="0c9bb684.svg" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Home</a><a class="docs-footer-nextpage" href="../measurement_models/">Multiple measurement models »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Wednesday 13 August 2025 05:50">Wednesday 13 August 2025</span>. Using Julia version 1.11.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
