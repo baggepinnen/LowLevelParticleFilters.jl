@@ -207,8 +207,8 @@ x0 = SA[0.0, 0.0, 0.0, 1.0]  # Initial state
 # Setup EKF
 # Base process noise covariance (will be scaled by Ts during filtering)
 R1_base = Diagonal([0.001, 0.001, 0.001, 0.001])  # Process noise per unit time
-R2 = Diagonal([0.3^2, 0.3^2])                    # Measurement noise
-d0 = SimpleMvNormal(x0, 0.1 * I(4))              # Initial state distribution
+R2 = Diagonal([0.3^2, 0.3^2])                     # Measurement noise
+d0 = SimpleMvNormal(x0, 0.1 * I(4))               # Initial state distribution
 
 # For the EKF constructor, use the base rate scaled according to advice above
 R1 = R1_base * Ts
@@ -225,9 +225,11 @@ ekf = ExtendedKalmanFilter(
     ny,
     p = Ts  # Default time step
 )
+```
 
-
-## Simulation
+### Simulation
+The function `simulate_stochastic_ekf!` implements both simulation of the plant by means of propagating the true state and filtering the measurements using the EKF. At each time step, a decision is made whether to update the control input or to take a measurement, depending on which event occurs first.
+```@example stochastic_ekf
 function simulate_stochastic_ekf!(
     ekf, adaptive_step_dynamics, u_func, x0, Tf
 )
@@ -249,8 +251,9 @@ function simulate_stochastic_ekf!(
         if next_sample_t < next_control_t
             # Step forward to next_sample_t and sample a measurement
             dt = next_sample_t - t                              # Step length to take, pass this as the parameter
+            R1t = R1_base * dt                                  # Scale process noise covariance by step length. Note the advice above regarding how to perform this scaling depending on discretization context.
             x_true = adaptive_step_dynamics(x_true, u, dt, t)
-            predict!(ekf, u, dt, t)                             # Step the filter forward dt time units as well
+            predict!(ekf, u, dt, t, R1=R1t)                     # Step the filter forward dt time units as well
             t = next_sample_t                                   # Update the current time
             y = measurement(x_true, u, nothing, t) + 0.3*randn(ekf.ny) # Simulate a measurement
             correct!(ekf, u, y, dt, t)                          # Apply filter measurement update
@@ -260,9 +263,10 @@ function simulate_stochastic_ekf!(
         else
             # Step forward to next_control_t, in this branch there is no new measurement
             dt      = next_control_t - t
+            R1t     = R1_base * dt # Scale process noise covariance by step length. Note the advice above regarding how to perform this scaling depending on discretization context.
             x_true  = adaptive_step_dynamics(x_true, u, dt, t)
             t       = next_control_t
-            predict!(ekf, u, dt, t)
+            predict!(ekf, u, dt, t, R1=R1t)
             u       = u_func(t)
             next_control_t += Ts
         end
