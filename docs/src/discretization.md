@@ -299,3 +299,5 @@ plot(T, reduce(hcat, X)', label="\$x\$", layout=4)
 scatter!(Ty, Xfy, label="\$x(t|t)\$", markersize=3, markerstrokewidth=0, sp=1:4)
 scatter!(Ty, reduce(hcat, Y)', label="\$y\$", markersize=3, markerstrokewidth=0, sp=1:2)
 ```
+
+In this example, we performed filtering using an [`ExtendedKalmanFilter`](@ref) that takes nonlinear dynamics discretized with an RK4 integrator. When the dynamics are linear and we employ a standard [`KalmanFilter`](@ref), varying-length discretization is similarly handled by providing custom ``A`` and ``B`` matrices to the `predict!` function. ZoH discretization of a linear system is performed using the matrix exponential ``e^{A T_s}`` (see [implementation of `c2d`](https://github.com/JuliaControl/ControlSystems.jl/blob/f04916f6afeadacbd48b2824fb0f2d833deb4f00/lib/ControlSystemsBase/src/discrete.jl#L49C7-L52C33) for how to handle also the ``B`` matrix at the same time).
