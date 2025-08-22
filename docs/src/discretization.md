@@ -47,6 +47,8 @@ The method used comes from theorem 5 in the reference below.
 
 **On singular covariance matrices:** The traditional double integrator with covariance matrix `Q = diagm([0,σ²])` warrants special consideration since it is rank-deficient, i.e., it indicates that there is a single source of randomness only, despite the presence of two state variables. If we assume that the noise is piecewise constant, we can use the input matrix ("Cholesky factor") of `Q`, e.g., the noise of variance `σ²` enters like `N = [0, 1]` which is sampled using ZoH and becomes `Nd = [Ts^2 / 2; Ts]` which results in the covariance matrix `σ² * Nd * Nd'` (see example below). If we instead assume that the noise is a continuous-time white noise process, the discretized covariance matrix is full rank and can be computed by `c2d(sys::StateSpace{Continuous}, R1c, Ts)` or directly by the function [`double_integrator_covariance_smooth`](@ref).
 
+For higher-order integrators (n > 2), the functions [`n_integrator_covariance`](@ref) and [`n_integrator_covariance_smooth`](@ref) provide the corresponding covariance matrices for piecewise constant and continuous white noise, respectively.
+
 ## Example
 The following example will discretize a linear double integrator system. Double integrators arise when the position of an object is controlled by a force, i.e., when Newtons second law ``f = ma`` governs the dynamics. The system can be written on the form
 ```math
@@ -115,10 +117,10 @@ This case can also arise when using a linear system with noise input, i.e., the 
 where `N` is the input matrix for the noise process. When this system is discretized with the input matrix `[B N]`
 and the `R1` matrix is derived as $R_1^d = N_d R_1^c N_d^T$, we need to further scale the covariance matrix by `1/Ts`, i.e., use $R_1^d = \frac{1}{T_s} N_d R_1^c N_d^T$.
 
-### When using `double_integrator_covariance_smooth`
-The function [`double_integrator_covariance_smooth`](@ref) already has the desired scaling with `Ts` built in, and this is thus to be used with additive noise that is not discretized.
+### When using integrator covariance functions
+The function [`double_integrator_covariance_smooth`](@ref) already has the desired scaling with `Ts` built in, and this is thus to be used with additive noise that is not discretized. Similarly, [`n_integrator_covariance_smooth`](@ref) provides the same functionality for higher-order integrators.
 
-[`double_integrator_covariance`](@ref) is for piecewise constant noise and this does generally not lead to sample-rate invariant tuning, however `double_integrator_covariance(Ts) ./ Ts` does.
+[`double_integrator_covariance`](@ref) is for piecewise constant noise and this does generally not lead to sample-rate invariant tuning, however `double_integrator_covariance(Ts) ./ Ts` does. The same applies to [`n_integrator_covariance`](@ref) for higher-order integrators.
 
 ## Non-uniform sample rates
 Special care is needed if the sample rate is not constant, i.e., the time interval between measurements varies. 

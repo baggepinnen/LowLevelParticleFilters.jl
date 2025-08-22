@@ -133,6 +133,31 @@ function double_integrator_covariance(Ts, σ2=1)
     Ts^3/2  Ts^2]
 end
 
+"""
+    R = n_integrator_covariance(n, Ts, σ2=1)
+
+Returns the covariance matrix of a discrete-time n-integrator with piecewise constant stochastic (generalized) force as input.
+
+# Arguments
+- `n`: Order of the integrator (state dimension)
+- `Ts`: Sample time
+- `σ2`: Variance of driving noise
+
+The state is assumed to be [x; ẋ; ẍ; ...] (n dimensional) and the dynamics follow
+```math
+x^+ = Ax + Bu + w
+```
+where the noise input `w` has not been included in the discretization process.
+
+This matrix is rank deficient and some applications might require a small increase in the diagonal to make it positive definite (or use [`n_integrator_covariance_smooth`](@ref)).
+
+# Example
+```julia
+R = n_integrator_covariance(3, 0.1)  # 3rd order integrator with Ts=0.1
+```
+
+See also [`n_integrator_covariance_smooth`](@ref) for the version that does not assume piecewise constant noise.
+"""
 function n_integrator_covariance(n, Ts, σ2=1)
     B = zeros(typeof(Ts), n)
     for i = 1:n
@@ -156,6 +181,33 @@ function double_integrator_covariance_smooth(Ts, σ2=1)
     Ts^2/2  Ts]
 end
 
+"""
+    R = n_integrator_covariance_smooth(n, Ts, σ2=1)
+    R = n_integrator_covariance_smooth(Val(n), Ts, σ2=1)
+
+Returns the covariance matrix of a discrete-time n-integrator with continuous noise as input.
+
+# Arguments
+- `n`: Order of the integrator (state dimension), can be provided as `Int` or `Val{n}`
+- `Ts`: Sample time  
+- `σ2`: Variance of driving noise (default: 1)
+
+The state is assumed to be [x; ẋ; ẍ; ...] (n dimensional). This assumes continuous white noise 
+driving the highest derivative, integrated over the sample interval.
+
+This matrix is full rank, which is often favorable for numerical stability. The resulting 
+covariance dynamics are approximately invariant to the sample interval.
+
+Formally, ``R`` is the solution to the fixed-horizon Lyapunov equation with the dynamics given by an n-th order integrator.
+
+# Example
+```julia
+R = n_integrator_covariance_smooth(3, 0.1)  # 3rd order integrator with Ts=0.1
+R = n_integrator_covariance_smooth(Val(3), 0.1)  # Compile-time known dimension
+```
+
+See also [`n_integrator_covariance`](@ref) for the version that assumes piecewise constant noise.
+"""
 function n_integrator_covariance_smooth(::Val{n}, Ts, σ2=1) where {n}
     SMatrix{n,n}([σ2 * Ts^(2n - i - j + 1) / ((2n - i - j + 1) * factorial(n - i) * factorial(n - j))
                   for i in 1:n, j in 1:n])
