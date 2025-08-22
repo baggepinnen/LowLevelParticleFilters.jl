@@ -43,7 +43,7 @@ The dynamics noise covariance matrix `R1` stored in `kf` can optionally be overr
 """
 function predict!(kf::AbstractKalmanFilter, u, p=parameters(kf), t::Real = index(kf)*kf.Ts; R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α, At = get_mat(kf.A, kf.x, u, p, t), Bt = get_mat(kf.B, kf.x, u, p, t))
     (; A,B,x,R) = kf
-    if length(u) == 0
+    if u === nothing || length(u) == 0
         # Special case useful since empty input is common special case
         kf.x = At*x
     else

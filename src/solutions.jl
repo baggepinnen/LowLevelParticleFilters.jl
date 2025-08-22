@@ -75,11 +75,12 @@ function Base.show(io::IO, sol::KalmanFilteringSolution)
     println(io, "  ll: ", sol.ll)
 end
 
-@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotR=false, plotRt=false, names = sol.f.names, name = names.name, σ=1.96)
+@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotR=false, plotRt=false, names = sol.f.names, name = names.name, σ=1.96, always_include_x=false)
     isempty(name) || (name = name*" ")
     kf = sol.f
     nx, nu, ny = length(sol.x[1]), length(sol.u[1]), length(sol.y[1])
-    layout --> nx*(plotx || plotxt) + plotu*nu + (ploty || plotyh || plotyht || plote)*ny
+    lay = nx*(plotx || plotxt || always_include_x) + plotu*nu + (ploty || plotyh || plotyht || plote)*ny
+    layout --> lay
     xnames = names.x
     if plotx
         m = reduce(hcat, sol.x)'
@@ -115,7 +116,7 @@ end
         for i = 1:nu
             @series begin
                 label --> "$(unames[i])"
-                subplot --> i + nx*(plotx || plotxt)
+                subplot --> i + nx*(plotx || plotxt || always_include_x)
                 timevec, series[:, i]
             end
         end
@@ -126,7 +127,7 @@ end
         for i = 1:ny
             @series begin
                 label --> "$(ynames[i])"
-                subplot --> i + (nx*(plotx || plotxt) + nu*plotu)
+                subplot --> i + (nx*(plotx || plotxt || always_include_x) + nu*plotu)
                 timevec, series[:, i]
             end
         end
@@ -136,7 +137,7 @@ end
         for i = 1:ny
             @series begin
                 label -->"$(name)ŷ$(i)(t|t-1)" 
-                subplot --> i + (nx*(plotx || plotxt) + nu*plotu)
+                subplot --> i + (nx*(plotx || plotxt || always_include_x) + nu*plotu)
                 linestyle --> :dash
                 
                 timevec, series[:, i]
@@ -148,7 +149,7 @@ end
         for i = 1:ny
             @series begin
                 label --> "$(name)ŷ$(i)(t|t)"
-                subplot --> i + (nx*(plotx || plotxt) + nu*plotu)
+                subplot --> i + (nx*(plotx || plotxt || always_include_x) + nu*plotu)
                 linestyle --> :dash
                 timevec, series[:, i]
             end
@@ -159,7 +160,7 @@ end
         for i = 1:ny
             @series begin
                 label --> "$(name)e$(i)(t|t-1)"
-                subplot --> i + (nx*(plotx || plotxt) + nu*plotu)
+                subplot --> i + (nx*(plotx || plotxt || always_include_x) + nu*plotu)
                 linestyle --> :dash
                 timevec, series[:, i]
             end
@@ -210,17 +211,31 @@ Base.iterate(r::KalmanSmoothingSolution, ::Val{:ll})   = (r.x, Val(:done))
 Base.iterate(r::KalmanSmoothingSolution, ::Val{:done}) = nothing
 
 
-@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanSmoothingSolution; plotxT = true, plotRT=true, names = sol.f.names, name = names.name)
+@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanSmoothingSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotxT = true, plotRT=true, names = sol.f.names, name = names.name, σ = 1.96)
     isempty(name) || (name = name*" ")
     kf = sol.f
     nx, nu, ny = length(sol.x[1]), length(sol.u[1]), length(sol.y[1])
     xnames = names.x
 
-    @series sol.sol
+    # The mess of replicating all plotx kwargs in this recipe is due to an obscure bug in Plots that causes the layout that is set in the lower KalmanFilteringSolution recipe to only take effect if anything is actually drawn in the recipe. When the user wants to plot only xT, the lower level recipe only sets the layout but plots nothing, and then we get an indexing error here due to there not being any layout > 1 subplot set.
+    lay = nx*(plotx || plotxt || plotxT) + plotu*nu + (ploty || plotyh || plotyht || plote)*ny
+    layout --> lay
+    @series begin
+        # This is unfortunately also required
+        always_include_x := plotxT
+        plotx := plotx
+        plotxt := plotxt
+        plotu := plotu
+        ploty := ploty
+        plotyh := plotyh
+        plotyht := plotyht
+        plote := plote
+        sol.sol
+    end
 
     if plotxT
         m = reduce(hcat, sol.xT)'
-        twoσ = 1.96 .* sqrt.(reduce(hcat, diag.(sol.RT))')
+        twoσ = σ .* sqrt.(reduce(hcat, diag.(sol.RT))')
         for i = 1:nx
             @series begin
                 label --> "$(name)$(xnames[i])(t|T)"
