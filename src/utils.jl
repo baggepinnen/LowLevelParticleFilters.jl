@@ -133,6 +133,14 @@ function double_integrator_covariance(Ts, σ2=1)
     Ts^3/2  Ts^2]
 end
 
+function n_integrator_covariance(n, Ts, σ2=1)
+    B = zeros(typeof(Ts), n)
+    for i = 1:n
+        B[i] = Ts^(n-i+1) / factorial(n-i+1)
+    end
+    return σ2*B*B'
+end
+
 """
     R = double_integrator_covariance_smooth(Ts, σ2=1)
 
@@ -147,6 +155,13 @@ function double_integrator_covariance_smooth(Ts, σ2=1)
     σ2*SA[Ts^3/3 Ts^2/2
     Ts^2/2  Ts]
 end
+
+function n_integrator_covariance_smooth(::Val{n}, Ts, σ2=1) where {n}
+    SMatrix{n,n}([σ2 * Ts^(2n - i - j + 1) / ((2n - i - j + 1) * factorial(n - i) * factorial(n - j))
+                  for i in 1:n, j in 1:n])
+end
+
+n_integrator_covariance_smooth(n::Int, Ts, σ2=1) = n_integrator_covariance_smooth(Val(n), Ts, σ2)
 
 function rk4(f::F, Ts0; supersample::Integer = 1) where {F}
     supersample ≥ 1 || throw(ArgumentError("supersample must be positive."))
