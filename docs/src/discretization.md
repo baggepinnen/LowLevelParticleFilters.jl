@@ -47,6 +47,8 @@ The method used comes from theorem 5 in the reference below.
 
 **On singular covariance matrices:** The traditional double integrator with covariance matrix `Q = diagm([0,σ²])` warrants special consideration since it is rank-deficient, i.e., it indicates that there is a single source of randomness only, despite the presence of two state variables. If we assume that the noise is piecewise constant, we can use the input matrix ("Cholesky factor") of `Q`, e.g., the noise of variance `σ²` enters like `N = [0, 1]` which is sampled using ZoH and becomes `Nd = [Ts^2 / 2; Ts]` which results in the covariance matrix `σ² * Nd * Nd'` (see example below). If we instead assume that the noise is a continuous-time white noise process, the discretized covariance matrix is full rank and can be computed by `c2d(sys::StateSpace{Continuous}, R1c, Ts)` or directly by the function [`double_integrator_covariance_smooth`](@ref).
 
+For higher-order integrators (n > 2), the functions [`n_integrator_covariance`](@ref) and [`n_integrator_covariance_smooth`](@ref) provide the corresponding covariance matrices for piecewise constant and continuous white noise, respectively.
+
 ## Example
 The following example will discretize a linear double integrator system. Double integrators arise when the position of an object is controlled by a force, i.e., when Newtons second law ``f = ma`` governs the dynamics. The system can be written on the form
 ```math
@@ -115,10 +117,10 @@ This case can also arise when using a linear system with noise input, i.e., the 
 where `N` is the input matrix for the noise process. When this system is discretized with the input matrix `[B N]`
 and the `R1` matrix is derived as $R_1^d = N_d R_1^c N_d^T$, we need to further scale the covariance matrix by `1/Ts`, i.e., use $R_1^d = \frac{1}{T_s} N_d R_1^c N_d^T$.
 
-### When using `double_integrator_covariance_smooth`
-The function [`double_integrator_covariance_smooth`](@ref) already has the desired scaling with `Ts` built in, and this is thus to be used with additive noise that is not discretized.
+### When using integrator covariance functions
+The function [`double_integrator_covariance_smooth`](@ref) already has the desired scaling with `Ts` built in, and this is thus to be used with additive noise that is not discretized. Similarly, [`n_integrator_covariance_smooth`](@ref) provides the same functionality for higher-order integrators.
 
-[`double_integrator_covariance`](@ref) is for piecewise constant noise and this does generally not lead to sample-rate invariant tuning, however `double_integrator_covariance(Ts) ./ Ts` does.
+[`double_integrator_covariance`](@ref) is for piecewise constant noise and this does generally not lead to sample-rate invariant tuning, however `double_integrator_covariance(Ts) ./ Ts` does. The same applies to [`n_integrator_covariance`](@ref) for higher-order integrators.
 
 ## Non-uniform sample rates
 Special care is needed if the sample rate is not constant, i.e., the time interval between measurements varies. 
@@ -301,3 +303,90 @@ scatter!(Ty, reduce(hcat, Y)', label="\$y\$", markersize=3, markerstrokewidth=0,
 ```
 
 In this example, we performed filtering using an [`ExtendedKalmanFilter`](@ref) that takes nonlinear dynamics discretized with an RK4 integrator. When the dynamics are linear and we employ a standard [`KalmanFilter`](@ref), varying-length discretization is similarly handled by providing custom ``A`` and ``B`` matrices to the `predict!` function. ZoH discretization of a linear system is performed using the matrix exponential ``e^{A T_s}`` (see [implementation of `c2d`](https://github.com/JuliaControl/ControlSystems.jl/blob/f04916f6afeadacbd48b2824fb0f2d833deb4f00/lib/ControlSystemsBase/src/discrete.jl#L49C7-L52C33) for how to handle also the ``B`` matrix at the same time).
+
+
+## Example: Adaptive interval velocity estimation from encoder pulses
+
+This example demonstrates how one can use a Kalman filter when measurements arrive at irregular intervals. The application is estimation of velocity (and possibly higher-order derivatives) from encoder pulses. An encoder has a fixed number of teeth, and a pulse is generated each time a tooth crosses a light sensor. For simplicity, we do not model the specifics of the encoder here, and instead simply generate a position measurement whenever a simulated position signal mas moved a certain amount (corresponding to the distance between teeth).
+
+The Kalman filter is setup using a model corresponding to a series of ``n = `` `filter_order` integrators with nominal values for covariance and dynamics and in the loop as measurements arrive, we discretize the continuous-time dynamical model with the interval between the current and last obtained measurement. This discretization involves not only the dynamics, we also compute the discrete-time covariance matrix ``R_1`` corresponding to passing a continuous-time white-noise process through the series of ``n`` integrators.
+
+Below, we show the results for filter order 4 (sometimes called a constant-jerk model). A lower filter order makes the system more responsive to changes in the measurement, while a higher order provides smoother estimates at the cost of increased lag. When viewed in the frequency domain, the filter order controls the slope of the rolloff for high frequencies, while the covariance value, ``\sigma^2`` below, controls the cut-off frequency.
+
+For fun, we use the square-root version of the Kalman filter here, [`SqKalmanFilter`](@ref) so that we have a demo that uses this as well.
+
+```@example velocity_observer
+using LowLevelParticleFilters, LinearAlgebra, StaticArrays
+using LowLevelParticleFilters: SimpleMvNormal
+using ControlSystemsBase, Plots
+traj(t)  = t < 10 ? t   :  10cos(t-10)
+trajv(t) = t < 10 ? 1.0 : -10sin(t-10)
+traja(t) = t < 10 ? 0.0 : -10cos(t-10)
+
+to_step(x, n) = floor(x*n)/n
+function find_crossings(traj::F, resolution) where F
+    # resolution is given in number of levels per unit position
+    t_candidates = 0:1e-6:20
+    crossings = Float64[]
+    t0 = to_step(traj(t_candidates[1]), resolution)
+    for t in 1:length(t_candidates) - 1
+        t1 = to_step(traj(t_candidates[t + 1]), resolution)
+        if t0 != t1
+            # Interpolate to get accurate t crossing
+            t_cross = t_candidates[t]
+            push!(crossings, t_cross)
+            t0 = t1
+        end
+    end
+    return crossings
+end
+
+sample_times = find_crossings(traj, 1)
+pos_measurements = traj.(sample_times)
+vel_measurements = diff(pos_measurements) ./ diff(sample_times)
+##
+plot(traj, 0, 20, layout=(2,1))
+scatter!(sample_times, traj.(sample_times), sp=1)
+plot!(trajv, 0, 20, sp=2)
+scatter!(sample_times[2:end], vel_measurements, sp=2)
+
+##
+
+filter_order = 4 # This controls the slope of the rolloff for high frequencies
+P = ss((1/tf('s')))^filter_order
+(; A, C, D) = P
+B  = @SMatrix zeros(filter_order, 0)
+Ts = 0.1
+σ2 = 1e5 # This controls the amount of filtering. Higher value gives a smoother but laggier response
+R1 = LowLevelParticleFilters.n_integrator_covariance_smooth(P.nx, Ts, σ2)
+R2 = [1.0;;]
+d0 = SimpleMvNormal(1e9R1)
+kf = SqKalmanFilter(to_static(A), B, to_static(C), to_static(D), R1, R2, d0)
+chol(x) = cholesky(x).U
+function kf_velocity_estimation!(
+    kf, sample_times
+)
+    (; Ts) = kf
+    Xf = [copy(kf.x)]
+    for i = 2:length(sample_times)
+        t0 = sample_times[i-1]
+        t1 = sample_times[i]
+        dt = t1 - t0
+        Ai = exp(A*dt)
+        R1 = LowLevelParticleFilters.n_integrator_covariance_smooth(kf.nx, dt, σ2) |> chol # This is the solution to a fixed-horizon Lyapunov equation
+        predict!(kf, nothing, nothing, t0; At=Ai, R1)
+        y = pos_measurements[i]
+        correct!(kf, nothing, y, nothing, t1)
+        push!(Xf, copy(kf.x))
+    end
+    Xf
+end
+Xf = kf_velocity_estimation!(kf, sample_times)
+XF = reduce(hcat, Xf)'
+##
+scatter(sample_times, XF, lab=permutedims(["\$\\frac{d^$(i)\\hat{x}}{dt^$(i)}\$" for i in 0:filter_order-1]), layout=(filter_order,1), size=(1000,1000), markerstrokewidth=1, m=:cross)
+plot!(traj, 0, 20, lab="True Position")
+plot!(trajv, 0, 20, sp=2, lab="True Velocity")
+plot!(traja, 0, 20, sp=3, lab="True Acceleration")
+```
+Notice how there are no measurements for a while when the velocity changes sign (the velocity is low), while there are more frequent measurements when the velocity is high.

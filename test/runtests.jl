@@ -136,6 +136,60 @@ out = zeros(2, 10000)
         @test dfun([0],1,1,1) ≈ [-1]
     end
 
+    @testset "n_integrator_covariance" begin
+        @info "Testing n_integrator_covariance"
+        using ControlSystemsBase
+        
+        Ts = 0.1
+        σ2 = 1.0
+        
+        # Test n=2 
+        P = c2d(ss(1/tf('s'))^2 * sqrt(σ2), Ts)
+        R_expected = P.B * P.B'
+        R_n2 = LowLevelParticleFilters.n_integrator_covariance(2, Ts, σ2)
+        @test R_n2 ≈ R_expected
+        
+        # Test n=3
+        P3 = c2d(ss(1/tf('s'))^3 * sqrt(σ2), Ts)
+        R_expected3 = P3.B * P3.B'
+        R_n3 = LowLevelParticleFilters.n_integrator_covariance(3, Ts, σ2)
+        @test R_n3 ≈ R_expected3
+        
+        # Test n=4 with different σ2
+        σ2_2 = 2.0
+        P4 = c2d(ss(1/tf('s'))^4 * sqrt(σ2_2), Ts)
+        R_expected4 = P4.B * P4.B'
+        R_n4 = LowLevelParticleFilters.n_integrator_covariance(4, Ts, σ2_2)
+        @test R_n4 ≈ R_expected4
+    end
+
+    @testset "n_integrator_covariance_smooth" begin
+        @info "Testing n_integrator_covariance_smooth"
+        using ControlSystemsBase
+        
+        Ts = 0.1
+        σ2 = 1.0
+        
+        # Test n=2
+        sys2 = ss(1/tf('s'))^2
+        R_expected2 = c2d(sys2, diagm([0, σ2]), Ts)
+        R_n2 = LowLevelParticleFilters.n_integrator_covariance_smooth(2, Ts, σ2)
+        @test R_n2 ≈ R_expected2
+        
+        # Test n=3 with Val
+        sys3 = ss(1/tf('s'))^3
+        R_expected3 = c2d(sys3, diagm([0, 0, σ2]), Ts)
+        R_n3 = LowLevelParticleFilters.n_integrator_covariance_smooth(Val(3), Ts, σ2)
+        @test R_n3 ≈ R_expected3
+        
+        # Test n=4 with different σ2
+        σ2_2 = 2.0
+        sys4 = ss(1/tf('s'))^4
+        R_expected4 = c2d(sys4, diagm([0, 0, 0, σ2_2]), Ts)
+        R_n4 = LowLevelParticleFilters.n_integrator_covariance_smooth(4, Ts, σ2_2)
+        @test R_n4 ≈ R_expected4
+    end
+
 
     @testset "End to end" begin
         @info "testing End to end"
