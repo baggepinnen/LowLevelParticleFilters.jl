@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Parameter estimation · LowLevelParticleFilters Documentation</title><meta name="title" content="Parameter estimation · LowLevelParticleFilters Documentation"/><meta property="og:title" content="Parameter estimation · LowLevelParticleFilters Documentation"/><meta property="twitter:title" content="Parameter estimation · LowLevelParticleFilters Documentation"/><meta name="description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="og:description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="twitter:description" content="Documentation for LowLevelParticleFilters Documentation."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">LowLevelParticleFilters Documentation</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../discretization/">Discretization</a></li><li><a class="tocitem" href="../measurement_models/">Multiple measurement models</a></li><li class="is-active"><a class="tocitem" href>Parameter estimation</a><ul class="internal"><li><a class="tocitem" href="#Maximum-likelihood-estimation"><span>Maximum-likelihood estimation</span></a></li><li><a class="tocitem" href="#MAP-estimation"><span>MAP estimation</span></a></li><li><a class="tocitem" href="#Bayesian-inference-using-PMMH"><span>Bayesian inference using PMMH</span></a></li><li><a class="tocitem" href="#Bayesian-inference-using-DynamicHMC.jl"><span>Bayesian inference using  DynamicHMC.jl</span></a></li><li><a class="tocitem" href="#Joint-state-and-parameter-estimation"><span>Joint state and parameter estimation</span></a></li><li><a class="tocitem" href="#Using-an-optimizer"><span>Using an optimizer</span></a></li><li><a class="tocitem" href="#Which-method-should-I-use?"><span>Which method should I use?</span></a></li><li><a class="tocitem" href="#Identifiability"><span>Identifiability</span></a></li><li><a class="tocitem" href="#Videos"><span>Videos</span></a></li></ul></li><li><a class="tocitem" href="../benchmark/">Benchmark</a></li><li><a class="tocitem" href="../distributions/">Performance tips</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../adaptive_kalmanfilter/">Kalman-filter tutorial with LowLevelParticleFilters</a></li><li><a class="tocitem" href="../noisetuning/">Noise tuning and disturbance modeling for Kalman filtering</a></li><li><a class="tocitem" href="../beetle_example/">Particle-filter tutorial</a></li><li><a class="tocitem" href="../beetle_example_imm/">IMM-filter tutorial</a></li><li><a class="tocitem" href="../rbpf_example/">Rao-Blackwellized PF tutorial</a></li><li><a class="tocitem" href="../dae/">State estimation for DAE systems</a></li><li><a class="tocitem" href="../adaptive_control/">Adaptive estimation and control</a></li><li><a class="tocitem" href="../neural_network/">Adaptive Neural-Network training</a></li><li><a class="tocitem" href="../fault_detection/">Fault detection</a></li><li><a class="tocitem" href="../ut/">Unscented transform</a></li><li><a class="tocitem" href="../disturbance_gallery/">Disturbance gallery</a></li><li><a class="tocitem" href="../sample_rate/">Influence of sample rate on performance</a></li></ul></li><li><a class="tocitem" href="../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Parameter estimation</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Parameter estimation</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/docs/src/parameter_estimation.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Parameter-Estimation"><a class="docs-heading-anchor" href="#Parameter-Estimation">Parameter Estimation</a><a id="Parameter-Estimation-1"></a><a class="docs-heading-anchor-permalink" href="#Parameter-Estimation" title="Permalink"></a></h1><p>State estimation is an integral part of many parameter-estimation methods. Below, we will illustrate several different methods of performing parameter estimation. We can roughly divide the methods into two camps</p><ol><li>Methods that optimize prediction error or likelihood by tweaking model parameters.</li><li>Methods that add the parameters to be estimated as state variables in the model and estimate them using standard state estimation. </li></ol><p>From the first camp, we provide som basic functionality for maximum-likelihood estimation and MAP estimation, described below. An example of (2), joint state and parameter estimation, is provided in <a href="#Joint-state-and-parameter-estimation">Joint state and parameter estimation</a>.</p><h2 id="Maximum-likelihood-estimation"><a class="docs-heading-anchor" href="#Maximum-likelihood-estimation">Maximum-likelihood estimation</a><a id="Maximum-likelihood-estimation-1"></a><a class="docs-heading-anchor-permalink" href="#Maximum-likelihood-estimation" title="Permalink"></a></h2><p>Filters calculate the likelihood and prediction errors while performing filtering, this can be used to perform maximum likelihood estimation or prediction-error minimization. One can estimate all kinds of parameters using this method, in the example below, we will estimate the noise covariance. We may for example plot likelihood as function of the variance of the dynamics noise like this:</p><h3 id="Generate-data-by-simulation"><a class="docs-heading-anchor" href="#Generate-data-by-simulation">Generate data by simulation</a><a id="Generate-data-by-simulation-1"></a><a class="docs-heading-anchor-permalink" href="#Generate-data-by-simulation" title="Permalink"></a></h3><p>This simulates the same linear system as on the index page of the documentation</p><pre><code class="language-julia hljs">using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Distributions, Plots
+nx = 2   # Dimension of state
+nu = 2   # Dimension of input
+ny = 2   # Dimension of measurements
+N = 2000 # Number of particles
+
+const dg = MvNormal(ny,1.0)          # Measurement noise Distribution
+const df = MvNormal(nx,1.0)          # Dynamics noise Distribution
+const d0 = MvNormal(@SVector(randn(nx)),2.0)   # Initial state Distribution
+
+const A = SA[1 0.1; 0 1]
+const B = @SMatrix [0.0 0.1; 1 0.1]
+const C = @SMatrix [1.0 0; 0 1]
+
+dynamics(x,u,p,t) = A*x .+ B*u
+measurement(x,u,p,t) = C*x
+vecvec_to_mat(x) = copy(reduce(hcat, x)&#39;) # Helper function
+pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
+xs,u,y = simulate(pf,300,df)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(StaticArraysCore.SVector{2, Float64}[[1.0812304200971112, -0.14562935751734435], [0.924513790303362, 1.3092404747692679], [-0.28096174621319503, 1.6162529523221547], [-1.6785325995805367, 2.8969828726022815], [-1.95271101483978, 4.477379491086783], [-0.9026915690382005, 4.21270819218092], [-0.816754539674126, 5.203154013938132], [-0.6354363786451654, 4.804210454090512], [-0.5788549558355787, 6.1030812578515325], [0.1214958184040468, 5.08143944548714]  …  [-129.26008847532032, -1.20211986871574], [-129.7619562626326, -1.6777631983286752], [-128.25707440644376, -2.3746210434991344], [-129.49129174780273, -0.684691473079073], [-127.55397183942274, -0.9502505383315198], [-130.41921227821658, -3.504835247814171], [-131.0646214277142, -5.0416174417962365], [-131.93629145610547, -5.797948898337331], [-132.53063404736687, -5.836133292602856], [-133.76793964105758, -4.505818567748874]], [[0.5839054062927054, -0.27929477378843304], [0.41007457728427377, 0.9184433161348705], [0.11204639752074251, 0.5631568392262732], [1.1255022555445502, -0.432131932236531], [-1.4609285400734122, -1.0047900574943391], [1.658369563599552, 0.41173127501428186], [0.080280121082907, -1.6750679461296805], [0.47545184209756375, 0.9200875097747347], [-0.8745692970385783, -0.6063211557138892], [-0.6371267005592348, 0.3182510062201885]  …  [-1.2489711048850263, 0.5737070285485795], [-0.5339829136703733, 0.2608634380802061], [-0.24862328178704068, 0.9549561375433364], [-0.16281638770760531, 1.0145987581223301], [-1.9226803890658999, 0.8827977883629121], [-0.858732315998032, -0.8824817581291353], [-0.6331406379760188, 0.42937840647202086], [-0.4115253891654016, -0.3459220491586696], [1.0877107905147378, -1.2027615350296437], [0.5789458507677563, 1.2073250722043054]], StaticArraysCore.SizedVector{2, Float64, Vector{Float64}}[[1.739713588187037, -0.5100498248797163], [0.6884644348537693, 0.40785382726645414], [-0.046159328564447794, 0.8209681493468804], [-1.6602577555374096, 0.2996936660102336], [-1.9591356936736117, 4.411292166914635], [0.16027635551352915, 3.994996126947198], [-1.7055014841960219, 6.02808068557436], [-0.5283595175554003, 6.1094357446751175], [0.6672536602825021, 7.2720183396991045], [0.7141524975300997, 5.861054271919626]  …  [-130.91236300416386, -1.4026406044669997], [-129.38292871328596, -0.8103014655919185], [-127.87423565490683, -3.668207615214774], [-129.08227167499135, 1.0204886212947761], [-125.83092445177378, -0.1549208893717232], [-129.98661501037546, -3.2502416876510654], [-131.86519516045917, -4.655700954954115], [-132.56412937103138, -6.1239847716997895], [-134.00684174888718, -6.0856648979582255], [-134.20829360243954, -5.088282478801821]])</code></pre><h3 id="Compute-likelihood-for-various-values-of-the-parameters"><a class="docs-heading-anchor" href="#Compute-likelihood-for-various-values-of-the-parameters">Compute likelihood for various values of the parameters</a><a id="Compute-likelihood-for-various-values-of-the-parameters-1"></a><a class="docs-heading-anchor-permalink" href="#Compute-likelihood-for-various-values-of-the-parameters" title="Permalink"></a></h3><p>Since this example looks for a single parameter only, we can plot the likelihood as a function of this parameter. If we had been looking for more than 2 parameters, we typically use an optimizer instead (see further below).</p><pre><code class="language-julia hljs">p = nothing
+svec = exp10.(LinRange(-0.8, 1.2, 60))
+llspf = map(svec) do s
+    df = MvNormal(nx,s)
+    pfs = ParticleFilter(N, dynamics, measurement, df, dg, d0)
+    loglik(pfs, u, y, p)
+end
+llspfaux = map(svec) do s
+    df = MvNormal(nx,s)
+    pfs = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
+    loglik(pfs, u, y, p)
+end
+plot( svec, llspf,
+    xscale = :log10,
+    title = &quot;Log-likelihood&quot;,
+    xlabel = &quot;Dynamics noise standard deviation&quot;,
+    lab = &quot;PF&quot;,
+)
+plot!(svec, llspfaux, yscale=:identity, xscale=:log10, lab=&quot;AUX PF&quot;, c=:green)
+vline!([svec[findmax(llspf)[2]]], l=(:dash,:blue), primary=false)</code></pre><img src="098481ae.svg" alt="Example block output"/><p>the correct value for the simulated data is 1 (the simulated system is the same as on the front page of the docs).</p><p>We can do the same with a Kalman filter, shown below. When using Kalman-type filters, one may also provide a known state sequence if one is available, such as when the data is obtained from a simulation or in an instrumented lab setting. If the state sequence is provided, state-prediction errors are used for log-likelihood estimation instead of output-prediction errors.</p><pre><code class="language-julia hljs">eye(n) = SMatrix{n,n}(1.0I(n))
+llskf = map(svec) do s
+    kfs = KalmanFilter(A, B, C, 0, s^2*eye(nx), eye(ny), d0)
+    loglik(kfs, u, y, p)
+end
+llskfx = map(svec) do s # Kalman filter with known state sequence, possible when data is simulated
+    kfs = KalmanFilter(A, B, C, 0, s^2*eye(nx), eye(ny), d0)
+    loglik_x(kfs, u, y, xs, p)
+end
+plot!(svec, llskf, yscale=:identity, xscale=:log10, lab=&quot;Kalman&quot;, c=:red)
+vline!([svec[findmax(llskf)[2]]], l=(:dash,:red), primary=false)
+plot!(svec, llskfx, yscale=:identity, xscale=:log10, lab=&quot;Kalman with known state sequence&quot;, c=:purple)
+vline!([svec[findmax(llskfx)[2]]], l=(:dash,:purple), primary=false)</code></pre><img src="80c168fa.svg" alt="Example block output"/><p>the result can be quite noisy due to the stochastic nature of particle filtering. The particle filter likelihood agrees with the Kalman-filter estimate, which is optimal for the linear example system we are simulating here, apart for when the noise variance is small. Due to particle depletion, particle filters often struggle when dynamics-noise is too small. This problem is mitigated by using a greater number of particles, or simply by not using a too small covariance.</p><h2 id="MAP-estimation"><a class="docs-heading-anchor" href="#MAP-estimation">MAP estimation</a><a id="MAP-estimation-1"></a><a class="docs-heading-anchor-permalink" href="#MAP-estimation" title="Permalink"></a></h2><p>Maximum a posteriori estimation (MAP) is similar to maximum likelihood (ML), but includes also prior knowledge of the distribution of the parameters in a way that is similar to parameter regularization. In this example, we will estimate the variance of the noises in the dynamics and the measurement functions.</p><p>To solve a MAP estimation problem, we need to define a function that takes a parameter vector and returns a filter, the parameters are used to construct the covariance matrices:</p><pre><code class="language-julia hljs">filter_from_parameters(θ, pf = nothing) = KalmanFilter(A, B, C, 0, exp(θ[1])^2*eye(nx), exp(θ[2])^2*eye(ny), d0) # Works with particle filters as well</code></pre><p>The call to <code>exp</code> on the parameters is so that we can define log-normal priors</p><pre><code class="language-julia hljs">priors = [Normal(0,2),Normal(0,2)]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">2-element Vector{Distributions.Normal{Float64}}:
+ Distributions.Normal{Float64}(μ=0.0, σ=2.0)
+ Distributions.Normal{Float64}(μ=0.0, σ=2.0)</code></pre><p>Now we call the function <code>log_likelihood_fun</code> that returns a function to be minimized</p><pre><code class="language-julia hljs">ll = log_likelihood_fun(filter_from_parameters, priors, u, y, p)</code></pre><p>Since this is once again a low-dimensional problem, we can plot the LL on a 2d-grid</p><pre><code class="language-julia hljs">function meshgrid(a,b)
+    grid_a = [i for i in a, j in b]
+    grid_b = [j for i in a, j in b]
+    grid_a, grid_b
+end
+Nv       = 20
+v        = LinRange(-0.7,1,Nv)
+llxy     = (x,y) -&gt; ll([x;y])
+VGx, VGy = meshgrid(v,v)
+VGz      = llxy.(VGx, VGy)
+heatmap(
+    VGz,
+    xticks = (1:Nv, round.(v, digits = 2)),
+    yticks = (1:Nv, round.(v, digits = 2)),
+    xlabel = &quot;sigma v&quot;,
+    ylabel = &quot;sigma w&quot;,
+) # Yes, labels are reversed</code></pre><img src="97fa8abd.svg" alt="Example block output"/><p>For higher-dimensional problems, we may estimate the parameters using an optimizer, e.g., Optim.jl.</p><h2 id="Bayesian-inference-using-PMMH"><a class="docs-heading-anchor" href="#Bayesian-inference-using-PMMH">Bayesian inference using PMMH</a><a id="Bayesian-inference-using-PMMH-1"></a><a class="docs-heading-anchor-permalink" href="#Bayesian-inference-using-PMMH" title="Permalink"></a></h2><p>We proceed like we did for MAP above, but when calling the function <code>metropolis</code>, we will get the entire posterior distribution of the parameter vector, for the small cost of a massive increase in the amount of computations. <a href="../api/#LowLevelParticleFilters.metropolis"><code>metropolis</code></a> runs the <a href="https://en.wikipedia.org/wiki/Metropolis%E2%80%93Hastings_algorithm">Metropolis Hastings algorithm</a>, or more precisely if a particle filter is used, the &quot;Particle Marginal Metropolis Hastings&quot; (PMMH) algorithm. Here we use the Kalman filter simply to have the documentation build a bit faster, it can be quite heavy to run.</p><pre><code class="language-julia hljs">filter_from_parameters(θ, pf = nothing) = KalmanFilter(A, B, C, 0, exp(θ[1])^2*I(nx), exp(θ[2])^2*I(ny), d0) # Works with particle filters as well</code></pre><p>The call to <code>exp</code> on the parameters is so that we can define log-normal priors</p><pre><code class="language-julia hljs">priors = [Normal(0,2),Normal(0,2)]
+ll     = log_likelihood_fun(filter_from_parameters, priors, u, y, p)
+θ₀     = log.([1.0, 1.0]) # Starting point</code></pre><p>We also need to define a function that suggests a new point from the &quot;proposal distribution&quot;. This can be pretty much anything, but it has to be symmetric since I was lazy and simplified an equation.</p><pre><code class="language-julia hljs">draw   = θ -&gt; θ .+ 0.05 .* randn.() # This function dictates how new proposal parameters are being generated.
+burnin = 200 # remove this many initial samples (&quot;burn-in period&quot;)
+@info &quot;Starting Metropolis algorithm&quot;
+@time theta, lls = metropolis(ll, 2200, θ₀, draw) # Run PMMH for 2200  iterations
+thetam = reduce(hcat, theta)&#39;[burnin+1:end,:] # Build a matrix of the output
+histogram(exp.(thetam), layout=(3,1), lab=[&quot;R1&quot; &quot;R2&quot;]); plot!(lls[burnin+1:end], subplot=3, lab=&quot;log likelihood&quot;) # Visualize</code></pre><img src="26044e41.svg" alt="Example block output"/><p>In this example, we initialize the MH algorithm on the correct value <code>θ₀</code>, in general, you&#39;d see a period in the beginning where the likelihood (bottom plot) is much lower than during the rest of the sampling, this is the reason we remove a number of samples in the beginning, typically referred to as &quot;burn in&quot;.</p><p>If you are lucky, you can run the above threaded as well. I tried my best to make particle filters thread safe with their own rngs etc., but your milage may vary. For threading to help, the dynamics must be non-allocating, e.g., by using StaticArrays etc.</p><pre><code class="language-julia hljs">@time thetalls = LowLevelParticleFilters.metropolis_threaded(burnin, ll, 2200, θ₀, draw, nthreads=2)
+histogram(exp.(thetalls[:,1:2]), layout=3)
+plot!(thetalls[:,3], subplot=3)</code></pre><img src="282b6654.svg" alt="Example block output"/><h2 id="Bayesian-inference-using-DynamicHMC.jl"><a class="docs-heading-anchor" href="#Bayesian-inference-using-DynamicHMC.jl">Bayesian inference using  DynamicHMC.jl</a><a id="Bayesian-inference-using-DynamicHMC.jl-1"></a><a class="docs-heading-anchor-permalink" href="#Bayesian-inference-using-DynamicHMC.jl" title="Permalink"></a></h2><p>The following snippet of code performs the same estimation as above, but uses the much more sophisticated HMC sampler in <a href="https://www.tamaspapp.eu/DynamicHMC.jl/stable/worked_example/">DynamicHMC.jl</a> rather than the PMMH sampler above. This package requires the log-likelihood function to be wrapped in a custom struct that implements the <code>LogDensityProblems</code> interface, which is done below. We also indicate that we want to use ForwardDiff.jl to compute the gradients for fast sampling.</p><pre><code class="language-julia hljs">using DynamicHMC, LogDensityProblemsAD, ForwardDiff, LogDensityProblems, LinearAlgebra, Random
+
+struct LogTargetDensity{F}
+    ll::F
+    dim::Int
+end
+LogDensityProblems.logdensity(p::LogTargetDensity, θ) = p.ll(θ)
+LogDensityProblems.dimension(p::LogTargetDensity) = p.dim
+LogDensityProblems.capabilities(::Type{LogTargetDensity}) = LogDensityProblems.LogDensityOrder{0}()
+
+function filter_from_parameters(θ, pf = nothing)
+    # It&#39;s important that the distribution of the initial state has the same
+    # element type as the parameters. DynamicHMC will use Dual numbers for differentiation,
+    # hence, we make sure that d0 has `eltype(d0) = eltype(θ)`
+    T = eltype(θ)
+    d0 = MvNormal(T.(d0.μ), T.(d0.Σ))
+    KalmanFilter(A, B, C, 0, exp(θ[1])^2*eye(nx), exp(θ[2])^2*eye(ny), d0) 
+end
+ll = log_likelihood_fun(filter_from_parameters, priors, u, y, p)
+
+D = length(θ₀)
+ℓπ = LogTargetDensity(ll, D)
+∇P = ADgradient(:ForwardDiff, ℓπ)
+
+results = mcmc_with_warmup(Random.default_rng(), ∇P, 3000)
+DynamicHMC.Diagnostics.summarize_tree_statistics(results.tree_statistics)
+lls = [ts.π for ts in results.tree_statistics]
+
+histogram(exp.(results.posterior_matrix)&#39;, layout=(3,1), lab=[&quot;R1&quot; &quot;R2&quot;])
+plot!(lls, subplot=3, lab=&quot;log likelihood&quot;) # Visualize</code></pre><h2 id="Joint-state-and-parameter-estimation"><a class="docs-heading-anchor" href="#Joint-state-and-parameter-estimation">Joint state and parameter estimation</a><a id="Joint-state-and-parameter-estimation-1"></a><a class="docs-heading-anchor-permalink" href="#Joint-state-and-parameter-estimation" title="Permalink"></a></h2><p>In this example, we&#39;ll show how to perform parameter estimation by treating a parameter as a state variable. This method can not only estimate constant parameters, but also <strong>time-varying parameters</strong>. The system we will consider is a quadruple tank, where two upper tanks feed into two lower tanks. The outlet for tank 1 can vary in size, simulating, e.g., that something partially blocks the outlet. We start by defining the dynamics on a form that changes the outlet area <span>$a_1$</span> at time <span>$t=500$</span>:</p><pre><code class="language-julia hljs">using LowLevelParticleFilters
+using SeeToDee
+using Distributions
+using StaticArrays
+using Plots, LinearAlgebra
+
+function quadtank(h,u,p,t)
+    k1, k2, g = 1.6, 1.6, 9.81
+    A1 = A3 = A2 = A4 = 4.9
+    a1, a3, a2, a4 = 0.03, 0.03, 0.03, 0.03
+    γ1, γ2 = 0.2, 0.2
+
+    if t &gt; 500
+        a1 *= 2 # Change the parameter at t = 500
+    end
+
+    ssqrt(x) = √(max(x, zero(x)) + 1e-3) # For numerical robustness at x = 0
+
+    SA[
+        -a1/A1 * ssqrt(2g*h[1]) + a3/A1*ssqrt(2g*h[3]) +     γ1*k1/A1 * u[1]
+        -a2/A2 * ssqrt(2g*h[2]) + a4/A2*ssqrt(2g*h[4]) +     γ2*k2/A2 * u[2]
+        -a3/A3*ssqrt(2g*h[3])                          + (1-γ2)*k2/A3 * u[2]
+        -a4/A4*ssqrt(2g*h[4])                          + (1-γ1)*k1/A4 * u[1]
+    ]
+end
+
+nu = 2 # number of control inputs
+nx = 4 # number of state variables
+ny = 2 # number of measured outputs
+Ts = 1 # sample time</code></pre><p>We then define a measurement function, we measure the levels of tanks 1 and 2, and discretize the continuous-time dynamics using a Runge-Kutta 4 integrator <a href="https://baggepinnen.github.io/SeeToDee.jl/dev/api/#SeeToDee.Rk4"><code>SeeToDee.Rk4</code></a>:</p><pre><code class="language-julia hljs">measurement(x,u,p,t) = SA[x[1], x[2]]
+discrete_dynamics = SeeToDee.Rk4(quadtank, Ts)</code></pre><p>We simulate the system using the <code>rollout</code> function and add some noise to the measurements. The inputs in this case are just square waves.</p><pre><code class="language-julia hljs">Tperiod = 200
+t = 0:Ts:1000
+u = vcat.(0.25 .* sign.(sin.(2pi/Tperiod .* t)) .+ 0.25)
+u = SVector{nu}.(vcat.(u,u))
+x0 = Float64[2,2,3,3]
+x = LowLevelParticleFilters.rollout(discrete_dynamics, x0, u)[1:end-1]
+y = measurement.(x, u, 0, 0)
+y = [y .+ 0.01.*randn.() for y in y]
+
+plot(
+    plot(reduce(hcat, x)&#39;, title=&quot;State&quot;),
+    plot(reduce(hcat, u)&#39;, title=&quot;Inputs&quot;)
+)</code></pre><img src="0376f2bb.svg" alt="Example block output"/><p>To perform the joint state and parameter estimation, we define a version of the dynamics that contains an extra state, corresponding to the unknown or time varying parameter, in this case <span>$a_1$</span>. We do not have any apriori information about how this parameter changes, so we say that its derivative is 0 and it&#39;s thus only driven by noise:</p><pre><code class="language-julia hljs">function quadtank_paramest(h, u, p, t)
+    k1, k2, g = 1.6, 1.6, 9.81
+    A1 = A3 = A2 = A4 = 4.9
+    a3, a2, a4 = 0.03, 0.03, 0.03
+    γ1, γ2 = 0.2, 0.2
+
+    a1 = h[5] # the a1 parameter is a state
+
+    ssqrt(x) = √(max(x, zero(x)) + 1e-3) # For numerical robustness at x = 0
+
+    SA[
+        -a1/A1 * ssqrt(2g*h[1]) + a3/A1*ssqrt(2g*h[3]) +     γ1*k1/A1 * u[1]
+        -a2/A2 * ssqrt(2g*h[2]) + a4/A2*ssqrt(2g*h[4]) +     γ2*k2/A2 * u[2]
+        -a3/A3*ssqrt(2g*h[3])                          + (1-γ2)*k2/A3 * u[2]
+        -a4/A4*ssqrt(2g*h[4])                          + (1-γ1)*k1/A4 * u[1]
+        0 # the state is only driven by noise
+    ]
+end
+
+discrete_dynamics_params = SeeToDee.Rk4(quadtank_paramest, Ts)</code></pre><p>We then define a nonlinear state estimator, we will use the <a href="../api/#LowLevelParticleFilters.UnscentedKalmanFilter-Union{Tuple{AUGM}, Tuple{AUGD}, Tuple{IPM}, Tuple{IPD}, Tuple{Any, LowLevelParticleFilters.AbstractMeasurementModel, Any}, Tuple{Any, LowLevelParticleFilters.AbstractMeasurementModel, Any, Any}} where {IPD, IPM, AUGD, AUGM}"><code>UnscentedKalmanFilter</code></a>, and solve the filtering problem. We start by an initial state estimate <span>$x_0$</span> that is slightly off for the parameter <span>$a_1$</span></p><pre><code class="language-julia hljs">nx = 5
+names = SignalNames(x = [&quot;h1&quot;, &quot;h2&quot;, &quot;h3&quot;, &quot;h4&quot;, &quot;a1&quot;], y = [&quot;h$i&quot; for i in 1:2], u = [&quot;p1&quot;, &quot;p2&quot;], name=&quot;UKF&quot;) # For nicer plot labels
+
+R1 = SMatrix{nx,nx}(Diagonal([0.1, 0.1, 0.1, 0.1, 0.0001])) # Use of StaticArrays is generally good for performance
+R2 = SMatrix{ny,ny}(Diagonal((1e-2)^2 * ones(ny)))
+x0 = SA[2, 2, 3, 3, 0.02] # The SA prefix makes the array static, which is good for performance
+
+kf = UnscentedKalmanFilter(discrete_dynamics_params, measurement, R1, R2, MvNormal(x0, R1); ny, nu, Ts, names)
+
+sol = forward_trajectory(kf, u, y)
+plot(sol, plotx=false, plotxt=true, plotu=false, ploty=true, legend=:bottomright)
+plot!([0,500,500,1000], [0.03, 0.03, 0.06, 0.06], l=(:dash, :black), sp=5, lab=&quot;True param&quot;)</code></pre><img src="313c15ef.svg" alt="Example block output"/><p>as we can see, the correct value of the parameter is quickly found (<span>$a_1$</span>), and it also adapts at <span>$t=500$</span> when the parameter value changes. The speed with which the parameter adapts to changes is determined by the covariance matrix <span>$R_1$</span>, a higher value results in faster adaptation, but also higher sensitivity to noise. </p><p>If adaptive parameter estimation is coupled with a model-based controller, we get an adaptive controller! Note: the state that corresponds to the estimated parameter is typically not controllable, a fact that may require some special care for some control methods.</p><p>We may ask ourselves, what&#39;s the difference between a parameter and a state variable if we can add parameters as state variables? Typically, parameters do not vary with time, and if they do, they vary significantly slower than the state variables. State variables also have dynamics associate with them, whereas we often have no idea about how the parameters vary other than that they vary slowly.</p><p>Abrupt changes to the dynamics like in the example above can happen in practice, for instance, due to equipment failure or change of operating mode. This can be treated as a scenario with time-varying parameters that are continuously estimated. </p><h2 id="Using-an-optimizer"><a class="docs-heading-anchor" href="#Using-an-optimizer">Using an optimizer</a><a id="Using-an-optimizer-1"></a><a class="docs-heading-anchor-permalink" href="#Using-an-optimizer" title="Permalink"></a></h2><p>The state estimators in this package are all statistically motivated and thus compute things like the likelihood of the data as a by-product of the estimation. Maximum-likelihood or prediction-error estimation is thus very straight-forward by simply calling a gradient-based optimizer with gradients provided by differentiating through the state estimator using automatic differentiation. In this example, we will continue the example from above, but now estimate all the parameters of the quad-tank process. This time, they will not vary with time. We will first use a standard optimization algorithm from <a href="https://github.com/JuliaNLSolvers/Optim.jl">Optim.jl</a> to minimize the cost function based on the prediction error, and then use a Gauss-Newton optimizer.</p><p>We now define the dynamics function such that it takes its parameters from the <code>p</code> input argument. We also define a variable <code>p_true</code> that contains the true values that we will use to simulate some estimation data</p><pre><code class="language-julia hljs">function quadtank(h, u, p, t)
+    k1, k2, g = p[1], p[2], 9.81
+    A1 = A3 = A2 = A4 = p[3]
+    a1 = a3 = a2 = a4 = p[4]
+    γ1 = γ2 = p[5]
+
+    ssqrt(x) = √(max(x, zero(x)) + 1e-3) # For numerical robustness at x = 0
+
+    SA[
+        -a1/A1 * ssqrt(2g*h[1]) + a3/A1*ssqrt(2g*h[3]) +     γ1*k1/A1 * u[1]
+        -a2/A2 * ssqrt(2g*h[2]) + a4/A2*ssqrt(2g*h[4]) +     γ2*k2/A2 * u[2]
+        -a3/A3*ssqrt(2g*h[3])                          + (1-γ2)*k2/A3 * u[2]
+        -a4/A4*ssqrt(2g*h[4])                          + (1-γ1)*k1/A4 * u[1]
+    ]
+end
+
+discrete_dynamics = SeeToDee.Rk4(quadtank, Ts) # Discretize the dynamics using a 4:th order Runge-Kutta integrator
+p_true = [1.6, 1.6, 4.9, 0.03, 0.2]</code></pre><p>Similar to previous example, we simulate the system, this time using a more exciting input in order to be able to identify several parameters</p><pre><code class="language-julia hljs">Tperiod = 200
+t = 0:Ts:1000
+u1 = vcat.(0.25 .* sign.(sin.(2pi/Tperiod .* (t ./ 40).^2)) .+ 0.25)
+u2 = vcat.(0.25 .* sign.(sin.(2pi/Tperiod .* (t ./ 40).^2 .+ pi/2)) .+ 0.25)
+u  = SVector{nu}.(vcat.(u1,u2))
+x0 = SA[2.0,2,3,3] # Initial condition, static array for performance
+x = LowLevelParticleFilters.rollout(discrete_dynamics, x0, u, p_true)[1:end-1]
+y = measurement.(x, u, 0, 0)
+y = [y .+ 0.01 .* randn.() for y in y]
+
+plot(
+    plot(reduce(hcat, x)&#39;, title=&quot;State&quot;),
+    plot(reduce(hcat, u)&#39;, title=&quot;Inputs&quot;)
+)</code></pre><img src="7be8e322.svg" alt="Example block output"/><p>This time, we define a cost function for the optimizer to optimize, we&#39;ll use the sum of squared errors (<code>sse</code>). It&#39;s important to define the UKF with an initial state distribution with the same element type as the parameter vector so that automatic differentiation through the state estimator works, hence the explicit casting <code>T.(x0)</code> and <code>T.(R1)</code>. We also make sure to use StaticArrays for the covariance matrices and the initial condition for performance reasons (optional).</p><pre><code class="language-julia hljs">nx = 4
+R1 = SMatrix{nx,nx}(Diagonal([0.1, 0.1, 0.1, 0.1])) # Use of StaticArrays is generally good for performance
+R2 = SMatrix{ny,ny}(Diagonal((1e-2)^2 * ones(ny)))
+x0 = SA[2.0, 2, 3, 3]
+
+function cost(p::Vector{T}) where T
+    kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), T.(R1)); ny, nu, Ts)
+    LowLevelParticleFilters.sse(kf, u, y, p) # Sum of squared prediction errors
+end</code></pre><p>We generate a random initial guess for the estimation problem</p><pre><code class="language-julia hljs">p_guess = p_true .+  0.1*p_true .* randn(length(p_true))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5-element Vector{Float64}:
+ 1.5524906519904813
+ 1.8775750226115546
+ 4.428448666554554
+ 0.02590304999150804
+ 0.1887687563066955</code></pre><h3 id="Solving-using-Optim"><a class="docs-heading-anchor" href="#Solving-using-Optim">Solving using Optim</a><a id="Solving-using-Optim-1"></a><a class="docs-heading-anchor-permalink" href="#Solving-using-Optim" title="Permalink"></a></h3><p>We first minimize the cost using the BFGS optimization algorithm from <a href="https://github.com/JuliaNLSolvers/Optim.jl">Optim.jl</a></p><pre><code class="language-julia hljs">using Optim
+res = Optim.optimize(
+    cost,
+    p_guess,
+    BFGS(),
+    Optim.Options(
+        show_trace = true,
+        show_every = 5,
+        iterations = 100,
+        time_limit = 30,
+    ),
+    autodiff = :forward, # Indicate that we want to use forward-mode AD to derive gradients
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"> * Status: success
+
+ * Candidate solution
+    Final objective value:     4.112172e-01
+
+ * Found with
+    Algorithm:     BFGS
+
+ * Convergence measures
+    |x - x&#39;|               = 3.19e-09 ≰ 0.0e+00
+    |x - x&#39;|/|x&#39;|          = 6.93e-10 ≰ 0.0e+00
+    |f(x) - f(x&#39;)|         = 7.44e-15 ≰ 0.0e+00
+    |f(x) - f(x&#39;)|/|f(x&#39;)| = 1.81e-14 ≰ 0.0e+00
+    |g(x)|                 = 1.31e-10 ≤ 1.0e-08
+
+ * Work counters
+    Seconds run:   0  (vs limit 30)
+    Iterations:    14
+    f(x) calls:    37
+    ∇f(x) calls:   37
+</code></pre><p>We started out with a normalized parameter error of</p><pre><code class="language-julia hljs">using LinearAlgebra
+norm(p_true - p_guess) / norm(p_true)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.10171638186250584</code></pre><p>and ended with</p><pre><code class="language-julia hljs">p_opt = res.minimizer
+norm(p_true - p_opt) / norm(p_true)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.06043388874189955</code></pre><h3 id="Solving-using-Gauss-Newton-optimization"><a class="docs-heading-anchor" href="#Solving-using-Gauss-Newton-optimization">Solving using Gauss-Newton optimization</a><a id="Solving-using-Gauss-Newton-optimization-1"></a><a class="docs-heading-anchor-permalink" href="#Solving-using-Gauss-Newton-optimization" title="Permalink"></a></h3><p>Below, we optimize the sum of squared residuals again, but this time we do it using a Gauss-Newton style algorithm (Levenberg Marquardt). These algorithms want the entire residual vector rather than the sum of squares of the residuals, so we define an alternative &quot;cost function&quot; called <code>residuals</code> that calls the lower-level function <a href="../api/#LowLevelParticleFilters.prediction_errors!"><code>LowLevelParticleFilters.prediction_errors!</code></a></p><pre><code class="language-julia hljs">using LeastSquaresOptim
+
+function residuals!(res, p::Vector{T}) where T
+    kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), T.(R1)); ny, nu, Ts)
+    LowLevelParticleFilters.prediction_errors!(res, kf, u, y, p)
+end
+
+res_gn = optimize!(LeastSquaresProblem(x = copy(p_guess), f! = residuals!, output_length = length(y)*ny, autodiff = :forward), LevenbergMarquardt())
+
+p_opt_gn = res_gn.minimizer
+norm(p_true - p_opt_gn) / norm(p_true)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.05181296446739656</code></pre><p>When performing sum-of-squares minimization like here, we can, assuming that we converge to the global optimum, estimate the covariance of the estimated parameters. The <em>precision matrix</em> <span>$Λ$</span>, which is the inverse of the covariance matrix of the parameters, is given by a scaled Hessian of the cost function. The Gauss-Newton appoximation of the Hessian is given by <span>$J&#39;J$</span>, where <span>$J$</span> is the Jacobian of the residuals. </p><pre><code class="language-julia hljs">using ForwardDiff
+T = length(y)
+J = ForwardDiff.jacobian(residuals!, zeros(T * ny), res_gn.minimizer)
+Λ = (T - length(p_guess)) * Symmetric(J&#39; * J) # Precision matrix of the estimated parameters
+# Σ = inv(Λ) # Covariance matrix of the estimated parameters (only compute this if precision matrix is well conditioned)
+svdvals(Λ)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5-element Vector{Float64}:
+     1.0581525693369225e7
+ 14925.359179054769
+   862.8219878962076
+   386.58162555667235
+     3.4106051316475588e-12</code></pre><p>In this case, the precision matrix is singular, indicating that there is at least one diretion in parameter space that yields no increase in cost, and we can thus not determine where along a line in this direction the true parameter lies.</p><p>Gauss-Newton algorithms are often more efficient at sum-of-squares minimization than the more generic BFGS optimizer. This form of Gauss-Newton optimization of prediction errors is also available through <a href="https://baggepinnen.github.io/ControlSystemIdentification.jl/dev/nonlinear/#Identification-of-nonlinear-models">ControlSystemIdentification.jl</a>, which uses this package undernath the hood.</p><h2 id="Which-method-should-I-use?"><a class="docs-heading-anchor" href="#Which-method-should-I-use?">Which method should I use?</a><a id="Which-method-should-I-use?-1"></a><a class="docs-heading-anchor-permalink" href="#Which-method-should-I-use?" title="Permalink"></a></h2><p>The methods demonstrated above have slightly different applicability, here, we try to outline which methods to consider for different problems</p><table><tr><th style="text-align: right">Method</th><th style="text-align: right">Parameter Estimation</th><th style="text-align: right">Covariance Estimation</th><th style="text-align: right">Time Varying Parameters</th><th style="text-align: right">Online Estimation</th></tr><tr><td style="text-align: right">Maximum likelihood</td><td style="text-align: right">🟢</td><td style="text-align: right">🟢</td><td style="text-align: right">🟥</td><td style="text-align: right">🟥</td></tr><tr><td style="text-align: right">Joint state/par estim</td><td style="text-align: right">🔶</td><td style="text-align: right">🟥</td><td style="text-align: right">🟢</td><td style="text-align: right">🟢</td></tr><tr><td style="text-align: right">Prediction-error opt.</td><td style="text-align: right">🟢</td><td style="text-align: right">🟥</td><td style="text-align: right">🟥</td><td style="text-align: right">🟥</td></tr></table><p>When trying to optimize parameters of the noise distributions, most commonly the covariance matrices, maximum-likelihood (or MAP) is the only recommened method. Similarly, when parameters are time varying or you want an online estimate, the method that jointly estimates state and parameter is the only applicable method. When fitting standard parameters, all methods are applicable. In this case the joint state and parameter estimation tends to be inefficient and unneccesarily complex, and it is recommended to opt for maximum likelihood or prediction-error minimization. The prediction-error minimization (PEM) with a Gauss-Newtown optimizer is often the most efficient method for this type of problem.</p><p>Maximum likelihood estimation tends to yield an estimator with better estimates of posterior covariance since this is explicitly optimized for, while PEM tends to produce the smallest possible prediction errors.</p><h2 id="Identifiability"><a class="docs-heading-anchor" href="#Identifiability">Identifiability</a><a id="Identifiability-1"></a><a class="docs-heading-anchor-permalink" href="#Identifiability" title="Permalink"></a></h2><h3 id="Polynomial-methods"><a class="docs-heading-anchor" href="#Polynomial-methods">Polynomial methods</a><a id="Polynomial-methods-1"></a><a class="docs-heading-anchor-permalink" href="#Polynomial-methods" title="Permalink"></a></h3><p>There is no guarantee that we will recover the true parameters by perfoming parameter estimation, especially not if the input excitation is poor. For the system in this tutorial, we will generally find parameters that results in a good predictor for the system (this is after all what we&#39;re optimizing for), but these may not be the &quot;correct&quot; parameters. A tool like <a href="https://github.com/SciML/StructuralIdentifiability.jl">StructuralIdentifiability.jl</a> may be used to determine the identifiability of parameters and state variables (for rational systems), something that for this system could look like</p><pre><code class="language-julia hljs">using StructuralIdentifiability
+
+ode = @ODEmodel(
+    h1&#39;(t) = -a1/A1 * h1(t) + a3/A1*h3(t) +     gam*k1/A1 * u1(t),
+    h2&#39;(t) = -a2/A2 * h2(t) + a4/A2*h4(t) +     gam*k2/A2 * u2(t),
+    h3&#39;(t) = -a3/A3*h3(t)                 + (1-gam)*k2/A3 * u2(t),
+    h4&#39;(t) = -a4/A4*h4(t)                 + (1-gam)*k1/A4 * u1(t),
+	y1(t) = h1(t),
+    y2(t) = h2(t),
+)
+
+local_id = assess_local_identifiability(ode)</code></pre><p>where we have made the substitution <span>$\sqrt h \rightarrow h$</span> due to a limitation of the tool (it currently only handles rational ODEs). The output of the above analysis is </p><pre><code class="language-julia hljs">julia&gt; local_id = assess_local_identifiability(ode)
+Dict{Nemo.fmpq_mpoly, Bool} with 15 entries:
+  a3  =&gt; 0
+  gam =&gt; 1
+  k2  =&gt; 0
+  A4  =&gt; 0
+  h4  =&gt; 0
+  h2  =&gt; 1
+  A3  =&gt; 0
+  a1  =&gt; 0
+  A2  =&gt; 0
+  k1  =&gt; 0
+  a4  =&gt; 0
+  h3  =&gt; 0
+  h1  =&gt; 1
+  A1  =&gt; 0
+  a2  =&gt; 0</code></pre><p>indicating that we can not hope to resolve all of the parameters. However, using appropriate regularization from prior information, we might still recover a lot of information about the system. Regularization could easily be added to the function <code>cost</code> above, e.g., using a penalty like <code>(p-p_guess)&#39;Γ*(p-p_guess)</code> for some matrix <span>$\Gamma$</span>, to indicate our confidence in the initial guess.</p><h3 id="Linear-methods"><a class="docs-heading-anchor" href="#Linear-methods">Linear methods</a><a id="Linear-methods-1"></a><a class="docs-heading-anchor-permalink" href="#Linear-methods" title="Permalink"></a></h3><p>This package also contains an interface to <a href="https://juliacontrol.github.io/ControlSystems.jl/stable/">ControlSystemsBase</a>, which allows you to call <code>ControlSystemsBase.observability(f, x, u, p, t)</code> on a filter <code>f</code> to linearize (if needed) it in the point <code>x,u,p,t</code> and assess observability using linear methods (the PHB test). Also <code>ControlSystemsBase.obsv(f, x, u, p, t)</code> for computing the observability matrix is available.</p><h2 id="Videos"><a class="docs-heading-anchor" href="#Videos">Videos</a><a id="Videos-1"></a><a class="docs-heading-anchor-permalink" href="#Videos" title="Permalink"></a></h2><p>Examples of parameter estimation are available here</p><p>By using an optimizer to optimize the likelihood of an <a href="../api/#LowLevelParticleFilters.UnscentedKalmanFilter-Union{Tuple{AUGM}, Tuple{AUGD}, Tuple{IPM}, Tuple{IPD}, Tuple{Any, LowLevelParticleFilters.AbstractMeasurementModel, Any}, Tuple{Any, LowLevelParticleFilters.AbstractMeasurementModel, Any, Any}} where {IPD, IPM, AUGD, AUGM}"><code>UnscentedKalmanFilter</code></a>:</p><iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/0RxQwepVsoM" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe><p>Estimation of time-varying parameters:</p><iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/zJcOPPLqv4A?si=XCvpo3WD-4U3PJ2S" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe><p>Adaptive control by means of estimation of time-varying parameters:</p><iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/Ip_prmA7QTU?si=Fat_srMTQw5JtW2d" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../measurement_models/">« Multiple measurement models</a><a class="docs-footer-nextpage" href="../benchmark/">Benchmark »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Friday 22 August 2025 10:17">Friday 22 August 2025</span>. Using Julia version 1.11.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
