@@ -311,8 +311,12 @@ The Kalman filter is setup using a model corresponding to a series of ``n = `` `
 
 Below, we show the results for filter order 4 (sometimes called a constant-jerk model). A lower filter order makes the system more responsive to changes in the measurement, while a higher order provides smoother estimates at the cost of increased lag. When viewed in the frequency domain, the filter order controls the slope of the rolloff for high frequencies, while the covariance value, ``\sigma^2`` below, controls the cut-off frequency.
 
-```@example velocity_observer
+For fun, we use the square-root version of the Kalman filter here, [`SqKalmanFilter`](@ref) so that we have a demo that uses this as well.
 
+```@example velocity_observer
+using LowLevelParticleFilters, LinearAlgebra, StaticArrays
+using LowLevelParticleFilters: SimpleMvNormal
+using ControlSystemsBase, Plots
 traj(t)  = t < 10 ? t   :  10cos(t-10)
 trajv(t) = t < 10 ? 1.0 : -10sin(t-10)
 traja(t) = t < 10 ? 0.0 : -10cos(t-10)
@@ -339,15 +343,13 @@ sample_times = find_crossings(traj, 1)
 pos_measurements = traj.(sample_times)
 vel_measurements = diff(pos_measurements) ./ diff(sample_times)
 ##
-using Plots
 plot(traj, 0, 20, layout=(2,1))
 scatter!(sample_times, traj.(sample_times), sp=1)
 plot!(trajv, 0, 20, sp=2)
 scatter!(sample_times[2:end], vel_measurements, sp=2)
 
 ##
-using LowLevelParticleFilters, LinearAlgebra, StaticArrays
-using LowLevelParticleFilters: SimpleMvNormal
+
 filter_order = 4 # This controls the slope of the rolloff for high frequencies
 P = ss((1/tf('s')))^filter_order
 (; A, C, D) = P
@@ -357,8 +359,8 @@ Ts = 0.1
 R1 = LowLevelParticleFilters.n_integrator_covariance_smooth(P.nx, Ts, σ2)
 R2 = [1.0;;]
 d0 = SimpleMvNormal(1e9R1)
-kf = KalmanFilter(to_static(A), B, to_static(C), to_static(D), R1, R2, d0)
-
+kf = SqKalmanFilter(to_static(A), B, to_static(C), to_static(D), R1, R2, d0)
+chol(x) = cholesky(x).U
 function kf_velocity_estimation!(
     kf, sample_times
 )
@@ -369,7 +371,7 @@ function kf_velocity_estimation!(
         t1 = sample_times[i]
         dt = t1 - t0
         Ai = exp(A*dt)
-        R1 = LowLevelParticleFilters.n_integrator_covariance_smooth(kf.nx, dt, σ2) # This is the solution to a fixed-horizon Lyapunov equation
+        R1 = LowLevelParticleFilters.n_integrator_covariance_smooth(kf.nx, dt, σ2) |> chol # This is the solution to a fixed-horizon Lyapunov equation
         predict!(kf, nothing, nothing, t0; At=Ai, R1)
         y = pos_measurements[i]
         correct!(kf, nothing, y, nothing, t1)

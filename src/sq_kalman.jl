@@ -101,11 +101,14 @@ end
 
 For the square-root Kalman filter, a custom provided `R1` must be the upper triangular Cholesky factor of the covariance matrix of the process noise.
 """
-function predict!(kf::SqKalmanFilter, u, p=parameters(kf), t::Real = index(kf)*kf.Ts; R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α)
-    (; A,B,x,R) = kf
-    At = get_mat(A, x, u, p, t)
-    Bt = get_mat(B, x, u, p, t)
-    kf.x = At*x .+ Bt*u |> vec
+function predict!(kf::SqKalmanFilter, u, p=parameters(kf), t::Real = index(kf)*kf.Ts; At = get_mat(kf.A, kf.x, u, p, t), Bt = get_mat(kf.B, kf.x, u, p, t), R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α)
+    (; x,R) = kf
+    if u === nothing || length(u) == 0
+        # Special case useful since empty input is common special case
+        kf.x = At*x
+    else
+        kf.x = At*x .+ Bt*u |> vec
+    end
     if α == 1
         M1 = [R*At';R1]
         if R.data isa SMatrix
