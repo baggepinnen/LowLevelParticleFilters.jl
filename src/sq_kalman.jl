@@ -53,10 +53,10 @@ function SqKalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(Matrix(R1)); p = NullPar
     end
     R = UpperTriangular(convert_cov_type(R1, cholesky(d0.Σ).U))
     if !(R1 isa UpperTriangular)
-        R1 = cholesky(R1).U
+        R1 = UpperTriangular(cholesky(R1).U) # The extra wrapping in UpperTriangular is to handle that chol of Diagonal is Diagonal
     end
     if !(R2 isa UpperTriangular)
-        R2 = cholesky(R2).U
+        R2 = UpperTriangular(cholesky(R2).U)
     end
     
     x0 = convert_x0_type(d0.μ)

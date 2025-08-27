@@ -52,10 +52,10 @@ function SqExtendedKalmanFilter(dynamics, measurement_model::AbstractMeasurement
 
     # Ensure R1 and R2 are in Cholesky factor form
     if !(R1 isa UpperTriangular)
-        R1 = cholesky(R1).U
+        R1 = cholesky(R1).U |> UpperTriangular # The extra wrapping in UpperTriangular is to handle that chol of Diagonal is Diagonal
     end
     if !(R2 isa UpperTriangular)
-        R2 = cholesky(R2).U
+        R2 = cholesky(R2).U |> UpperTriangular
     end
 
     if R1 isa SMatrix
@@ -146,6 +146,8 @@ end
 
 Prediction step for the Square-root Extended Kalman Filter.
 Linearizes the dynamics and updates the state and Cholesky factor of covariance using QR decomposition.
+
+If a custom `R1` is provided, it must be the upper triangular Cholesky factor (of type `UpperTriangular`) of the covariance matrix of the process noise.
 """
 function predict!(kf::SqExtendedKalmanFilter{IPD}, u, p = parameters(kf), t::Real = index(kf)*kf.Ts;
                   R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α) where IPD
@@ -187,6 +189,8 @@ end
 
 Correction step for the Square-root Extended Kalman Filter.
 Linearizes the measurement and updates the state and Cholesky factor of covariance using QR decomposition.
+
+If a custom `R2` is provided, it must be the upper triangular Cholesky factor (of type `UpperTriangular`) of the covariance matrix of the measurement noise.
 """
 function correct!(kf::SqExtendedKalmanFilter, u, y, p, t::Real; kwargs...)
     measurement_model = kf.measurement_model
