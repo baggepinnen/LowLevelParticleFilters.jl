@@ -7,7 +7,7 @@ The key point is that while we know the basic physics (Newton's second law), we 
 Combining first-principles models and black-box neural networks, today popularized under the name "Universal Differential Equations" (UDEs), has been explored for a long time in the process-control community, early work includes [^UDE1] and [^UDE2], where neural networks were used to augment continuous-time models of chemical processes. Contrary to those works, we will let the state estimator itself find the parameters of the neural network alongside the state, rather than relying on a separate training phase using gradient descent.
 
 [^UDE1]: Psichogios, Dimitris C., and Lyle H. Ungar. "A hybrid neural network‐first principles approach to process modeling." AIChE Journal 38.10 (1992): 1499-1511.
-[^UDE2"]: Psichogios, Dimitris C., and Lyle H. Ungar. "Process modeling using structured neural networks." 1992 American Control Conference. IEEE, 1992.
+[^UDE2]: Psichogios, Dimitris C., and Lyle H. Ungar. "Process modeling using structured neural networks." 1992 American Control Conference. IEEE, 1992.
 
 ## System Description
 

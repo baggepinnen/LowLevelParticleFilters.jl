@@ -191,3 +191,85 @@ ekf = LLPF.ExtendedKalmanFilter(kf, error_dynamics, measurement_ekf)
 @test_throws ErrorException forward_trajectory(ekf, u, y)
 
 @test_logs (:error,r"State estimation failed") forward_trajectory(ekf, u, y, debug=true)
+
+
+## Test Square-root Extended Kalman Filter
+@testset "SqExtendedKalmanFilter" begin
+    # Setup
+    nx = 2
+    nu = 1
+    ny = 1
+    
+    A = SA[1.0 0.1; 0 1]
+    B = SA[0.0; 1.0;;]
+    C = SA[1.0 0.0]
+    
+    R1 = SA[0.01 0; 0 0.01]
+    R2 = SA[0.01;;]
+    
+    dynamics_test(x,u,p,t) = A*x .+ B*u
+    measurement_test(x,u,p,t) = C*x
+    
+    d0 = MvNormal(SA[1.0, 0.0], SA[1.0 0; 0 1.0])
+    
+    # Create standard and square-root EKF
+    kf_standard = KalmanFilter(A, B, C, 0, R1, R2, d0)
+    ekf_standard = ExtendedKalmanFilter(kf_standard, dynamics_test, measurement_test)
+    
+    sqkf = SqKalmanFilter(A, B, C, 0, R1, R2, d0)
+    sqekf = LLPF.SqExtendedKalmanFilter(sqkf, dynamics_test, measurement_test)
+    
+    # Test alternative constructors
+    sqekf2 = LLPF.SqExtendedKalmanFilter(dynamics_test, measurement_test, R1, R2, d0, nu=nu)
+    @test sqekf2.kf.R1 ≈ sqekf.kf.R1
+    @test sqekf2.kf.R2 ≈ sqekf.kf.R2
+    
+    # Generate test data
+    T = 100
+    du = MvNormal(nu, 0.1)
+    x,u,y = simulate(kf_standard, T, du)
+    
+    # Test forward trajectory
+    sol_standard = forward_trajectory(ekf_standard, u, y)
+    sol_sq = forward_trajectory(sqekf, u, y)
+    
+    # For linear dynamics, results should be very close (allowing for numerical differences)
+    @test reduce(hcat, sol_standard.x) ≈ reduce(hcat, sol_sq.x) rtol=1e-6
+    @test reduce(hcat, sol_standard.xt) ≈ reduce(hcat, sol_sq.xt) rtol=1e-6
+    
+    # Covariances should match (sq version stores Cholesky factors)
+    for i in 1:length(sol_sq.R)
+        R_sq_cov = sol_sq.R[i]'*sol_sq.R[i]  # Convert Cholesky to covariance
+        @test R_sq_cov ≈ sol_standard.R[i] rtol=1e-6
+    end
+    
+    @test sol_standard.ll ≈ sol_sq.ll rtol=1e-6
+    
+    # Test with nonlinear dynamics
+    dynamics_nonlinear(x,u,p,t) = A*x - 0.01*sin.(x) .+ B*u
+    
+    ekf_nl = ExtendedKalmanFilter(kf_standard, dynamics_nonlinear, measurement_test)
+    sqekf_nl = LLPF.SqExtendedKalmanFilter(sqkf, dynamics_nonlinear, measurement_test)
+    
+    x_nl,u_nl,y_nl = simulate(ekf_nl, T, du)
+    
+    sol_nl_standard = forward_trajectory(ekf_nl, u_nl, y_nl)
+    sol_nl_sq = forward_trajectory(sqekf_nl, u_nl, y_nl)
+    
+    # Results should be close but may differ slightly due to numerical differences
+    @test reduce(hcat, sol_nl_standard.x) ≈ reduce(hcat, sol_nl_sq.x) rtol=1e-5
+    @test reduce(hcat, sol_nl_standard.xt) ≈ reduce(hcat, sol_nl_sq.xt) rtol=1e-5
+    @test abs(sol_nl_standard.ll - sol_nl_sq.ll) / abs(sol_nl_standard.ll) < 0.01  # Within 1% difference
+    
+    # Test smoothing
+    xT_standard, RT_standard, ll_standard = smooth(ekf_nl, u_nl, y_nl)
+    xT_sq, RT_sq, ll_sq = smooth(sqekf_nl, u_nl, y_nl)
+    
+    @test reduce(hcat, xT_standard) ≈ reduce(hcat, xT_sq) rtol=1e-5
+    @test reduce(hcat, RT_standard) ≈ reduce(hcat, RT_sq) rtol=1e-4
+    
+    # Verify smoothing improves estimates
+    @test norm(reduce(hcat, x_nl .- xT_sq)) < norm(reduce(hcat, x_nl .- sol_nl_sq.x))
+    
+   
+end
