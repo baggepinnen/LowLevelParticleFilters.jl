@@ -217,3 +217,8 @@ sample_state(kf::AbstractExtendedKalmanFilter, x, u, p, t; noise=true) = kf.dyna
 sample_measurement(kf::AbstractExtendedKalmanFilter, x, u, p, t; noise=true) = kf.measurement(x, u, p, t) .+ noise*rand(SimpleMvNormal(get_mat(kf.R2, x, u, p, t)))
 measurement(kf::AbstractExtendedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractExtendedKalmanFilter) = kf.dynamics
+
+
+# For smooth_mbf
+get_A(kf::ExtendedKalmanFilter, x, u, p, t) = kf.Ajac(x,u,p,t)
+get_C(kf::ExtendedKalmanFilter, x, u, p, t) = kf.Cjac(x,u,p,t)
