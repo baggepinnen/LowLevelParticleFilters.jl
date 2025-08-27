@@ -131,7 +131,7 @@ function (kfm::MeasurementOop)(x,u,p,t)
         return y
     elseif kf isa UnscentedKalmanFilter{<:Any,false, <:Any, true} # augmented oop
         return mfun(x,u,p,t,0)
-    elseif kf isa UnscentedKalmanFilter{<:Any,true} || kf isa ExtendedKalmanFilter{<:Any,true}
+    elseif kf isa UnscentedKalmanFilter{<:Any,true} || kf isa ExtendedKalmanFilter{<:Any,true} ||  kf isa SqExtendedKalmanFilter{<:Any,true}
         y = zeros(kf.ny)
         mfun(y,x,u,p,t)
         return y

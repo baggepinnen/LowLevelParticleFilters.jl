@@ -75,6 +75,9 @@ function Base.show(io::IO, sol::KalmanFilteringSolution)
     println(io, "  ll: ", sol.ll)
 end
 
+cov_diag(R::AbstractMatrix) = diag(R)
+cov_diag(U::UpperTriangular) = diag(U'U)
+
 @recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotR=false, plotRt=false, names = sol.f.names, name = names.name, σ=1.96, always_include_x=false)
     isempty(name) || (name = name*" ")
     kf = sol.f
@@ -84,7 +87,7 @@ end
     xnames = names.x
     if plotx
         m = reduce(hcat, sol.x)'
-        twoσ = σ .* sqrt.(reduce(hcat, diag.(sol.R))')
+        twoσ = σ .* sqrt.(reduce(hcat, cov_diag.(sol.R))')
         for i = 1:nx
             @series begin
                 label --> "$(name)$(xnames[i])(t|t-1)"
@@ -98,7 +101,7 @@ end
     end
     if plotxt
         m = reduce(hcat, sol.xt)'
-        twoσ = σ .* sqrt.(reduce(hcat, diag.(sol.Rt))')
+        twoσ = σ .* sqrt.(reduce(hcat, cov_diag.(sol.Rt))')
         for i = 1:nx
             @series begin
                 label --> "$(name)$(xnames[i])(t|t)"
@@ -235,7 +238,7 @@ Base.iterate(r::KalmanSmoothingSolution, ::Val{:done}) = nothing
 
     if plotxT
         m = reduce(hcat, sol.xT)'
-        twoσ = σ .* sqrt.(reduce(hcat, diag.(sol.RT))')
+        twoσ = σ .* sqrt.(reduce(hcat, cov_diag.(sol.RT))')
         for i = 1:nx
             @series begin
                 label --> "$(name)$(xnames[i])(t|T)"

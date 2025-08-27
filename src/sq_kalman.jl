@@ -53,10 +53,10 @@ function SqKalmanFilter(A,B,C,D,R1,R2,d0=SimpleMvNormal(Matrix(R1)); p = NullPar
     end
     R = UpperTriangular(convert_cov_type(R1, cholesky(d0.Σ).U))
     if !(R1 isa UpperTriangular)
-        R1 = cholesky(R1).U
+        R1 = UpperTriangular(cholesky(R1).U) # The extra wrapping in UpperTriangular is to handle that chol of Diagonal is Diagonal
     end
     if !(R2 isa UpperTriangular)
-        R2 = cholesky(R2).U
+        R2 = UpperTriangular(cholesky(R2).U)
     end
     
     x0 = convert_x0_type(d0.μ)
@@ -101,7 +101,7 @@ end
 
 For the square-root Kalman filter, a custom provided `R1` must be the upper triangular Cholesky factor of the covariance matrix of the process noise.
 """
-function predict!(kf::SqKalmanFilter, u, p=parameters(kf), t::Real = index(kf)*kf.Ts; At = get_mat(kf.A, kf.x, u, p, t), Bt = get_mat(kf.B, kf.x, u, p, t), R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α)
+function predict!(kf::SqKalmanFilter, u, p=parameters(kf), t::Real = index(kf)*kf.Ts; At = get_mat(kf.A, kf.x, u, p, t), Bt = get_mat(kf.B, kf.x, u, p, t), R1::UpperTriangular = get_mat(kf.R1, kf.x, u, p, t), α = kf.α)
     (; x,R) = kf
     if u === nothing || length(u) == 0
         # Special case useful since empty input is common special case
