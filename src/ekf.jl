@@ -177,7 +177,7 @@ function correct!(kf::AbstractKalmanFilter,  measurement_model::EKFMeasurementMo
     (; ll, e, S, Sᵪ, K)
 end
 
-
+# If smoothing blows up / explodes / diverges towards the beginning of the trajectory, try increasing the measurement noise covariance. Also try the smooth_mbf in case the state dimension is large
 function smooth(sol, kf::AbstractExtendedKalmanFilter, u::AbstractVector=sol.u, y::AbstractVector=sol.y, p=parameters(kf))
     T            = length(y)
     (; x,xt,R,Rt,ll) = sol

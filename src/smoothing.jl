@@ -36,7 +36,7 @@ end
 
 Implements the "modified Bryson-Frazier smoother" which is a variant of the Rauch-Tung-Striebel smoother used in [`smooth`](@ref) that does not require the inversion of the state covariance matrix. The smoother is described in "New Kalman filter and smoother consistency tests" by Gibbs.
 """
-function smooth_mbf(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractVector=sol.u, y::AbstractVector=sol.y,  p=parameters(kf))
+function smooth_mbf(sol::KalmanFilteringSolution, kf::AbstractKalmanFilter, u::AbstractVector=sol.u, y::AbstractVector=sol.y,  p=parameters(kf))
     (; x,xt,R,Rt,ll) = sol
     T            = length(y)
     xT           = similar(xt)
@@ -51,8 +51,14 @@ function smooth_mbf(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractV
     λ̂[end] = zero(xt[end])
     r = similar(λ̂)
     for t = T:-1:1
-        F = kf.A
-        H = kf.C
+        ti = ((t+1)-1)*kf.Ts
+        # if t < T
+        #     F = get_A(kf, xT[t+1], u[t+1], p, ti) 
+        #     H = get_C(kf, xT[t+1], u[t+1], p, ti)
+        # else
+            F = get_A(kf, xt[t], u[t], p, ti) # NOTE: may be wrong state here, xT[t+1]?
+            H = get_C(kf, xt[t], u[t], p, ti)
+        # end
         if !isassigned(sol.K, t)
             xT[t] = xt[t]
             RT[t] = Rt[t]
@@ -77,6 +83,11 @@ function smooth_mbf(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractV
         
         xT[t] = xt[t] .- Rt[t]*λ̂[t]
         RT[t] = Rt[t] .- symmetrize(Rt[t]*Λ̂[t]*Rt[t])
+        # if true
+        #     # Project onto closest positive definite matrix
+        #     eiv = eigen(RT[t])
+        #     RT[t] = symmetrize(eiv.vectors * Diagonal(max.(eiv.values, 1e-3)) * eiv.vectors')
+        # end
 
         # The alternative formulation below is bad when there are missing values in the measurement sequence
         # xT[t] = x[t] .- R[t]*λ̃[t]
@@ -84,6 +95,12 @@ function smooth_mbf(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractV
     end
     xT,RT,ll,λ̃,λ̂,r
 end
+
+get_A(kf::KalmanFilter, x, u, p, t) = kf.A
+get_C(kf::KalmanFilter, x, u, p, t) = kf.C
+
+get_A(kf::ExtendedKalmanFilter, x, u, p, t) = kf.Ajac(x,u,p,t)
+get_C(kf::ExtendedKalmanFilter, x, u, p, t) = kf.Cjac(x,u,p,t)
 
 function smooth(pf::AbstractParticleFilter, M, u, y, p=parameters(pf))
     sol = forward_trajectory(pf, u, y, p)
