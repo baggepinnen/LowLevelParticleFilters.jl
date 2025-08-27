@@ -99,9 +99,6 @@ end
 get_A(kf::KalmanFilter, x, u, p, t) = kf.A
 get_C(kf::KalmanFilter, x, u, p, t) = kf.C
 
-get_A(kf::ExtendedKalmanFilter, x, u, p, t) = kf.Ajac(x,u,p,t)
-get_C(kf::ExtendedKalmanFilter, x, u, p, t) = kf.Cjac(x,u,p,t)
-
 function smooth(pf::AbstractParticleFilter, M, u, y, p=parameters(pf))
     sol = forward_trajectory(pf, u, y, p)
     smooth(pf::AbstractParticleFilter, sol.x, sol.w, sol.we, sol.ll, M, u, y, p)
