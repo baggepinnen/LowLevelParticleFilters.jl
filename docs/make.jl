@@ -29,6 +29,7 @@ makedocs(
                   "State estimation for DAE systems" => "dae.md",
                   "Adaptive estimation and control" => "adaptive_control.md",
                   "Adaptive Neural-Network training" => "neural_network.md",
+                  "Adaptive Universal Differential Equation" => "friction_nn_example.md",
                   "Fault detection" => "fault_detection.md",
                   "Unscented transform" => "ut.md",
                   "Disturbance gallery" => "disturbance_gallery.md",
