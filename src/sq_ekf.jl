@@ -298,6 +298,8 @@ sample_measurement(kf::SqExtendedKalmanFilter, x, u, p, t; noise=true) = kf.meas
 measurement(kf::SqExtendedKalmanFilter) = kf.measurement
 dynamics(kf::SqExtendedKalmanFilter) = kf.dynamics
 
+# covariance(kf::SqExtendedKalmanFilter)   = kf.R'kf.R
+
 # Helper function from sq_kalman.jl
 @inline function signdet!(S0, S)
     @inbounds for rc in axes(S0, 1)

@@ -83,7 +83,7 @@ nu = 1  # Input dimension [force]
 ny = 2  # Output dimension [position, velocity]
 
 # Generate training data
-function generate_data()
+function generate_data(rng)
     measurement(x, u, p, t) = x  # Measure full state
     
     # Time vector
@@ -98,7 +98,7 @@ function generate_data()
         elseif i < N÷2  
             push!(u, 5.0f0 * sign(sin(0.5f0 * t[i])))  # Square wave
         elseif i < 3N÷4
-            push!(u, 2.0f0 * randn())  # Random excitation
+            push!(u, 2.0f0 * randn(rng))  # Random excitation
         else
             freq = 0.05f0 + 0.2f0 * (i - 3N÷4) / (N÷4)
             push!(u, 4.0f0 * sin(2π * freq * t[i]))  # Chirp signal
@@ -122,7 +122,7 @@ end
 # Generate data
 rng = Random.default_rng()
 Random.seed!(rng, 42)
-data = generate_data()
+data = generate_data(rng)
 nothing # hide
 ```
 
@@ -154,12 +154,19 @@ nothing # hide
 
 ## Hybrid Dynamics Model
 
-We combine our knowledge of the physics with the neural network friction model:
+We combine our knowledge of the physics with the neural network friction model, the only part of the friction we assume known is that it is anti-symmetric around zero velocity:
 
 ```@example FRICTION_NN
 # Initial state combining physical states and NN parameters
 x0 = Float32[0.0, 0.0]
 s0 = ComponentVector(; x=x0, p=parr)
+
+function friction_function(v, params, st)
+    # Neural network predicts friction based on velocity
+    # We assume that we know that friction is anti-symmetric around zero velocity
+    friction_nn, _ = Lux.apply(friction_model2, SA[abs(v)], params, st)
+    return friction_nn[1]*sign(v)
+end
 
 # Continuous-time hybrid dynamics: known physics + learned friction
 function hybrid_dynamics_continuous(xp, u, p, t)
@@ -168,11 +175,8 @@ function hybrid_dynamics_continuous(xp, u, p, t)
     x₁, x₂ = xp_comp.x
     params = xp_comp.p
     m = 1.0f0
-    rough_friction = 0.0f0 * x₂
     
-    # Neural network predicts friction based on velocity
-    friction_nn, _ = Lux.apply(friction_model2, SA[x₂], params, st)
-    friction = friction_nn[1] + rough_friction
+    friction = friction_function(x₂, params, st)
     
     # Known physics: Newton's second law
     force = u[1]
@@ -239,7 +243,7 @@ ynames = ["position", "velocity"]
 xnames = [ynames; ["nn_$i" for i in 1:length(parr)]]
 unames = ["force"]
 snames = SignalNames(x = xnames, y = ynames, u = unames, name="EKF")
-ekf = IteratedExtendedKalmanFilter(
+ekf = ExtendedKalmanFilter(
     hybrid_dynamics, 
     measurement, 
     R1, 
@@ -286,15 +290,15 @@ friction_true = [true_friction(v) for v in v_test]
 friction_learned_mid = Float32[]
 params_mid = ComponentArray(sol.xt[2000-1][nx+1:end], getaxes(parr))  # At t=200
 for v in v_test
-    f_nn, _ = Lux.apply(friction_model2, SA[Float32(v)], params_mid, st)
-    push!(friction_learned_mid, f_nn[1])
+    friction = friction_function(Float32(v), params_mid, st)
+    push!(friction_learned_mid, friction)
 end
 
 # Compute learned friction (final, after adaptation)
 friction_learned_final = Float32[]
 for v in v_test
-    f_nn, _ = Lux.apply(friction_model2, SA[Float32(v)], final_params, st)
-    push!(friction_learned_final, f_nn[1])
+    friction = friction_function(Float32(v), final_params, st)
+    push!(friction_learned_final, friction)
 end
 
 # Compute modified true friction (after t=200)
