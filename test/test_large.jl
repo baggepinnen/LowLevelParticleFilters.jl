@@ -21,11 +21,14 @@ measurement_large(x,u,p,t) = __C*x
 R1 = I(nx)
 R2 = I(ny)
 
+cu(x) = cholesky(x).U
+
 T    = 200 # Number of time steps
 kf   = KalmanFilter(__A, __B, __C, 0, R1, R2)
-skf = SqKalmanFilter(__A, __B, __C, 0, R1, R2)
+skf = SqKalmanFilter(__A, __B, __C, 0, cu(R1), cu(R2))
 ukf = UnscentedKalmanFilter(dynamics_large, measurement_large, R1, R2; ny, nu)
 ekf = ExtendedKalmanFilter(dynamics_large, measurement_large, R1, R2; nu)
+sqekf = SqExtendedKalmanFilter(dynamics_large, measurement_large, cu(R1), cu(R2); nu)
 
 U = [randn(nu) for _ in 1:T]
 x,u,y = LowLevelParticleFilters.simulate(kf, U) # Simuate trajectory using the model in the filter
@@ -61,8 +64,13 @@ a = @allocations forward_trajectory(skf, u, y)
 a = @allocated forward_trajectory(skf, u, y)
 @test a <=  425_413_104*1.1
 
+sol_sqekf = forward_trajectory(sqekf, u, y)
+a = @allocations forward_trajectory(sqekf, u, y)
+@test a <=  52224*1.1 
 
-@test sol_kf.ll ≈ sol_ukf.ll ≈ sol_ekf.ll ≈ sol_sqkf.ll
+
+
+@test sol_kf.ll ≈ sol_ukf.ll ≈ sol_ekf.ll ≈ sol_sqkf.ll ≈ sol_sqekf.ll
 
 
 ## In place ====================================================================
@@ -81,6 +89,7 @@ end
 
 ukf = UnscentedKalmanFilter(dynamics_large_ip, measurement_large_ip, R1, R2; ny, nu)
 ekf = ExtendedKalmanFilter(dynamics_large_ip, measurement_large_ip, R1, R2; nu)
+sqekf = SqExtendedKalmanFilter(dynamics_large_ip, measurement_large_ip, cu(R1), cu(R2); nu)
 
 sol_ukf = forward_trajectory(ukf, u, y)
 a = @allocations forward_trajectory(ukf, u, y)
@@ -96,6 +105,13 @@ a = @allocations forward_trajectory(ekf, u, y)
 a = @allocated forward_trajectory(ekf, u, y)
 @test a <=  220_814_208*1.1
 
+sol_sqekf = forward_trajectory(sqekf, u, y)
+a = @allocations forward_trajectory(sqekf, u, y)
+@test a <=  23823*1.1
+
+a = @allocated forward_trajectory(sqekf, u, y)
+@test a <=  401_930_896*1.1
+
 
 
 ## Plotting ====================================================================
@@ -104,6 +120,7 @@ plot(sol_kf, plothy = true, plote = true)
 plot(sol_ukf, plothy = true, plote = true, plotR=true)
 plot(sol_ekf, plothy = true, plote = true, plotRt=true)
 plot(sol_sqkf, plothy = true, plote = true)
+plot(sol_sqekf, plothy = true, plote = true, plotRt=true)
 
 ## Smoothing ===================================================================
 

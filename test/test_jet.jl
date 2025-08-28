@@ -61,6 +61,15 @@ ekf = ExtendedKalmanFilter(dynamics_jet, measurement_jet, eye(nx), eye(ny), d0; 
 @test_opt correct!(ekf, u[1], y[1])
 @report_call correct!(ekf, u[1], y[1])
 
+cu(x) = cholesky(x).U |> UpperTriangular
+sqekf = SqExtendedKalmanFilter(dynamics_jet, measurement_jet, cu(eye(nx)), cu(eye(ny)), d0; nu)
+@test sqekf.kf.R1.data isa SMatrix{2, 2, Float64, 4}
+@test_opt predict!(sqekf, u[1])
+@report_call predict!(sqekf, u[1])
+
+@test_opt correct!(sqekf, u[1], y[1])
+@report_call correct!(sqekf, u[1], y[1])
+
 
 
 ## Test allocations ============================================================
@@ -84,3 +93,12 @@ end
 forward_trajectory(ekf, u, y)
 a = @allocations forward_trajectory(ekf, u, y)
 @test a <= 22*1.1
+
+forward_trajectory(sqekf, u, y)
+a = @allocations forward_trajectory(sqekf, u, y)
+
+if get(ENV, "CI", nothing) == "true"
+    @test a <= 300 # Mysteriously higher on CI despite identical package environments
+else
+    @test a <= 44*1.1
+end
