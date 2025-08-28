@@ -238,7 +238,9 @@ Base.iterate(r::KalmanSmoothingSolution, ::Val{:done}) = nothing
 
     if plotxT
         m = reduce(hcat, sol.xT)'
-        twoσ = σ .* sqrt.(reduce(hcat, cov_diag.(sol.RT))')
+        if plotRT
+            twoσ = σ .* sqrt.(reduce(hcat, cov_diag.(sol.RT))')
+        end
         for i = 1:nx
             @series begin
                 label --> "$(name)$(xnames[i])(t|T)"
