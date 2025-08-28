@@ -58,7 +58,7 @@ function SqExtendedKalmanFilter(dynamics, measurement_model::AbstractMeasurement
         R2 = cholesky(R2).U |> UpperTriangular
     end
 
-    if R1 isa SMatrix
+    if R1 isa SMatrix || R1 isa UpperTriangular{<:Any, <:SMatrix}
         x = @SVector zeros(T, nx)
         u = @SVector zeros(T, nu)
     else
