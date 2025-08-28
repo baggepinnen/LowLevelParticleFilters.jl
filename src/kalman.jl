@@ -1,10 +1,13 @@
+
+const StaticCovMat = Union{SMatrix, UpperTriangular{<:Any, <:SMatrix}}
+
 function convert_cov_type(R1, R)
     if !(eltype(R) <: AbstractFloat)
         R = float.(R)
     end
-    if R isa SMatrix || R isa UpperTriangular{<:Any, <:SMatrix} || R isa Matrix
+    if (R isa StaticCovMat) || (R isa Matrix)
         return copy(R)
-    elseif (R1 isa SMatrix || R1 isa UpperTriangular{<:Any, <:SMatrix}) && size(R) == size(R1)
+    elseif (R1 isa StaticCovMat) && size(R) == size(R1)
         return SMatrix{size(R1,1),size(R1,2)}(R)
     elseif R1 isa Matrix
         return Matrix(R)
