@@ -1,6 +1,15 @@
-# Thermal System Identification with Neural Networks
+# Learning a disturbance model using SciML
 
-In this example, we demonstrate parameter estimation for a thermal system using neural networks. Unlike the [friction example](@ref friction_nn_example), where neural network parameters are added to the state and estimated jointly, here we optimize the NN parameters separately using Gauss-Newton optimization while treating only the cloud cover as a state variable.
+In this example we will attempt to learn how an unknown and stochastic input, sun shining in through a window, influences a dynamical system, the temperature in a house. How the sun is shining on a house on a cloud-free day, absent any surrounding trees or buildings can be readily simulated. However, the real world offers a number of challenges that influence the effect this has on the inside temperature
+- Surrounding trees and buildings may cast shadows on the house at certain parts of the day.
+- The sun shining in through a window has much greater effect than if it's shining on a wall.
+- Cloud cover modulates the effect of the sun.
+- As a vendor of, e.g., HVAC equipment with interesting control systems, you may not want to model each individual site in detail, including the location and size of windows and surrounding shading elements. Even if these are static, they are thus to be considered unknown.
+
+We can model this as some deterministic parts and one stochastic parts, some known and some unknown. The path of the sun across the sky is deterministic and periodic, with one daily and one yearly component. The surroundings, like trees and buildings is for the most part static, but the influence this has on the insolation is unknown, and so is the exact location of windows on the house. However, the cloud cover is stochastic. We can thus model insolation by
+- Treating the current cloud cover as a stochastic variable ``C_{cloud} \in [0, 1]`` to be estimated continuously. We achieve this by including the cloud cover as a state variable in our system.
+- Treating the insolation when there is _no cloud cover_ as a deterministic function of the time of day (we ignore the yearly component here for simplicity). This function will be modeled as a basis-function expansion that will be learned from data.
+- The effective insolation at any point in time is thus ``I_{solar} = (1 - C_{cloud}) I_{solar, clear}``, that is, the cloud-free insolation is modulated by the current cloud cover.
 
 ## System Description
 
@@ -10,8 +19,8 @@ We consider a simplified thermal model of a single-room house:
 - Disturbances: external temperature `T_ext` and solar insolation through windows
 
 The heat transfer dynamics follow Newton's law of cooling with additional terms for heating and solar gains:
-```
-C_thermal * Ṫ = -k_loss * (T - T_ext) + η * P_heater + A_window * I_solar
+```math
+C_{thermal} * Ṫ = -k_{loss}  (T - T_{ext}) + η  P_{heater} + A_{window} I_{solar}
 ```
 where:
 - `C_thermal`: thermal capacity of the room
@@ -20,30 +29,21 @@ where:
 - `A_window`: effective window area
 - `I_solar`: solar insolation (W/m²)
 
-The challenge is that solar insolation depends on:
-1. Time of day (deterministic 24h pattern)
-2. Cloud cover (slowly varying, unknown)
-
-We'll use a neural network to learn the time-of-day pattern while estimating cloud cover as a state variable.
 
 ## Data Generation
 
 First, let's generate realistic thermal data with time-varying external conditions:
 
 ```@example THERMAL_NN
-using LowLevelParticleFilters, Lux, Random, SeeToDee, StaticArrays, Plots, LinearAlgebra
-using ComponentArrays#, DifferentiationInterface, SparseMatrixColorings
-# using SparseConnectivityTracer: TracerSparsityDetector
-# using DifferentiationInterface: AutoForwardDiff
+using LowLevelParticleFilters, Random, SeeToDee, StaticArrays, Plots, LinearAlgebra
+using LowLevelParticleFilters: SimpleMvNormal
 using Optim
 using DisplayAs # hide
 
-using LowLevelParticleFilters: SimpleMvNormal
-
 # System parameters
-const C_thermal = 10.0f0    # Thermal capacity (kWh/°C)
-const k_loss = 0.5f0         # Heat loss coefficient (kW/°C)
-const η = 0.95f0             # Heater efficiency
+const C_thermal = 10.0f0      # Thermal capacity (kWh/°C)
+const k_loss = 0.5f0          # Heat loss coefficient (kW/°C)
+const η = 0.95f0              # Heater efficiency
 const A_window = 20.0f0       # Effective window area factor
 
 # Time constants
@@ -64,13 +64,9 @@ end
 # True solar insolation pattern (W/m²)
 function true_insolation(t, cloud_cover)
     tod = time_of_day(t)
-    # Cropped sinusoid: sun rises at 6:00, sets at 18:00
-    if 6 <= tod <= 18
-        base_insolation = 500.0f0 * sin(π * (tod - 6) / 12)
-        return base_insolation * (1 - cloud_cover)
-    else
-        return 0.0f0
-    end
+    # Cropped sinusoid
+    base_insolation = max(500.0f0 * (0.2 + sin(π * (tod - 6) / 12)), 0)
+    return base_insolation * (1 - cloud_cover)
 end
 
 # Plot the daily patterns
@@ -98,13 +94,13 @@ function thermal_dynamics_true(x, u, p, t)
     dT_dt = (-k_loss * (T_room - T_ext) + η * P_heater + A_window * I_solar / 1000) / C_thermal
     
     # Cloud cover changes slowly (random walk)
-    dcloud_dt = 0.0f0  # Driven by process noise
+    dcloud_dt = 0.0f0  # Driven by process noise, zero deterministic dynamics
     
     SA[dT_dt, dcloud_dt]
 end
 
 # Discretize the dynamics
-discrete_dynamics_true = SeeToDee.Heun(thermal_dynamics_true, Ts)
+discrete_dynamics_true = SeeToDee.Rk4(thermal_dynamics_true, Ts)
 
 # Generate training data
 function generate_thermal_data(; days=7, measure_cloud_cover=true)
@@ -141,7 +137,7 @@ function generate_thermal_data(; days=7, measure_cloud_cover=true)
         x_next = discrete_dynamics_true(x[i-1], u[i-1], nothing, t[i-1])
         x[i] = x_next + w
         # Keep cloud cover in [0, 1]
-        x[i] = SA[x[i][1], clamp(x[i][2]*0.99, 0.0f0, 1.0f0)]
+        x[i] = SA[x[i][1], clamp(x[i][2]*0.999, 0.0f0, 1.0f0)]
     end
     
     # Measurements - optionally include cloud cover
@@ -158,53 +154,42 @@ end
 
 # Generate data (with cloud cover measurements by default)
 measure_cloud_cover = false  # Set to false to exclude cloud cover measurements
-data = generate_thermal_data(; days=30, measure_cloud_cover)
+data = generate_thermal_data(; days=14, measure_cloud_cover)
 
 # Visualize the generated data
 p1 = plot(data.t, [x[1] for x in data.x], label="Room Temperature", ylabel="Temperature (°C)")
 plot!(data.t, [external_temp(t) for t in data.t], label="External Temperature", ls=:dash, alpha=0.7)
 
 p2 = plot(data.t, [x[2] for x in data.x], label="Cloud Cover", ylabel="Cloud Cover (0-1)", color=:orange)
-
 p3 = plot(data.t, [u[1] for u in data.u], label="Heater Power", ylabel="Power (kW)", color=:red)
 
 plot(p1, p2, p3, layout=(3,1), size=(900, 600), xlabel="Time (hours)")
 ```
 
-## Neural Network Model
+## Radial Basis Function Model
 
-We'll use a neural network to learn the solar insolation pattern as a function of time of day. To ensure the network is naturally periodic, we use sin and cos of the daily angle as inputs:
+We'll use a radial basis function expansion to learn the solar insolation pattern. This provides a more interpretable model than a neural network, with basis functions centered during daylight hours:
 
 ```@example THERMAL_NN
-# Neural network for learning insolation pattern
-# Input: [sin(2π*t/24), cos(2π*t/24)] for natural periodicity
-# Output: base insolation (before cloud modulation)
-ni = 2  # Input dimension (sin and cos of day angle)
-no = 1  # Output dimension
-nhidden = 14  # Hidden layer size
-
-const insolation_model8 = Chain(
-    Dense(ni, nhidden, tanh),
-    Dense(nhidden, nhidden, tanh),
-    Dense(nhidden, no, x -> 500.0f0 * sigmoid(x))  # Output in [0, 500] W/m²
-)
-
-# Initialize network parameters
+# Initialize RBF weights (parameters to be learned)
 rng = Random.default_rng()
 Random.seed!(rng, 456)
-ps, st = Lux.setup(rng, insolation_model8) |> cpu_device()
-parr = ComponentArray(ps)
-n_params = length(parr)
+const n_basis = 8  # Number of basis functions
+# Initialize with positive weights since insolation is always positive ("negative insolation" could model things like someone always opening a window in the morning letting cold air in)
+rbf_weights = 100.0f0 * rand(Float32, n_basis)  # Random positive initialization
 
-# Helper function to compute insolation from neural network
-function compute_nn_insolation(t, params)
+function basis_functions(t)
     tod = time_of_day(t)
-    (6 < tod < 18) || return zero(eltype(params))
-    day_angle = Float32(2π) * tod / hours_per_day
-    nn_input = SA[sin(day_angle), cos(day_angle)]
-    I_base, _ = Lux.apply(insolation_model8, nn_input, params, st)
-    return I_base[1]
+    centers = LinRange(7.0f0, 17.0f0, n_basis) # Centers spread from 9 AM to 5 PM
+    width = 1.5f0  # Width of each Gaussian basis function (in hours)
+    @. exp(-((tod - centers) / width)^2)
 end
+
+# RBF evaluation function
+function compute_nn_insolation(t, weights)
+    return weights'basis_functions(t) # Linear combination of basis functions
+end
+
 nothing # hide
 ```
 
@@ -213,7 +198,7 @@ nothing # hide
 Define the dynamics model that uses the neural network for insolation estimation:
 
 ```@example THERMAL_NN
-# Measurement model (temperature and optionally cloud cover)
+# Measurement model, we measure temperature and optionally also cloud cover (this makes the problem much easier)
 if data.measure_cloud_cover
     measurement_fun = (x, u, p, t) -> SA[x[1], x[2]]  # Temperature and cloud cover
 else
@@ -256,9 +241,9 @@ ny = data.ny  # Output dimension depends on whether cloud cover is measured
 nothing # hide
 ```
 
-## Parameter Estimation using LBFGS
+## Parameter Estimation
 
-Now we'll set up the optimization problem using the LBFGS quasi-Newton method:
+Now we'll set up the state estimator and the optimization problem using a quasi-Newton method:
 
 ```@example THERMAL_NN
 # Process and measurement noise for the filter
@@ -275,8 +260,6 @@ x0 = SA[20.0f0, 0.5f0]  # Initial temperature and cloud cover guess
 # Cost function for optimization (sum of squared errors)
 function cost(θ)
     T = eltype(θ)
-    # Reconstruct parameters for the neural network
-    params = ComponentArray(θ, getaxes(parr))
     
     # Create filter with current parameters
     kf = UnscentedKalmanFilter(
@@ -285,45 +268,38 @@ function cost(θ)
         R1, 
         R2, 
         SimpleMvNormal(T.(x0), T.(2*R1));
-        ny, nu, Ts, #maxiters=3
+        ny, nu, Ts,
     )
     
     # Compute sum of squared prediction errors
-    LowLevelParticleFilters.sse(kf, data.u, data.y, params)
+    LowLevelParticleFilters.sse(kf, data.u, data.y, θ)
 end
 
 # Initial parameters from the neural network initialization
-θ_init = copy(parr)
+θ_init = copy(rbf_weights)
 
-# Optimize using LBFGS
-using Optim.LineSearches
 result = Optim.optimize(
     cost,
     θ_init,
-    # NelderMead(),
-    BFGS(alphaguess = LineSearches.InitialStatic(alpha=0.05), linesearch = LineSearches.BackTracking()),
+    BFGS(),
     Optim.Options(
-        show_trace = true,
+        show_trace = false,
         store_trace = true,
-        show_every = 1,
-        iterations = 100,
+        iterations = 200,
         g_tol = 1e-12,
     );
     autodiff = :forward,  # Use forward-mode AD for gradients
 )
 
-
-
-θ_opt = result.minimizer
-params_opt = ComponentArray(θ_opt, getaxes(parr))
+params_opt = result.minimizer
 
 @info "Optimization complete. Converged: $(Optim.converged(result)), Iterations: $(Optim.iterations(result))"
 @info "Final cost: $(Optim.minimum(result))"
 
 # Plot convergence history
-plot(getfield.(result.trace, :value), #yscale=:log10, 
-     xlabel="Iteration", ylabel="Cost (SSE)",
-     title="LBFGS Convergence", lw=2)
+# plot(getfield.(result.trace, :value), #yscale=:log10, 
+#      xlabel="Iteration", ylabel="Cost (SSE)",
+#      title="Convergence", lw=2)
 ```
 
 ## Results Analysis
@@ -367,9 +343,11 @@ title!("Cloud Cover Estimation")
 plot(p1, p2, layout=(2,1), size=(1200, 800))
 ```
 
+As we can see, it's easy to estimate the internal temperature, after all, we measure this directly. Estimating the cloud cover is significantly harder, notice in particular how the estimation drifts to 0.5 each night when there is no sun. This is expected since it is impossible to observe (in the estimation-theoretical sense) the cloud cover when there is no sun, since when there is no sun there is no effect of the cloud cover on the variable we do measure, the temperature. The fact that it drifts to 0.5 in particular can be explained by the growing estimated covariance during night combined with the clamping of the estimated cloud cover variable between 0 and 1.
+
 ## Learned vs True Insolation Pattern
 
-Compare the learned neural network pattern with the true insolation:
+We now have a look at the function we learned for the effect of insolation on the internal temperature, absent of clouds. Since this is a simulated example, we have access to the true function to compare with:
 
 ```@example THERMAL_NN
 # Generate time points for one day
@@ -389,22 +367,10 @@ ylabel!("Insolation (W/m²)")
 title!("Learned Solar Insolation Pattern")
 vline!([6, 18], ls=:dot, color=:gray, alpha=0.5, label="Sunrise/Sunset")
 ```
-
-```@example THERMAL_NN
-ssol = smooth(sol, kf_final)
-plot(ssol, size=(1900,1200), plotRT=false, plotu=false, ploty=false, plotyh=false, layout=(2,1), link=:x, lw=2)
-plot!(ssol.t, cloud_true, sp=2, lw=2)
-```
+Hopefully, we see that the estimation has captured the general shape of the true insolation pattern, but perhaps not perfectly, since this function is "hidden" behind an unknown and noisy estimate of the cloud cover.
 
 
 ## Discussion
 
-This example demonstrates several key concepts:
+This example demonstrates a classical SciML workflow, the combination of physics-based thermal dynamics with a data-driven model to capture unknown solar patterns. During the day, we were able to roughly estimate the cloud cover despite not being directly measured, by leveraging its effect on the temperature dynamics, but during night our estimator has no fighting chance of doing a good job here, a limitation inherent to the unobservability of the cloud cover in the absence of sunlight.
 
-1. **Hybrid Modeling**: We combined physics-based thermal dynamics with a neural network to capture unknown solar patterns.
-2. **Unobserved State Estimation**: Cloud cover was estimated despite not being directly measured, by leveraging its effect on the temperature dynamics.
-
-The approach is particularly useful when:
-- Some model components are well-understood (heat transfer physics)
-- Other components have unknown but structured patterns (solar insolation)
-- Parameters are numerous but fixed (neural network weights)
