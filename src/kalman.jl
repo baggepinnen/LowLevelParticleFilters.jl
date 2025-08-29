@@ -162,3 +162,64 @@ function reset!(kf::AbstractKalmanFilter; x0 = kf.d0.μ, t=0)
     kf.t = t
     nothing
 end
+
+
+
+"""
+    project_bound(μ, R, idx; lower=-Inf, upper=Inf, tol=1e-9)
+
+Project (μ,R) onto the bound lower ≤ x[idx] ≤ upper by minimizing
+(x-μ)'*inv(R)*(x-μ). If μ[idx] is inside the interval (with tol), no change.
+
+If a bound is violated, treats the active inequality as the equality
+x[idx] = bound and applies the closed-form projection:
+x* = μ - K * (μ[idx] - d),  R* = R - K * (R[idx,:]),
+where K = R[:,idx] / R[idx,idx] and d is the active bound.
+
+Returns `(x_proj, R_proj)`.
+"""
+function project_bound(μ::AbstractVector, P::AbstractMatrix, idx::Integer;
+                       lower=-Inf, upper=Inf, tol=1e-9)
+
+    @assert length(μ) == size(P,1) == size(P,2)
+
+    x = copy(μ)
+    Σ = copy(P)
+
+    # Decide which (if any) bound is active
+    d = if x[idx] < lower - tol
+        lower
+    elseif x[idx] > upper + tol
+        upper
+    else
+        # Already feasible
+        return x, Σ
+    end
+
+    Σii = Σ[idx, idx]
+    if !isfinite(Σii) || Σii <= 0
+        # Degenerate variance; safest fallback: clamp mean, leave covariance
+        x[idx] = d
+        return x, Σ
+    end
+
+    # Rank-1 “Kalman gain” for the hyperplane x[idx] = d
+    Σi = Σ[:, idx]
+    K = Σi / Σii
+    Δ = x[idx] - d
+
+    @bangbang x .-= K .* Δ
+    @bangbang Σ .-= K * Σi'
+
+    return x, symmetrize_psd(Σ)
+end
+
+# Helper: re-symmetrize and small PSD clip
+function symmetrize_psd(A::AbstractMatrix; eps=1e-12)
+    S = symmetrize(A)
+    # Tiny eigenvalue floor to avoid numerical negatives
+    vals, vecs = eigen(Symmetric(S))
+    @bangbang vals .= max.(vals, eps)
+    return vecs * Diagonal(vals) * vecs'
+end
+

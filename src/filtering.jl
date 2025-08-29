@@ -256,7 +256,7 @@ The filter loop consists of the following steps, in this order:
 3. `pre_predict_cb`
 4. `predict!`
 """
-function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf); debug=false, pre_correct_cb=(args...)->nothing, pre_predict_cb=(args...)->nothing)
+function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf); debug=false, pre_correct_cb=(args...)->nothing, pre_predict_cb=(args...)->nothing, post_predict_cb=(args...)->nothing, post_correct_cb=(args...)->nothing)
     reset!(kf)
     T    = length(y)
     x    = Array{particletype(kf)}(undef,T)
@@ -273,6 +273,7 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
             R[t]  = covariance(kf) |> copy
             R2 = pre_correct_cb(kf, u[t], y[t], p, ti)
             lli, ei, Si, Sᵪi, Ki = correct!(kf, u[t], y[t], p, ti; R2 = something(R2, get_mat(kf.R2, kf.x, u[t], p, ti)))
+            post_correct_cb(kf, p)
             ll += lli
             e[t] = ei
             xt[t] = state(kf)      |> copy
@@ -286,6 +287,7 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
             K[t] = Ki
             R1 = pre_predict_cb(kf, u[t], y[t], p, ti, lli, ei, Si, Sᵪi)
             predict!(kf, u[t], p, ti; R1 = something(R1, get_mat(kf.R1, kf.x, u[t], p, ti)))
+            post_predict_cb(kf, p)
         end
     catch err
         if debug

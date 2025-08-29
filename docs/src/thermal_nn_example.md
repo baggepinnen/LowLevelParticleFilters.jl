@@ -20,7 +20,7 @@ We consider a simplified thermal model of a single-room house:
 
 The heat transfer dynamics follow Newton's law of cooling with additional terms for heating and solar gains:
 ```math
-C_{thermal} * Ṫ = -k_{loss}  (T - T_{ext}) + η  P_{heater} + A_{window} I_{solar}
+C_{thermal} Ṫ = -k_{loss}  (T - T_{ext}) + η  P_{heater} + A_{window} I_{solar}
 ```
 where:
 - `C_thermal`: thermal capacity of the room
@@ -35,7 +35,7 @@ where:
 First, let's generate realistic thermal data with time-varying external conditions:
 
 ```@example THERMAL_NN
-using LowLevelParticleFilters, Random, SeeToDee, StaticArrays, Plots, LinearAlgebra
+using LowLevelParticleFilters, Random, SeeToDee, StaticArrays, Plots, LinearAlgebra, Statistics
 using LowLevelParticleFilters: SimpleMvNormal
 using Optim
 using DisplayAs # hide
@@ -206,8 +206,10 @@ else
 end
 
 # Hybrid dynamics with neural network and cloud cover state
+sigmoid(x) = x# 1 / (1 + exp(-x))
 function thermal_dynamics_hybrid(x, u, p, t)
-    T_room, cloud_cover = x
+    T_room, log_cloud_cover = x
+    cloud_cover = sigmoid(log_cloud_cover)
     P_heater = u[1]
     
     # External temperature (known)
@@ -231,7 +233,7 @@ const discrete_dynamics_hybrid5 = SeeToDee.ForwardEuler(thermal_dynamics_hybrid,
 
 function clamped_dynamics(x,u,p,t)
     xp = discrete_dynamics_hybrid5(x,u,p,t)
-    SA[xp[1]; clamp(xp[2], 0.0f0, 1.0f0)]
+    # SA[xp[1]; clamp(xp[2], 0.0f0, 1.0f0)]
 end
 
 # System dimensions for the filter
@@ -240,6 +242,7 @@ nu = 1  # Input: heater power
 ny = data.ny  # Output dimension depends on whether cloud cover is measured
 nothing # hide
 ```
+
 
 ## Parameter Estimation
 
@@ -257,6 +260,17 @@ end
 # Initial state estimate
 x0 = SA[20.0f0, 0.5f0]  # Initial temperature and cloud cover guess
 
+using ForwardDiff
+function post_update_cb(kf, u, y, p, ll, e)
+    if !(0 <= kf.x[2] <= 1)
+        xn, Rn = LowLevelParticleFilters.project_bound(kf.x, kf.R, 2; lower=0, upper=1, tol=1e-9)
+        # @show ForwardDiff.value.(kf.R), ForwardDiff.value.(Rn)
+        kf.x = xn
+        kf.R = Rn
+    end
+    nothing
+end
+
 # Cost function for optimization (sum of squared errors)
 function cost(θ)
     T = eltype(θ)
@@ -272,7 +286,7 @@ function cost(θ)
     )
     
     # Compute sum of squared prediction errors
-    LowLevelParticleFilters.sse(kf, data.u, data.y, θ)
+    LowLevelParticleFilters.sse(kf, data.u, data.y, θ; post_update_cb)
 end
 
 # Initial parameters from the neural network initialization
@@ -318,13 +332,16 @@ kf_final = UnscentedKalmanFilter(
     ny, nu, Ts
 )
 
-sol = forward_trajectory(kf_final, data.u, data.y)
+post_predict_cb(kf, p) = post_update_cb(kf, 0, 0, p, 0, 0)
+sol = forward_trajectory(kf_final, data.u, data.y; post_predict_cb, post_correct_cb=post_predict_cb)
 
 # Extract estimated states
 T_est = [sol.xt[i][1] for i in 1:length(sol.xt)]
-cloud_est = [sol.xt[i][2] for i in 1:length(sol.xt)]
+cloud_est = [sigmoid(sol.xt[i][2]) for i in 1:length(sol.xt)]
 T_true = [data.x[i][1] for i in 1:length(data.x)]
 cloud_true = [data.x[i][2] for i in 1:length(data.x)]
+
+cloud_error = sqrt(mean(abs2, cloud_true .- cloud_est))
 
 # Plot temperature estimation
 p1 = plot(data.t, T_true, label="True Temperature", lw=2, color=:blue)
@@ -374,3 +391,7 @@ Hopefully, we see that the estimation has captured the general shape of the true
 
 This example demonstrates a classical SciML workflow, the combination of physics-based thermal dynamics with a data-driven model to capture unknown solar patterns. During the day, we were able to roughly estimate the cloud cover despite not being directly measured, by leveraging its effect on the temperature dynamics, but during night our estimator has no fighting chance of doing a good job here, a limitation inherent to the unobservability of the cloud cover in the absence of sunlight.
 
+
+
+## TODO
+- Try the learned function with a particle filter
