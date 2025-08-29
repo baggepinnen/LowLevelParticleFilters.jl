@@ -302,26 +302,7 @@ sample_measurement(kf::SqExtendedKalmanFilter, x, u, p, t; noise=true) = kf.meas
 measurement(kf::SqExtendedKalmanFilter) = kf.measurement
 dynamics(kf::SqExtendedKalmanFilter) = kf.dynamics
 
-# covariance(kf::SqExtendedKalmanFilter)   = kf.R'kf.R
-
-# Helper function from sq_kalman.jl
-@inline function signdet!(S0, S)
-    @inbounds for rc in axes(S0, 1)
-        # In order to get a well-defined logdet, we need to enforce a positive diagonal of the R factor
-        if S0[rc,rc] < 0
-            for c = rc:size(S0, 2)
-                S0[rc, c] = -S0[rc,c]
-            end
-        end
-    end
-    S0
-end
-
-@inline function signdet!(S0::SMatrix, S)
-    Stemp = similar(S0) .= S0
-    signdet!(Stemp, S)
-    SMatrix(Stemp)
-end
+# covariance(kf::SqExtendedKalmanFilter)   = kf.R'kf.R # Don't, at least for now
 
 function reset!(kf::SqExtendedKalmanFilter; x0 = kf.d0.μ)
     kf.x = convert_x0_type(x0)
