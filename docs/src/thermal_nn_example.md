@@ -195,15 +195,16 @@ nothing # hide
 
 ## Hybrid Dynamics for Estimation
 
-Define the dynamics model that uses the neural network for insolation estimation:
+Define the dynamics model that uses the neural network for insolation estimation. Since our measurement is linear (we directly observe parts of the state), we can use a `LinearMeasurementModel` for improved efficiency:
 
 ```@example THERMAL_NN
-# Measurement model, we measure temperature and optionally also cloud cover (this makes the problem much easier)
+# Linear measurement model - more efficient than nonlinear for direct state measurements
 if data.measure_cloud_cover
-    measurement_fun = (x, u, p, t) -> SA[x[1], x[2]]  # Temperature and cloud cover
+    C = SA[1.0f0 0.0f0; 0.0f0 1.0f0]  # Measure both temperature and cloud cover
 else
-    measurement_fun = (x, u, p, t) -> SA[x[1]]  # Only temperature
+    C = SA[1.0f0 0.0f0]  # Only measure temperature
 end
+measurement_model = LinearMeasurementModel(C, 0, data.measure_cloud_cover ? Diagonal([0.1f0^2, 0.01f0^2]) : Diagonal([0.1f0^2]); ny=data.ny)
 
 # Hybrid dynamics with neural network and cloud cover state
 function thermal_dynamics_hybrid(x, u, p, t)
@@ -221,7 +222,7 @@ function thermal_dynamics_hybrid(x, u, p, t)
     dT_dt = (-k_loss * (T_room - T_ext) + η * P_heater + A_window * I_solar / 1000) / C_thermal
     
     # Cloud cover changes slowly
-    dcloud_dt = 0.0001f0*(0.3f0 - cloud_cover)  # Driven by process noise, assume we know mean cloud cover over time
+    dcloud_dt = 0.0001f0*(0.5f0 - cloud_cover)  # Driven by process noise, assume we know mean cloud cover over time
     
     SA[dT_dt, dcloud_dt]
 end
@@ -262,12 +263,11 @@ x0 = SA[20.0f0, 0.5f0]  # Initial temperature and cloud cover guess
 function cost(θ)
     T = eltype(θ)
     
-    # Create filter with current parameters
+    # Create filter with current parameters and linear measurement model
     kf = UnscentedKalmanFilter(
         clamped_dynamics, 
-        measurement_fun, 
+        measurement_model,  # Use the linear measurement model
         R1, 
-        R2, 
         SimpleMvNormal(T.(x0), T.(2*R1));
         ny, nu, Ts,
     )
@@ -279,16 +279,19 @@ end
 # Initial parameters from the neural network initialization
 θ_init = copy(rbf_weights)
 
+# Define optimization options once for reuse
+opt_options = Optim.Options(
+    show_trace = false,
+    store_trace = true,
+    iterations = 200,
+    g_tol = 1e-12,
+)
+
 result = Optim.optimize(
     cost,
     θ_init,
     BFGS(),
-    Optim.Options(
-        show_trace = false,
-        store_trace = true,
-        iterations = 200,
-        g_tol = 1e-12,
-    );
+    opt_options;
     autodiff = :forward,  # Use forward-mode AD for gradients
 )
 
@@ -308,12 +311,11 @@ params_opt = result.minimizer
 Let's analyze the results by running the filter with optimized parameters:
 
 ```@example THERMAL_NN
-# Run filter with optimized parameters
+# Run filter with optimized parameters and linear measurement model
 kf_final = UnscentedKalmanFilter(
     clamped_dynamics,
-    measurement_fun,
+    measurement_model,  # Use the linear measurement model
     R1,
-    R2,
     SimpleMvNormal(x0, R1);
     p = params_opt,
     ny, nu, Ts
@@ -464,7 +466,7 @@ function thermal_dynamics_sigmoid(x, u, p, t)
     dT_dt = (-k_loss * (T_room - T_ext) + η * P_heater + A_window * I_solar / 1000) / C_thermal
     
     # Cloud cover changes slowly (in transformed space)
-    dlogcloud_dt = 0.0001f0*(sigmoid_inv(0.3f0) - log_cloud_cover)
+    dlogcloud_dt = 0.0001f0*(sigmoid_inv(0.5f0) - log_cloud_cover)
     
     SA[dT_dt, dlogcloud_dt]
 end
@@ -502,11 +504,7 @@ result_sigmoid = Optim.optimize(
     cost_sigmoid,
     θ_init,
     BFGS(),
-    Optim.Options(
-        show_trace = false,
-        iterations = 200,
-        g_tol = 1e-12,
-    );
+    opt_options;
     autodiff = :forward,
 )
 
@@ -541,7 +539,6 @@ eval_sigmoid = evaluate_solution(sol_sigmoid_transformed, data, params_sigmoid)
 
 ```@example THERMAL_NN
 # Projection method - uses standard dynamics but projects after updates
-using ForwardDiff
 
 function post_update_cb(kf, u, y, p, ll, e)
     if !(0 <= kf.x[2] <= 1)
@@ -561,9 +558,8 @@ function cost_projection(θ)
     
     kf = UnscentedKalmanFilter(
         discrete_dynamics_unclamped,
-        measurement_fun,
+        measurement_model,  # Use the linear measurement model
         R1,
-        R2,
         SimpleMvNormal(T.(x0), T.(2*R1));
         ny, nu, Ts,
     )
@@ -577,11 +573,7 @@ result_projection = Optim.optimize(
     cost_projection,
     θ_init,
     BFGS(),
-    Optim.Options(
-        show_trace = false,
-        iterations = 200,
-        g_tol = 1e-12,
-    );
+    opt_options;
     autodiff = :forward,
 )
 
@@ -590,9 +582,8 @@ params_projection = result_projection.minimizer
 # Evaluate projection method
 kf_projection = UnscentedKalmanFilter(
     discrete_dynamics_unclamped,
-    measurement_fun,
+    measurement_model,  # Use the linear measurement model
     R1,
-    R2,
     SimpleMvNormal(x0, R1);
     p = params_projection,
     ny, nu, Ts
@@ -625,9 +616,8 @@ function cost_rejection(θ)
     
     kf = UnscentedKalmanFilter(
         discrete_dynamics_rejection,
-        measurement_fun,
+        measurement_model,  # Use the linear measurement model
         R1,
-        R2,
         SimpleMvNormal(T.(x0), T.(2*R1));
         ny, nu, Ts,
         reject = reject_sigma_point  # Add rejection function
@@ -642,11 +632,7 @@ result_rejection = Optim.optimize(
     cost_rejection,
     θ_init,
     BFGS(),
-    Optim.Options(
-        show_trace = false,
-        iterations = 200,
-        g_tol = 1e-12,
-    );
+    opt_options;
     autodiff = :forward,
 )
 
@@ -655,9 +641,8 @@ params_rejection = result_rejection.minimizer
 # Evaluate rejection method
 kf_rejection = UnscentedKalmanFilter(
     discrete_dynamics_rejection,
-    measurement_fun,
+    measurement_model,  # Use the linear measurement model
     R1,
-    R2,
     SimpleMvNormal(x0, R1);
     p = params_rejection,
     ny, nu, Ts,
