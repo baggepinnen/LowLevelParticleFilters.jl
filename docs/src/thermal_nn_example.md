@@ -384,6 +384,7 @@ The variable cloud cover is constrained to be between 0 and 1. The Kalman-filter
 - The clamping method
 - Reformulating the dynamics to use an unconstrained variable that is projected onto the constraint set using a sigmoid function
 - Projection implemented as a "perfect measurement": We may treat the projection as a fictitious measurement update, imagining that we have obtained a zero-variance measurement that the constrained variable is at the constraint boundary. This is similar to the naive clamping above, but also updates the covariance. We perform this projection using the function `LowLevelParticleFilters.project_bound` and make use of a callback in order to apply it during the estimation.
+- Sigma-point rejection, when we use an [`UnscentedKalmanFilter`](@ref), we may reject sigma points that fall outside of the feasible region.
 
 ```@example THERMAL_NN
 # Evaluation function to compare methods
@@ -604,15 +605,81 @@ eval_projection = evaluate_solution(sol_projection, data, params_projection)
 @info "Projection method - Temperature RMSE: $(round(eval_projection.temp_rmse, digits=3))°C, Cloud RMSE: $(round(eval_projection.cloud_rmse, digits=3))"
 ```
 
+### Method 4: Sigma-point rejection
+
+The UKF provides a mechanism to reject sigma points that violate constraints. When a sigma point falls outside [0,1] for cloud cover, we can reject it and replace it with the mean point:
+
+```@example THERMAL_NN
+# Sigma-point rejection method
+function reject_sigma_point(x)
+    # Reject if cloud cover is outside [0, 1]
+    return !(0.0f0 <= x[2] <= 1.0f0)
+end
+
+# Use unclamped dynamics for rejection method
+discrete_dynamics_rejection = discrete_dynamics_hybrid5
+
+# Optimize with sigma-point rejection
+function cost_rejection(θ)
+    T = eltype(θ)
+    
+    kf = UnscentedKalmanFilter(
+        discrete_dynamics_rejection,
+        measurement_fun,
+        R1,
+        R2,
+        SimpleMvNormal(T.(x0), T.(2*R1));
+        ny, nu, Ts,
+        reject = reject_sigma_point  # Add rejection function
+    )
+    
+    LowLevelParticleFilters.sse(kf, data.u, data.y, θ)
+end
+
+# Run optimization for rejection method
+@info "Optimizing sigma-point rejection method..."
+result_rejection = Optim.optimize(
+    cost_rejection,
+    θ_init,
+    BFGS(),
+    Optim.Options(
+        show_trace = false,
+        iterations = 200,
+        g_tol = 1e-12,
+    );
+    autodiff = :forward,
+)
+
+params_rejection = result_rejection.minimizer
+
+# Evaluate rejection method
+kf_rejection = UnscentedKalmanFilter(
+    discrete_dynamics_rejection,
+    measurement_fun,
+    R1,
+    R2,
+    SimpleMvNormal(x0, R1);
+    p = params_rejection,
+    ny, nu, Ts,
+    reject = reject_sigma_point
+)
+
+sol_rejection = forward_trajectory(kf_rejection, data.u, data.y)
+
+eval_rejection = evaluate_solution(sol_rejection, data, params_rejection)
+@info "Rejection method - Temperature RMSE: $(round(eval_rejection.temp_rmse, digits=3))°C, Cloud RMSE: $(round(eval_rejection.cloud_rmse, digits=3))"
+```
+
 ### Comparison Results
 
 ```@example THERMAL_NN
-# Plot comparison of all three methods
+# Plot comparison of all four methods
 p1 = plot(data.t, [data.x[i][2] for i in 1:length(data.x)], 
     label="True Cloud Cover", lw=3, color=:black, alpha=0.7)
 plot!(data.t, eval_clamping.cloud_est, label="Clamping", lw=2, color=:blue)
 plot!(data.t, eval_sigmoid.cloud_est, label="Sigmoid", lw=2, color=:red, ls=:dash)
 plot!(data.t, eval_projection.cloud_est, label="Projection", lw=2, color=:green, ls=:dot)
+plot!(data.t, eval_rejection.cloud_est, label="Rejection", lw=2, color=:purple, ls=:dashdot)
 ylabel!("Cloud Cover")
 xlabel!("Time (hours)")
 title!("Cloud Cover Estimation - Method Comparison")
@@ -625,6 +692,7 @@ p2 = plot(tod_test, I_true_plot, label="True", lw=3, color=:black, alpha=0.7)
 plot!(tod_test, eval_clamping.I_learned, label="Clamping", lw=2, color=:blue)
 plot!(tod_test, eval_sigmoid.I_learned, label="Sigmoid", lw=2, color=:red, ls=:dash)
 plot!(tod_test, eval_projection.I_learned, label="Projection", lw=2, color=:green, ls=:dot)
+plot!(tod_test, eval_rejection.I_learned, label="Rejection", lw=2, color=:purple, ls=:dashdot)
 xlabel!("Time of Day (hours)")
 ylabel!("Insolation (W/m²)")
 title!("Learned Insolation Patterns")
@@ -641,6 +709,7 @@ println("----------- | --------- | ---------- | ---------------")
 println("Clamping    | $(round(eval_clamping.temp_rmse, digits=3))     | $(round(eval_clamping.cloud_rmse, digits=3))      | $(round(eval_clamping.insolation_rmse, digits=1))")
 println("Sigmoid     | $(round(eval_sigmoid.temp_rmse, digits=3))     | $(round(eval_sigmoid.cloud_rmse, digits=3))      | $(round(eval_sigmoid.insolation_rmse, digits=1))")
 println("Projection  | $(round(eval_projection.temp_rmse, digits=3))     | $(round(eval_projection.cloud_rmse, digits=3))      | $(round(eval_projection.insolation_rmse, digits=1))")
+println("Rejection   | $(round(eval_rejection.temp_rmse, digits=3))     | $(round(eval_rejection.cloud_rmse, digits=3))      | $(round(eval_rejection.insolation_rmse, digits=1))")
 ```
 
 ### Discussion of Constraint Methods
@@ -653,4 +722,6 @@ Each method has different trade-offs:
 
 3. **Projection**: Maintains filter consistency by properly updating both mean and covariance, but requires additional computation and can be numerically sensitive.
 
-The results show that all three methods achieve similar performance for this problem, with the choice depending on the specific requirements of your application regarding computational efficiency, theoretical guarantees, and implementation complexity.
+4. **Sigma-point Rejection**: Preserves the unscented transform's statistical properties while respecting constraints. Rejected points are replaced with the mean, which can reduce the effective number of sigma points and may affect uncertainty estimates.
+
+The results show that all four methods achieve similar performance for this problem, with the choice depending on the specific requirements of your application regarding computational efficiency, theoretical guarantees, and implementation complexity.
