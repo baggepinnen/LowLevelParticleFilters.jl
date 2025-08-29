@@ -1,0 +1,376 @@
+# Learning a disturbance model using SciML
+
+In this example we will attempt to learn how an unknown and stochastic input, sun shining in through a window, influences a dynamical system, the temperature in a house. How the sun is shining on a house on a cloud-free day, absent any surrounding trees or buildings can be readily simulated. However, the real world offers a number of challenges that influence the effect this has on the inside temperature
+- Surrounding trees and buildings may cast shadows on the house at certain parts of the day.
+- The sun shining in through a window has much greater effect than if it's shining on a wall.
+- Cloud cover modulates the effect of the sun.
+- As a vendor of, e.g., HVAC equipment with interesting control systems, you may not want to model each individual site in detail, including the location and size of windows and surrounding shading elements. Even if these are static, they are thus to be considered unknown.
+
+We can model this as some deterministic parts and one stochastic parts, some known and some unknown. The path of the sun across the sky is deterministic and periodic, with one daily and one yearly component. The surroundings, like trees and buildings is for the most part static, but the influence this has on the insolation is unknown, and so is the exact location of windows on the house. However, the cloud cover is stochastic. We can thus model insolation by
+- Treating the current cloud cover as a stochastic variable ``C_{cloud} \in [0, 1]`` to be estimated continuously. We achieve this by including the cloud cover as a state variable in our system.
+- Treating the insolation when there is _no cloud cover_ as a deterministic function of the time of day (we ignore the yearly component here for simplicity). This function will be modeled as a basis-function expansion that will be learned from data.
+- The effective insolation at any point in time is thus ``I_{solar} = (1 - C_{cloud}) I_{solar, clear}``, that is, the cloud-free insolation is modulated by the current cloud cover.
+
+## System Description
+
+We consider a simplified thermal model of a single-room house:
+- State variable: room temperature `T`
+- Control input: heater power `P_heater`
+- Disturbances: external temperature `T_ext` and solar insolation through windows
+
+The heat transfer dynamics follow Newton's law of cooling with additional terms for heating and solar gains:
+```math
+C_{thermal} * Ṫ = -k_{loss}  (T - T_{ext}) + η  P_{heater} + A_{window} I_{solar}
+```
+where:
+- `C_thermal`: thermal capacity of the room
+- `k_loss`: heat loss coefficient
+- `η`: heater efficiency
+- `A_window`: effective window area
+- `I_solar`: solar insolation (W/m²)
+
+
+## Data Generation
+
+First, let's generate realistic thermal data with time-varying external conditions:
+
+```@example THERMAL_NN
+using LowLevelParticleFilters, Random, SeeToDee, StaticArrays, Plots, LinearAlgebra
+using LowLevelParticleFilters: SimpleMvNormal
+using Optim
+using DisplayAs # hide
+
+# System parameters
+const C_thermal = 10.0f0      # Thermal capacity (kWh/°C)
+const k_loss = 0.5f0          # Heat loss coefficient (kW/°C)
+const η = 0.95f0              # Heater efficiency
+const A_window = 20.0f0       # Effective window area factor
+
+# Time constants
+const hours_per_day = 24.0f0
+const Ts = 0.25f0            # Sample time (15 minutes)
+
+# Helper function for time of day (0-24 hours)
+time_of_day(t) = mod(t, hours_per_day)
+
+# External temperature (sinusoidal daily variation)
+function external_temp(t)
+    tod = time_of_day(t)
+    T_mean = 10.0f0  # Mean temperature (°C)
+    T_amplitude = 5.0f0  # Daily variation amplitude
+    T_mean + T_amplitude * sin(2π * (tod - 6) / hours_per_day)  # Peak at 12:00
+end
+
+# True solar insolation pattern (W/m²)
+function true_insolation(t, cloud_cover)
+    tod = time_of_day(t)
+    # Cropped sinusoid
+    base_insolation = max(500.0f0 * (0.2 + sin(π * (tod - 6) / 12)), 0)
+    return base_insolation * (1 - cloud_cover)
+end
+
+# Plot the daily patterns
+t_plot = 0:0.1:48  # Two days for visualization
+plot(t_plot, external_temp.(t_plot), label="External Temperature (°C)", lw=2)
+plot!(t_plot, true_insolation.(t_plot, 0) ./ 100, label="Clear Sky Insolation (×100 W/m²)", lw=2)
+plot!(t_plot, true_insolation.(t_plot, 0.5) ./ 100, label="50% Cloud Cover (×100 W/m²)", lw=2, ls=:dash)
+xlabel!("Time (hours)")
+title!("Daily Environmental Patterns")
+```
+
+Now let's define the true system dynamics and generate training data:
+
+```@example THERMAL_NN
+# True system dynamics with time-varying cloud cover
+function thermal_dynamics_true(x, u, p, t)
+    T_room, cloud_cover = x
+    P_heater = u[1]
+    
+    # External conditions
+    T_ext = external_temp(t)
+    I_solar = true_insolation(t, cloud_cover)
+    
+    # Heat balance
+    dT_dt = (-k_loss * (T_room - T_ext) + η * P_heater + A_window * I_solar / 1000) / C_thermal
+    
+    # Cloud cover changes slowly (random walk)
+    dcloud_dt = 0.0f0  # Driven by process noise, zero deterministic dynamics
+    
+    SA[dT_dt, dcloud_dt]
+end
+
+# Discretize the dynamics
+discrete_dynamics_true = SeeToDee.Rk4(thermal_dynamics_true, Ts)
+
+# Generate training data
+function generate_thermal_data(; days=7, measure_cloud_cover=true)
+    rng = Random.default_rng()
+    Random.seed!(rng, 123)
+    
+    t = 0:Ts:(days * hours_per_day)
+    N = length(t)
+    
+    # Generate control inputs (varied heating patterns)
+    u = Vector{SVector{1, Float32}}(undef, N)
+    for (i, t) in enumerate(t)
+        tod = time_of_day(t)
+        # Different heating strategies throughout the day
+        if 6 <= tod < 8 || 17 <= tod < 22  # Morning and evening comfort
+            u[i] = SA[3.0f0 + 0.5f0 * randn(rng)]  # Higher heating
+        elseif 22 <= tod || tod < 6  # Night setback
+            u[i] = SA[1.0f0 + 0.2f0 * randn(rng)]  # Lower heating
+        else  # Day time
+            u[i] = SA[2.0f0 + 0.3f0 * randn(rng)]  # Moderate heating
+        end
+        u[i] = SA[clamp(u[i][1], 0.0f0, 5.0f0)]  # Heater power limits
+    end
+    
+    # Initial conditions
+    x0 = SA[20.0f0, 0.3f0]  # Initial room temp and cloud cover
+    
+    # Simulate with slowly varying cloud cover
+    x = Vector{SVector{2, Float32}}(undef, N)
+    x[1] = x0
+    for i in 2:N
+        # Process noise (small for temperature, larger for cloud cover)
+        w = SA[0.01f0 * randn(rng), 0.06f0 * randn(rng)]
+        x_next = discrete_dynamics_true(x[i-1], u[i-1], nothing, t[i-1])
+        x[i] = x_next + w
+        # Keep cloud cover in [0, 1]
+        x[i] = SA[x[i][1], clamp(x[i][2]*0.999, 0.0f0, 1.0f0)]
+    end
+    
+    # Measurements - optionally include cloud cover
+    if measure_cloud_cover
+        y = [SA[x_i[1] + 0.1f0 * randn(rng), x_i[2] + 0.01f0 * randn(rng)] for x_i in x]
+        ny = 2
+    else
+        y = [SA[x_i[1] + 0.1f0 * randn(rng)] for x_i in x]
+        ny = 1
+    end
+    
+    (; x, u, y, t, N, Ts, ny, measure_cloud_cover)
+end
+
+# Generate data (with cloud cover measurements by default)
+measure_cloud_cover = false  # Set to false to exclude cloud cover measurements
+data = generate_thermal_data(; days=14, measure_cloud_cover)
+
+# Visualize the generated data
+p1 = plot(data.t, [x[1] for x in data.x], label="Room Temperature", ylabel="Temperature (°C)")
+plot!(data.t, [external_temp(t) for t in data.t], label="External Temperature", ls=:dash, alpha=0.7)
+
+p2 = plot(data.t, [x[2] for x in data.x], label="Cloud Cover", ylabel="Cloud Cover (0-1)", color=:orange)
+p3 = plot(data.t, [u[1] for u in data.u], label="Heater Power", ylabel="Power (kW)", color=:red)
+
+plot(p1, p2, p3, layout=(3,1), size=(900, 600), xlabel="Time (hours)")
+```
+
+## Radial Basis Function Model
+
+We'll use a radial basis function expansion to learn the solar insolation pattern. This provides a more interpretable model than a neural network, with basis functions centered during daylight hours:
+
+```@example THERMAL_NN
+# Initialize RBF weights (parameters to be learned)
+rng = Random.default_rng()
+Random.seed!(rng, 456)
+const n_basis = 8  # Number of basis functions
+# Initialize with positive weights since insolation is always positive ("negative insolation" could model things like someone always opening a window in the morning letting cold air in)
+rbf_weights = 100.0f0 * rand(Float32, n_basis)  # Random positive initialization
+
+function basis_functions(t)
+    tod = time_of_day(t)
+    centers = LinRange(7.0f0, 17.0f0, n_basis) # Centers spread from 9 AM to 5 PM
+    width = 1.5f0  # Width of each Gaussian basis function (in hours)
+    @. exp(-((tod - centers) / width)^2)
+end
+
+# RBF evaluation function
+function compute_nn_insolation(t, weights)
+    return weights'basis_functions(t) # Linear combination of basis functions
+end
+
+nothing # hide
+```
+
+## Hybrid Dynamics for Estimation
+
+Define the dynamics model that uses the neural network for insolation estimation:
+
+```@example THERMAL_NN
+# Measurement model, we measure temperature and optionally also cloud cover (this makes the problem much easier)
+if data.measure_cloud_cover
+    measurement_fun = (x, u, p, t) -> SA[x[1], x[2]]  # Temperature and cloud cover
+else
+    measurement_fun = (x, u, p, t) -> SA[x[1]]  # Only temperature
+end
+
+# Hybrid dynamics with neural network and cloud cover state
+function thermal_dynamics_hybrid(x, u, p, t)
+    T_room, cloud_cover = x
+    P_heater = u[1]
+    
+    # External temperature (known)
+    T_ext = external_temp(t)
+    
+    # Solar insolation from neural network
+    I_base = compute_nn_insolation(t, p)
+    I_solar = I_base * (1 - cloud_cover)
+    
+    # Heat balance
+    dT_dt = (-k_loss * (T_room - T_ext) + η * P_heater + A_window * I_solar / 1000) / C_thermal
+    
+    # Cloud cover changes slowly
+    dcloud_dt = 0.0001f0*(0.3f0 - cloud_cover)  # Driven by process noise, assume we know mean cloud cover over time
+    
+    SA[dT_dt, dcloud_dt]
+end
+
+# Discretize hybrid dynamics
+const discrete_dynamics_hybrid5 = SeeToDee.ForwardEuler(thermal_dynamics_hybrid, Ts)
+
+function clamped_dynamics(x,u,p,t)
+    xp = discrete_dynamics_hybrid5(x,u,p,t)
+    SA[xp[1]; clamp(xp[2], 0.0f0, 1.0f0)]
+end
+
+# System dimensions for the filter
+nx = 2  # State: [temperature, cloud_cover]
+nu = 1  # Input: heater power
+ny = data.ny  # Output dimension depends on whether cloud cover is measured
+nothing # hide
+```
+
+## Parameter Estimation
+
+Now we'll set up the state estimator and the optimization problem using a quasi-Newton method:
+
+```@example THERMAL_NN
+# Process and measurement noise for the filter
+R1 = SMatrix{nx, nx}(Diagonal([0.01f0, 0.06f0]))  # Process noise
+if data.measure_cloud_cover
+    R2 = SMatrix{ny, ny}(Diagonal([0.1f0^2, 0.01f0^2]))  # Temperature and cloud cover noise
+else
+    R2 = SMatrix{ny, ny}(Diagonal([0.1f0^2]))  # Only temperature noise
+end
+
+# Initial state estimate
+x0 = SA[20.0f0, 0.5f0]  # Initial temperature and cloud cover guess
+
+# Cost function for optimization (sum of squared errors)
+function cost(θ)
+    T = eltype(θ)
+    
+    # Create filter with current parameters
+    kf = UnscentedKalmanFilter(
+        clamped_dynamics, 
+        measurement_fun, 
+        R1, 
+        R2, 
+        SimpleMvNormal(T.(x0), T.(2*R1));
+        ny, nu, Ts,
+    )
+    
+    # Compute sum of squared prediction errors
+    LowLevelParticleFilters.sse(kf, data.u, data.y, θ)
+end
+
+# Initial parameters from the neural network initialization
+θ_init = copy(rbf_weights)
+
+result = Optim.optimize(
+    cost,
+    θ_init,
+    BFGS(),
+    Optim.Options(
+        show_trace = false,
+        store_trace = true,
+        iterations = 200,
+        g_tol = 1e-12,
+    );
+    autodiff = :forward,  # Use forward-mode AD for gradients
+)
+
+params_opt = result.minimizer
+
+@info "Optimization complete. Converged: $(Optim.converged(result)), Iterations: $(Optim.iterations(result))"
+@info "Final cost: $(Optim.minimum(result))"
+
+# Plot convergence history
+# plot(getfield.(result.trace, :value), #yscale=:log10, 
+#      xlabel="Iteration", ylabel="Cost (SSE)",
+#      title="Convergence", lw=2)
+```
+
+## Results Analysis
+
+Let's analyze the results by running the filter with optimized parameters:
+
+```@example THERMAL_NN
+# Run filter with optimized parameters
+kf_final = UnscentedKalmanFilter(
+    clamped_dynamics,
+    measurement_fun,
+    R1,
+    R2,
+    SimpleMvNormal(x0, R1);
+    p = params_opt,
+    ny, nu, Ts
+)
+
+sol = forward_trajectory(kf_final, data.u, data.y)
+
+# Extract estimated states
+T_est = [sol.xt[i][1] for i in 1:length(sol.xt)]
+cloud_est = [sol.xt[i][2] for i in 1:length(sol.xt)]
+T_true = [data.x[i][1] for i in 1:length(data.x)]
+cloud_true = [data.x[i][2] for i in 1:length(data.x)]
+
+# Plot temperature estimation
+p1 = plot(data.t, T_true, label="True Temperature", lw=2, color=:blue)
+plot!(data.t, T_est, label="Estimated Temperature", lw=2, ls=:dash, color=:red)
+plot!(data.t, [y[1] for y in data.y], label="Measurements", alpha=0.3, seriestype=:scatter, ms=1, color=:gray)
+ylabel!("Temperature (°C)")
+title!("Temperature Estimation")
+
+# Plot cloud cover estimation
+p2 = plot(data.t, cloud_true, label="True Cloud Cover", lw=2, color=:blue)
+plot!(data.t, cloud_est, label="Estimated Cloud Cover", lw=2, ls=:dash, color=:red)
+ylabel!("Cloud Cover")
+xlabel!("Time (hours)")
+title!("Cloud Cover Estimation")
+
+plot(p1, p2, layout=(2,1), size=(1200, 800))
+```
+
+As we can see, it's easy to estimate the internal temperature, after all, we measure this directly. Estimating the cloud cover is significantly harder, notice in particular how the estimation drifts to 0.5 each night when there is no sun. This is expected since it is impossible to observe (in the estimation-theoretical sense) the cloud cover when there is no sun, since when there is no sun there is no effect of the cloud cover on the variable we do measure, the temperature. The fact that it drifts to 0.5 in particular can be explained by the growing estimated covariance during night combined with the clamping of the estimated cloud cover variable between 0 and 1.
+
+## Learned vs True Insolation Pattern
+
+We now have a look at the function we learned for the effect of insolation on the internal temperature, absent of clouds. Since this is a simulated example, we have access to the true function to compare with:
+
+```@example THERMAL_NN
+# Generate time points for one day
+tod_test = LinRange(0.0f0, 24.0f0, 100)
+
+# Compute true insolation (without clouds)
+I_true = [true_insolation(t, 0.0f0) for t in tod_test]
+
+# Compute learned insolation
+I_learned = [compute_nn_insolation(t, params_opt) for t in tod_test]
+
+# Plot comparison
+plot(tod_test, I_true, label="True Insolation", lw=3, color=:blue)
+plot!(tod_test, I_learned, label="Learned Insolation", lw=2, ls=:dash, color=:red)
+xlabel!("Time of Day (hours)")
+ylabel!("Insolation (W/m²)")
+title!("Learned Solar Insolation Pattern")
+vline!([6, 18], ls=:dot, color=:gray, alpha=0.5, label="Sunrise/Sunset")
+```
+Hopefully, we see that the estimation has captured the general shape of the true insolation pattern, but perhaps not perfectly, since this function is "hidden" behind an unknown and noisy estimate of the cloud cover.
+
+
+## Discussion
+
+This example demonstrates a classical SciML workflow, the combination of physics-based thermal dynamics with a data-driven model to capture unknown solar patterns. During the day, we were able to roughly estimate the cloud cover despite not being directly measured, by leveraging its effect on the temperature dynamics, but during night our estimator has no fighting chance of doing a good job here, a limitation inherent to the unobservability of the cloud cover in the absence of sunlight.
+
