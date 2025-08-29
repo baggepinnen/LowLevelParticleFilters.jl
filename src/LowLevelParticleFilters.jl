@@ -23,6 +23,7 @@ using Statistics
 using RecipesBase
 using ForwardDiff
 using MaybeInplace
+import SpecialFunctions # Normpdf and friends
 
 # using SciMLBase
 struct NullParameters end

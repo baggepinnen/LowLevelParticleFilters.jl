@@ -424,13 +424,15 @@ eval_clamping = evaluate_solution(sol, data, params_opt)
 
 ## Comparison of Constraint Handling Methods
 
-The cloud cover state must be constrained to lie in the interval [0, 1]. We have explored three different methods to handle this constraint:
+The cloud cover state must be constrained to lie in the interval [0, 1]. We have explored several different methods to handle this constraint:
 
 1. **Clamping**: Directly clamp the cloud cover after each dynamics update
 2. **Sigmoid transformation**: Transform the state through a sigmoid function  
 3. **Projection**: Project the state back to the constraint set after filter updates
+4. **Sigma-point rejection**: Reject sigma points that violate constraints
+5. **Truncated moment matching**: Use truncated normal distribution moments
 
-Let's compare these three approaches:
+Let's compare these approaches:
 
 ### Method 1: Clamping (Already Implemented)
 
@@ -655,16 +657,79 @@ eval_rejection = evaluate_solution(sol_rejection, data, params_rejection)
 @info "Rejection method - Temperature RMSE: $(round(eval_rejection.temp_rmse, digits=3))°C, Cloud RMSE: $(round(eval_rejection.cloud_rmse, digits=3))"
 ```
 
+### Method 5: Truncated Moment Matching
+
+This method uses truncated normal distribution moments to handle the constraint, providing a statistically principled approach:
+
+```@example THERMAL_NN
+# Truncated moment matching method - uses standard dynamics but applies moment matching after updates
+function post_update_tmm(kf, u, y, p, ll, e)
+    if !(0 <= kf.x[2] <= 1)
+        xn, Rn = LowLevelParticleFilters.truncated_moment_match(kf.x, kf.R, 2; lower=0, upper=1, tol=1e-9)
+        kf.x = xn
+        kf.R = Rn
+    end
+    nothing
+end
+
+# Use original unclamped dynamics for truncated moment matching
+discrete_dynamics_tmm = discrete_dynamics_hybrid5
+
+# Optimize truncated moment matching method
+function cost_tmm(θ)
+    T = eltype(θ)
+    
+    kf = UnscentedKalmanFilter(
+        discrete_dynamics_tmm,
+        measurement_model,  # Use the linear measurement model
+        R1,
+        SimpleMvNormal(T.(x0), T.(2*R1));
+        ny, nu, Ts,
+    )
+    
+    LowLevelParticleFilters.sse(kf, data.u, data.y, θ; post_update_cb=post_update_tmm)
+end
+
+# Run optimization for truncated moment matching
+@info "Optimizing truncated moment matching method..."
+result_tmm = Optim.optimize(
+    cost_tmm,
+    θ_init,
+    BFGS(),
+    opt_options;
+    autodiff = :forward,
+)
+
+params_tmm = result_tmm.minimizer
+
+# Evaluate truncated moment matching method
+kf_tmm = UnscentedKalmanFilter(
+    discrete_dynamics_tmm,
+    measurement_model,  # Use the linear measurement model
+    R1,
+    SimpleMvNormal(x0, R1);
+    p = params_tmm,
+    ny, nu, Ts
+)
+
+post_predict_tmm(kf, p) = post_update_tmm(kf, 0, 0, p, 0, 0)
+sol_tmm = forward_trajectory(kf_tmm, data.u, data.y; post_predict_cb=post_predict_tmm, post_correct_cb=post_predict_tmm)
+
+eval_tmm = evaluate_solution(sol_tmm, data, params_tmm)
+@info "Truncated moment matching - Temperature RMSE: $(round(eval_tmm.temp_rmse, digits=3))°C, Cloud RMSE: $(round(eval_tmm.cloud_rmse, digits=3))"
+```
+
 ### Comparison Results
 
 ```@example THERMAL_NN
-# Plot comparison of all four methods
+# Plot comparison of all five methods
 p1 = plot(data.t, [data.x[i][2] for i in 1:length(data.x)], 
     label="True Cloud Cover", lw=3, color=:black, alpha=0.7)
 plot!(data.t, eval_clamping.cloud_est, label="Clamping", lw=2, color=:blue)
 plot!(data.t, eval_sigmoid.cloud_est, label="Sigmoid", lw=2, color=:red, ls=:dash)
 plot!(data.t, eval_projection.cloud_est, label="Projection", lw=2, color=:green, ls=:dot)
 plot!(data.t, eval_rejection.cloud_est, label="Rejection", lw=2, color=:purple, ls=:dashdot)
+plot!(data.t, eval_tmm.cloud_est, label="Truncated MM", lw=2, color=:orange, ls=:dashdotdot)
 ylabel!("Cloud Cover")
 xlabel!("Time (hours)")
 title!("Cloud Cover Estimation - Method Comparison")
@@ -678,6 +743,7 @@ plot!(tod_test, eval_clamping.I_learned, label="Clamping", lw=2, color=:blue)
 plot!(tod_test, eval_sigmoid.I_learned, label="Sigmoid", lw=2, color=:red, ls=:dash)
 plot!(tod_test, eval_projection.I_learned, label="Projection", lw=2, color=:green, ls=:dot)
 plot!(tod_test, eval_rejection.I_learned, label="Rejection", lw=2, color=:purple, ls=:dashdot)
+plot!(tod_test, eval_tmm.I_learned, label="Truncated MM", lw=2, color=:orange, ls=:dashdotdot)
 xlabel!("Time of Day (hours)")
 ylabel!("Insolation (W/m²)")
 title!("Learned Insolation Patterns")
@@ -689,12 +755,13 @@ plot(p1, p2, layout=(2,1), size=(1200, 800))
 #### Summary table
 ```@example THERMAL_NN
 println("\n=== Method Comparison Summary ===")
-println("Method      | Temp RMSE | Cloud RMSE | Insolation RMSE")
-println("----------- | --------- | ---------- | ---------------")
-println("Clamping    | $(round(eval_clamping.temp_rmse, digits=3))     | $(round(eval_clamping.cloud_rmse, digits=3))      | $(round(eval_clamping.insolation_rmse, digits=1))")
-println("Sigmoid     | $(round(eval_sigmoid.temp_rmse, digits=3))     | $(round(eval_sigmoid.cloud_rmse, digits=3))      | $(round(eval_sigmoid.insolation_rmse, digits=1))")
-println("Projection  | $(round(eval_projection.temp_rmse, digits=3))     | $(round(eval_projection.cloud_rmse, digits=3))      | $(round(eval_projection.insolation_rmse, digits=1))")
-println("Rejection   | $(round(eval_rejection.temp_rmse, digits=3))     | $(round(eval_rejection.cloud_rmse, digits=3))      | $(round(eval_rejection.insolation_rmse, digits=1))")
+println("Method        | Temp RMSE | Cloud RMSE | Insolation RMSE")
+println("------------- | --------- | ---------- | ---------------")
+println("Clamping      | $(round(eval_clamping.temp_rmse, digits=3))     | $(round(eval_clamping.cloud_rmse, digits=3))      | $(round(eval_clamping.insolation_rmse, digits=1))")
+println("Sigmoid       | $(round(eval_sigmoid.temp_rmse, digits=3))     | $(round(eval_sigmoid.cloud_rmse, digits=3))      | $(round(eval_sigmoid.insolation_rmse, digits=1))")
+println("Projection    | $(round(eval_projection.temp_rmse, digits=3))     | $(round(eval_projection.cloud_rmse, digits=3))      | $(round(eval_projection.insolation_rmse, digits=1))")
+println("Rejection     | $(round(eval_rejection.temp_rmse, digits=3))     | $(round(eval_rejection.cloud_rmse, digits=3))      | $(round(eval_rejection.insolation_rmse, digits=1))")
+println("Truncated MM  | $(round(eval_tmm.temp_rmse, digits=3))     | $(round(eval_tmm.cloud_rmse, digits=3))      | $(round(eval_tmm.insolation_rmse, digits=1))")
 ```
 
 ### Discussion of Constraint Methods
@@ -709,4 +776,6 @@ Each method has different trade-offs:
 
 4. **Sigma-point Rejection**: Preserves the unscented transform's statistical properties while respecting constraints. Rejected points are replaced with the mean, which can reduce the effective number of sigma points and may affect uncertainty estimates.
 
-The results show that all four methods achieve similar performance for this problem, with the choice depending on the specific requirements of your application regarding computational efficiency, theoretical guarantees, and implementation complexity.
+5. **Truncated Moment Matching**: Provides a statistically principled approach by computing the exact moments of the truncated normal distribution. This method maintains theoretical consistency but may be slightly more computaitonally expensive.
+
+The results show that the sigmoidal transformation and the truncated moment matching appear to perfom best on this particular problem. We didn't use all that much data, so there is bound to be some randomness in these findings. I did try with 10x more data and the findings were quite similar.
