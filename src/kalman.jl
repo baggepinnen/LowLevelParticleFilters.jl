@@ -162,3 +162,197 @@ function reset!(kf::AbstractKalmanFilter; x0 = kf.d0.μ, t=0)
     kf.t = t
     nothing
 end
+
+
+
+"""
+    project_bound(μ, R, idx; lower=-Inf, upper=Inf, tol=1e-9)
+
+Project (μ,R) onto the bound lower ≤ x[idx] ≤ upper by minimizing
+(x-μ)'*inv(R)*(x-μ). If μ[idx] is inside the interval (with tol), no change.
+
+If a bound is violated, treats the active inequality as the equality
+x[idx] = bound and applies the closed-form projection:
+x* = μ - K * (μ[idx] - d),  R* = R - K * (R[idx,:]),
+where K = R[:,idx] / R[idx,idx] and d is the active bound.
+
+Returns `(x_proj, R_proj)`.
+"""
+function project_bound(μ::AbstractVector, P::AbstractMatrix, idx::Integer;
+                       lower=-Inf, upper=Inf, tol=1e-9)
+
+    @assert length(μ) == size(P,1) == size(P,2)
+
+    x = copy(μ)
+    Σ = copy(P)
+
+    # Decide which (if any) bound is active
+    d = if x[idx] < lower - tol
+        lower
+    elseif x[idx] > upper + tol
+        upper
+    else
+        # Already feasible
+        return x, Σ
+    end
+
+    Σii = Σ[idx, idx]
+    if !isfinite(Σii) || Σii <= 0
+        # Degenerate variance; safest fallback: clamp mean, leave covariance
+        x[idx] = d
+        return x, Σ
+    end
+
+    # Rank-1 “Kalman gain” for the hyperplane x[idx] = d
+    Σi = Σ[:, idx]
+    K = Σi / Σii
+    Δ = x[idx] - d
+
+    @bangbang x .-= K .* Δ
+    @bangbang Σ .-= K * Σi'
+
+    return x, symmetrize_psd(Σ)
+end
+
+# Helper: re-symmetrize and small PSD clip
+function symmetrize_psd(A::AbstractMatrix; eps=1e-12)
+    S = symmetrize(A)
+    # Tiny eigenvalue floor to avoid numerical negatives
+    vals, vecs = eigen(Symmetric(S))
+    @bangbang vals .= max.(vals, eps)
+    return vecs * Diagonal(vals) * vecs'
+end
+
+"""
+    truncated_moment_match(μ, Σ, idx; lower=-Inf, upper=Inf, tol=1e-12, var_floor=1e-12)
+
+Moment-match a Gaussian (μ, Σ) to enforce `lower ≤ x[idx] ≤ upper` by replacing the
+marginal of x[idx] with a truncated-normal and adjusting the rest via the regression
+identity:
+    μ_-i' = μ_-i + A (m' - m),    Σ' = Σ + (s2' - s2) * (A * A'),
+where A = Σ[:,idx] / Σ[idx,idx], m = μ[idx], s2 = Σ[idx,idx], and (m', s2') are the
+mean/variance of the truncated scalar N(m, s2) on [lower, upper].
+
+Returns `(μ_proj, Σ_proj)`.
+
+Notes:
+- Works for one-sided (lower or upper) and two-sided bounds.
+- If the feasible probability mass is numerically ~0, falls back to projecting onto the
+  nearest active bound (rank-1 “equality” projection).
+"""
+function truncated_moment_match(μ::AbstractVector, Σ::AbstractMatrix, idx::Integer;
+                                lower=-Inf, upper=Inf, tol=1e-12, var_floor=1e-12)
+
+    @assert length(μ) == size(Σ,1) == size(Σ,2)
+
+    x = copy(μ)
+    C = copy(Σ)
+
+    s2 = C[idx, idx]
+    if !isfinite(s2) || s2 <= 0
+        # Degenerate variance: safest fallback — clamp mean, keep covariance
+        x[idx] = clamp(x[idx], lower, upper)
+        return x, C
+    end
+
+    m  = x[idx]
+    s  = sqrt(s2)
+
+    # Truncated scalar moments for N(m, s2) on [lower, upper]
+    m′, s2′, ok = truncated_scalar_moments(m, s, lower, upper; tol=tol)
+    if !ok
+        # Fallback: equality-projection onto nearest active bound
+        d = if m < lower - tol
+            lower
+        elseif m > upper + tol
+            upper
+        else
+            # Interval too narrow or numerically ill-conditioned with m inside:
+            # pin to closest endpoint
+            abs(m - lower) < abs(upper - m) ? lower : upper
+        end
+        # rank-1 projection onto x[idx] = d
+        Σi = C[:, idx]
+        K  = Σi / s2
+        Δ  = m - d
+        @bangbang x .-= K .* Δ
+        @bangbang C .-= K * Σi'
+        return x, symmetrize_psd(C)
+    end
+
+    # Regression vector A = Σ[:,i] / s2 (keeps conditional x_-i | x_i the same)
+    A = C[:, idx] / s2
+
+    # Mean update: μ' = μ + A (m' - m)
+    shift = (m′ - m)
+    @bangbang x .+= A .* shift
+
+    # Covariance update: Σ' = Σ + (s2' - s2) * (A * A')
+    @bangbang C .+= (s2′ - s2) * (A * A')  # rank-1 symmetric update
+
+    return x, symmetrize_psd(C; eps=var_floor)
+end
+
+# --- helpers ---------------------------------------------------------------
+
+# Numerically-stable pdf/cdf for standard normal
+normpdf(z::T) where T = exp(-(z*z)/2) / sqrt(T(2π))
+normcdf(z::T) where T = SpecialFunctions.erfc(-z / sqrt(T(2)))/2        # stable in both tails
+normccdf(z::T) where T = SpecialFunctions.erfc(z / sqrt(T(2)))/2        # 1 - Φ(z), stable for large z
+
+"""
+    truncated_scalar_moments(m, s, a, b; tol=1e-12)
+
+Return (m′, s2′, ok) for X ~ N(m, s^2) truncated to [a,b].
+If the normalizing mass Z is < tol, returns ok=false.
+"""
+function truncated_scalar_moments(m::Real, s::Real, a::Real, b::Real; tol=1e-12)
+    if !isfinite(s) || s <= 0
+        return m, 0.0, false
+    end
+    # Handle invalid / collapsed intervals
+    if a >= b
+        # treat as equality at nearest endpoint
+        d = clamp(m, a, b)
+        return d, 0.0, false
+    end
+
+    α = isfinite(a) ? (a - m)/s : -Inf
+    β = isfinite(b) ? (b - m)/s :  Inf
+
+    # One-sided cases (most stable)
+    if !isfinite(β) && isfinite(α)
+        # lower truncation [a, ∞)
+        λ = normpdf(α) / max(normccdf(α), tol)      # Mills ratio for tail
+        m′  = m + s * λ
+        if !(a <= m′ <= b)  # numerical safety
+            return m, 0.0, false
+        end
+        s2′ = (s^2) * (1 - λ*(λ - α))
+        s2′ = max(s2′, 0.0)
+        return m′, s2′, true
+    elseif !isfinite(α) && isfinite(β)
+        # upper truncation (-∞, b]
+        λ = normpdf(β) / max(normcdf(β), tol)
+        m′  = m - s * λ
+        s2′ = (s^2) * (1 - λ*(λ + β))
+        s2′ = max(s2′, 0.0)
+        return m′, s2′, true
+    else
+        # two-sided [a,b]
+        ϕα = isfinite(α) ? normpdf(α) : 0.0
+        ϕβ = isfinite(β) ? normpdf(β) : 0.0
+        Φα = isfinite(α) ? normcdf(α) : 0.0
+        Φβ = isfinite(β) ? normcdf(β) : 1.0
+        Z  = Φβ - Φα
+        if !(Z > tol)   # numerically empty mass
+            return m, 0.0, false
+        end
+        num = ϕα - ϕβ
+        μshift = num / Z
+        m′  = m + s * μshift
+        s2′ = (s^2) * (1 + (α*ϕα - β*ϕβ)/Z - μshift^2)
+        s2′ = max(s2′, 0.0)
+        return m′, s2′, true
+    end
+end

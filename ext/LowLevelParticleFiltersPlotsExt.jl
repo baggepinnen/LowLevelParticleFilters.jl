@@ -188,7 +188,7 @@ Plot the covariance ellipse of the state `μ` and covariance `R`. `dims` indicat
 If a filter `f` is passed, the state and covariance are extracted from the filter.
 """
 covplot
-Plots.@recipe function f(c::CovPlot; n_std = 2, N = 100, dims=nothing)
+Plots.@recipe function f(c::CovPlot; n_std = 2, N = 100, dims=nothing, mean=false)
     if dims === nothing
         dims = 1:2
     end
@@ -211,6 +211,14 @@ Plots.@recipe function f(c::CovPlot; n_std = 2, N = 100, dims=nothing)
     Plots.@series begin
         seriesalpha --> 0.3
         Plots.Shape(μ[1] .+ A[1, :], μ[2] .+ A[2, :])
+    end
+    if mean
+        Plots.@series begin
+            primary := false
+            seriestype --> :scatter
+            markersize --> 5
+            [μ[1]], [μ[2]]
+        end
     end
 end
 

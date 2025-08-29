@@ -141,17 +141,18 @@ function smooth(pf::AbstractParticleFilter, xf, wf, wef, ll, M, u, y, p=paramete
 end
 
 """
-    sse(f::AbstractFilter, u, y, p = parameters(pf), λ = 1)
+    sse(f::AbstractFilter, u, y, p = parameters(pf), λ = 1; post_update_cb=(f, u, y, p, ll, e)->nothing)
 
 Calculate the sum of squared errors ``\\sum dot(e, λ, e)``.
 - `λ`: May be a weighting matrix. A commonly used metric is `λ = Diagonal(1 ./ (mag.^2))`, where `mag` is a vector of the "typical magnitude" of each output.
 
 See also [`LowLevelParticleFilters.prediction_errors!`](@ref) which returns the prediction errors themselves rather than their sum of squares (for use with Gauss-Newton style optimization).
 """
-function sse(f::AbstractFilter, u, y, p=parameters(f), λ=1)
+function sse(f::AbstractFilter, u, y, p=parameters(f), λ=1; post_update_cb=(args...)->nothing)
     reset!(f)
     sum(zip(u, y)) do (u,y)
         ll, e = f(u,y,p)
+        post_update_cb(f, u, y, p, ll, e)
         dot(e, λ, e)
     end
 end

@@ -20,7 +20,7 @@ We consider a simplified thermal model of a single-room house:
 
 The heat transfer dynamics follow Newton's law of cooling with additional terms for heating and solar gains:
 ```math
-C_{thermal} * Ṫ = -k_{loss}  (T - T_{ext}) + η  P_{heater} + A_{window} I_{solar}
+C_{thermal} Ṫ = -k_{loss}  (T - T_{ext}) + η  P_{heater} + A_{window} I_{solar}
 ```
 where:
 - `C_thermal`: thermal capacity of the room
@@ -35,7 +35,7 @@ where:
 First, let's generate realistic thermal data with time-varying external conditions:
 
 ```@example THERMAL_NN
-using LowLevelParticleFilters, Random, SeeToDee, StaticArrays, Plots, LinearAlgebra
+using LowLevelParticleFilters, Random, SeeToDee, StaticArrays, Plots, LinearAlgebra, Statistics
 using LowLevelParticleFilters: SimpleMvNormal
 using Optim
 using DisplayAs # hide
@@ -195,15 +195,16 @@ nothing # hide
 
 ## Hybrid Dynamics for Estimation
 
-Define the dynamics model that uses the neural network for insolation estimation:
+Define the dynamics model that uses the neural network for insolation estimation. Since our measurement is linear (we directly observe parts of the state), we can use a `LinearMeasurementModel` for improved efficiency:
 
 ```@example THERMAL_NN
-# Measurement model, we measure temperature and optionally also cloud cover (this makes the problem much easier)
+# Linear measurement model - more efficient than nonlinear for direct state measurements
 if data.measure_cloud_cover
-    measurement_fun = (x, u, p, t) -> SA[x[1], x[2]]  # Temperature and cloud cover
+    C = SA[1.0f0 0.0f0; 0.0f0 1.0f0]  # Measure both temperature and cloud cover
 else
-    measurement_fun = (x, u, p, t) -> SA[x[1]]  # Only temperature
+    C = SA[1.0f0 0.0f0]  # Only measure temperature
 end
+measurement_model = LinearMeasurementModel(C, 0, data.measure_cloud_cover ? Diagonal([0.1f0^2, 0.01f0^2]) : Diagonal([0.1f0^2]); ny=data.ny)
 
 # Hybrid dynamics with neural network and cloud cover state
 function thermal_dynamics_hybrid(x, u, p, t)
@@ -221,7 +222,7 @@ function thermal_dynamics_hybrid(x, u, p, t)
     dT_dt = (-k_loss * (T_room - T_ext) + η * P_heater + A_window * I_solar / 1000) / C_thermal
     
     # Cloud cover changes slowly
-    dcloud_dt = 0.0001f0*(0.3f0 - cloud_cover)  # Driven by process noise, assume we know mean cloud cover over time
+    dcloud_dt = 0.0001f0*(0.5f0 - cloud_cover)  # Driven by process noise, assume we know mean cloud cover over time
     
     SA[dT_dt, dcloud_dt]
 end
@@ -231,7 +232,7 @@ const discrete_dynamics_hybrid5 = SeeToDee.ForwardEuler(thermal_dynamics_hybrid,
 
 function clamped_dynamics(x,u,p,t)
     xp = discrete_dynamics_hybrid5(x,u,p,t)
-    SA[xp[1]; clamp(xp[2], 0.0f0, 1.0f0)]
+    SA[xp[1], clamp(xp[2], 0.0f0, 1.0f0)]
 end
 
 # System dimensions for the filter
@@ -240,6 +241,7 @@ nu = 1  # Input: heater power
 ny = data.ny  # Output dimension depends on whether cloud cover is measured
 nothing # hide
 ```
+
 
 ## Parameter Estimation
 
@@ -261,12 +263,11 @@ x0 = SA[20.0f0, 0.5f0]  # Initial temperature and cloud cover guess
 function cost(θ)
     T = eltype(θ)
     
-    # Create filter with current parameters
+    # Create filter with current parameters and linear measurement model
     kf = UnscentedKalmanFilter(
         clamped_dynamics, 
-        measurement_fun, 
+        measurement_model,  # Use the linear measurement model
         R1, 
-        R2, 
         SimpleMvNormal(T.(x0), T.(2*R1));
         ny, nu, Ts,
     )
@@ -278,16 +279,19 @@ end
 # Initial parameters from the neural network initialization
 θ_init = copy(rbf_weights)
 
+# Define optimization options once for reuse
+opt_options = Optim.Options(
+    show_trace = false,
+    store_trace = true,
+    iterations = 200,
+    g_tol = 1e-12,
+)
+
 result = Optim.optimize(
     cost,
     θ_init,
     BFGS(),
-    Optim.Options(
-        show_trace = false,
-        store_trace = true,
-        iterations = 200,
-        g_tol = 1e-12,
-    );
+    opt_options;
     autodiff = :forward,  # Use forward-mode AD for gradients
 )
 
@@ -307,12 +311,11 @@ params_opt = result.minimizer
 Let's analyze the results by running the filter with optimized parameters:
 
 ```@example THERMAL_NN
-# Run filter with optimized parameters
+# Run filter with optimized parameters and linear measurement model
 kf_final = UnscentedKalmanFilter(
     clamped_dynamics,
-    measurement_fun,
+    measurement_model,  # Use the linear measurement model
     R1,
-    R2,
     SimpleMvNormal(x0, R1);
     p = params_opt,
     ny, nu, Ts
@@ -325,6 +328,8 @@ T_est = [sol.xt[i][1] for i in 1:length(sol.xt)]
 cloud_est = [sol.xt[i][2] for i in 1:length(sol.xt)]
 T_true = [data.x[i][1] for i in 1:length(data.x)]
 cloud_true = [data.x[i][2] for i in 1:length(data.x)]
+
+cloud_error = sqrt(mean(abs2, cloud_true .- cloud_est))
 
 # Plot temperature estimation
 p1 = plot(data.t, T_true, label="True Temperature", lw=2, color=:blue)
@@ -374,3 +379,403 @@ Hopefully, we see that the estimation has captured the general shape of the true
 
 This example demonstrates a classical SciML workflow, the combination of physics-based thermal dynamics with a data-driven model to capture unknown solar patterns. During the day, we were able to roughly estimate the cloud cover despite not being directly measured, by leveraging its effect on the temperature dynamics, but during night our estimator has no fighting chance of doing a good job here, a limitation inherent to the unobservability of the cloud cover in the absence of sunlight.
 
+
+
+## Diving deeper: How to handle constraints
+The variable cloud cover is constrained to be between 0 and 1. The Kalman-filtering framework does not handle such a constraint natively, but there are several different more or less heuristic methods available to handle it. Above, we simply clamped the estimated value to be between 0 and 1, simple but effective. Can we do any better? This section compares a number of different methods
+- The clamping method
+- Reformulating the dynamics to use an unconstrained variable that is projected onto the constraint set using a sigmoid function
+- Projection implemented as a "perfect measurement": We may treat the projection as a fictitious measurement update, imagining that we have obtained a zero-variance measurement that the constrained variable is at the constraint boundary. This is similar to the naive clamping above, but also updates the covariance. We perform this projection using the function `LowLevelParticleFilters.project_bound` and make use of a callback in order to apply it during the estimation.
+- Sigma-point rejection, when we use an [`UnscentedKalmanFilter`](@ref), we may reject sigma points that fall outside of the feasible region.
+
+```@example THERMAL_NN
+# Evaluation function to compare methods
+function evaluate_solution(sol, data, params)
+    # Extract estimated states
+    T_est = [sol.xt[i][1] for i in 1:length(sol.xt)]
+    cloud_est = [sol.xt[i][2] for i in 1:length(sol.xt)]
+    T_true = [data.x[i][1] for i in 1:length(data.x)]
+    cloud_true = [data.x[i][2] for i in 1:length(data.x)]
+    
+    # Compute errors
+    temp_rmse = sqrt(mean(abs2, T_true .- T_est))
+    cloud_rmse = sqrt(mean(abs2, cloud_true .- cloud_est))
+    
+    # Compute learned insolation vs true
+    tod_test = LinRange(0.0f0, 24.0f0, 100)
+    I_true = [true_insolation(t, 0.0f0) for t in tod_test]
+    I_learned = [compute_nn_insolation(t, params) for t in tod_test]
+    insolation_rmse = sqrt(mean(abs2, I_true .- I_learned))
+    
+    return (;
+        temp_rmse,
+        cloud_rmse,
+        insolation_rmse,
+        T_est,
+        cloud_est,
+        I_learned
+    )
+end
+
+# Evaluate the clamping method (already optimized)
+eval_clamping = evaluate_solution(sol, data, params_opt)
+@info "Clamping method - Temperature RMSE: $(round(eval_clamping.temp_rmse, digits=3))°C, Cloud RMSE: $(round(eval_clamping.cloud_rmse, digits=3))"
+```
+
+## Comparison of Constraint Handling Methods
+
+The cloud cover state must be constrained to lie in the interval [0, 1]. We have explored several different methods to handle this constraint:
+
+1. **Clamping**: Directly clamp the cloud cover after each dynamics update
+2. **Sigmoid transformation**: Transform the state through a sigmoid function  
+3. **Projection**: Project the state back to the constraint set after filter updates
+4. **Sigma-point rejection**: Reject sigma points that violate constraints
+5. **Truncated moment matching**: Use truncated normal distribution moments
+
+Let's compare these approaches:
+
+### Method 1: Clamping (Already Implemented)
+
+The clamping method was used in the main tutorial above. It simply clips the cloud cover to [0, 1] after each dynamics step:
+
+```julia
+function clamped_dynamics(x,u,p,t)
+    xp = discrete_dynamics_hybrid(x,u,p,t)
+    SA[xp[1], clamp(xp[2], 0.0f0, 1.0f0)]
+end
+```
+
+### Method 2: Sigmoid Transformation
+
+```@example THERMAL_NN
+# Sigmoid transformation method
+sigmoid(x) = 1 / (1 + exp(-x))
+sigmoid_inv(y) = log(y / (1 - y))
+
+function thermal_dynamics_sigmoid(x, u, p, t)
+    T_room, log_cloud_cover = x
+    cloud_cover = sigmoid(log_cloud_cover)
+    P_heater = u[1]
+    
+    # External temperature (known)
+    T_ext = external_temp(t)
+    
+    # Solar insolation from RBF model
+    I_base = compute_nn_insolation(t, p)
+    I_solar = I_base * (1 - cloud_cover)
+    
+    # Heat balance
+    dT_dt = (-k_loss * (T_room - T_ext) + η * P_heater + A_window * I_solar / 1000) / C_thermal
+    
+    # Cloud cover changes slowly (in transformed space)
+    dlogcloud_dt = 0.0001f0*(sigmoid_inv(0.5f0) - log_cloud_cover)
+    
+    SA[dT_dt, dlogcloud_dt]
+end
+
+# Discretize sigmoid dynamics
+discrete_dynamics_sigmoid = SeeToDee.ForwardEuler(thermal_dynamics_sigmoid, Ts)
+
+# Measurement model for sigmoid method
+measurement_sigmoid = if data.measure_cloud_cover
+    (x, u, p, t) -> SA[x[1], sigmoid(x[2])]
+else
+    (x, u, p, t) -> SA[x[1]]
+end
+
+# Optimize sigmoid method
+function cost_sigmoid(θ)
+    T = eltype(θ)
+    x0_sigmoid = SA[20.0f0, sigmoid_inv(0.5f0)]
+    
+    kf = UnscentedKalmanFilter(
+        discrete_dynamics_sigmoid,
+        measurement_sigmoid,
+        R1,
+        R2,
+        SimpleMvNormal(T.(x0_sigmoid), T.(2*R1));
+        ny, nu, Ts,
+    )
+    
+    LowLevelParticleFilters.sse(kf, data.u, data.y, θ)
+end
+
+# Run optimization for sigmoid method
+@info "Optimizing sigmoid method..."
+result_sigmoid = Optim.optimize(
+    cost_sigmoid,
+    θ_init,
+    BFGS(),
+    opt_options;
+    autodiff = :forward,
+)
+
+params_sigmoid = result_sigmoid.minimizer
+
+# Evaluate sigmoid method
+x0_sigmoid = SA[20.0f0, sigmoid_inv(0.5f0)]
+kf_sigmoid = UnscentedKalmanFilter(
+    discrete_dynamics_sigmoid,
+    measurement_sigmoid,
+    R1,
+    R2,
+    SimpleMvNormal(x0_sigmoid, R1);
+    p = params_sigmoid,
+    ny, nu, Ts
+)
+
+sol_sigmoid = forward_trajectory(kf_sigmoid, data.u, data.y)
+
+# Transform cloud estimates back from log space
+sol_sigmoid_transformed = deepcopy(sol_sigmoid)
+for i in 1:length(sol_sigmoid_transformed.xt)
+    x = sol_sigmoid_transformed.xt[i]
+    sol_sigmoid_transformed.xt[i] = SA[x[1], sigmoid(x[2])]
+end
+
+eval_sigmoid = evaluate_solution(sol_sigmoid_transformed, data, params_sigmoid)
+@info "Sigmoid method - Temperature RMSE: $(round(eval_sigmoid.temp_rmse, digits=3))°C, Cloud RMSE: $(round(eval_sigmoid.cloud_rmse, digits=3))"
+```
+
+### Method 3: Projection
+
+```@example THERMAL_NN
+# Projection method - uses standard dynamics but projects after updates
+
+function post_update_cb(kf, u, y, p, ll, e)
+    if !(0 <= kf.x[2] <= 1)
+        xn, Rn = LowLevelParticleFilters.project_bound(kf.x, kf.R, 2; lower=0, upper=1, tol=1e-9)
+        kf.x = xn
+        kf.R = Rn
+    end
+    nothing
+end
+
+# Use original unclamped dynamics for projection method
+discrete_dynamics_unclamped = discrete_dynamics_hybrid5
+
+# Optimize projection method
+function cost_projection(θ)
+    T = eltype(θ)
+    
+    kf = UnscentedKalmanFilter(
+        discrete_dynamics_unclamped,
+        measurement_model,  # Use the linear measurement model
+        R1,
+        SimpleMvNormal(T.(x0), T.(2*R1));
+        ny, nu, Ts,
+    )
+    
+    LowLevelParticleFilters.sse(kf, data.u, data.y, θ; post_update_cb)
+end
+
+# Run optimization for projection method
+@info "Optimizing projection method..."
+result_projection = Optim.optimize(
+    cost_projection,
+    θ_init,
+    BFGS(),
+    opt_options;
+    autodiff = :forward,
+)
+
+params_projection = result_projection.minimizer
+
+# Evaluate projection method
+kf_projection = UnscentedKalmanFilter(
+    discrete_dynamics_unclamped,
+    measurement_model,  # Use the linear measurement model
+    R1,
+    SimpleMvNormal(x0, R1);
+    p = params_projection,
+    ny, nu, Ts
+)
+
+post_predict_cb(kf, p) = post_update_cb(kf, 0, 0, p, 0, 0)
+sol_projection = forward_trajectory(kf_projection, data.u, data.y; post_predict_cb, post_correct_cb=post_predict_cb)
+
+eval_projection = evaluate_solution(sol_projection, data, params_projection)
+@info "Projection method - Temperature RMSE: $(round(eval_projection.temp_rmse, digits=3))°C, Cloud RMSE: $(round(eval_projection.cloud_rmse, digits=3))"
+```
+
+### Method 4: Sigma-point rejection
+
+The UKF provides a mechanism to reject sigma points that violate constraints. When a sigma point falls outside [0,1] for cloud cover, we can reject it and replace it with the mean point:
+
+```@example THERMAL_NN
+# Sigma-point rejection method
+function reject_sigma_point(x)
+    # Reject if cloud cover is outside [0, 1]
+    return !(0.0f0 <= x[2] <= 1.0f0)
+end
+
+# Use unclamped dynamics for rejection method
+discrete_dynamics_rejection = discrete_dynamics_hybrid5
+
+# Optimize with sigma-point rejection
+function cost_rejection(θ)
+    T = eltype(θ)
+    
+    kf = UnscentedKalmanFilter(
+        discrete_dynamics_rejection,
+        measurement_model,  # Use the linear measurement model
+        R1,
+        SimpleMvNormal(T.(x0), T.(2*R1));
+        ny, nu, Ts,
+        reject = reject_sigma_point  # Add rejection function
+    )
+    
+    LowLevelParticleFilters.sse(kf, data.u, data.y, θ)
+end
+
+# Run optimization for rejection method
+@info "Optimizing sigma-point rejection method..."
+result_rejection = Optim.optimize(
+    cost_rejection,
+    θ_init,
+    BFGS(),
+    opt_options;
+    autodiff = :forward,
+)
+
+params_rejection = result_rejection.minimizer
+
+# Evaluate rejection method
+kf_rejection = UnscentedKalmanFilter(
+    discrete_dynamics_rejection,
+    measurement_model,  # Use the linear measurement model
+    R1,
+    SimpleMvNormal(x0, R1);
+    p = params_rejection,
+    ny, nu, Ts,
+    reject = reject_sigma_point
+)
+
+sol_rejection = forward_trajectory(kf_rejection, data.u, data.y)
+
+eval_rejection = evaluate_solution(sol_rejection, data, params_rejection)
+@info "Rejection method - Temperature RMSE: $(round(eval_rejection.temp_rmse, digits=3))°C, Cloud RMSE: $(round(eval_rejection.cloud_rmse, digits=3))"
+```
+
+### Method 5: Truncated Moment Matching
+
+This method uses truncated normal distribution moments to handle the constraint, providing a statistically principled approach:
+
+```@example THERMAL_NN
+# Truncated moment matching method - uses standard dynamics but applies moment matching after updates
+function post_update_tmm(kf, u, y, p, ll, e)
+    if !(0 <= kf.x[2] <= 1)
+        xn, Rn = LowLevelParticleFilters.truncated_moment_match(kf.x, kf.R, 2; lower=0, upper=1, tol=1e-9)
+        kf.x = xn
+        kf.R = Rn
+    end
+    nothing
+end
+
+# Use original unclamped dynamics for truncated moment matching
+discrete_dynamics_tmm = discrete_dynamics_hybrid5
+
+# Optimize truncated moment matching method
+function cost_tmm(θ)
+    T = eltype(θ)
+    
+    kf = UnscentedKalmanFilter(
+        discrete_dynamics_tmm,
+        measurement_model,  # Use the linear measurement model
+        R1,
+        SimpleMvNormal(T.(x0), T.(2*R1));
+        ny, nu, Ts,
+    )
+    
+    LowLevelParticleFilters.sse(kf, data.u, data.y, θ; post_update_cb=post_update_tmm)
+end
+
+# Run optimization for truncated moment matching
+@info "Optimizing truncated moment matching method..."
+result_tmm = Optim.optimize(
+    cost_tmm,
+    θ_init,
+    BFGS(),
+    opt_options;
+    autodiff = :forward,
+)
+
+params_tmm = result_tmm.minimizer
+
+# Evaluate truncated moment matching method
+kf_tmm = UnscentedKalmanFilter(
+    discrete_dynamics_tmm,
+    measurement_model,  # Use the linear measurement model
+    R1,
+    SimpleMvNormal(x0, R1);
+    p = params_tmm,
+    ny, nu, Ts
+)
+
+post_predict_tmm(kf, p) = post_update_tmm(kf, 0, 0, p, 0, 0)
+sol_tmm = forward_trajectory(kf_tmm, data.u, data.y; post_predict_cb=post_predict_tmm, post_correct_cb=post_predict_tmm)
+
+eval_tmm = evaluate_solution(sol_tmm, data, params_tmm)
+@info "Truncated moment matching - Temperature RMSE: $(round(eval_tmm.temp_rmse, digits=3))°C, Cloud RMSE: $(round(eval_tmm.cloud_rmse, digits=3))"
+```
+
+### Comparison Results
+
+```@example THERMAL_NN
+# Plot comparison of all five methods
+p1 = plot(data.t, [data.x[i][2] for i in 1:length(data.x)], 
+    label="True Cloud Cover", lw=3, color=:black, alpha=0.7)
+plot!(data.t, eval_clamping.cloud_est, label="Clamping", lw=2, color=:blue)
+plot!(data.t, eval_sigmoid.cloud_est, label="Sigmoid", lw=2, color=:red, ls=:dash)
+plot!(data.t, eval_projection.cloud_est, label="Projection", lw=2, color=:green, ls=:dot)
+plot!(data.t, eval_rejection.cloud_est, label="Rejection", lw=2, color=:purple, ls=:dashdot)
+plot!(data.t, eval_tmm.cloud_est, label="Truncated MM", lw=2, color=:orange, ls=:dashdotdot)
+ylabel!("Cloud Cover")
+xlabel!("Time (hours)")
+title!("Cloud Cover Estimation - Method Comparison")
+
+# Compare learned insolation patterns
+tod_test = LinRange(0.0f0, 24.0f0, 100)
+I_true_plot = [true_insolation(t, 0.0f0) for t in tod_test]
+
+p2 = plot(tod_test, I_true_plot, label="True", lw=3, color=:black, alpha=0.7)
+plot!(tod_test, eval_clamping.I_learned, label="Clamping", lw=2, color=:blue)
+plot!(tod_test, eval_sigmoid.I_learned, label="Sigmoid", lw=2, color=:red, ls=:dash)
+plot!(tod_test, eval_projection.I_learned, label="Projection", lw=2, color=:green, ls=:dot)
+plot!(tod_test, eval_rejection.I_learned, label="Rejection", lw=2, color=:purple, ls=:dashdot)
+plot!(tod_test, eval_tmm.I_learned, label="Truncated MM", lw=2, color=:orange, ls=:dashdotdot)
+xlabel!("Time of Day (hours)")
+ylabel!("Insolation (W/m²)")
+title!("Learned Insolation Patterns")
+
+plot(p1, p2, layout=(2,1), size=(1200, 800))
+```
+
+
+#### Summary table
+```@example THERMAL_NN
+println("\n=== Method Comparison Summary ===")
+println("Method        | Temp RMSE | Cloud RMSE | Insolation RMSE")
+println("------------- | --------- | ---------- | ---------------")
+println("Clamping      | $(round(eval_clamping.temp_rmse, digits=3))     | $(round(eval_clamping.cloud_rmse, digits=3))      | $(round(eval_clamping.insolation_rmse, digits=1))")
+println("Sigmoid       | $(round(eval_sigmoid.temp_rmse, digits=3))     | $(round(eval_sigmoid.cloud_rmse, digits=3))      | $(round(eval_sigmoid.insolation_rmse, digits=1))")
+println("Projection    | $(round(eval_projection.temp_rmse, digits=3))     | $(round(eval_projection.cloud_rmse, digits=3))      | $(round(eval_projection.insolation_rmse, digits=1))")
+println("Rejection     | $(round(eval_rejection.temp_rmse, digits=3))     | $(round(eval_rejection.cloud_rmse, digits=3))      | $(round(eval_rejection.insolation_rmse, digits=1))")
+println("Truncated MM  | $(round(eval_tmm.temp_rmse, digits=3))     | $(round(eval_tmm.cloud_rmse, digits=3))      | $(round(eval_tmm.insolation_rmse, digits=1))")
+```
+
+### Discussion of Constraint Methods
+
+Each method has different trade-offs:
+
+1. **Clamping**: Simple and computationally efficient, but creates discontinuities in the dynamics that can affect filter consistency.
+
+2. **Sigmoid**: Smooth transformation that naturally keeps states bounded, but changes the noise characteristics and may introduce "stickyness" at the boundaries.
+
+3. **Projection**: Similar to clamping, but takes correlation between variables into account, updating also non-clamped variables and covariance.
+
+4. **Sigma-point Rejection**: Simple method that often introduces large bias.
+
+5. **Truncated Moment Matching**: Provides a statistically principled approach by computing the exact moments of the truncated normal distribution. This method maintains theoretical consistency but may be slightly more computaitonally expensive.
+
+The results show that the sigmoidal transformation and the truncated moment matching appear to perfom best on this particular problem. We didn't use all that much data, so there is bound to be some randomness in these findings. I did try with 10x more data and the findings were quite similar.
