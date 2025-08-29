@@ -325,6 +325,9 @@ function truncated_scalar_moments(m::Real, s::Real, a::Real, b::Real; tol=1e-12)
         # lower truncation [a, ∞)
         λ = normpdf(α) / max(normccdf(α), tol)      # Mills ratio for tail
         m′  = m + s * λ
+        if !(a <= m′ <= b)  # numerical safety
+            return m, 0.0, false
+        end
         s2′ = (s^2) * (1 - λ*(λ - α))
         s2′ = max(s2′, 0.0)
         return m′, s2′, true

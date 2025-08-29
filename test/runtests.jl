@@ -555,6 +555,11 @@ end
     include("test_function_versions.jl")
 end
 
+@testset "constraint_handling" begin
+    @info "Testing constraint handling"
+    include("test_constraint_handling.jl")
+end
+
 
 end
 

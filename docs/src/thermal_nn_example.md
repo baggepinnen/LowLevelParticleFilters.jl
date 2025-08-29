@@ -770,11 +770,11 @@ Each method has different trade-offs:
 
 1. **Clamping**: Simple and computationally efficient, but creates discontinuities in the dynamics that can affect filter consistency.
 
-2. **Sigmoid**: Smooth transformation that naturally keeps states bounded, but changes the noise characteristics and can make optimization more difficult due to the nonlinear transformation.
+2. **Sigmoid**: Smooth transformation that naturally keeps states bounded, but changes the noise characteristics and may introduce "stickyness" at the boundaries.
 
-3. **Projection**: Maintains filter consistency by properly updating both mean and covariance, but requires additional computation and can be numerically sensitive.
+3. **Projection**: Similar to clamping, but takes correlation between variables into account, updating also non-clamped variables and covariance.
 
-4. **Sigma-point Rejection**: Preserves the unscented transform's statistical properties while respecting constraints. Rejected points are replaced with the mean, which can reduce the effective number of sigma points and may affect uncertainty estimates.
+4. **Sigma-point Rejection**: Simple method that often introduces large bias.
 
 5. **Truncated Moment Matching**: Provides a statistically principled approach by computing the exact moments of the truncated normal distribution. This method maintains theoretical consistency but may be slightly more computaitonally expensive.
 
