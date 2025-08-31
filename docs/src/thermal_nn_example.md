@@ -329,7 +329,9 @@ cloud_est = [sol.xt[i][2] for i in 1:length(sol.xt)]
 T_true = [data.x[i][1] for i in 1:length(data.x)]
 cloud_true = [data.x[i][2] for i in 1:length(data.x)]
 
-cloud_error = sqrt(mean(abs2, cloud_true .- cloud_est))
+# Only compute cloud RMSE when sun is above horizon
+sun_up_mask = [true_insolation(data.t[i], 0.0f0) > 0 for i in 1:length(data.t)]
+cloud_error = sqrt(mean(abs2, cloud_true[sun_up_mask] .- cloud_est[sun_up_mask]))
 
 # Plot temperature estimation
 p1 = plot(data.t, T_true, label="True Temperature", lw=2, color=:blue)
@@ -399,7 +401,9 @@ function evaluate_solution(sol, data, params)
     
     # Compute errors
     temp_rmse = sqrt(mean(abs2, T_true .- T_est))
-    cloud_rmse = sqrt(mean(abs2, cloud_true .- cloud_est))
+    # Only compute cloud RMSE when sun is above horizon (true insolation > 0)
+    sun_up_mask = [true_insolation(data.t[i], 0.0f0) > 0 for i in 1:length(data.t)]
+    cloud_rmse = sqrt(mean(abs2, cloud_true[sun_up_mask] .- cloud_est[sun_up_mask]))
     
     # Compute learned insolation vs true
     tod_test = LinRange(0.0f0, 24.0f0, 100)
@@ -768,14 +772,14 @@ println("Truncated MM  | $(round(eval_tmm.temp_rmse, digits=3))     | $(round(ev
 
 Each method has different trade-offs:
 
-1. **Clamping**: Simple and computationally efficient, but creates discontinuities in the dynamics that can affect filter consistency.
+1. **Clamping**: Simple and computationally efficient, but creates discontinuities in the dynamics that some filters may not like.
 
-2. **Sigmoid**: Smooth transformation that naturally keeps states bounded, but changes the noise characteristics and may introduce "stickyness" at the boundaries.
+2. **Sigmoid**: Smooth transformation that naturally keeps variables bounded, but changes the noise characteristics and may introduce "stickyness" at the boundaries.
 
 3. **Projection**: Similar to clamping, but takes correlation between variables into account, updating also non-clamped variables and covariance.
 
 4. **Sigma-point Rejection**: Simple method that often introduces large bias.
 
-5. **Truncated Moment Matching**: Provides a statistically principled approach by computing the exact moments of the truncated normal distribution. This method maintains theoretical consistency but may be slightly more computaitonally expensive.
+5. **Truncated Moment Matching**: Provides a statistically principled approach by computing the exact moments of the truncated normal distribution. May be _slightly_ computaitonally expensive.
 
 The results show that the sigmoidal transformation and the truncated moment matching appear to perfom best on this particular problem. We didn't use all that much data, so there is bound to be some randomness in these findings. I did try with 10x more data and the findings were quite similar.
