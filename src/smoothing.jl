@@ -32,11 +32,11 @@ end
 
 # This smoother appears to have issues when there are missing measurements. It also requires more information to be stored from the forward pass, K and S. The benefit of this implementation is that it does not invert the state covariance matrix, instead, it inverts the residual covariance. Pick the smoother that inverts the smallest matrix.
 """
-    xT,RT,ll,λ̃,λ̂,r = smooth_mbf(sol, kf)
+    ssol,ll,λ̃,λ̂,r = smooth_mbf(sol, kf)
 
 Implements the "modified Bryson-Frazier smoother" which is a variant of the Rauch-Tung-Striebel smoother used in [`smooth`](@ref) that does not require the inversion of the state covariance matrix. The smoother is described in "New Kalman filter and smoother consistency tests" by Gibbs.
 """
-function smooth_mbf(sol::KalmanFilteringSolution, kf::AbstractKalmanFilter, u::AbstractVector=sol.u, y::AbstractVector=sol.y,  p=parameters(kf))
+function smooth_mbf(sol::KalmanFilteringSolution, kf::AbstractKalmanFilter=sol.f, u::AbstractVector=sol.u, y::AbstractVector=sol.y,  p=parameters(kf))
     (; x,xt,R,Rt,ll) = sol
     T            = length(y)
     xT           = similar(xt)
@@ -93,7 +93,7 @@ function smooth_mbf(sol::KalmanFilteringSolution, kf::AbstractKalmanFilter, u::A
         # xT[t] = x[t] .- R[t]*λ̃[t]
         # RT[t] = R[t] .- symmetrize(R[t]*Λ̃[t]*R[t])
     end
-    xT,RT,ll,λ̃,λ̂,r
+    KalmanSmoothingSolution(sol, xT, RT),ll,λ̃,λ̂,r
 end
 
 get_A(kf::KalmanFilter, x, u, p, t) = kf.A

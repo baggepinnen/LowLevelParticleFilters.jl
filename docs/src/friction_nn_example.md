@@ -198,10 +198,6 @@ function hybrid_dynamics(out0, xp0, u, p, t)
     out0 .= xp_next
     nothing
 end
-
-# Measurement model (observe full state)
-@views measurement(out, xp, _, _, _) = out .= xp[1:nx]
-nothing # hide
 ```
 
 ## Extended Kalman Filter Setup
@@ -234,9 +230,9 @@ end
 
 Ajac = Ajacfun(s0, data.u[1], nothing, 0)
 
-# Constant measurement Jacobian
-const CJ_ = [I(nx) zeros(Float32, nx, length(parr))]
-Cjac(x, u, p, t) = CJ_
+# Measurement model (observe full state)
+measurement_model = LinearMeasurementModel(IndexingMatrix(SVector{nx}(1:nx), nx+length(parr)), 0, R2; ny)
+
 
 # Initialize Extended Kalman Filter
 ynames = ["position", "velocity"]
@@ -245,7 +241,7 @@ unames = ["force"]
 snames = SignalNames(x = xnames, y = ynames, u = unames, name="EKF")
 ekf = ExtendedKalmanFilter(
     hybrid_dynamics, 
-    measurement, 
+    measurement_model, 
     R1, 
     R2, 
     SimpleMvNormal(s0, 10000R1);
@@ -314,6 +310,45 @@ plot!(legend=:bottomright, size=(800, 500))
 DisplayAs.PNG(p2) # hide
 ```
 
+## Smoothing
+```@example FRICTION_NN
+ssol,_ = LowLevelParticleFilters.smooth_mbf(sol)
+plot(ssol, plotRT=false, layout=1, sp=1, legend=false)
+```
+
+## Evolution of Learned Friction Function
+
+```@example FRICTION_NN
+# Create animation showing evolution of learned friction
+anim = @animate for i in 1:10:length(sol.xt)
+    t_current = (i-1) * Ts
+    
+    # Extract parameters at current timestep
+    params_current = ComponentArray(sol.xt[i][nx+1:end], getaxes(parr))
+    
+    # Compute learned friction at current timestep
+    friction_learned_current = Float32[]
+    for v in v_test
+        friction = friction_function(Float32(v), params_current, st)
+        push!(friction_learned_current, friction)
+    end
+    
+    # Determine which true friction to show
+    if t_current < 200
+        plot(v_test, friction_true, label="True friction", lw=2, c=:red)
+    else
+        plot(v_test, friction_true_modified, label="True friction", lw=2, c=:red)
+    end
+    
+    plot!(v_test, friction_learned_current, label="Learned friction", lw=2, c=:blue)
+    
+    plot!(xlabel="Velocity", ylabel="Friction Force", 
+          title="t = $(round(t_current, digits=1))",
+          legend=:bottomright, size=(800, 500), ylims=(-4,4))
+end
+
+gif(anim, fps=30)
+```
 
 ## Closing Remarks
 

@@ -285,7 +285,8 @@ out = zeros(2, 10000)
         @test :t ∈ propertynames(ksol)
         @test length(ksol.t) == T
         xT,R,lls = smooth(kf, u, y)
-        xTmbf,Rmbf,_,lt,lh,r = LowLevelParticleFilters.smooth_mbf(ksol, kf)
+        ssol,_,lt,lh,r = LowLevelParticleFilters.smooth_mbf(ksol, kf)
+        xTmbf,Rmbf = ssol.xT, ssol.RT
         @test sum(abs, sum(xTmbf .- xT)) < 1e-10
         @test sum(abs, sum(Rmbf .- R)) < 1e-10
 
