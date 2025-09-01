@@ -103,14 +103,17 @@ end
 
 
 
-function LowLevelParticleFilters.debugplot(pf, u, y, p=parameters(pf); runall=false, kwargs...)
+function LowLevelParticleFilters.debugplot(pf, u, y, p=parameters(pf); runall=false, pre_correct_cb=(args...)->nothing, post_predict_cb=(args...)->nothing, kwargs...)
     pdata = nothing
     reset!(pf)
     pfp = pf isa AuxiliaryParticleFilter ? pf.pf : pf
     for i = 1:length(y)
         pdata = LowLevelParticleFilters.pplot(pfp, u, y, p, pdata; kwargs...)
         t = index(pf)
+        ti = (i-1)*pf.Ts
+        pre_correct_cb(pf,u[t],y[t],p,ti)
         LowLevelParticleFilters.update!(pf,u[t],y[t], p)
+        post_predict_cb(pf,u[t],y[t],p,ti)
         runall || display(pdata[1])
     end
     display(pdata[1])
