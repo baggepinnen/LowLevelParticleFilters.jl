@@ -560,6 +560,11 @@ end
     include("test_constraint_handling.jl")
 end
 
+@testset "indexing_matrix" begin
+    @info "Testing indexing_matrix"
+    include("test_indexing_matrix.jl")
+end
+
 
 end
 

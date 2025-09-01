@@ -44,6 +44,7 @@ macro maybe_threads(flag, expr)
     end |> esc
 end
 
+include("indexing_matrix.jl")
 include("signalnames.jl")
 include("PFtypes.jl")
 include("solutions.jl")
