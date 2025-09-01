@@ -43,11 +43,14 @@ using DisplayAs # hide
 using LowLevelParticleFilters: SimpleMvNormal
 
 # True friction model with Stribeck effect
-function true_friction(v; f_s=2.0, f_c=1.0, v_s=0.1, f_v=0.5)
+function true_friction(v, t; f_s=2.0, f_c=1.0, v_s=0.1, f_v=0.5)
     if abs(v) < 1e-6
         return 0.0f0  # Avoid numerical issues at zero velocity
     else
-        return Float32((f_c + (f_s - f_c) * exp(-abs(v)/v_s)) * sign(v) + f_v * v)
+        # Friction increases linearly over time from 1.0 to 1.8
+        t_max = 400.0f0  # Maximum time in simulation
+        friction_multiplier = 1.0f0 + 0.3f0 * (t / t_max)
+        return Float32((f_c + (f_s - f_c) * exp(-abs(v)/v_s)) * sign(v) + f_v * v) * friction_multiplier
     end
 end
 
@@ -60,12 +63,7 @@ function mass_dynamics(x, u, p, t)
     m = 1.0f0  # Mass
     x₁, x₂ = x
     force = u[1]
-    friction = true_friction(x₂)
-    
-    # Add time-varying behavior: friction increases after t=200
-    if t > 200
-        friction *= 1.3f0
-    end
+    friction = true_friction(x₂, t)
     
     SA[
         x₂,  # ẋ₁ = velocity
@@ -243,13 +241,11 @@ ekf = ExtendedKalmanFilter(
     hybrid_dynamics, 
     measurement_model, 
     R1, 
-    R2, 
     SimpleMvNormal(s0, 10000R1);
     nu, 
     ny,
     check=false, 
     Ajac, 
-    Cjac, 
     Ts,
     names = snames,
 )
@@ -280,7 +276,7 @@ final_params = ComponentArray(sol.xt[end][nx+1:end], getaxes(parr))
 v_test = LinRange(-3.0f0, 3.0f0, 100)
 
 # Compute true friction
-friction_true = [true_friction(v) for v in v_test]
+friction_halfway = true_friction.(v_test, 200)
 
 # Compute learned friction (at t=200, before change)
 friction_learned_mid = Float32[]
@@ -298,11 +294,11 @@ for v in v_test
 end
 
 # Compute modified true friction (after t=200)
-friction_true_modified = [1.3f0 * true_friction(v) for v in v_test]
+friction_end = true_friction.(v_test, 400)
 
 # Plot comparison
-p2 = plot(v_test, friction_true, label="True friction (initial)", lw=2, ls=:dash, c=1)
-plot!(v_test, friction_true_modified, label="True friction (after t=200)", lw=2, ls=:dash, c=2)
+p2 = plot(v_test, friction_halfway, label="True friction (initial)", lw=2, ls=:dash, c=1)
+plot!(v_test, friction_end, label="True friction (after t=200)", lw=2, ls=:dash, c=2)
 plot!(v_test, friction_learned_mid, label="Learned (at t=200)", lw=2, alpha=0.7, c=1)
 plot!(v_test, friction_learned_final, label="Learned (final)", lw=2, c=2)
 plot!(xlabel="Velocity", ylabel="Friction Force", title="Friction Model Comparison")
@@ -310,36 +306,20 @@ plot!(legend=:bottomright, size=(800, 500))
 DisplayAs.PNG(p2) # hide
 ```
 
-## Smoothing
-```@example FRICTION_NN
-ssol,_ = LowLevelParticleFilters.smooth_mbf(sol)
-plot(ssol, plotRT=false, layout=1, sp=1, legend=false)
-```
 
 ## Evolution of Learned Friction Function
 
 ```@example FRICTION_NN
 # Create animation showing evolution of learned friction
-anim = @animate for i in 1:10:length(sol.xt)
+anim = @animate for i in 1:10:length(sol.x)
     t_current = (i-1) * Ts
     
     # Extract parameters at current timestep
-    params_current = ComponentArray(sol.xt[i][nx+1:end], getaxes(parr))
+    params_current = ComponentArray(sol.x[i][nx+1:end], getaxes(parr))
     
-    # Compute learned friction at current timestep
-    friction_learned_current = Float32[]
-    for v in v_test
-        friction = friction_function(Float32(v), params_current, st)
-        push!(friction_learned_current, friction)
-    end
+    friction_learned_current = friction_function.(Float32.(v_test), Ref(params_current), Ref(st))
     
-    # Determine which true friction to show
-    if t_current < 200
-        plot(v_test, friction_true, label="True friction", lw=2, c=:red)
-    else
-        plot(v_test, friction_true_modified, label="True friction", lw=2, c=:red)
-    end
-    
+    plot(v_test, true_friction.(v_test, t_current), label="True friction", lw=2, c=:red)    
     plot!(v_test, friction_learned_current, label="Learned friction", lw=2, c=:blue)
     
     plot!(xlabel="Velocity", ylabel="Friction Force", 
@@ -354,4 +334,4 @@ gif(anim, fps=30)
 
 We combined first-principles knowledge (Newton's laws) with a neural network to learn only the unknown component (friction). This is more sample-efficient and interpretable than learning the entire dynamics.
 
-The Extended Kalman Filter continuously updates the neural network parameters, allowing the model to adapt to changes in the system (e.g., the friction increase at t=200).
+The Extended Kalman Filter continuously updates the neural network parameters, allowing the model to adapt to changes in the system (e.g., the continuous friction increase).
