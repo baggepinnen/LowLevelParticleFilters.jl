@@ -33,7 +33,7 @@ where:
 - `f_v`: viscous friction coefficient
 
 ## Setup and Data Generation
-
+We generate some data from the true system using the, assumed unknown, friction model. We let the friction increase linearly, simulating, e.g., increased friction due to increased temperature over time.
 ```@example FRICTION_NN
 using LowLevelParticleFilters, Lux, Random, SeeToDee, StaticArrays, Plots, LinearAlgebra
 using ComponentArrays, DifferentiationInterface, SparseMatrixColorings
@@ -54,7 +54,8 @@ function true_friction(v, t; f_s=2.0, f_c=1.0, v_s=0.1, f_v=0.5)
     end
 end
 
-plot(true_friction, -2, 2, title="True Friction Model", xlabel="Velocity", ylabel="Friction Force")
+plot(v->true_friction(v, 0), -2, 2, lab="\$t = 0\$", xlabel="Velocity", ylabel="Friction Force", title="True friction model")
+plot!(v->true_friction(v, 400), -2, 2, lab="\$t = 400\$")
 ```
 
 ```@example FRICTION_NN
