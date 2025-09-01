@@ -62,7 +62,7 @@ See the docs for more information: https://baggepinnen.github.io/LowLevelParticl
 - `measurement_density`: A probability-density function for additive measurement noise. Use [`AdvancedParticleFilter`](@ref) for non-additive noise.
 - `initial_density`: Distribution of the initial state.
 """
-function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density; kwargs...)
+function ParticleFilter(N::Integer, dynamics, measurement::Function, dynamics_density, measurement_density, initial_density; kwargs...)
     xprev = Vector{SVector{length(initial_density),eltype(initial_density)}}([rand(initial_density) for n=1:N])
     x = deepcopy(xprev)
     w = fill(log(1/N), N)
@@ -74,7 +74,7 @@ function ParticleFilter(N::Integer, dynamics::Function, measurement::Function, d
     initial_density, kwargs...)
 end
 
-function ParticleFilter(s::PFstate, dynamics::Function, measurement::Function, dynamics_density, measurement_density, initial_density; kwargs...)
+function ParticleFilter(s::PFstate, dynamics, measurement::Function, dynamics_density, measurement_density, initial_density; kwargs...)
     ParticleFilter(; state = s, dynamics, measurement,
     dynamics_density, measurement_density,
     initial_density, kwargs...)

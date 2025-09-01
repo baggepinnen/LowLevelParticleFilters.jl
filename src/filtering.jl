@@ -316,7 +316,7 @@ If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurem
 plot(sol::ParticleFilteringSolution; nbinsy=30, xreal=nothing, dim=nothing)
 ```
 """
-function forward_trajectory(pf, u::AbstractVector, y::AbstractVector, p=parameters(pf))
+function forward_trajectory(pf, u::AbstractVector, y::AbstractVector, p=parameters(pf); pre_correct_cb=(args...)->nothing, pre_predict_cb=(args...)->nothing, post_predict_cb=(args...)->nothing, post_correct_cb=(args...)->nothing)
     reset!(pf)
     T = length(y)
     N = num_particles(pf)
@@ -326,11 +326,16 @@ function forward_trajectory(pf, u::AbstractVector, y::AbstractVector, p=paramete
     ll = 0.
     @inbounds for t = 1:T
         ti = (t-1)*pf.Ts
-        ll += correct!(pf, u[t], y[t], p, ti) |> first
+        pre_correct_cb(pf, u[t], y[t], p, ti)
+        lli = correct!(pf, u[t], y[t], p, ti) |> first
+        post_correct_cb(pf, u[t], y[t], p, ti, lli)
+        ll += lli
         x[:,t] .= particles(pf)
         w[:,t] .= weights(pf)
         we[:,t] .= expweights(pf)
+        pre_predict_cb(pf, u[t], y[t], p, ti, lli)
         predict!(pf, u[t], p, ti)
+        post_predict_cb(pf, u[t], y[t], p, ti)
     end
     ParticleFilteringSolution(pf,u,y,x,w,we,ll)
 end
@@ -361,8 +366,9 @@ end
 
 This method resets the particle filter to the initial state distribution upon start
 """
-mean_trajectory(pf, u::Vector, y::Vector) = reduce_trajectory(pf, u::Vector, y::Vector, weighted_mean)
-mode_trajectory(pf, u::Vector, y::Vector) = reduce_trajectory(pf, u::Vector, y::Vector, mode)
+mean_trajectory(pf, u::Vector, y::Vector, p=pf.p; kwargs...) = reduce_trajectory(pf, u::Vector, y::Vector, weighted_mean, p; kwargs...)
+
+mode_trajectory(pf, u::Vector, y::Vector, p=pf.p; kwargs...) = reduce_trajectory(pf, u::Vector, y::Vector, mode, p; kwargs...)
 
 """
     mean_trajectory(sol::ParticleFilteringSolution)
@@ -384,7 +390,7 @@ Compute the mode (particle with largest weight) along the trajectory of a partic
 """
 mode_trajectory(sol::ParticleFilteringSolution) = mode_trajectory(sol.x, sol.we)
 
-function reduce_trajectory(pf, u::Vector, y::Vector, f::F, p=parameters(pf)) where F
+function reduce_trajectory(pf, u::Vector, y::Vector, f::F, p=parameters(pf); pre_correct_cb=(args...)->nothing, post_predict_cb=(args...)->nothing) where F
     reset!(pf)
     T = length(y)
     N = num_particles(pf)
@@ -393,7 +399,9 @@ function reduce_trajectory(pf, u::Vector, y::Vector, f::F, p=parameters(pf)) whe
     x[1] = f(state(pf))
     for t = 2:T
         ti = (t-1)*pf.Ts
+        pre_correct_cb(pf,u[t-1],y[t],p,ti)
         ll += pf(u[t-1], y[t], p, ti) |> first
+        post_predict_cb(pf,u[t-1],y[t],p,ti)
         x[t] = f(pf)
     end
     x,ll

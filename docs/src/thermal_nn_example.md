@@ -228,10 +228,10 @@ function thermal_dynamics_hybrid(x, u, p, t)
 end
 
 # Discretize hybrid dynamics
-const discrete_dynamics_hybrid5 = SeeToDee.ForwardEuler(thermal_dynamics_hybrid, Ts)
+const discrete_dynamics_hybrid = SeeToDee.ForwardEuler(thermal_dynamics_hybrid, Ts)
 
 function clamped_dynamics(x,u,p,t)
-    xp = discrete_dynamics_hybrid5(x,u,p,t)
+    xp = discrete_dynamics_hybrid(x,u,p,t)
     SA[xp[1], clamp(xp[2], 0.0f0, 1.0f0)]
 end
 
@@ -556,7 +556,7 @@ function post_update_cb(kf, u, y, p, ll, e)
 end
 
 # Use original unclamped dynamics for projection method
-discrete_dynamics_unclamped = discrete_dynamics_hybrid5
+discrete_dynamics_unclamped = discrete_dynamics_hybrid
 
 # Optimize projection method
 function cost_projection(θ)
@@ -614,7 +614,7 @@ function reject_sigma_point(x)
 end
 
 # Use unclamped dynamics for rejection method
-discrete_dynamics_rejection = discrete_dynamics_hybrid5
+discrete_dynamics_rejection = discrete_dynamics_hybrid
 
 # Optimize with sigma-point rejection
 function cost_rejection(θ)
@@ -677,7 +677,7 @@ function post_update_tmm(kf, u, y, p, ll, e)
 end
 
 # Use original unclamped dynamics for truncated moment matching
-discrete_dynamics_tmm = discrete_dynamics_hybrid5
+discrete_dynamics_tmm = discrete_dynamics_hybrid
 
 # Optimize truncated moment matching method
 function cost_tmm(θ)
@@ -723,10 +723,11 @@ eval_tmm = evaluate_solution(sol_tmm, data, params_tmm)
 @info "Truncated moment matching - Temperature RMSE: $(round(eval_tmm.temp_rmse, digits=3))°C, Cloud RMSE: $(round(eval_tmm.cloud_rmse, digits=3))"
 ```
 
+
 ### Comparison Results
 
 ```@example THERMAL_NN
-# Plot comparison of all five methods
+# Plot comparison of all methods
 p1 = plot(data.t, [data.x[i][2] for i in 1:length(data.x)], 
     label="True Cloud Cover", lw=3, color=:black, alpha=0.7)
 plot!(data.t, eval_clamping.cloud_est, label="Clamping", lw=2, color=:blue)
@@ -780,6 +781,7 @@ Each method has different trade-offs:
 
 4. **Sigma-point Rejection**: Simple method that often introduces large bias.
 
-5. **Truncated Moment Matching**: Provides a statistically principled approach by computing the exact moments of the truncated normal distribution. May be _slightly_ computaitonally expensive.
+5. **Truncated Moment Matching**: Provides a statistically principled approach by computing the exact moments of the truncated normal distribution. May be _slightly_ computationally expensive.
 
-The results show that the sigmoidal transformation and the truncated moment matching appear to perfom best on this particular problem. We didn't use all that much data, so there is bound to be some randomness in these findings. I did try with 10x more data and the findings were quite similar.
+
+The results show that the sigmoidal transformation and the truncated moment matching appear to perform best on this particular problem. We didn't use all that much data, so there is bound to be some randomness in these findings. I did try with 10x more data and the findings were quite similar.
