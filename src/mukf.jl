@@ -232,8 +232,6 @@ function predict!(f::MUKF{IPD}, u=zeros(f.nu), p=parameters(f), t::Real=index(f)
 end
 
 function correct!(f::MUKF{IPD,IPM}, u, y, p=parameters(f), t::Real=index(f)*f.Ts; R2=nothing) where {IPD,IPM}
-    IPM && error("Inplace measurement model not yet supported for MUKF")
-
     # Generate sigma points using cache
     sp = f.sigma_point_cache.x0
     sigmapoints!(sp, f.xn, f.Rn, f.weight_params)
@@ -252,10 +250,22 @@ function correct!(f::MUKF{IPD,IPM}, u, y, p=parameters(f), t::Real=index(f)*f.Ts
     Y = Vector{typeof(y)}(undef, length(sp))
     Σy_extra = zeros(f.ny, f.ny)
 
-    @inbounds for i in eachindex(sp)
-        Y[i] = g(sp[i], u, p, t) .+ Cl * f.xl[i]
-        # Add contribution from linear state uncertainty
-        Σy_extra .+= (i == 1 ? W.wc : W.wci) .* (Cl * f.Rl[i] * Cl')
+    if IPM
+        # In-place measurement
+        y_temp = similar(y)
+        @inbounds for i in eachindex(sp)
+            g(y_temp, sp[i], u, p, t)
+            Y[i] = y_temp .+ Cl * f.xl[i]
+            # Add contribution from linear state uncertainty
+            Σy_extra .+= (i == 1 ? W.wc : W.wci) .* (Cl * f.Rl[i] * Cl')
+        end
+    else
+        # Out-of-place measurement
+        @inbounds for i in eachindex(sp)
+            Y[i] = g(sp[i], u, p, t) .+ Cl * f.xl[i]
+            # Add contribution from linear state uncertainty
+            Σy_extra .+= (i == 1 ? W.wc : W.wci) .* (Cl * f.Rl[i] * Cl')
+        end
     end
 
     yhat = mean_with_weights(weighted_mean, Y, f.weight_params)
@@ -286,16 +296,34 @@ function correct!(f::MUKF{IPD,IPM}, u, y, p=parameters(f), t::Real=index(f)*f.Ts
 
     # Update each linear Kalman filter with its residual
     kf = f.kf
-    @inbounds for i in eachindex(sp)
-        y_corrected = y .- g(sp[i], u, p, t)
+    if IPM
+        # In-place measurement
+        y_temp = similar(y)
+        @inbounds for i in eachindex(sp)
+            g(y_temp, sp[i], u, p, t)
+            y_corrected = y .- y_temp
 
-        kf.x = f.xl[i]
-        kf.R = f.Rl[i]
+            kf.x = f.xl[i]
+            kf.R = f.Rl[i]
 
-        correct!(kf, u, y_corrected, p, t; R2=R2_mat)
+            correct!(kf, u, y_corrected, p, t; R2=R2_mat)
 
-        f.xl[i] = kf.x
-        f.Rl[i] = kf.R
+            f.xl[i] = kf.x
+            f.Rl[i] = kf.R
+        end
+    else
+        # Out-of-place measurement
+        @inbounds for i in eachindex(sp)
+            y_corrected = y .- g(sp[i], u, p, t)
+
+            kf.x = f.xl[i]
+            kf.R = f.Rl[i]
+
+            correct!(kf, u, y_corrected, p, t; R2=R2_mat)
+
+            f.xl[i] = kf.x
+            f.Rl[i] = kf.R
+        end
     end
 
     ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), innovation)

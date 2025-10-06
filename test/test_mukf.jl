@@ -170,11 +170,20 @@ end
     @test_nowarn simulate(mukf_ip, u_ip[1:10])
 end
 
-@testset "MUKF with in-place measurement (unsupported)" begin
-    # Verify that IPM=true throws an error
+@testset "MUKF with in-place measurement" begin
+    # Test that IPM=true works correctly
     nxn_ipm, nxl_ipm, ny_ipm, nu_ipm = 1, 2, 2, 0
-    fn_ipm(xn, u, p, t) = atan.(xn)
-    g_ipm(xn, u, p, t) = [0.1 * xn[]^2 * sign(xn[]), 0.0]
+
+    # Out-of-place versions for comparison
+    fn_oop(xn, u, p, t) = atan.(xn)
+    g_oop(xn, u, p, t) = [0.1 * xn[]^2 * sign(xn[]), 0.0]
+
+    # In-place measurement function
+    function g_ip(y, xn, u, p, t)
+        y[1] = 0.1 * xn[]^2 * sign(xn[])
+        y[2] = 0.0
+        y
+    end
 
     An_ipm = [1.0 0.0]
     Al_ipm = [1.0 0.3; 0.0 0.92]
@@ -191,17 +200,38 @@ end
     d0n_ipm = LowLevelParticleFilters.SimpleMvNormal(x0n_ipm, R0n_ipm)
     d0l_ipm = LowLevelParticleFilters.SimpleMvNormal(x0l_ipm, R0l_ipm)
 
+    # Create out-of-place MUKF for reference
+    kf_oop = KalmanFilter(Al_ipm, zeros(nxl_ipm,nu_ipm), Cl_ipm, 0, R1l_ipm, R2_ipm, d0l_ipm; ny=ny_ipm, nu=nu_ipm)
+    mm_oop = RBMeasurementModel(g_oop, R2_ipm, ny_ipm)
+    mukf_oop = MUKF{false,false}(dynamics=fn_oop, nl_measurement_model=mm_oop, An=An_ipm, kf=kf_oop, R1n=R1n_ipm, d0n=d0n_ipm)
+
+    # Create in-place measurement MUKF
     kf_ipm = KalmanFilter(Al_ipm, zeros(nxl_ipm,nu_ipm), Cl_ipm, 0, R1l_ipm, R2_ipm, d0l_ipm; ny=ny_ipm, nu=nu_ipm)
-    mm_ipm = RBMeasurementModel(g_ipm, R2_ipm, ny_ipm)
+    mm_ipm = RBMeasurementModel{true}(g_ip, R2_ipm, ny_ipm)
+    mukf_ipm = MUKF{false,true}(dynamics=fn_oop, nl_measurement_model=mm_ipm, An=An_ipm, kf=kf_ipm, R1n=R1n_ipm, d0n=d0n_ipm)
 
-    # Create MUKF with IPM=true
-    mukf_ipm = MUKF{false,true}(dynamics=fn_ipm, nl_measurement_model=mm_ipm, An=An_ipm, kf=kf_ipm, R1n=R1n_ipm, d0n=d0n_ipm)
+    # Generate data using out-of-place version
+    T_ipm = 50
+    u_ipm = [zeros(nu_ipm) for _ in 1:T_ipm]
+    x_ipm, _, y_ipm = simulate(mukf_oop, u_ipm)
 
-    u_ipm = [zeros(nu_ipm) for _ in 1:10]
-    y_ipm = [zeros(ny_ipm) for _ in 1:10]
+    # Filter with both versions
+    sol_oop = forward_trajectory(mukf_oop, u_ipm, y_ipm)
+    sol_ipm = forward_trajectory(mukf_ipm, u_ipm, y_ipm)
 
-    # Verify that correct! throws an error
-    @test_throws ErrorException("Inplace measurement model not yet supported for MUKF") forward_trajectory(mukf_ipm, u_ipm, y_ipm)
+    # Verify they produce the same results
+    @test length(sol_ipm.xt) == T_ipm
+    @test all(length(x) == nxn_ipm + nxl_ipm for x in sol_ipm.xt)
+
+    # Compare state estimates (should be very close)
+    @test sol_ipm.xt ≈ sol_oop.xt rtol=1e-6
+
+    # Compare log-likelihoods
+    @test sol_ipm.ll ≈ sol_oop.ll rtol=1e-6
+
+    # Verify covariance is positive definite
+    cov_ipm = LowLevelParticleFilters.covariance(mukf_ipm)
+    @test isposdef(cov_ipm + cov_ipm')
 end
 
 ## `examples/mukf_tutorial.jl`
