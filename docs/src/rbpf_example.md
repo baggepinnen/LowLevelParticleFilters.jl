@@ -112,6 +112,55 @@ In this example, we made use of standard julia arrays for the dynamics and covar
 The paper referenced above mention a lot of special cases in which the filter can be simplified, it's worth a read if you are considering using this filter.
 
 
+## Comparison with MUKF
+
+The [`MUKF`](@ref) (Marginalized Unscented Kalman Filter) is an alternative to RBPF that uses the Unscented Transform instead of random particles. While RBPF uses ``N`` random particles (each with a Kalman filter), MUKF uses deterministic sigma points (typically ``2n+1`` for an ``n``-dimensional nonlinear state). This makes MUKF:
+- **Deterministic**
+- **Efficient for low-dimensional nonlinear states**: Uses fewer "hypotheses" than typical RBPF
+- **Gaussian assumption**: Like UKF, assumes posterior remains Gaussian (cannot handle multimodal distributions)
+
+Let's compare MUKF with RBPF on the same system:
+
+```@example RBPF
+# Create MUKF using the same model components
+mukf = MUKF(dynamics=fn, nl_measurement_model=mm, An=An, kf=kf, R1n=R1n, d0n=d0n)
+
+# Run filtering on the same data
+sol_mukf = forward_trajectory(mukf, u, y)
+
+# Extract nonlinear state estimates for comparison
+xn_true = [x[t][1] for t in 1:length(x)]
+xn_rbpf = [mean(sol.x[:, t])[1] for t in 1:length(y)]  # Mean of RBPF particles
+xn_mukf = [sol_mukf.xt[t][1] for t in 1:length(y)]     # MUKF filtered estimate
+
+# Compute RMSE
+using Statistics
+rmse_rbpf = sqrt(mean((xn_true .- xn_rbpf).^2))
+rmse_mukf = sqrt(mean((xn_true .- xn_mukf).^2))
+
+println("RBPF RMSE: $(round(rmse_rbpf, digits=4))")
+println("MUKF RMSE: $(round(rmse_mukf, digits=4))")
+```
+
+Let's visualize the comparison:
+
+```@example RBPF
+plot(xn_true, label="True x^n", lw=2, legend=:topleft)
+plot!(xn_rbpf, label="RBPF estimate (N=$N)", lw=2, alpha=0.7)
+plot!(xn_mukf, label="MUKF estimate", lw=2, alpha=0.7, ls=:dash)
+xlabel!("Time step")
+ylabel!("x^n")
+title!("Comparison: RBPF vs MUKF")
+DisplayAs.PNG(Plots.current()) # hide
+```
+
+Both filters successfully track the nonlinear state. The MUKF uses only 3 sigma points (for the 1D nonlinear state) compared to 200 particles in the RBPF, yet achieves comparable performance. For this problem with a low-dimensional nonlinear state and unimodal posterior, MUKF is more efficient.
+
+**When to use each filter:**
+- **Use MUKF** when: Nonlinear state is low-dimensional, posterior is unimodal, you want deterministic results
+- **Use RBPF** when: Nonlinear state is high-dimensional, posterior may be multimodal, you need maximum flexibility
+
+
 ## Details of the marginal distribution over the linear sub state
 We can create a distribution object that represents the Gaussian mixture model that represents the marginal distribution over the linear sub state. This may be useful to compute confidence intervals or quantiles etc.
 ```@example RBPF

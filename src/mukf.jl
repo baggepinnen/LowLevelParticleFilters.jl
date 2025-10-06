@@ -1,311 +1,405 @@
+"""
+    MUKF(; dynamics, nl_measurement_model::RBMeasurementModel, An, kf::KalmanFilter, R1n, d0n, nu=kf.nu, Ts=1.0, p=NullParameters(), weight_params=MerweParams(), names=default_names(length(d0n.μ) + length(kf.d0.μ), nu, kf.ny, "MUKF"))
 
-module MUKF
+Marginalized Unscented Kalman Filter for mixed linear/nonlinear state-space models.
 
-using LinearAlgebra
-using LowLevelParticleFilters
+!!! warning "Experimental"
+    This filter is currently considered experimental and the user interface may change in the future without respecting semantic versioning.
 
-export UTParams, MUKFState, init_mukf, reset!, predict!, correct!, step!, filter!, xl_mean
+This filter combines the Unscented Kalman Filter (UKF) for the nonlinear substate with a
+bank of Kalman filters (one per sigma point) for the linear substate. This approach provides
+improved accuracy compared to linearization-based methods while remaining more efficient
+than a full particle filter.
 
-############################
-# Unscented Transform (UT) #
-############################
+# Model structure
+The filter assumes dynamics on the form:
+```math
+\\begin{aligned}
+x_{t+1}^n &= f_n(x_t^n, u, p, t) + A_n x_t^l + w_t^n, \\quad &w_t^n \\sim \\mathcal{N}(0, R_1^n) \\\\
+x_{t+1}^l &= A_l x_t^l + B_l u + w_t^l, \\quad &w_t^l \\sim \\mathcal{N}(0, R_1^l) \\\\
+y_t &= g(x_t^n, u, p, t) + C_l x_t^l + e_t, \\quad &e_t \\sim \\mathcal{N}(0, R_2)
+\\end{aligned}
+```
+where ``x^n`` is the nonlinear substate and ``x^l`` is the linear substate.
 
-Base.@kwdef struct UTParams
-    α::Float64 = 1e-3
-    β::Float64 = 2.0
-    κ::Float64 = 0.0
-end
+# Arguments
+- `dynamics`: The nonlinear dynamics function ``f_n(x^n, u, p, t)``
+- `nl_measurement_model`: An instance of [`RBMeasurementModel`](@ref) containing ``g`` and ``R_2``
+- `An`: The coupling matrix from linear to nonlinear state (can be a matrix or function)
+- `kf`: A [`KalmanFilter`](@ref) describing the linear substate dynamics (``A_l, B_l, C_l, R_1^l``)
+- `R1n`: Process noise covariance for the nonlinear substate
+- `d0n`: Initial distribution for the nonlinear substate (SimpleMvNormal)
+- `nu`: Number of inputs (default: `kf.nu`)
+- `Ts`: Sampling time (default: 1.0)
+- `p`: Parameters (default: NullParameters())
+- `weight_params`: Unscented transform parameters (default: MerweParams())
+- `names`: Signal names for plotting
 
-struct SigmaPack
-    X::Matrix{Float64}   # n × (2n+1)
-    Wm::Vector{Float64}
-    Wc::Vector{Float64}
-end
+# Extended help
+The MUKF uses sigma points to represent the distribution of the nonlinear substate.
+For each sigma point, a separate Kalman filter tracks the linear substate conditioned
+on that sigma point. This approach is particularly efficient when:
+- The system has a large linear substate
+- The nonlinear substate is low-dimensional
+- Gaussian noise assumptions are appropriate
 
-function sigma_points(μ::AbstractVector, P::AbstractMatrix, ut::UTParams)
-    n = length(μ)
-    λ = ut.α^2*(n + ut.κ) - n
-    S = cholesky(Symmetric((n+λ)*P), check=false).L
-    X = Matrix{Float64}(undef, n, 2n+1)
-    X[:,1] = μ
-    @inbounds for i in 1:n
-        X[:,1+i]   = μ .+ view(S,:,i)
-        X[:,1+n+i] = μ .- view(S,:,i)
-    end
-    Wm = zeros(Float64, 2n+1)
-    Wc = zeros(Float64, 2n+1)
-    Wm[1] = λ/(n+λ)
-    Wc[1] = λ/(n+λ) + (1 - ut.α^2 + ut.β)
-    @inbounds for j in 2:(2n+1)
-        Wm[j] = 1/(2(n+λ))
-        Wc[j] = 1/(2(n+λ))
-    end
-    return SigmaPack(X, Wm, Wc)
-end
+See also [`UnscentedKalmanFilter`](@ref), [`RBPF`](@ref), [`KalmanFilter`](@ref)
 
-wmean(X::AbstractMatrix, W::AbstractVector) = mapreduce(identity, +, (W[j] .* view(X, :, j) for j in 1:size(X,2)))
-
-function wcov(X::AbstractMatrix, μ::AbstractVector, Wc::AbstractVector)
-    n = length(μ)
-    P = zeros(Float64, n, n)
-    @inbounds for j in 1:size(X,2)
-        d = view(X, :, j) .- μ
-        P .+= Wc[j] .* (d * d')
-    end
-    return P
-end
-
-########################
-# MUKF filter state    #
-########################
-
-Base.@kwdef mutable struct MUKFState
-    # model dimensions
-    nxn::Int
-    nxl::Int
-    ny::Int
-
-    # Nonlinear/linear model pieces
-    fn::Function              # xⁿ_{k+1} = fₙ(xⁿ_k) + Aₙ xˡ_k + wⁿ_k
-    g::Function               # y_k = g(xⁿ_k) + C xˡ_k + e_k
-    An::Matrix{Float64}
-    Al::Matrix{Float64}
-    Cl::Matrix{Float64}
+# References
+Based on the Marginalized Unscented Kalman Filter described in the literature on
+Rao-Blackwellized filtering techniques.
+"""
+mutable struct MUKF{DT,MMT,ANT,KFT,R1NT,D0NT,XNT,RNT,XLT,RLT,TS,P,WP,NT} <: AbstractKalmanFilter
+    # Model functions and parameters
+    dynamics::DT              # xⁿ_{k+1} = fₙ(xⁿ_k, u, p, t) + Aₙ xˡ_k + wⁿ_k
+    nl_measurement_model::MMT # Nonlinear measurement model
+    An::ANT                   # Coupling matrix (or function)
+    kf::KFT                   # Template Kalman filter for linear substate
 
     # Noise covariances
-    R1n::Matrix{Float64}
-    R1l::Matrix{Float64}
-    R2::Matrix{Float64}
+    R1n::R1NT                 # Process noise covariance for nonlinear state
+    d0n::D0NT                 # Initial distribution for nonlinear state
 
-    # Current estimates
-    μn::Vector{Float64}
-    Σn::Matrix{Float64}
-    μl::Vector{Vector{Float64}}   # per-sigma means of xˡ
-    Σl::Vector{Matrix{Float64}}   # per-sigma covariances of xˡ
+    # Current state estimates
+    xn::XNT                   # Mean of nonlinear state
+    Rn::RNT                   # Covariance of nonlinear state
+    xl::Vector{XLT}           # Mean of linear state per sigma point
+    Rl::Vector{RLT}           # Covariance of linear state per sigma point
 
-    # UT params
-    ut::UTParams
+    # Metadata
+    t::Int
+    Ts::TS
+    nu::Int
+    ny::Int
+    p::P
+    weight_params::WP
+    names::NT
 end
 
-function init_mukf(; fn, g, An, Al, Cl, R1n, R1l, R2, d0n::LowLevelParticleFilters.SimpleMvNormal,
-    d0l::LowLevelParticleFilters.SimpleMvNormal, ut::UTParams=UTParams())
+function MUKF(; dynamics, nl_measurement_model::RBMeasurementModel, An, kf::KalmanFilter,
+              R1n, d0n, nu=kf.nu, Ts=1.0, p=NullParameters(),
+              weight_params=MerweParams(),
+              names=default_names(length(d0n.μ) + length(kf.d0.μ), nu, kf.ny, "MUKF"))
 
     nxn = length(d0n.μ)
-    nxl = length(d0l.μ)
-    ny  = size(R2,1)
+    nxl = length(kf.d0.μ)
+    ny  = kf.ny
 
-    # initialize sigma-conditioned linear KFs around prior of xˡ
-    sp = sigma_points(d0n.μ, d0n.Σ, ut)
-    μl = [copy(d0l.μ) for _ in 1:size(sp.X,2)]
-    Σl = [copy(d0l.Σ) for _ in 1:size(sp.X,2)]
+    # Initialize sigma points for the nonlinear state
+    sp = sigmapoints(d0n.μ, d0n.Σ, weight_params)
+    ns = length(sp)  # Number of sigma points (2*nxn + 1)
 
-    return MUKFState(nxn, nxl, ny, fn, g, Matrix(An), Matrix(Al), Matrix(Cl), Matrix(R1n), Matrix(R1l), Matrix(R2),
-                     copy(d0n.μ), copy(d0n.Σ), μl, Σl, ut)
+    # Initialize state estimates using type from d0 and kf
+    xn0 = convert_x0_type(d0n.μ)
+    Rn0 = convert_cov_type(R1n, d0n.Σ)
+    xl0 = convert_x0_type(kf.d0.μ)
+    Rl0 = convert_cov_type(kf.R1, kf.d0.Σ)
+
+    # Initialize one Kalman filter per sigma point
+    xl = [copy(xl0) for _ in 1:ns]
+    Rl = [copy(Rl0) for _ in 1:ns]
+
+    MUKF{typeof(dynamics), typeof(nl_measurement_model), typeof(An), typeof(kf),
+         typeof(R1n), typeof(d0n), typeof(xn0), typeof(Rn0), typeof(xl0), typeof(Rl0),
+         typeof(Ts), typeof(p), typeof(weight_params), typeof(names)}(
+        dynamics, nl_measurement_model, An, kf, R1n, d0n,
+        xn0, Rn0, xl, Rl,
+        0, Ts, nu, ny, p, weight_params, names)
 end
 
-reset!(f::MUKFState, d0n::LowLevelParticleFilters.SimpleMvNormal, d0l::LowLevelParticleFilters.SimpleMvNormal) = begin
-    f.μn .= d0n.μ
-    f.Σn .= d0n.Σ
-    sp = sigma_points(f.μn, f.Σn, f.ut)
-    for i in 1:length(f.μl)
-        f.μl[i] .= d0l.μ
-        f.Σl[i] .= d0l.Σ
+# Convenience accessors
+state(f::MUKF) = [f.xn; xl_mean(f)]
+covariance(f::MUKF) = cat(f.Rn, xl_cov(f), dims=(1,2))
+parameters(f::MUKF) = f.p
+particletype(f::MUKF) = typeof([f.xn; f.xl[1]])
+covtype(f::MUKF) = typeof(cat(f.Rn, f.Rl[1], dims=(1,2)))
+
+# Simplified getproperty - only provide essential virtual properties
+function Base.getproperty(f::MUKF, s::Symbol)
+    s ∈ fieldnames(typeof(f)) && return getfield(f, s)
+    if s === :x
+        return state(f)
+    elseif s === :R
+        return covariance(f)
+    elseif s === :nx
+        return length(getfield(f, :xn)) + length(getfield(f, :xl)[1])
+    else
+        throw(ArgumentError("$(typeof(f)) has no property named $s"))
     end
-    f
 end
 
-function predict!(f::MUKFState)
-    sp = sigma_points(f.μn, f.Σn, f.ut)
+"""
+    xl_mean(f::MUKF)
 
-    # linear substate time update per sigma point: xˡ⁺ = Al xˡ + wˡ
-    for i in 1:length(f.μl)
-        f.μl[i] = f.Al * f.μl[i]
-        f.Σl[i] = f.Al * f.Σl[i] * f.Al' .+ f.R1l
-    end
-
-    # propagate xⁿ using per-sigma xˡ means
-    Xn_pred = similar(sp.X)
-    @inbounds for i in 1:size(sp.X,2)
-        Xn_pred[:,i] = f.fn(view(sp.X,:,i), nothing, nothing, 0) .+ f.An * f.μl[i]
-    end
-
-    μn_pred = wmean(Xn_pred, sp.Wm)
-    Σn_pred = wcov(Xn_pred, μn_pred, sp.Wc) .+ f.R1n
-
-    f.μn .= μn_pred
-    f.Σn .= Σn_pred
-    return f
-end
-
-function correct!(f::MUKFState, y::AbstractVector)
-    sp = sigma_points(f.μn, f.Σn, f.ut)
-
-    # predicted measurement per sigma: ŷᵢ = g(xⁿᵢ) + C xˡᵢ
-    Y = zeros(f.ny, size(sp.X,2))
-    Σy = zeros(f.ny, f.ny)
-    @inbounds for i in 1:size(sp.X,2)
-        Y[:,i] = f.g(view(sp.X,:,i), 0, 0, 0) .+ f.Cl * f.μl[i]
-        Σy .+= sp.Wc[i] .* (f.Cl * f.Σl[i] * f.Cl')  # from linear substate uncertainty
-    end
-    yhat = wmean(Y, sp.Wm)
-
-    # innovation covariance and cross-covariance
-    S = wcov(Y, yhat, sp.Wc) .+ Σy .+ f.R2
-
-    Σny = zeros(f.nxn, f.ny)
-    @inbounds for i in 1:size(sp.X,2)
-        dx = view(sp.X,:,i) .- f.μn
-        dy = view(Y,:,i)   .- yhat
-        Σny .+= sp.Wc[i] .* (dx * dy')
-    end
-
-    # UKF-style update for xⁿ
-    Kn = Σny * inv(S)
-    f.μn .= f.μn .+ Kn * (y .- yhat)
-    f.Σn .= f.Σn .- Kn * S * Kn'
-
-    # per-sigma linear KF measurement updates with residuals
-    @inbounds for i in 1:size(sp.X,2)
-        r_i = y .- f.g(view(sp.X,:,i), 0, 0, 0) .- f.Cl * f.μl[i]
-        Si  = f.Cl * f.Σl[i] * f.Cl' .+ f.R2
-        Ki  = f.Σl[i] * f.Cl' * inv(Si)
-        f.μl[i] .= f.μl[i] .+ Ki * r_i
-        f.Σl[i]  = (I - Ki * f.Cl) * f.Σl[i]
-    end
-    return f
-end
-
-step!(f::MUKFState, y) = (predict!(f); correct!(f, y))
-
-function filter!(f::MUKFState, yseq)
-    out = Vector{Vector{Float64}}(undef, length(yseq))
-    for t in eachindex(yseq)
-        step!(f, yseq[t])
-        out[t] = copy(f.μn)
-    end
-    return out
-end
-
-# collapse xˡ mixture mean across sigma-conditioned linear KFs
-function xl_mean(f::MUKFState)
-    sp = sigma_points(f.μn, f.Σn, f.ut)
-    μ = zeros(f.nxl)
-    @inbounds for i in 1:length(f.μl)
-        μ .+= sp.Wm[i] .* f.μl[i]
+Compute the marginal mean of the linear substate by averaging over sigma points.
+"""
+function xl_mean(f::MUKF)
+    sp = sigmapoints(f.xn, f.Rn, f.weight_params)
+    W = UKFWeights(f.weight_params, length(f.xn))
+    μ = zeros(eltype(f.xl[1]), length(f.xl[1]))
+    @inbounds for i in eachindex(f.xl)
+        w = i == 1 ? W.wm : W.wmi
+        μ .+= w .* f.xl[i]
     end
     return μ
 end
 
-end # module
+"""
+    xl_cov(f::MUKF)
 
-using Test
-using LinearAlgebra
-using LowLevelParticleFilters
-using .MUKF
-filter! = MUKF.filter!
+Compute the marginal covariance of the linear substate.
+"""
+function xl_cov(f::MUKF)
+    sp = sigmapoints(f.xn, f.Rn, f.weight_params)
+    W = UKFWeights(f.weight_params, length(f.xn))
+    μ = xl_mean(f)
+    nxl = length(μ)
+    Σ = zeros(eltype(f.Rl[1]), nxl, nxl)
 
-# --- Recreate the RBPF tutorial system exactly ---
-nxn, nxl, ny, nu = 1, 3, 2, 0
-fn(xn, u, p, t) = atan.(xn)
-g(xn, u, p, t)  = [0.1 * xn[]^2 * sign(xn[]), 0.0]
-An = [1.0 0.0 0.0]
-Al = [ 1.0  0.3   0.0;
-       0.0  0.92 -0.3;
-       0.0  0.3   0.92 ]
-Cl = [0.0 0.0 0.0;
-      1.0 -1.0 1.0]
-R1n = [0.01;;]
-R1l = 0.01I(nxl)
-R2  = 0.1I(ny)
-x0n = zeros(nxn); R0n = [1.0;;]
-x0l = zeros(nxl); R0l = 0.01I(nxl)
-
-d0n = LowLevelParticleFilters.SimpleMvNormal(x0n, R0n)
-d0l = LowLevelParticleFilters.SimpleMvNormal(x0l, R0l)
-
-# Use package RBPF to generate consistent data
-kf_lin = KalmanFilter(Al, zeros(nxl,nu), Cl, 0, R1l, R2, d0l; ny, nu)
-mm     = RBMeasurementModel(g, R2, ny)
-
-names = SignalNames(; x=["xnl", "xl1", "xl2", "xl3"], u=[], y=["y1", "y2"], name="RBPF_tutorial")
-rbpf   = RBPF(300, kf_lin, fn, mm, R1n, d0n; nu, An, Ts=1.0, names)
-
-T = 150
-u_data = [zeros(nu) for _ in 1:T]
-x_true, _, y_meas = simulate(rbpf, u_data)
-
-# --- Run MUKF ---
-state = init_mukf(fn=fn, g=g, An=An, Al=Al, Cl=Cl, R1n=R1n, R1l=R1l, R2=R2, d0n=d0n, d0l=d0l)
-μn_hist = filter!(state, y_meas)
-
-# Helpers
-xn_true = [x_true[t][1] for t in 1:T]
-xn_est  = [μ[1] for μ in μn_hist]
-rmse(v1, v2) = sqrt(sum((v1 .- v2).^2) / length(v1))
-
-@testset "MUKF sanity" begin
-    @test length(μn_hist) == T
-    @test isposdef(state.Σn + state.Σn') # symmetric positive semi-def check (approx)
-    @test rmse(xn_true, xn_est) < 0.6    # loose upper bound; adjust as needed
+    @inbounds for i in eachindex(f.xl)
+        w = i == 1 ? W.wc : W.wci
+        d = f.xl[i] .- μ
+        Σ .+= w .* (d * d' .+ f.Rl[i])
+    end
+    return Σ
 end
 
-## `examples/mukf_tutorial.jl`
-
-
-using LinearAlgebra
-using LowLevelParticleFilters
-using Statistics
-using Printf
-# Optional plotting (comment out if you avoid deps in CI)
-try
-    using Σlots
-catch err
-    @warn "Σlots.jl not found; example will run without figures" err
+function reset!(f::MUKF, d0n=f.d0n, d0l=f.kf.d0)
+    f.xn .= d0n.μ
+    f.Rn .= d0n.Σ
+    sp = sigmapoints(f.xn, f.Rn, f.weight_params)
+    for i in eachindex(f.xl)
+        f.xl[i] .= d0l.μ
+        f.Rl[i] .= d0l.Σ
+    end
+    f.t = 0
+    f
 end
 
-# --- Model (same as RBPF tutorial) ---
-fn(xn, u, p, t) = atan.(xn)
-g(xn, u, p, t)  = [0.1 * xn[]^2 * sign(xn[]), 0.0]
-An = [1.0 0.0 0.0]
-Al = [ 1.0  0.3   0.0;
-       0.0  0.92 -0.3;
-       0.0  0.3   0.92 ]
-Cl = [0.0 0.0 0.0;
-      1.0 -1.0 1.0]
-R1n = [0.01;;]
-R1l = 0.01I(3)
-R2  = 0.1I(2)
+function predict!(f::MUKF, u=zeros(f.nu), p=parameters(f), t::Real=index(f)*f.Ts)
+    # Generate sigma points for nonlinear state
+    sp = sigmapoints(f.xn, f.Rn, f.weight_params)
+    W = UKFWeights(f.weight_params, length(f.xn))
 
-x0n = zeros(1); R0n = [1.0;;]
-x0l = zeros(3); R0l = 0.01I(3)
+    # Get matrices
+    Al = get_mat(f.kf.A, f.xn, u, p, t)
+    Bl = get_mat(f.kf.B, f.xn, u, p, t)
+    R1l = get_mat(f.kf.R1, f.xn, u, p, t)
+    An = get_mat(f.An, f.xn, u, p, t)
+    R1n_mat = f.R1n isa AbstractMatrix ? f.R1n : (f.R1n isa Function ? f.R1n(f.xn, u, p, t) : f.R1n.Σ)
 
-d0n = LowLevelParticleFilters.SimpleMvNormal(x0n, R0n)
-d0l = LowLevelParticleFilters.SimpleMvNormal(x0l, R0l)
+    # Propagate each Kalman filter (linear substate time update)
+    for i in eachindex(f.xl)
+        f.xl[i] = Al * f.xl[i] .+ Bl * u
+        f.Rl[i] = Al * f.Rl[i] * Al' .+ R1l
+    end
 
-# Use RBPF simulate for data parity
-kf_lin = KalmanFilter(Al, zeros(3,0), Cl, 0, R1l, R2, d0l; ny=2, nu=0)
-mm     = RBMeasurementModel(g, R2, 2)
-rbpf   = RBPF(300, kf_lin, fn, mm, R1n, d0n; nu=0, An=An, Ts=1.0, names=SignalNames(; x=["xnl", "xl1", "xl2", "xl3"], u=[], y=["y1", "y2"], name="RBPF_tutorial"))
+    # Propagate nonlinear state through dynamics using sigma points
+    Xn_pred = similar(sp)
+    @inbounds for i in eachindex(sp)
+        Xn_pred[i] = f.dynamics(sp[i], u, p, t) .+ An * f.xl[i]
+    end
 
-T = 150
-u_data = [zeros(0) for _ in 1:T]
-x_true, _, y_meas = simulate(rbpf, u_data)
+    # Compute predicted mean and covariance for nonlinear state
+    xn_pred = weighted_mean(Xn_pred, W)
+    Rn_pred = weighted_cov(Xn_pred, xn_pred, W) .+ R1n_mat
 
-# --- Run MUKF ---
-state = init_mukf(fn=fn, g=g, An=An, Al=Al, Cl=Cl, R1n=R1n, R1l=R1l, R2=R2, d0n=d0n, d0l=d0l)
-μn_hist = filter!(state, y_meas)
+    f.xn .= xn_pred
+    f.Rn .= Rn_pred
+    f.t += 1
+    return f
+end
 
-# Collect arrays for plotting
-xn_true = [x_true[t][1] for t in 1:T]
-xn_est  = [μ[1] for μ in μn_hist]
-RMSE = sqrt(mean((xn_true .- xn_est).^2))
-@printf("MUKF RMSE on xⁿ: %.4f\n", RMSE)
+function correct!(f::MUKF, u, y, p=parameters(f), t::Real=index(f)*f.Ts; R2=nothing)
+    # Generate sigma points
+    sp = sigmapoints(f.xn, f.Rn, f.weight_params)
+    W = UKFWeights(f.weight_params, length(f.xn))
 
-using Plots
-t = 1:T
-plt = plot(t, xn_true, label="true xⁿ", lw=2)
-plot!(plt, t, xn_est, label="MUKF xⁿ est", lw=2, ls=:dash)
-xlabel!(plt, "time step")
-ylabel!(plt, "xⁿ")
-title!(plt, @sprintf("MUKF on RBPF tutorial system (RMSE=%.3f)", RMSE))
-display(plt)
+    g = f.nl_measurement_model.measurement
+    Cl = get_mat(f.kf.C, f.xn, u, p, t)
+    R2_mat = if R2 !== nothing
+        R2
+    else
+        mm_R2 = f.nl_measurement_model.R2
+        mm_R2 isa AbstractMatrix ? mm_R2 : (mm_R2 isa Function ? mm_R2(f.xn, u, p, t) : mm_R2.Σ)
+    end
+
+    # Predicted measurements per sigma point: ŷᵢ = g(xⁿᵢ) + Cl xˡᵢ
+    Y = Vector{typeof(y)}(undef, length(sp))
+    Σy_extra = zeros(f.ny, f.ny)
+
+    @inbounds for i in eachindex(sp)
+        Y[i] = g(sp[i], u, p, t) .+ Cl * f.xl[i]
+        # Add contribution from linear state uncertainty
+        Σy_extra .+= (i == 1 ? W.wc : W.wci) .* (Cl * f.Rl[i] * Cl')
+    end
+
+    yhat = weighted_mean(Y, W)
+
+    # Innovation covariance
+    S = weighted_cov(Y, yhat, W) .+ Σy_extra .+ R2_mat
+
+    # Cross-covariance between nonlinear state and measurement
+    Σny = zeros(length(f.xn), f.ny)
+    @inbounds for i in eachindex(sp)
+        w = i == 1 ? W.wc : W.wci
+        dx = sp[i] .- f.xn
+        dy = Y[i] .- yhat
+        Σny .+= w .* (dx * dy')
+    end
+
+    # UKF-style update for nonlinear state
+    Sᵪ = cholesky(Symmetric(S), check=false)
+    if !issuccess(Sᵪ)
+        error("Cholesky factorization of innovation covariance failed at time step $(f.t)")
+    end
+
+    Kn = Σny / Sᵪ
+    innovation = y .- yhat
+    f.xn .= f.xn .+ Kn * innovation
+    f.Rn .= f.Rn .- Kn * S * Kn'
+    f.Rn .= (f.Rn .+ f.Rn') ./ 2  # Ensure symmetry
+
+    # Update each linear Kalman filter with its residual
+    @inbounds for i in eachindex(sp)
+        r_i = y .- g(sp[i], u, p, t) .- Cl * f.xl[i]
+        Si = Cl * f.Rl[i] * Cl' .+ R2_mat
+        Ki = f.Rl[i] * Cl' / cholesky(Symmetric(Si))
+        f.xl[i] .= f.xl[i] .+ Ki * r_i
+        f.Rl[i] = (I - Ki * Cl) * f.Rl[i]
+        f.Rl[i] .= (f.Rl[i] .+ f.Rl[i]') ./ 2  # Ensure symmetry
+    end
+
+    ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), innovation)
+    return (; ll, e=innovation, S, Sᵪ, K=Kn)
+end
+
+function update!(f::MUKF, u, y, p=parameters(f), t=index(f)*f.Ts)
+    predict!(f, u, p, t-f.Ts)
+    correct!(f, u, y, p, t)
+end
+
+# Make MUKF callable
+(f::MUKF)(u, y, p=parameters(f), t=index(f)*f.Ts) = update!(f, u, y, p, t)
+
+# Measurement function for MUKF
+function measurement(mukf::MUKF)
+    function (x, u, p, t)
+        nxn = length(mukf.xn)
+        xn = x[1:nxn]
+        xl = x[nxn+1:end]
+
+        g = mukf.nl_measurement_model.measurement
+        Cl = get_mat(mukf.kf.C, xn, u, p, t)
+
+        return g(xn, u, p, t) .+ Cl * xl
+    end
+end
+
+# Dynamics function for MUKF
+function dynamics(mukf::MUKF)
+    function (x, u, p, t)
+        nxn = length(mukf.xn)
+        xn = x[1:nxn]
+        xl = x[nxn+1:end]
+
+        An = get_mat(mukf.An, xn, u, p, t)
+        Al = get_mat(mukf.kf.A, xn, u, p, t)
+        Bl = get_mat(mukf.kf.B, xn, u, p, t)
+
+        xn_next = mukf.dynamics(xn, u, p, t) .+ An * xl
+        xl_next = Al * xl .+ Bl * u
+
+        return [xn_next; xl_next]
+    end
+end
+
+# Simulation support
+function sample_state(f::MUKF, p=parameters(f); noise=true)
+    xn = noise ? rand(f.d0n) : f.d0n.μ
+    xl = noise ? rand(f.kf.d0) : f.kf.d0.μ
+    return [xn; xl]
+end
+
+function sample_state(f::MUKF, x, u, p=parameters(f), t=index(f)*f.Ts; noise=true)
+    nxn = length(f.xn)
+    xn = x[1:nxn]
+    xl = x[nxn+1:end]
+
+    An = get_mat(f.An, xn, u, p, t)
+    xn_next = f.dynamics(xn, u, p, t) .+ An * xl
+    if noise
+        R1n_mat = f.R1n isa AbstractMatrix ? f.R1n : (f.R1n isa Function ? f.R1n(xn, u, p, t) : f.R1n.Σ)
+        xn_next .+= rand(SimpleMvNormal(R1n_mat))
+    end
+
+    Al = get_mat(f.kf.A, xn, u, p, t)
+    Bl = get_mat(f.kf.B, xn, u, p, t)
+    xl_next = Al * xl .+ Bl * u
+    if noise
+        xl_next .+= rand(SimpleMvNormal(get_mat(f.kf.R1, xn, u, p, t)))
+    end
+
+    return [xn_next; xl_next]
+end
+
+function sample_measurement(f::MUKF, x, u, p=parameters(f), t=index(f)*f.Ts; noise=true)
+    nxn = length(f.xn)
+    xn = x[1:nxn]
+    xl = x[nxn+1:end]
+
+    g = f.nl_measurement_model.measurement
+    Cl = get_mat(f.kf.C, xn, u, p, t)
+
+    y = g(xn, u, p, t) .+ Cl * xl
+    if noise
+        y .+= rand(f.nl_measurement_model.R2)
+    end
+    return y
+end
+
+# Custom forward_trajectory for MUKF
+function forward_trajectory(mukf::MUKF, u::AbstractVector, y::AbstractVector, p=parameters(mukf); debug=false)
+    reset!(mukf)
+    T    = length(y)
+    x    = Vector{Vector{Float64}}(undef, T)
+    xt   = Vector{Vector{Float64}}(undef, T)
+    R    = Vector{Matrix{Float64}}(undef, T)
+    Rt   = Vector{Matrix{Float64}}(undef, T)
+    e    = similar(y)
+    ll   = 0.0
+    local t, S, K
+
+    try
+        for outer t = 1:T
+            ti = (t-1)*mukf.Ts
+            x[t]  = state(mukf)      |> copy
+            R[t]  = covariance(mukf) |> copy
+
+            lli, ei, Si, Sᵪi, Ki = correct!(mukf, u[t], y[t], p, ti)
+            ll += lli
+            e[t] = ei
+            xt[t] = state(mukf)      |> copy
+            Rt[t] = covariance(mukf) |> copy
+
+            if t == 1
+                S = Vector{typeof(Sᵪi)}(undef, T)
+                K = Vector{typeof(Ki)}(undef, T)
+            end
+            S[t] = Sᵪi
+            K[t] = Ki
+
+            predict!(mukf, u[t], p, ti)
+        end
+    catch err
+        if debug
+            t -= 1
+            x, xt, R, Rt, e, u, y = x[1:t], xt[1:t], R[1:t], Rt[1:t], e[1:t], u[1:t], y[1:t]
+            @error "State estimation failed, returning partial solution" err
+        else
+            @error "State estimation failed, pass `debug = true` to forward_trajectory to return a partial solution"
+            rethrow()
+        end
+    end
+    KalmanFilteringSolution(mukf, u, y, x, xt, R, Rt, ll, e, K, S)
+end

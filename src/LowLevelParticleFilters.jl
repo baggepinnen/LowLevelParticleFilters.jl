@@ -5,6 +5,7 @@ export double_integrator_covariance, double_integrator_covariance_smooth, n_inte
 export UKFWeights, TrivialParams, MerweParams, WikiParams
 export IMM, interact!, combine!
 export RBPF, RBParticle, RBMeasurementModel
+export MUKF
 export LinearMeasurementModel, EKFMeasurementModel, IEKFMeasurementModel, UKFMeasurementModel, CompositeMeasurementModel
 export KalmanFilteringSolution, KalmanSmoothingSolution, ParticleFilteringSolution
 @deprecate weigthed_mean weighted_mean
@@ -62,6 +63,7 @@ include("sq_kalman.jl")
 include("sq_ekf.jl")
 include("imm.jl")
 include("rbpf.jl")
+include("mukf.jl")
 
 index(f::AbstractFilter) = f.t
 
