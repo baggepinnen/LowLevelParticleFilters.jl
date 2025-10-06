@@ -122,6 +122,7 @@ The [`MUKF`](@ref) (Marginalized Unscented Kalman Filter) is an alternative to R
 Let's compare MUKF with RBPF on the same system:
 
 ```@example RBPF
+using Statistics
 # Create MUKF using the same model components
 mukf = MUKF(dynamics=fn, nl_measurement_model=mm, An=An, kf=kf, R1n=R1n, d0n=d0n)
 
