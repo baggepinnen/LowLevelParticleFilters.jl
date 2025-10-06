@@ -49,7 +49,7 @@ See also [`UnscentedKalmanFilter`](@ref), [`RBPF`](@ref), [`KalmanFilter`](@ref)
 Based on the Marginalized Unscented Kalman Filter described in the literature on
 Rao-Blackwellized filtering techniques.
 """
-mutable struct MUKF{DT,MMT,ANT,KFT,R1NT,D0NT,XNT,RNT,XLT,RLT,TS,P,WP,NT} <: AbstractKalmanFilter
+mutable struct MUKF{IPD,IPM,DT,MMT,ANT,KFT,R1NT,D0NT,XNT,RNT,XLT,RLT,TS,P,WP,NT,SPC} <: AbstractKalmanFilter
     # Model functions and parameters
     dynamics::DT              # xⁿ_{k+1} = fₙ(xⁿ_k, u, p, t) + Aₙ xˡ_k + wⁿ_k
     nl_measurement_model::MMT # Nonlinear measurement model
@@ -59,6 +59,9 @@ mutable struct MUKF{DT,MMT,ANT,KFT,R1NT,D0NT,XNT,RNT,XLT,RLT,TS,P,WP,NT} <: Abst
     # Noise covariances
     R1n::R1NT                 # Process noise covariance for nonlinear state
     d0n::D0NT                 # Initial distribution for nonlinear state
+
+    # Sigma point cache
+    sigma_point_cache::SPC    # Pre-allocated sigma point storage
 
     # Current state estimates
     xn::XNT                   # Mean of nonlinear state
@@ -76,18 +79,27 @@ mutable struct MUKF{DT,MMT,ANT,KFT,R1NT,D0NT,XNT,RNT,XLT,RLT,TS,P,WP,NT} <: Abst
     names::NT
 end
 
-function MUKF(; dynamics, nl_measurement_model::RBMeasurementModel, An, kf::KalmanFilter,
+function MUKF{IPD,IPM}(; dynamics, nl_measurement_model::RBMeasurementModel, An, kf::KalmanFilter,
               R1n, d0n, nu=kf.nu, Ts=1.0, p=NullParameters(),
               weight_params=MerweParams(),
-              names=default_names(length(d0n.μ) + length(kf.d0.μ), nu, kf.ny, "MUKF"))
+              names=default_names(length(d0n.μ) + length(kf.d0.μ), nu, kf.ny, "MUKF")) where {IPD,IPM}
 
     nxn = length(d0n.μ)
     nxl = length(kf.d0.μ)
     ny  = kf.ny
 
-    # Initialize sigma points for the nonlinear state
-    sp = sigmapoints(d0n.μ, d0n.Σ, weight_params)
-    ns = length(sp)  # Number of sigma points (2*nxn + 1)
+    # Determine element type
+    T = promote_type(eltype(d0n), eltype(kf.d0))
+
+    # Number of sigma points (2*nxn + 1)
+    L = nxn
+    ns = 2*L + 1
+
+    # Decide if we should use static arrays (like UKF does)
+    static = !(IPD || L > 50)
+
+    # Create sigma point cache
+    sigma_point_cache = SigmaPointCache{T}(nxn, 0, nxn, L, static)
 
     # Initialize state estimates using type from d0 and kf
     xn0 = convert_x0_type(d0n.μ)
@@ -99,13 +111,16 @@ function MUKF(; dynamics, nl_measurement_model::RBMeasurementModel, An, kf::Kalm
     xl = [copy(xl0) for _ in 1:ns]
     Rl = [copy(Rl0) for _ in 1:ns]
 
-    MUKF{typeof(dynamics), typeof(nl_measurement_model), typeof(An), typeof(kf),
+    MUKF{IPD,IPM,typeof(dynamics), typeof(nl_measurement_model), typeof(An), typeof(kf),
          typeof(R1n), typeof(d0n), typeof(xn0), typeof(Rn0), typeof(xl0), typeof(Rl0),
-         typeof(Ts), typeof(p), typeof(weight_params), typeof(names)}(
-        dynamics, nl_measurement_model, An, kf, R1n, d0n,
+         typeof(Ts), typeof(p), typeof(weight_params), typeof(names), typeof(sigma_point_cache)}(
+        dynamics, nl_measurement_model, An, kf, R1n, d0n, sigma_point_cache,
         xn0, Rn0, xl, Rl,
         0, Ts, nu, ny, p, weight_params, names)
 end
+
+# Convenience constructor that infers IPD and IPM (default to false for now)
+MUKF(args...; kwargs...) = MUKF{false,false}(args...; kwargs...)
 
 # Convenience accessors
 state(f::MUKF) = [f.xn; xl_mean(f)]
@@ -134,7 +149,6 @@ end
 Compute the marginal mean of the linear substate by averaging over sigma points.
 """
 function xl_mean(f::MUKF)
-    sp = sigmapoints(f.xn, f.Rn, f.weight_params)
     W = UKFWeights(f.weight_params, length(f.xn))
     μ = zeros(eltype(f.xl[1]), length(f.xl[1]))
     @inbounds for i in eachindex(f.xl)
@@ -150,7 +164,6 @@ end
 Compute the marginal covariance of the linear substate.
 """
 function xl_cov(f::MUKF)
-    sp = sigmapoints(f.xn, f.Rn, f.weight_params)
     W = UKFWeights(f.weight_params, length(f.xn))
     μ = xl_mean(f)
     nxl = length(μ)
@@ -165,21 +178,20 @@ function xl_cov(f::MUKF)
 end
 
 function reset!(f::MUKF, d0n=f.d0n, d0l=f.kf.d0)
-    f.xn .= d0n.μ
-    f.Rn .= d0n.Σ
-    sp = sigmapoints(f.xn, f.Rn, f.weight_params)
+    @bangbang f.xn .= d0n.μ
+    @bangbang f.Rn .= d0n.Σ
     for i in eachindex(f.xl)
-        f.xl[i] .= d0l.μ
-        f.Rl[i] .= d0l.Σ
+        @bangbang f.xl[i] .= d0l.μ
+        @bangbang f.Rl[i] .= d0l.Σ
     end
     f.t = 0
     f
 end
 
 function predict!(f::MUKF, u=zeros(f.nu), p=parameters(f), t::Real=index(f)*f.Ts)
-    # Generate sigma points for nonlinear state
-    sp = sigmapoints(f.xn, f.Rn, f.weight_params)
-    W = UKFWeights(f.weight_params, length(f.xn))
+    # Generate sigma points for nonlinear state using cache
+    sp = f.sigma_point_cache.x0
+    sigmapoints!(sp, f.xn, f.Rn, f.weight_params)
 
     # Get matrices
     Al = get_mat(f.kf.A, f.xn, u, p, t)
@@ -195,24 +207,25 @@ function predict!(f::MUKF, u=zeros(f.nu), p=parameters(f), t::Real=index(f)*f.Ts
     end
 
     # Propagate nonlinear state through dynamics using sigma points
-    Xn_pred = similar(sp)
+    # Reuse cache for transformed points
+    Xn_pred = f.sigma_point_cache.x1
     @inbounds for i in eachindex(sp)
         Xn_pred[i] = f.dynamics(sp[i], u, p, t) .+ An * f.xl[i]
     end
 
-    # Compute predicted mean and covariance for nonlinear state
-    xn_pred = weighted_mean(Xn_pred, W)
-    Rn_pred = weighted_cov(Xn_pred, xn_pred, W) .+ R1n_mat
+    xn_pred = mean_with_weights(weighted_mean, Xn_pred, f.weight_params)
+    Rn_pred = cov_with_weights(weighted_cov, Xn_pred, xn_pred, f.weight_params) .+ R1n_mat
 
-    f.xn .= xn_pred
-    f.Rn .= Rn_pred
+    @bangbang f.xn .= xn_pred
+    @bangbang f.Rn .= Rn_pred
     f.t += 1
     return f
 end
 
 function correct!(f::MUKF, u, y, p=parameters(f), t::Real=index(f)*f.Ts; R2=nothing)
-    # Generate sigma points
-    sp = sigmapoints(f.xn, f.Rn, f.weight_params)
+    # Generate sigma points using cache
+    sp = f.sigma_point_cache.x0
+    sigmapoints!(sp, f.xn, f.Rn, f.weight_params)
     W = UKFWeights(f.weight_params, length(f.xn))
 
     g = f.nl_measurement_model.measurement
@@ -234,10 +247,10 @@ function correct!(f::MUKF, u, y, p=parameters(f), t::Real=index(f)*f.Ts; R2=noth
         Σy_extra .+= (i == 1 ? W.wc : W.wci) .* (Cl * f.Rl[i] * Cl')
     end
 
-    yhat = weighted_mean(Y, W)
+    yhat = mean_with_weights(weighted_mean, Y, f.weight_params)
 
     # Innovation covariance
-    S = weighted_cov(Y, yhat, W) .+ Σy_extra .+ R2_mat
+    S = cov_with_weights(weighted_cov, Y, yhat, f.weight_params) .+ Σy_extra .+ R2_mat
 
     # Cross-covariance between nonlinear state and measurement
     Σny = zeros(length(f.xn), f.ny)
@@ -256,18 +269,18 @@ function correct!(f::MUKF, u, y, p=parameters(f), t::Real=index(f)*f.Ts; R2=noth
 
     Kn = Σny / Sᵪ
     innovation = y .- yhat
-    f.xn .= f.xn .+ Kn * innovation
-    f.Rn .= f.Rn .- Kn * S * Kn'
-    f.Rn .= (f.Rn .+ f.Rn') ./ 2  # Ensure symmetry
+    @bangbang f.xn .= f.xn .+ Kn * innovation
+    @bangbang f.Rn .= f.Rn .- Kn * S * Kn'
+    @bangbang f.Rn .= (f.Rn .+ f.Rn') ./ 2  # Ensure symmetry
 
     # Update each linear Kalman filter with its residual
     @inbounds for i in eachindex(sp)
         r_i = y .- g(sp[i], u, p, t) .- Cl * f.xl[i]
         Si = Cl * f.Rl[i] * Cl' .+ R2_mat
         Ki = f.Rl[i] * Cl' / cholesky(Symmetric(Si))
-        f.xl[i] .= f.xl[i] .+ Ki * r_i
+        @bangbang f.xl[i] .= f.xl[i] .+ Ki * r_i
         f.Rl[i] = (I - Ki * Cl) * f.Rl[i]
-        f.Rl[i] .= (f.Rl[i] .+ f.Rl[i]') ./ 2  # Ensure symmetry
+        @bangbang f.Rl[i] .= (f.Rl[i] .+ f.Rl[i]') ./ 2  # Ensure symmetry
     end
 
     ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), innovation)
@@ -330,14 +343,14 @@ function sample_state(f::MUKF, x, u, p=parameters(f), t=index(f)*f.Ts; noise=tru
     xn_next = f.dynamics(xn, u, p, t) .+ An * xl
     if noise
         R1n_mat = f.R1n isa AbstractMatrix ? f.R1n : (f.R1n isa Function ? f.R1n(xn, u, p, t) : f.R1n.Σ)
-        xn_next .+= rand(SimpleMvNormal(R1n_mat))
+        xn_next = xn_next .+ rand(SimpleMvNormal(R1n_mat))
     end
 
     Al = get_mat(f.kf.A, xn, u, p, t)
     Bl = get_mat(f.kf.B, xn, u, p, t)
     xl_next = Al * xl .+ Bl * u
     if noise
-        xl_next .+= rand(SimpleMvNormal(get_mat(f.kf.R1, xn, u, p, t)))
+        xl_next = xl_next .+ rand(SimpleMvNormal(get_mat(f.kf.R1, xn, u, p, t)))
     end
 
     return [xn_next; xl_next]
@@ -353,7 +366,7 @@ function sample_measurement(f::MUKF, x, u, p=parameters(f), t=index(f)*f.Ts; noi
 
     y = g(xn, u, p, t) .+ Cl * xl
     if noise
-        y .+= rand(f.nl_measurement_model.R2)
+        y = y .+ rand(f.nl_measurement_model.R2)
     end
     return y
 end
