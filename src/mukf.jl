@@ -274,13 +274,17 @@ function correct!(f::MUKF, u, y, p=parameters(f), t::Real=index(f)*f.Ts; R2=noth
     symmetrize(f.Rn)
 
     # Update each linear Kalman filter with its residual
+    kf = f.kf
     @inbounds for i in eachindex(sp)
-        r_i = y .- g(sp[i], u, p, t) .- Cl * f.xl[i]
-        Si = Cl * f.Rl[i] * Cl' .+ R2_mat
-        Ki = f.Rl[i] * Cl' / cholesky(Symmetric(Si))
-        @bangbang f.xl[i] .= f.xl[i] .+ Ki * r_i
-        f.Rl[i] = (I - Ki * Cl) * f.Rl[i]
-        symmetrize(f.Rl[i])
+        y_corrected = y .- g(sp[i], u, p, t)
+
+        kf.x = f.xl[i]
+        kf.R = f.Rl[i]
+
+        correct!(kf, u, y_corrected, p, t; R2=R2_mat)
+
+        f.xl[i] = kf.x
+        f.Rl[i] = kf.R
     end
 
     ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), innovation)
