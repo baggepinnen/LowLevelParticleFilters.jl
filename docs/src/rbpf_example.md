@@ -1,8 +1,10 @@
 # Rao-Blackwellized particle filter
 
-This example will demonstrate use of the Rao-Blackwellized particle filter ([`RBPF`](@ref)), also called "Marginalized particle filter".
+This example will demonstrate use of the Rao-Blackwellized particle filter and UKF ([`RBPF`](@ref) and [`MUKF`](@ref) respectively), also called "Marginalized particle filter" and "Marginalized Unscented Kalman Filter".
 
-This filter is effectively a particle filter where each particle is a Kalman filter that is responsible for the estimation of a linear sub structure.
+
+## RBPF
+The [`RBPF`](@ref) filter is effectively a particle filter where each particle is a Kalman filter that is responsible for the estimation of a linear sub structure.
 
 The filter assumes that the dynamics follow "model 2" in the article ["Marginalized Particle Filters for Mixed Linear/Nonlinear State-space Models" by Thomas Schön, Fredrik Gustafsson, and Per-Johan Nordlund](https://people.isy.liu.se/rt/schon/Publications/SchonGN2004.pdf), i.e., the dynamics is described by
 ```math
@@ -112,7 +114,7 @@ In this example, we made use of standard julia arrays for the dynamics and covar
 The paper referenced above mention a lot of special cases in which the filter can be simplified, it's worth a read if you are considering using this filter.
 
 
-## Comparison with MUKF
+## MUKF
 
 The [`MUKF`](@ref) (Marginalized Unscented Kalman Filter) is an alternative to RBPF that uses the Unscented Transform instead of random particles. While RBPF uses ``N`` random particles (each with a Kalman filter), MUKF uses deterministic sigma points (typically ``2n+1`` for an ``n``-dimensional nonlinear state). This makes MUKF:
 - **Deterministic**
