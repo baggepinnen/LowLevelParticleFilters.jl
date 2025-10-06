@@ -6,10 +6,7 @@ Marginalized Unscented Kalman Filter for mixed linear/nonlinear state-space mode
 !!! warning "Experimental"
     This filter is currently considered experimental and the user interface may change in the future without respecting semantic versioning.
 
-This filter combines the Unscented Kalman Filter (UKF) for the nonlinear substate with a
-bank of Kalman filters (one per sigma point) for the linear substate. This approach provides
-improved accuracy compared to linearization-based methods while remaining more efficient
-than a full particle filter.
+This filter combines the Unscented Kalman Filter (UKF) for the nonlinear substate with a bank of Kalman filters (one per sigma point) for the linear substate. This approach provides improved accuracy compared to linearization-based methods while remaining more efficient than a full particle filter. This filter is sometimes referred to as a Rao-Blackwellized Unscented Kalman Filter, similar to the [`RBPF`](@ref).
 
 # Model structure
 The filter assumes dynamics on the form:
@@ -188,7 +185,7 @@ function reset!(f::MUKF, d0n=f.d0n, d0l=f.kf.d0)
     f
 end
 
-function predict!(f::MUKF, u=zeros(f.nu), p=parameters(f), t::Real=index(f)*f.Ts)
+function predict!(f::MUKF{IPD}, u=zeros(f.nu), p=parameters(f), t::Real=index(f)*f.Ts) where IPD
     # Generate sigma points for nonlinear state using cache
     sp = f.sigma_point_cache.x0
     sigmapoints!(sp, f.xn, f.Rn, f.weight_params)
@@ -209,8 +206,20 @@ function predict!(f::MUKF, u=zeros(f.nu), p=parameters(f), t::Real=index(f)*f.Ts
     # Propagate nonlinear state through dynamics using sigma points
     # Reuse cache for transformed points
     Xn_pred = f.sigma_point_cache.x1
-    @inbounds for i in eachindex(sp)
-        Xn_pred[i] = f.dynamics(sp[i], u, p, t) .+ An * f.xl[i]
+    if IPD
+        # In-place dynamics
+        xp = similar(Xn_pred[1])
+        @inbounds for i in eachindex(sp)
+            xp .= 0
+            f.dynamics(xp, sp[i], u, p, t)
+            @bangbang xp .+= An * f.xl[i]
+            Xn_pred[i] .= xp
+        end
+    else
+        # Out-of-place dynamics
+        @inbounds for i in eachindex(sp)
+            Xn_pred[i] = f.dynamics(sp[i], u, p, t) .+ An * f.xl[i]
+        end
     end
 
     xn_pred = mean_with_weights(weighted_mean, Xn_pred, f.weight_params)
@@ -222,7 +231,9 @@ function predict!(f::MUKF, u=zeros(f.nu), p=parameters(f), t::Real=index(f)*f.Ts
     return f
 end
 
-function correct!(f::MUKF, u, y, p=parameters(f), t::Real=index(f)*f.Ts; R2=nothing)
+function correct!(f::MUKF{IPD,IPM}, u, y, p=parameters(f), t::Real=index(f)*f.Ts; R2=nothing) where {IPD,IPM}
+    IPM && error("Inplace measurement model not yet supported for MUKF")
+
     # Generate sigma points using cache
     sp = f.sigma_point_cache.x0
     sigmapoints!(sp, f.xn, f.Rn, f.weight_params)
@@ -338,13 +349,22 @@ function sample_state(f::MUKF, p=parameters(f); noise=true)
     return [xn; xl]
 end
 
-function sample_state(f::MUKF, x, u, p=parameters(f), t=index(f)*f.Ts; noise=true)
+function sample_state(f::MUKF{IPD}, x, u, p=parameters(f), t=index(f)*f.Ts; noise=true) where IPD
     nxn = length(f.xn)
     xn = x[1:nxn]
     xl = x[nxn+1:end]
 
     An = get_mat(f.An, xn, u, p, t)
-    xn_next = f.dynamics(xn, u, p, t) .+ An * xl
+
+    # Handle in-place vs out-of-place dynamics
+    if IPD
+        xn_next = similar(xn)
+        f.dynamics(xn_next, xn, u, p, t)
+        @bangbang xn_next .+= An * xl
+    else
+        xn_next = f.dynamics(xn, u, p, t) .+ An * xl
+    end
+
     if noise
         R1n_mat = f.R1n isa AbstractMatrix ? f.R1n : (f.R1n isa Function ? f.R1n(xn, u, p, t) : f.R1n.Σ)
         xn_next = xn_next .+ rand(SimpleMvNormal(R1n_mat))
