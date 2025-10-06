@@ -271,7 +271,7 @@ function correct!(f::MUKF, u, y, p=parameters(f), t::Real=index(f)*f.Ts; R2=noth
     innovation = y .- yhat
     @bangbang f.xn .= f.xn .+ Kn * innovation
     @bangbang f.Rn .= f.Rn .- Kn * S * Kn'
-    @bangbang f.Rn .= (f.Rn .+ f.Rn') ./ 2  # Ensure symmetry
+    symmetrize(f.Rn)
 
     # Update each linear Kalman filter with its residual
     @inbounds for i in eachindex(sp)
@@ -280,7 +280,7 @@ function correct!(f::MUKF, u, y, p=parameters(f), t::Real=index(f)*f.Ts; R2=noth
         Ki = f.Rl[i] * Cl' / cholesky(Symmetric(Si))
         @bangbang f.xl[i] .= f.xl[i] .+ Ki * r_i
         f.Rl[i] = (I - Ki * Cl) * f.Rl[i]
-        @bangbang f.Rl[i] .= (f.Rl[i] .+ f.Rl[i]') ./ 2  # Ensure symmetry
+        symmetrize(f.Rl[i])
     end
 
     ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), innovation)
