@@ -6,7 +6,7 @@ In this example we will attempt to learn how an unknown and stochastic input, su
 - Cloud cover modulates the effect of the sun.
 - As a vendor of, e.g., HVAC equipment with interesting control systems, you may not want to model each individual site in detail, including the location and size of windows and surrounding shading elements. Even if these are static, they are thus to be considered unknown.
 
-We can model this as some deterministic parts and one stochastic parts, some known and some unknown. The path of the sun across the sky is deterministic and periodic, with one daily and one yearly component. The surroundings, like trees and buildings is for the most part static, but the influence this has on the insolation is unknown, and so is the exact location of windows on the house. However, the cloud cover is stochastic. We can thus model insolation by
+We can model this as some deterministic parts and some stochastic parts, some known and some unknown. The path of the sun across the sky is deterministic and periodic, with one daily and one yearly component. The surroundings, like trees and buildings, are for the most part static, but the influence these have on the insolation is unknown, and so is the exact location of windows on the house. However, the cloud cover is stochastic. We can thus model insolation by
 - Treating the current cloud cover as a stochastic variable ``C_{cloud} \in [0, 1]`` to be estimated continuously. We achieve this by including the cloud cover as a state variable in our system.
 - Treating the insolation when there is _no cloud cover_ as a deterministic function of the time of day (we ignore the yearly component here for simplicity). This function will be modeled as a basis-function expansion that will be learned from data.
 - The effective insolation at any point in time is thus ``I_{solar} = (1 - C_{cloud}) I_{solar, clear}``, that is, the cloud-free insolation is modulated by the current cloud cover.
@@ -372,7 +372,6 @@ plot!(tod_test, I_learned, label="Learned Insolation", lw=2, ls=:dash, color=:re
 xlabel!("Time of Day (hours)")
 ylabel!("Insolation (W/m²)")
 title!("Learned Solar Insolation Pattern")
-vline!([6, 18], ls=:dot, color=:gray, alpha=0.5, label="Sunrise/Sunset")
 ```
 Hopefully, we see that the estimation has captured the general shape of the true insolation pattern, but perhaps not perfectly, since this function is "hidden" behind an unknown and noisy estimate of the cloud cover.
 

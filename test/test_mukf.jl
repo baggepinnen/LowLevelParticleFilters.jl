@@ -296,6 +296,7 @@ end
     T = 100
     u = [zeros(nu) for _ in 1:T]
     x_true, _, y = simulate(kf_full, u)
+    y = SVector.(y)
 
     predict!(kf_full, u[1], y[1])
     predict!(mukf, u[1], y[1])

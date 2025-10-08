@@ -1,5 +1,48 @@
 
 """
+    MUKFCorrectCache
+
+Cache for correction step arrays in MUKF to avoid allocations.
+
+# Fields:
+- `X_full`: Vector of full state vectors [xn; xl] per sigma point
+- `Cl_matrices`: Vector of Cl measurement matrices per sigma point
+- `y_temp`: Temporary vector for in-place measurement function
+"""
+struct MUKFCorrectCache{XF, CL, YT}
+    X_full::XF
+    Cl_matrices::CL
+    y_temp::YT
+end
+
+"""
+    MUKFCorrectCache(x_proto, Cl_proto, y_proto, ns, static)
+
+Create correction cache with proper types.
+
+# Arguments:
+- `x_proto`: Prototype full state vector [xn; xl] (nx-dimensional)
+- `Cl_proto`: Prototype Cl matrix (ny × nxl)
+- `y_proto`: Prototype measurement vector (ny-dimensional)
+- `ns`: Number of sigma points (2*nxn + 1)
+- `static`: Whether to use static arrays
+"""
+function MUKFCorrectCache(x_proto, Cl_proto, y_proto, ns, static::Bool)
+    if static
+        # For static arrays, create mutable static arrays to allow in-place operations
+        X_full = [SVector{length(x_proto)}(x_proto) for _ in 1:ns]
+        Cl_matrices = [SMatrix{size(Cl_proto,1), size(Cl_proto,2)}(Cl_proto) for _ in 1:ns]
+        y_temp = SVector{length(y_proto)}(y_proto)
+    else
+        # For regular arrays, use similar
+        X_full = [similar(x_proto) for _ in 1:ns]
+        Cl_matrices = [similar(Cl_proto) for _ in 1:ns]
+        y_temp = similar(y_proto)
+    end
+    MUKFCorrectCache(X_full, Cl_matrices, y_temp)
+end
+
+"""
     MUKF(; dynamics, nl_measurement_model::RBMeasurementModel, An, kf::KalmanFilter, R1n, d0n, nu=kf.nu, Ts=1.0, p=NullParameters(), weight_params=MerweParams(), names=default_names(length(d0n.μ) + length(kf.d0.μ), nu, kf.ny, "MUKF"))
 
 Marginalized Unscented Kalman Filter for mixed linear/nonlinear state-space models.
@@ -35,7 +78,7 @@ where `x^n` is the nonlinear substate and `x^l` is the linear substate.
 * `weight_params`: Unscented transform parameters (default: MerweParams())
 * `names`: Signal names for plotting
   """
-mutable struct MUKF{IPD,IPM,DT,MMT,ANT,KFT,R1NT,D0NT,XNT,XLT,PT,TS,PARAMS,WP,NT,SPC} <:
+mutable struct MUKF{IPD,IPM,DT,MMT,ANT,KFT,R1NT,D0NT,XNT,XLT,PT,TS,PARAMS,WP,NT,SPC,SPC2,CORR_C,NINDS,LINDS} <:
                AbstractKalmanFilter
 
     # Model functions and parameters
@@ -50,16 +93,20 @@ mutable struct MUKF{IPD,IPM,DT,MMT,ANT,KFT,R1NT,D0NT,XNT,XLT,PT,TS,PARAMS,WP,NT,
     R1n::R1NT                 # Process noise covariance for nonlinear state
     d0n::D0NT                 # Initial distribution for nonlinear state
 
-    # Sigma point cache
+    # Sigma point caches
 
-    sigma_point_cache::SPC
-    xn_sigma_points::Vector{XNT}  # Current sigma points for xn (for cross-covariance)
+    sigma_point_cache::SPC            # For predict step
+    correct_sigma_point_cache::SPC2   # For correct step (sigma points and Y_meas)
+    correct_cache::CORR_C             # For correct step (X_full, Cl_matrices, y_temp)
+    xn_sigma_points::Vector{XNT}      # Current sigma points for xn (for cross-covariance)
 
     # Current state estimates
 
     xn::XNT                   # Mean of nonlinear state
     xl::Vector{XLT}           # Mean of linear state (all elements equal)
     P::PT                     # Joint covariance matrix [xn; xl]
+    n_inds::NINDS             # Index vector for nonlinear state (1:nxn)
+    l_inds::LINDS             # Index vector for linear state (nxn+1:nxn+nxl)
 
     # Metadata
 
@@ -100,17 +147,45 @@ function MUKF{IPD,IPM}(;
     # Decide if we should use static arrays (like UKF does)
     static = !(IPD || L > 50)
 
-    # Create sigma point cache
+    # Create sigma point cache for predict
     sigma_point_cache = SigmaPointCache{T}(nxn, 0, nxn, L, static)
+
+    # Create sigma point cache for correct (x0: xn sigma points, x1: Y_meas)
+    correct_sigma_point_cache = SigmaPointCache{T}(nxn, 0, ny, L, static)
 
     # Initialize state estimates using type from d0 and kf
     xn0  = convert_x0_type(d0n.μ)
     xl0  = convert_x0_type(kf.d0.μ)
 
+    # Create prototypes for correct cache initialization
+    x_proto = [xn0; xl0]  # Full state prototype (nx-dimensional)
+
+    # Get Cl prototype - need to evaluate at initial state
+    Cl_proto = get_mat(kf.C, xn0, zeros(T, nu), p, T(0))  # ny × nxl matrix
+
+    # Create y prototype
+    if static && ny <= 50
+        y_proto = @SVector zeros(T, ny)
+    else
+        y_proto = zeros(T, ny)
+    end
+
+    # Create correction cache for MUKF-specific arrays
+    correct_cache = MUKFCorrectCache(x_proto, Cl_proto, y_proto, ns, static)
+
     # Initialize joint covariance P0 = blockdiag(Rn0, Γ0) with Rnl=0
     Rn0  = convert_cov_type(R1n, d0n.Σ)
     Γ0   = convert_cov_type(kf.R1, kf.d0.Σ)
     P0   = blockdiag(Rn0, Γ0)  # Start with zero cross-covariance
+
+    # Create index vectors for efficient partition_cov (static if P0 is static)
+    if P0 isa StaticArray
+        n_inds = SVector{nxn}(1:nxn)
+        l_inds = SVector{nxl}((1:nxl) .+ nxn)
+    else
+        n_inds = 1:nxn
+        l_inds = nxn+1:nxn+nxl
+    end
 
     # Initialize linear state means (all equal)
     xl = [copy(xl0) for _ = 1:ns]
@@ -136,6 +211,10 @@ function MUKF{IPD,IPM}(;
         typeof(weight_params),
         typeof(names),
         typeof(sigma_point_cache),
+        typeof(correct_sigma_point_cache),
+        typeof(correct_cache),
+        typeof(n_inds),
+        typeof(l_inds),
     }(
         dynamics,
         nl_measurement_model,
@@ -144,10 +223,14 @@ function MUKF{IPD,IPM}(;
         R1n,
         d0n,
         sigma_point_cache,
+        correct_sigma_point_cache,
+        correct_cache,
         xn_sigma_points,
         xn0,
         xl,
         P0,
+        n_inds,
+        l_inds,
         0,
         Ts,
         nu,
@@ -179,7 +262,7 @@ function Base.show(io::IO, mukf::MUKF{IPD,IPM}) where {IPD,IPM}
     println(io, "  weight_params: $(typeof(mukf.weight_params))")
     for field in fieldnames(typeof(mukf))
         field in (:ny, :nu, :Ts, :t, :nxn, :nxl, :weight_params) && continue
-        if field in (:nl_measurement_model, :sigma_point_cache, :kf, :An, :xn_sigma_points, :xl, :P)
+        if field in (:nl_measurement_model, :sigma_point_cache, :correct_sigma_point_cache, :correct_cache, :kf, :An, :xn_sigma_points, :xl, :P)
             println(io, "  $field: $(fieldtype(typeof(mukf), field))")
         else
             println(io, "  $field: $(repr(getfield(mukf, field), context=:compact => true))")
@@ -250,15 +333,20 @@ end
 
 
 """
-    partition_cov(P, nxn, nxl)
+    partition_cov(P, n_inds, l_inds)
 
-Partition joint covariance P into blocks: Pnn, Pnl, Pln, Pll
+Partition joint covariance P into blocks: Pnn, Pnl, Pln, Pll using index vectors.
+
+# Arguments:
+- `P`: Joint covariance matrix [nxn+nxl × nxn+nxl]
+- `n_inds`: Index vector for nonlinear state (1:nxn), SVector if P is static
+- `l_inds`: Index vector for linear state (nxn+1:nxn+nxl), SVector if P is static
 """
-function partition_cov(P, nxn, nxl)
-    Pnn = P[1:nxn, 1:nxn]
-    Pnl = P[1:nxn, nxn+1:end]
-    Pln = P[nxn+1:end, 1:nxn]
-    Pll = P[nxn+1:end, nxn+1:end]
+@views @inline function partition_cov(P, n_inds, l_inds)
+    Pnn = P[n_inds, n_inds]
+    Pnl = P[n_inds, l_inds]
+    Pln = P[l_inds, n_inds]
+    Pll = P[l_inds, l_inds]
     return Pnn, Pnl, Pln, Pll
 end
 
@@ -274,10 +362,10 @@ xl | xn ~ N(μl + L*(xn - μn), Γ)
 """
 function cond_linear_params(Pnn, Pnl, Pln, Pll)
     # Compute L = Pln * inv(Pnn) stably using linear solve
-    nxn = size(Pnn, 1)
-    L = Pln * (Pnn \ I(nxn))
+    PC = cholesky(Symmetric(Pnn))
+    L = Pln / PC
     # Compute conditional covariance
-    Γ = Pll - Pln * (Pnn \ Pnl)
+    Γ = Pll - Pln * (PC \ Pnl)
     return L, Γ
 end
 
@@ -318,7 +406,7 @@ function predict!(
     R1l_mat = get_mat(f.kf.R1, f.xn, u, p, t)  # May be state-dependent
 
     # Extract conditional parameters from current joint covariance
-    Pnn, Pnl, Pln, Pll = partition_cov(f.P, nxn, nxl)
+    Pnn, Pnl, Pln, Pll = partition_cov(f.P, f.n_inds, f.l_inds)
     L, Γ_curr = cond_linear_params(Pnn, Pnl, Pln, Pll)
 
     # Current means
@@ -453,7 +541,7 @@ function correct!(
     end
 
     # Extract conditional parameters from current joint covariance
-    Pnn, Pnl, Pln, Pll = partition_cov(f.P, nxn, nxl)
+    Pnn, Pnl, Pln, Pll = partition_cov(f.P, f.n_inds, f.l_inds)
     L, Γ_curr = cond_linear_params(Pnn, Pnl, Pln, Pll)
 
     # Current means
@@ -470,17 +558,14 @@ function correct!(
     # yi = g(sp[i]) + Cl_i*νB_i
     # where νB_i = μl + L*(sp[i] - μn)
 
-    # Type-preserving allocations using prototypes
-    y_proto = similar(y)
-    Y_meas = [similar(y_proto) for _ in eachindex(sp)]
-    x_proto = [f.xn; μl]
-    X_full = [similar(x_proto) for _ in eachindex(sp)]
-    Cl_proto = get_mat(f.kf.C, f.xn, u, p, t)
-    Cl_matrices = [similar(Cl_proto) for _ in eachindex(sp)]
+    # Use cached arrays (no allocations!)
+    Y_meas = f.correct_sigma_point_cache.x1
+    X_full = f.correct_cache.X_full
+    Cl_matrices = f.correct_cache.Cl_matrices
+    y_temp = f.correct_cache.y_temp
 
     if IPM
         # In-place measurement
-        y_temp = similar(y)
         @inbounds for i in eachindex(sp)
             Cl_i = get_mat(f.kf.C, sp[i], u, p, t)
             νB = μl .+ L * (sp[i] .- μn)
@@ -523,7 +608,7 @@ function correct!(
     Cl_avg = zero(Cl_matrices[1])
     @inbounds for i in eachindex(sp)
         w = i == 1 ? W.wm : W.wmi
-        Cl_avg = Cl_avg .+ w .* Cl_matrices[i]
+        @bangbang Cl_avg .= Cl_avg .+ w .* Cl_matrices[i]
     end
 
     # Add analytic MUT term to innovation covariance
@@ -539,12 +624,18 @@ function correct!(
         w = i == 1 ? W.wc : W.wci
         δx = X_full[i] .- μ_full
         δy = Y_meas[i] .- yhat
-        Σxy = Σxy .+ w .* (δx * δy')
+        @bangbang Σxy .+= w .* (δx * δy')
     end
 
     # Add the missing term: [0; Γ*Cl_avg'] (from equation 16 in MUT paper)
     # This is the conditional covariance contribution that was causing negative Γ!
-    Σxy[nxn+1:end, :] .+= Γ_curr * Cl_avg'
+    if Σxy isa SMatrix
+        Σxym = MMatrix(Σxy)
+        Σxym[f.l_inds, :] .+= Γ_curr * Cl_avg'
+        Σxy = typeof(Σxy)(Σxym)
+    else
+        Σxy[f.l_inds, :] .+= Γ_curr * Cl_avg'
+    end
 
     # Factorize S and compute Kalman gain
     Sᵪ = cholesky(Symmetric(S), check = false)
@@ -562,8 +653,8 @@ function correct!(
     P_new = symmetrize(P_new)
 
     # Update state and covariance
-    @bangbang f.xn .= μ_new[1:nxn]
-    μl_new = μ_new[nxn+1:end]
+    @bangbang f.xn .= μ_new[f.n_inds]
+    μl_new = μ_new[f.l_inds]
     @bangbang f.P .= P_new
 
     # Update xl means - all xl[i] are set to marginal mean
