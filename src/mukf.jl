@@ -383,8 +383,8 @@ function reset!(f::MUKF, d0 = f.d0)
     @bangbang f.x .= d0.μ
     @bangbang f.R .= d0.Σ
     # Extract nonlinear part for sigma points
-    xn0 = d0.μ[f.n_inds]
-    Rn0 = d0.Σ[f.n_inds, f.n_inds]
+    # xn0 = d0.μ[f.n_inds]
+    # Rn0 = d0.Σ[f.n_inds, f.n_inds]
     # sigmapoints!(f.xn_sigma_points, xn0, Rn0, f.weight_params)
     f.t = 0
     f

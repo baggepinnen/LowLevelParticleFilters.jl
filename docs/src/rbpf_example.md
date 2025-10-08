@@ -128,20 +128,20 @@ Let's compare MUKF with RBPF on the same system:
 using Statistics
 # Create MUKF using the same model components
 # Combine process noise covariances into full R1 matrix
-R1_full = [R1n zeros(nxn, nxl); zeros(nxl, nxn) R1l]
+R1 = [R1n zeros(nxn, nxl); zeros(nxl, nxn) R1l]
 # Unified initial distribution for MUKF
 x0 = [x0n; x0l]
 R0_full = [R0n zeros(nxn, nxl); zeros(nxl, nxn) R0l]
 d0 = SimpleMvNormal(x0, R0_full)
-mukf = MUKF(dynamics=fn, nl_measurement_model=mm, An=An, Al=Al, Bl=Bl, Cl=Cl, R1=R1_full, d0=d0, nxn=nxn, nu=nu, ny=ny)
+mukf = MUKF(; dynamics=fn, nl_measurement_model=mm, An, Al, Bl, Cl, R1, d0, nxn, nu, ny)
 
 # Run filtering on the same data
 sol_mukf = forward_trajectory(mukf, u, y)
 
 # Extract nonlinear state estimates for comparison
-xn_true = [x[t][1] for t in 1:length(x)]
+xn_true = first.(x)
 xn_rbpf = [mean(sol.x[:, t])[1] for t in 1:length(y)]  # Mean of RBPF particles
-xn_mukf = [sol_mukf.xt[t][1] for t in 1:length(y)]     # MUKF filtered estimate
+xn_mukf = first.(sol_mukf.xt)                          # MUKF filtered estimate
 
 # Compute RMSE
 using Statistics
@@ -167,8 +167,8 @@ DisplayAs.PNG(Plots.current()) # hide
 Both filters successfully track the nonlinear state. The MUKF uses only 3 sigma points (for the 1D nonlinear state) compared to 200 particles in the RBPF, yet achieves comparable performance. For this problem with a low-dimensional nonlinear state and unimodal posterior, MUKF is more efficient.
 
 **When to use each filter:**
-- **Use MUKF** when: Nonlinear state is low-dimensional, posterior is unimodal, you want deterministic results
-- **Use RBPF** when: Nonlinear state is high-dimensional, posterior may be multimodal, you need maximum flexibility
+- **Use MUKF** when: posterior is unimodal, you want deterministic results. The MUKF estimator is often suitable for disturbance and parameter estimation, since it is deterministic, differentiable and disturbances and parameters are often modeled with linear time evolution.
+- **Use RBPF** when: posterior may be multimodal, you need maximum flexibility
 
 
 ## Details of the marginal distribution over the linear sub state
