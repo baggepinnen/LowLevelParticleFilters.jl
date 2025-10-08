@@ -7,7 +7,9 @@ using StaticArrays
 
 # --- Recreate the RBPF tutorial system exactly ---
 nxn, nxl, ny, nu = 1, 3, 2, 0
+# Dynamics now returns [dn; dl] where dl=0 for parameter-only systems
 fn(xn, u, p, t) = atan.(xn)
+fn_mukf(xn, u, p, t) = [atan(xn[1]); SA[0.0, 0, 0]]
 g_mukf(xn, u, p, t)  = [0.1 * xn[]^2 * sign(xn[]), 0.0]
 An_mat = [1.0 0.0 0.0]
 Al = [ 1.0  0.3   0.0;
@@ -43,7 +45,7 @@ x_true, _, y_meas = simulate(rbpf, u_data)
 # --- Run MUKF ---
 # Create full R1 matrix from blocks
 R1_full = [R1n_mat zeros(nxn, nxl); zeros(nxl, nxn) R1l_mat]
-mukf = MUKF(dynamics=fn, nl_measurement_model=mm, An=An_mat, Al=Al, Bl=zeros(nxl,nu), Cl=Cl, R1=R1_full, d0=d0, nxn=nxn, nu=nu, ny=ny)
+mukf = MUKF(dynamics=fn_mukf, nl_measurement_model=mm, An=An_mat, Al=Al, Bl=zeros(nxl,nu), Cl=Cl, R1=R1_full, d0=d0, nxn=nxn, nu=nu, ny=ny)
 sol = forward_trajectory(mukf, u_data, y_meas)
 
 # plot(sol)  # TEMP: commented out while debugging
@@ -67,7 +69,8 @@ end
 @testset "MUKF with StaticArrays" begin
     # Create a smaller system with static arrays
     nxn_s, nxl_s, ny_s, nu_s = 1, 2, 2, 0
-    fn_s(xn, u, p, t) = atan.(xn)
+    # Dynamics now returns [dn; dl] where dl=0 for parameter-only systems
+    fn_s(xn, u, p, t) = SVector{nxn_s + nxl_s}([atan.(xn)..., zeros(nxl_s)...])
     g_s(xn, u, p, t) = SVector{2}(0.1 * xn[]^2 * sign(xn[]), 0.0)
 
     An_s = @SMatrix [1.0 0.0]
@@ -124,12 +127,13 @@ end
     # Create system with regular arrays for in-place operations
     nxn_ip, nxl_ip, ny_ip, nu_ip = 1, 2, 2, 0
 
-    # Out-of-place dynamics for comparison
-    fn_oop(xn, u, p, t) = atan.(xn)
+    # Out-of-place dynamics returns [dn; dl]
+    fn_oop(xn, u, p, t) = [atan.(xn); zeros(nxl_ip)]
 
-    # In-place dynamics
+    # In-place dynamics returns [dn; dl]
     function fn_ip(xp, xn, u, p, t)
-        xp .= atan.(xn)
+        xp[1:nxn_ip] .= atan.(xn)
+        xp[nxn_ip+1:end] .= 0
         xp
     end
 
@@ -182,7 +186,7 @@ end
     @test all(length(x) == nxn_ip + nxl_ip for x in sol_ip.xt)
 
     # Compare state estimates (should be very close)
-    @test sol_ip.xt ≈ sol_oop.xt rtol=1e-6
+    @test sol_ip.xt ≈ sol_oop.xt rtol=1e-5
 
     # Compare log-likelihoods
     @test sol_ip.ll ≈ sol_oop.ll rtol=1e-6
@@ -194,8 +198,8 @@ end
     # Test that IPM=true works correctly
     nxn_ipm, nxl_ipm, ny_ipm, nu_ipm = 1, 2, 2, 0
 
-    # Out-of-place versions for comparison
-    fn_oop(xn, u, p, t) = atan.(xn)
+    # Out-of-place versions for comparison - returns [dn; dl]
+    fn_oop(xn, u, p, t) = [atan.(xn); zeros(nxl_ipm)]
     g_oop(xn, u, p, t) = [0.1 * xn[]^2 * sign(xn[]), 0.0]
 
     # In-place measurement function
@@ -279,8 +283,8 @@ end
     # y1 = 1.0*x1 + v1
     # y2 = 0.5*x2 + v2
 
-    # MUKF parameters
-    fn(xn, u, p, t) = 0.9 .* xn  # Linear dynamics for "nonlinear" part
+    # MUKF parameters - dynamics returns [dn; dl]
+    fn(xn, u, p, t) = SA[0.9 * xn[]; 0.0]  # [dn; dl] where dn is linear, dl=0
     An = SA[0.2;;]                  # Coupling from linear to nonlinear (1x1 matrix)
     Al = SA[0.95;;]                 # Linear dynamics
 

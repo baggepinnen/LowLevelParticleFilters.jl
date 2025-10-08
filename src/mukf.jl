@@ -101,18 +101,18 @@ Ref: Morelande, M.R. & Moran, Bill. (2007). An Unscented Transformation for Cond
 The filter assumes dynamics on the form:
 ```math
 \\begin{aligned}
-x_{t+1}^n &= f_n(x_t^n, u, p, t) + A_n(x_t^n)\\, x_t^l + w_t^n \\\\
-x_{t+1}^l &= A_l(x_t^n)\\, x_t^l + B_l(x_t^n)\\, u + w_t^l \\\\
+x_{t+1}^n &= d_n(x_t^n, u, p, t) + A_n(x_t^n)\\, x_t^l + w_t^n \\\\
+x_{t+1}^l &= d_l(x_t^n, u, p, t) + A_l(x_t^n)\\, x_t^l + B_l(x_t^n)\\, u + w_t^l \\\\
 w_t &= \\begin{bmatrix} w_t^n \\\\ w_t^l \\end{bmatrix} &\\sim \\mathcal{N}(0, R_1) \\\\
 y_t &= g(x_t^n, u, p, t) + C_l(x_t^n)\\, x_t^l + e_t, \\quad &e_t \\sim \\mathcal{N}(0, R_2)
 \\end{aligned}
 ````
 
-where `x^n` is the nonlinear substate and `x^l` is the linear substate.
+where `x^n` is the nonlinear substate and `x^l` is the linear substate. This is the **conditionally linear** form from Morelande & Moran (2007), which allows the linear substate to depend on the nonlinear substate through both `d_l(x^n)` and the coupling matrices.
 
 # Arguments
 
-* `dynamics`: The nonlinear dynamics function `f_n(x^n, u, p, t)`
+* `dynamics`: Function returning full state derivative `[d_n(x^n, u, p, t); d_l(x^n, u, p, t)]`. For backward compatibility with parameter-only models, set `d_l = 0`.
 * `nl_measurement_model`: An instance of [`RBMeasurementModel`](@ref) containing `g` and `R_2`
 * `An`: The coupling matrix/function from linear to nonlinear state (matrix or function)
 * `Al`: Linear dynamics matrix/function `A_l(x^n, u, p, t)` for the linear substate
@@ -133,7 +133,7 @@ mutable struct MUKF{IPD,IPM,DT,MMT,ANT,ALT,BLT,CLT,R1T,D0T,XNT,XT,RT,TS,PARAMS,W
 
     # Model functions and parameters
 
-    dynamics::DT              # xⁿ_{k+1} = fₙ(xⁿ_k, u, p, t) + Aₙ(xⁿ_k) xˡ_k + wⁿ_k
+    dynamics::DT              # Returns [dₙ(xⁿ, u, p, t); dₗ(xⁿ, u, p, t)] (uncoupled part of dynamics)
     nl_measurement_model::MMT # Nonlinear measurement model
     An::ANT                   # Coupling from linear to nonlinear state
     Al::ALT                   # Linear dynamics matrix
@@ -237,7 +237,7 @@ function MUKF{IPD,IPM}(;
     x_full_proto = x_proto  # nx-dimensional (same as x_proto)
     G_proto = vcat(get_mat(An, xn0, zeros(T, nu), p, T(0)),
                    get_mat(Al, xn0, zeros(T, nu), p, T(0)))  # nx×nxl matrix
-    xp_proto = xn0  # nxn-dimensional
+    xp_proto = x0  # nx-dimensional (full state) - dynamics returns [dn; dl]
     predict_cache = MUKFPredictCache(x_full_proto, G_proto, xp_proto, ns, static)
 
     # Initialize joint covariance from unified d0
@@ -498,16 +498,16 @@ function predict!(
             # Conditional mean of xl given xn=sp[i]
             νB = μl .+ L * (sp[i] .- μn)
 
-            # Nonlinear state dynamics
+            # Get full dynamics [dn(xn); dl(xn)]
             xp .= 0
             f.dynamics(xp, sp[i], u, p, t)
-            xp .+= An_i * νB
 
-            # Linear state dynamics
-            xl_i = Al_i * νB .+ Bl_i * u
+            # Partition and add coupling
+            xn_i = xp[f.n_inds] .+ An_i * νB  # dn + An*xl
+            xl_i = xp[f.l_inds] .+ Al_i * νB .+ Bl_i * u  # dl + Al*xl + Bl*u
 
             # Store full transformed state
-            Y[i] = [xp; xl_i]
+            Y[i] = [xn_i; xl_i]
 
             # Store G matrix: [An_i; Al_i]
             G_matrices[i] = [An_i; Al_i]
@@ -521,8 +521,12 @@ function predict!(
 
             νB = μl .+ L * (sp[i] .- μn)
 
-            xn_i = f.dynamics(sp[i], u, p, t) .+ An_i * νB
-            xl_i = Al_i * νB
+            # Get full dynamics [dn(xn); dl(xn)]
+            xp_full = f.dynamics(sp[i], u, p, t)
+
+            # Partition and add coupling
+            xn_i = xp_full[f.n_inds] .+ An_i * νB  # dn + An*xl
+            xl_i = xp_full[f.l_inds] .+ Al_i * νB  # dl + Al*xl
             if u !== nothing && length(u) > 0
                 @bangbang xl_i .+= Bl_i * u
             end
@@ -753,29 +757,29 @@ end
 function sample_state(f::MUKF{IPD}, x, u, p=parameters(f), t=index(f)*f.Ts; noise=true) where IPD
     nxn = length(f.n_inds)
     nxl = length(f.l_inds)
-    xn = x[1:nxn]
-    xl = x[nxn+1:end]
+    xn = x[f.n_inds]
+    xl = x[f.l_inds]
 
     An = get_mat(f.An, xn, u, p, t)
+    Al = get_mat(f.Al, xn, u, p, t)
+    Bl = get_mat(f.Bl, xn, u, p, t)
 
-    # Handle in-place vs out-of-place dynamics
+    # Get full dynamics [dn; dl]
     if IPD
-        xn_next = similar(xn)
-        f.dynamics(xn_next, xn, u, p, t)
-        @bangbang xn_next .+= An * xl
+        dyn_full = similar(x)
+        f.dynamics(dyn_full, xn, u, p, t)
+        xn_next = dyn_full[f.n_inds] .+ An * xl
+        xl_next = dyn_full[f.l_inds] .+ Al * xl .+ Bl * u
     else
-        xn_next = f.dynamics(xn, u, p, t) .+ An * xl
+        dyn_full = f.dynamics(xn, u, p, t)
+        xn_next = dyn_full[f.n_inds] .+ An * xl
+        xl_next = dyn_full[f.l_inds] .+ Al * xl .+ Bl * u
     end
 
     if noise
         R1n_mat = get_mat(f.R1, xn, u, p, t)[f.n_inds, f.n_inds]  # Extract nonlinear block
         xn_next = xn_next .+ rand(SimpleMvNormal(R1n_mat))
-    end
 
-    Al = get_mat(f.Al, xn, u, p, t)
-    Bl = get_mat(f.Bl, xn, u, p, t)
-    xl_next = Al * xl .+ Bl * u
-    if noise
         R1l_mat = get_mat(f.R1, xn, u, p, t)[f.l_inds, f.l_inds]  # Extract linear block
         xl_next = xl_next .+ rand(SimpleMvNormal(R1l_mat))
     end
