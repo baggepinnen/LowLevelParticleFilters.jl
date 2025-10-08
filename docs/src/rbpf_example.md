@@ -129,7 +129,11 @@ using Statistics
 # Create MUKF using the same model components
 # Combine process noise covariances into full R1 matrix
 R1_full = [R1n zeros(nxn, nxl); zeros(nxl, nxn) R1l]
-mukf = MUKF(dynamics=fn, nl_measurement_model=mm, An=An, Al=Al, Bl=Bl, Cl=Cl, R1=R1_full, d0n=d0n, d0l=d0l, nu=nu, ny=ny)
+# Unified initial distribution for MUKF
+x0 = [x0n; x0l]
+R0_full = [R0n zeros(nxn, nxl); zeros(nxl, nxn) R0l]
+d0 = SimpleMvNormal(x0, R0_full)
+mukf = MUKF(dynamics=fn, nl_measurement_model=mm, An=An, Al=Al, Bl=Bl, Cl=Cl, R1=R1_full, d0=d0, nxn=nxn, nu=nu, ny=ny)
 
 # Run filtering on the same data
 sol_mukf = forward_trajectory(mukf, u, y)

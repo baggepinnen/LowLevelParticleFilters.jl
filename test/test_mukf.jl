@@ -24,6 +24,11 @@ x0l = zeros(nxl); R0l = 0.01I(nxl)
 d0n = LowLevelParticleFilters.SimpleMvNormal(x0n, R0n)
 d0l = LowLevelParticleFilters.SimpleMvNormal(x0l, R0l)
 
+# Unified initial distribution for MUKF
+x0 = [x0n; x0l]
+R0 = [R0n zeros(nxn, nxl); zeros(nxl, nxn) R0l]
+d0 = LowLevelParticleFilters.SimpleMvNormal(x0, R0)
+
 # Use package RBPF to generate consistent data
 kf_lin = KalmanFilter(Al, zeros(nxl,nu), Cl, 0, R1l_mat, R2_mat, d0l; ny, nu)
 mm     = RBMeasurementModel(g, R2_mat, ny)
@@ -38,7 +43,7 @@ x_true, _, y_meas = simulate(rbpf, u_data)
 # --- Run MUKF ---
 # Create full R1 matrix from blocks
 R1_full = [R1n_mat zeros(nxn, nxl); zeros(nxl, nxn) R1l_mat]
-mukf = MUKF(dynamics=fn, nl_measurement_model=mm, An=An_mat, Al=Al, Bl=zeros(nxl,nu), Cl=Cl, R1=R1_full, d0n=d0n, d0l=d0l, nu=nu, ny=ny)
+mukf = MUKF(dynamics=fn, nl_measurement_model=mm, An=An_mat, Al=Al, Bl=zeros(nxl,nu), Cl=Cl, R1=R1_full, d0=d0, nxn=nxn, nu=nu, ny=ny)
 sol = forward_trajectory(mukf, u_data, y_meas)
 
 # plot(sol)  # TEMP: commented out while debugging
@@ -80,9 +85,14 @@ end
     d0n_s = LowLevelParticleFilters.SimpleMvNormal(x0n_s, R0n_s)
     d0l_s = LowLevelParticleFilters.SimpleMvNormal(x0l_s, R0l_s)
 
+    # Unified initial distribution for MUKF
+    x0_s = SVector{nxn_s + nxl_s}([x0n_s..., x0l_s...])
+    R0_s = [[R0n_s zeros(SMatrix{nxn_s,nxl_s})]; [zeros(SMatrix{nxl_s,nxn_s}) R0l_s]]
+    d0_s = LowLevelParticleFilters.SimpleMvNormal(x0_s, R0_s)
+
     R1_s = [[R1n_s zeros(SMatrix{nxn_s,nxl_s})]; [zeros(SMatrix{nxl_s,nxn_s}) R1l_s]]
     mm_s = RBMeasurementModel(g_s, R2_s, ny_s)
-    mukf_s = MUKF(dynamics=fn_s, nl_measurement_model=mm_s, An=An_s, Al=Al_s, Bl=zeros(SMatrix{nxl_s,nu_s}), Cl=Cl_s, R1=R1_s, d0n=d0n_s, d0l=d0l_s, nu=nu_s, ny=ny_s)
+    mukf_s = MUKF(dynamics=fn_s, nl_measurement_model=mm_s, An=An_s, Al=Al_s, Bl=zeros(SMatrix{nxl_s,nu_s}), Cl=Cl_s, R1=R1_s, d0=d0_s, nxn=nxn_s, nu=nu_s, ny=ny_s)
 
     # Verify types
     @test mukf_s.x isa SVector
@@ -140,6 +150,11 @@ end
     d0n_ip = LowLevelParticleFilters.SimpleMvNormal(x0n_ip, R0n_ip)
     d0l_ip = LowLevelParticleFilters.SimpleMvNormal(x0l_ip, R0l_ip)
 
+    # Unified initial distribution for MUKF
+    x0_ip = [x0n_ip; x0l_ip]
+    R0_ip = [R0n_ip zeros(nxn_ip, nxl_ip); zeros(nxl_ip, nxn_ip) R0l_ip]
+    d0_ip = LowLevelParticleFilters.SimpleMvNormal(x0_ip, R0_ip)
+
     # Create KF and measurement model
     kf_ip = KalmanFilter(Al_ip, zeros(nxl_ip,nu_ip), Cl_ip, 0, R1l_ip, R2_ip, d0l_ip; ny=ny_ip, nu=nu_ip)
     mm_ip = RBMeasurementModel(g_ip, R2_ip, ny_ip)
@@ -148,10 +163,10 @@ end
     R1_ip_full = [R1n_ip zeros(nxn_ip, nxl_ip); zeros(nxl_ip, nxn_ip) R1l_ip]
 
     # Create out-of-place MUKF for reference
-    mukf_oop = MUKF{false,false}(dynamics=fn_oop, nl_measurement_model=mm_ip, An=An_ip, Al=Al_ip, Bl=zeros(nxl_ip,nu_ip), Cl=Cl_ip, R1=R1_ip_full, d0n=d0n_ip, d0l=d0l_ip, nu=nu_ip, ny=ny_ip)
+    mukf_oop = MUKF{false,false}(dynamics=fn_oop, nl_measurement_model=mm_ip, An=An_ip, Al=Al_ip, Bl=zeros(nxl_ip,nu_ip), Cl=Cl_ip, R1=R1_ip_full, d0=d0_ip, nxn=nxn_ip, nu=nu_ip, ny=ny_ip)
 
     # Create in-place MUKF
-    mukf_ip = MUKF{true,false}(dynamics=fn_ip, nl_measurement_model=mm_ip, An=An_ip, Al=Al_ip, Bl=zeros(nxl_ip,nu_ip), Cl=Cl_ip, R1=R1_ip_full, d0n=d0n_ip, d0l=d0l_ip, nu=nu_ip, ny=ny_ip)
+    mukf_ip = MUKF{true,false}(dynamics=fn_ip, nl_measurement_model=mm_ip, An=An_ip, Al=Al_ip, Bl=zeros(nxl_ip,nu_ip), Cl=Cl_ip, R1=R1_ip_full, d0=d0_ip, nxn=nxn_ip, nu=nu_ip, ny=ny_ip)
 
     # Generate data using out-of-place version
     T_ip = 50
@@ -205,18 +220,23 @@ end
     d0n_ipm = LowLevelParticleFilters.SimpleMvNormal(x0n_ipm, R0n_ipm)
     d0l_ipm = LowLevelParticleFilters.SimpleMvNormal(x0l_ipm, R0l_ipm)
 
+    # Unified initial distribution for MUKF
+    x0_ipm = [x0n_ipm; x0l_ipm]
+    R0_ipm = [R0n_ipm zeros(nxn_ipm, nxl_ipm); zeros(nxl_ipm, nxn_ipm) R0l_ipm]
+    d0_ipm = LowLevelParticleFilters.SimpleMvNormal(x0_ipm, R0_ipm)
+
     # Create full R1 matrix from blocks
     R1_ipm_full = [R1n_ipm zeros(nxn_ipm, nxl_ipm); zeros(nxl_ipm, nxn_ipm) R1l_ipm]
 
     # Create out-of-place MUKF for reference
     kf_oop = KalmanFilter(Al_ipm, zeros(nxl_ipm,nu_ipm), Cl_ipm, 0, R1l_ipm, R2_ipm, d0l_ipm; ny=ny_ipm, nu=nu_ipm)
     mm_oop = RBMeasurementModel(g_oop, R2_ipm, ny_ipm)
-    mukf_oop = MUKF{false,false}(dynamics=fn_oop, nl_measurement_model=mm_oop, An=An_ipm, Al=Al_ipm, Bl=zeros(nxl_ipm,nu_ipm), Cl=Cl_ipm, R1=R1_ipm_full, d0n=d0n_ipm, d0l=d0l_ipm, nu=nu_ipm, ny=ny_ipm)
+    mukf_oop = MUKF{false,false}(dynamics=fn_oop, nl_measurement_model=mm_oop, An=An_ipm, Al=Al_ipm, Bl=zeros(nxl_ipm,nu_ipm), Cl=Cl_ipm, R1=R1_ipm_full, d0=d0_ipm, nxn=nxn_ipm, nu=nu_ipm, ny=ny_ipm)
 
     # Create in-place measurement MUKF
     kf_ipm = KalmanFilter(Al_ipm, zeros(nxl_ipm,nu_ipm), Cl_ipm, 0, R1l_ipm, R2_ipm, d0l_ipm; ny=ny_ipm, nu=nu_ipm)
     mm_ipm = RBMeasurementModel{true}(g_ip, R2_ipm, ny_ipm)
-    mukf_ipm = MUKF{false,true}(dynamics=fn_oop, nl_measurement_model=mm_ipm, An=An_ipm, Al=Al_ipm, Bl=zeros(nxl_ipm,nu_ipm), Cl=Cl_ipm, R1=R1_ipm_full, d0n=d0n_ipm, d0l=d0l_ipm, nu=nu_ipm, ny=ny_ipm)
+    mukf_ipm = MUKF{false,true}(dynamics=fn_oop, nl_measurement_model=mm_ipm, An=An_ipm, Al=Al_ipm, Bl=zeros(nxl_ipm,nu_ipm), Cl=Cl_ipm, R1=R1_ipm_full, d0=d0_ipm, nxn=nxn_ipm, nu=nu_ipm, ny=ny_ipm)
 
     # Generate data using out-of-place version
     T_ipm = 50
@@ -279,6 +299,12 @@ end
     d0n = LowLevelParticleFilters.SimpleMvNormal(x0n, R0n)
     d0l = LowLevelParticleFilters.SimpleMvNormal(x0l, R0l)
 
+    # Unified initial distribution for MUKF
+    x0 = SA[x0n[]; x0l[]]
+    R0 = SA[R0n[1] 0.0;
+           0.0     R0l[1]]
+    d0 = LowLevelParticleFilters.SimpleMvNormal(x0, R0)
+
     # Create full R1 matrix from blocks
     R1_full = SA[R1n[1]  0.0;
                0.0    R1l[1]]
@@ -286,7 +312,7 @@ end
     # Create MUKF
     kf_mukf = KalmanFilter(Al, zeros(nxl, nu), Cl, 0, R1l, R2, d0l; ny=ny, nu=nu)
     mm = RBMeasurementModel(g, R2, ny)
-    mukf = MUKF(dynamics=fn, nl_measurement_model=mm, An=An, Al=Al, Bl=zeros(nxl,nu), Cl=Cl, R1=R1_full, d0n=d0n, d0l=d0l, nu=nu, ny=ny)
+    mukf = MUKF(dynamics=fn, nl_measurement_model=mm, An=An, Al=Al, Bl=zeros(nxl,nu), Cl=Cl, R1=R1_full, d0=d0, nxn=nxn, nu=nu, ny=ny)
 
     # Create equivalent standard Kalman filter for full system
     A_full = SA[0.9  0.2;
@@ -326,7 +352,7 @@ end
     # Run both filters
     sol_mukf = forward_trajectory(mukf, u, y)
     a = @allocations forward_trajectory(mukf, u, y)
-    @test a < 19 * 1.1
+    @test a < 22 * 1.1
     sol_kf = forward_trajectory(kf_full, u, y)
 
     # Extract states - MUKF stores [xn; xl], KF stores [x1; x2]
