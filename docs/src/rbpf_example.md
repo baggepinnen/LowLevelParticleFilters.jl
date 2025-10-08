@@ -127,7 +127,9 @@ Let's compare MUKF with RBPF on the same system:
 ```@example RBPF
 using Statistics
 # Create MUKF using the same model components
-mukf = MUKF(dynamics=fn, nl_measurement_model=mm, An=An, kf=kf, R1n=R1n, d0n=d0n)
+# Combine process noise covariances into full R1 matrix
+R1_full = [R1n zeros(nxn, nxl); zeros(nxl, nxn) R1l]
+mukf = MUKF(dynamics=fn, nl_measurement_model=mm, An=An, Al=Al, Bl=Bl, Cl=Cl, R1=R1_full, d0n=d0n, d0l=d0l, nu=nu, ny=ny)
 
 # Run filtering on the same data
 sol_mukf = forward_trajectory(mukf, u, y)
