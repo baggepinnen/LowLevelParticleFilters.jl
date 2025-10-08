@@ -163,6 +163,30 @@ end
 
 MUKF(args...; kwargs...) = MUKF{false,false}(args...; kwargs...)
 
+function Base.show(io::IO, mukf::MUKF{IPD,IPM}) where {IPD,IPM}
+    println(io, "MUKF{$IPD,$IPM}")
+    println(io, "  Inplace dynamics: $IPD")
+    println(io, "  Inplace measurement: $IPM")
+    nxn = length(mukf.xn)
+    nxl = length(mukf.xl[1])
+    println(io, "  nxn: $nxn (nonlinear state)")
+    println(io, "  nxl: $nxl (linear state)")
+    println(io, "  nx: $(nxn + nxl)")
+    println(io, "  nu: $(mukf.nu)")
+    println(io, "  ny: $(mukf.ny)")
+    println(io, "  Ts: $(mukf.Ts)")
+    println(io, "  t: $(mukf.t)")
+    println(io, "  weight_params: $(typeof(mukf.weight_params))")
+    for field in fieldnames(typeof(mukf))
+        field in (:ny, :nu, :Ts, :t, :nxn, :nxl, :weight_params) && continue
+        if field in (:nl_measurement_model, :sigma_point_cache, :kf, :An, :xn_sigma_points, :xl, :P)
+            println(io, "  $field: $(fieldtype(typeof(mukf), field))")
+        else
+            println(io, "  $field: $(repr(getfield(mukf, field), context=:compact => true))")
+        end
+    end
+end
+
 # Convenience accessors
 
 state(f::MUKF) = [f.xn; xl_mean(f)]
