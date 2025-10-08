@@ -305,18 +305,20 @@ We may ask ourselves, what's the difference between a parameter and a state vari
 
 Abrupt changes to the dynamics like in the example above can happen in practice, for instance, due to equipment failure or change of operating mode. This can be treated as a scenario with time-varying parameters that are continuously estimated.
 
-## Parameter Estimation using MUKF
-The [`MUKF`](@ref) (Marginalized Unscented Kalman Filter) provides an alternative approach to parameter estimation that can be advantageous when parameters have **linear time evolution** and enter **multiplicatively** into the system dynamics. Unlike the UKF approach above where parameters are added to the state vector, MUKF explicitly separates the nonlinear states from linearly-evolving parameters, leading to:
-- **Deterministic estimation**: No particle randomness, making it suitable for gradient-based optimization of hyperparameters
-- **Computational efficiency**: Uses fewer sigma points than UKF for the same total state dimension
-- **Natural formulation**: Parameters with linear evolution (e.g., random walk models) fit naturally into the MUKF framework
+### Joint state and parameter estimation using MUKF
+The [`MUKF`](@ref) (Marginalized Unscented Kalman Filter) provides an alternative approach to parameter estimation that can be advantageous when parameters have **linear time evolution** and enter **multiplicatively** into the system dynamics. Unlike the UKF approach above where parameters are added to the state vector, MUKF explicitly separates the nonlinear state variables from linearly-evolving variables, leading to:
+- **Deterministic estimation**: No particle randomness like for particle filters, making it suitable for gradient-based optimization of hyperparameters
+- **Computational efficiency**: Uses fewer sigma points than UKF for the same state dimension
 
-This approach is particularly well-suited for **online estimation in control systems** where deterministic, differentiable estimators are preferred, and for **disturbance and parameter estimation** where the unknowns have approximately linear dynamics.
 
-### Problem: Quadrotor with Unknown Mass and Drag
-We consider a simplified quadrotor model where the mass and drag coefficient are unknown and time-varying. The system has 8 dimensions total:
-- **Nonlinear state** (6D): position ``[x, y, z]`` and velocity ``[v_x, v_y, v_z]``
-- **Linear parameters** (2D): mass ``m`` and drag coefficient ``C_d``
+#### Problem: Quadrotor with Unknown Mass and Drag
+We consider a simplified quadrotor model where the mass and drag coefficient are unknown and time-varying. By cleverly partitioning the state and using inverse mass ``\theta = 1/m``, we exploit the **conditionally linear** structure to reduce computational cost.
+
+The system has 8 dimensions total with the following partitioning:
+- **Nonlinear substate** (4D): velocities ``[v_x, v_y, v_z]`` and drag coefficient ``C_d``
+- **Linear substate** (4D): positions ``[x, y, z]`` and inverse mass ``\theta = 1/m``
+
+The key insight is that positions evolve linearly given the velocities (``\dot{x} = v_x``), which fits the conditionally linear structure. This partitioning reduces sigma points from 17 (for full 8D UKF) to only 9 (for 4D nonlinear MUKF).
 
 The dynamics are given by:
 ```math
@@ -357,7 +359,7 @@ We'll simulate a scenario where:
 - Mass decreases linearly from 1.0 to 0.85 kg (battery drain)
 - Drag increases abruptly at t=50s from 0.01 to 0.015 (damage/configuration change)
 
-### MUKF Formulation with Conditionally Linear Structure
+#### MUKF Formulation with Conditionally Linear Structure
 
 **Key insight:** By using θ = 1/m (inverse mass) and treating positions as part of the linear substate, we exploit the **conditionally linear** structure from Morelande & Moran (2007). The positions depend linearly on themselves but nonlinearly on velocities, which fits the form:
 
@@ -436,7 +438,7 @@ discrete_dynamics_full2(x,u,p,t) = [x; zeros(4)] + Ts .* quadrotor_dynamics_full
 nothing # hide
 ```
 
-### Simulation
+#### Simulation
 We'll simulate a hovering scenario with small perturbations, where the mass decreases (battery drain) and drag increases abruptly (damage).
 
 ```@example mukfparam
@@ -513,7 +515,7 @@ p3 = plot(t_vec, Cd_true, label="Drag", ylabel="kg·s/m", c=:red)
 plot(p1, p2, p3)
 ```
 
-### MUKF Setup and Estimation
+#### MUKF Setup and Estimation
 Now we set up the MUKF. The key is to provide the unified initial distribution `d0` and specify `nxn` (dimension of nonlinear substate).
 
 ```@example mukfparam
@@ -566,7 +568,7 @@ Cd_est_mukf = x_est_mukf[:, 4]  # Cd is the 4th state
 nothing # hide
 ```
 
-### Results and Comparison
+#### Results and Comparison
 Let's visualize the parameter estimation performance:
 
 ```@example mukfparam
@@ -584,7 +586,7 @@ plot(p1, p2, layout=(2,1), size=(800,500))
 
 The MUKF successfully tracks both parameters through the gradual mass decrease and the abrupt drag increase at t=50s. The estimation converges quickly from the initial guess.
 
-### Comparison with UKF Approach
+#### Comparison with UKF Approach
 For comparison, let's solve the same problem using a standard UKF with the full 8D state (no exploitation of conditionally linear structure):
 
 ```@example mukfparam
@@ -640,7 +642,7 @@ plot!(p2, t_vec, Cd_est_ukf, label="UKF", lw=2, c=:green, alpha=0.7, ls=:dot)
 plot(p1, p2, layout=(2,1), size=(800,500))
 ```
 
-### Performance Analysis
+#### Performance Analysis
 Let's quantify the estimation accuracy:
 
 ```@example mukfparam
