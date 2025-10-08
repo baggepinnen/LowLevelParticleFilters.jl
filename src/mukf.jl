@@ -27,12 +27,12 @@ Create correction cache with proper types.
 - `ns`: Number of sigma points (2*nxn + 1)
 - `static`: Whether to use static arrays
 """
-function MUKFCorrectCache(x_proto, Cl_proto, y_proto, ns, static::Bool)
+function MUKFCorrectCache(x_proto, Cl_proto, y_proto, ns, static::Bool, IPM)
     if static
         # For static arrays, create mutable static arrays to allow in-place operations
         X_full = [SVector{length(x_proto)}(x_proto) for _ in 1:ns]
         Cl_matrices = [SMatrix{size(Cl_proto,1), size(Cl_proto,2)}(Cl_proto) for _ in 1:ns]
-        y_temp = SVector{length(y_proto)}(y_proto)
+        y_temp = IPM ? similar(y_proto) : SVector{length(y_proto)}(y_proto)
     else
         # For regular arrays, use similar
         X_full = [similar(x_proto) for _ in 1:ns]
@@ -40,6 +40,49 @@ function MUKFCorrectCache(x_proto, Cl_proto, y_proto, ns, static::Bool)
         y_temp = similar(y_proto)
     end
     MUKFCorrectCache(X_full, Cl_matrices, y_temp)
+end
+
+"""
+    MUKFPredictCache
+
+Cache for prediction step arrays in MUKF to avoid allocations.
+
+# Fields:
+- `Y`: Vector of full state vectors [xn; xl] per sigma point
+- `G_matrices`: Vector of G matrices [An; Al] per sigma point
+- `xp`: Temporary vector for in-place dynamics function
+"""
+struct MUKFPredictCache{Y_VEC, G_MAT, XP}
+    Y::Y_VEC
+    G_matrices::G_MAT
+    xp::XP
+end
+
+"""
+    MUKFPredictCache(x_full_proto, G_proto, xp_proto, ns, static)
+
+Create prediction cache with proper types.
+
+# Arguments:
+- `x_full_proto`: Prototype full state vector [xn; xl] (nx-dimensional)
+- `G_proto`: Prototype G matrix [An; Al] (nx × nxl)
+- `xp_proto`: Prototype xn vector for in-place dynamics (nxn-dimensional)
+- `ns`: Number of sigma points (2*nxn + 1)
+- `static`: Whether to use static arrays
+"""
+function MUKFPredictCache(x_full_proto, G_proto, xp_proto, ns, static::Bool)
+    if static
+        # For static arrays, create mutable static arrays
+        Y = [SVector{length(x_full_proto)}(x_full_proto) for _ in 1:ns]
+        G_matrices = [SMatrix{size(G_proto,1), size(G_proto,2)}(G_proto) for _ in 1:ns]
+        xp = SVector{length(xp_proto)}(xp_proto)
+    else
+        # For regular arrays
+        Y = [similar(x_full_proto) for _ in 1:ns]
+        G_matrices = [similar(G_proto) for _ in 1:ns]
+        xp = similar(xp_proto)
+    end
+    MUKFPredictCache(Y, G_matrices, xp)
 end
 
 """
@@ -78,7 +121,7 @@ where `x^n` is the nonlinear substate and `x^l` is the linear substate.
 * `weight_params`: Unscented transform parameters (default: MerweParams())
 * `names`: Signal names for plotting
   """
-mutable struct MUKF{IPD,IPM,DT,MMT,ANT,KFT,R1NT,D0NT,XNT,XLT,PT,TS,PARAMS,WP,NT,SPC,SPC2,CORR_C,NINDS,LINDS} <:
+mutable struct MUKF{IPD,IPM,DT,MMT,ANT,KFT,R1NT,D0NT,XNT,XLT,PT,TS,PARAMS,WP,NT,SPC,SPC2,PRED_C,CORR_C,NINDS,LINDS} <:
                AbstractKalmanFilter
 
     # Model functions and parameters
@@ -95,8 +138,9 @@ mutable struct MUKF{IPD,IPM,DT,MMT,ANT,KFT,R1NT,D0NT,XNT,XLT,PT,TS,PARAMS,WP,NT,
 
     # Sigma point caches
 
-    sigma_point_cache::SPC            # For predict step
+    sigma_point_cache::SPC            # For predict step (sigma points only)
     correct_sigma_point_cache::SPC2   # For correct step (sigma points and Y_meas)
+    predict_cache::PRED_C             # For predict step (Y, G_matrices, xp)
     correct_cache::CORR_C             # For correct step (X_full, Cl_matrices, y_temp)
     xn_sigma_points::Vector{XNT}      # Current sigma points for xn (for cross-covariance)
 
@@ -171,7 +215,14 @@ function MUKF{IPD,IPM}(;
     end
 
     # Create correction cache for MUKF-specific arrays
-    correct_cache = MUKFCorrectCache(x_proto, Cl_proto, y_proto, ns, static)
+    correct_cache = MUKFCorrectCache(x_proto, Cl_proto, y_proto, ns, static, IPM)
+
+    # Create predict cache for dynamics transformation
+    x_full_proto = x_proto  # nx-dimensional (same as x_proto)
+    G_proto = vcat(get_mat(An, xn0, zeros(T, nu), p, T(0)),
+                   get_mat(kf.A, xn0, zeros(T, nu), p, T(0)))  # nx×nxl matrix
+    xp_proto = xn0  # nxn-dimensional
+    predict_cache = MUKFPredictCache(x_full_proto, G_proto, xp_proto, ns, static)
 
     # Initialize joint covariance P0 = blockdiag(Rn0, Γ0) with Rnl=0
     Rn0  = convert_cov_type(R1n, d0n.Σ)
@@ -212,6 +263,7 @@ function MUKF{IPD,IPM}(;
         typeof(names),
         typeof(sigma_point_cache),
         typeof(correct_sigma_point_cache),
+        typeof(predict_cache),
         typeof(correct_cache),
         typeof(n_inds),
         typeof(l_inds),
@@ -224,6 +276,7 @@ function MUKF{IPD,IPM}(;
         d0n,
         sigma_point_cache,
         correct_sigma_point_cache,
+        predict_cache,
         correct_cache,
         xn_sigma_points,
         xn0,
@@ -262,7 +315,7 @@ function Base.show(io::IO, mukf::MUKF{IPD,IPM}) where {IPD,IPM}
     println(io, "  weight_params: $(typeof(mukf.weight_params))")
     for field in fieldnames(typeof(mukf))
         field in (:ny, :nu, :Ts, :t, :nxn, :nxl, :weight_params) && continue
-        if field in (:nl_measurement_model, :sigma_point_cache, :correct_sigma_point_cache, :correct_cache, :kf, :An, :xn_sigma_points, :xl, :P)
+        if field in (:nl_measurement_model, :sigma_point_cache, :correct_sigma_point_cache, :predict_cache, :correct_cache, :kf, :An, :xn_sigma_points, :xl, :P, :n_inds, :l_inds)
             println(io, "  $field: $(fieldtype(typeof(mukf), field))")
         else
             println(io, "  $field: $(repr(getfield(mukf, field), context=:compact => true))")
@@ -376,7 +429,7 @@ Create block diagonal matrix [A 0; 0 B]
 """
 function blockdiag(A::StaticMatrix{m,n}, B::StaticMatrix{p,q}) where {m,n,p,q}
     T = promote_type(eltype(A), eltype(B))
-    return SMatrix{m+p,n+q,T}([A zeros(SMatrix{m,q,T}); zeros(SMatrix{p,n,T}) B])
+    return [[A zeros(SMatrix{m,q,T})]; [zeros(SMatrix{p,n,T}) B]]
 end
 
 function blockdiag(A::AbstractMatrix, B::AbstractMatrix)
@@ -422,15 +475,13 @@ function predict!(
     # Yi = [fn(sp[i]) + An_i*νB_i; Al_i*νB_i + Bl_i*u]
     # where νB_i = μl + L*(sp[i] - μn) is the conditional mean of xl given xn=sp[i]
 
-    # Preallocate with type preservation
-    Y_proto = [f.xn; μl]  # Prototype full state vector
-    Y = [similar(Y_proto) for _ in eachindex(sp)]
-    G_proto = [f.An; f.kf.A]  # Prototype G matrix
-    G_matrices = [similar(G_proto) for _ in eachindex(sp)]
+    # Use cached arrays (no allocations!)
+    Y = f.predict_cache.Y
+    G_matrices = f.predict_cache.G_matrices
+    xp = f.predict_cache.xp
 
     if IPD
         # In-place dynamics
-        xp = similar(f.xn)
         @inbounds for i in eachindex(sp)
             # Get state-dependent matrices
             An_i = get_mat(f.An, sp[i], u, p, t)
@@ -464,7 +515,10 @@ function predict!(
             νB = μl .+ L * (sp[i] .- μn)
 
             xn_i = f.dynamics(sp[i], u, p, t) .+ An_i * νB
-            xl_i = Al_i * νB .+ Bl_i * u
+            xl_i = Al_i * νB
+            if u !== nothing && length(u) > 0
+                @bangbang xl_i .+= Bl_i * u
+            end
 
             Y[i] = [xn_i; xl_i]
             G_matrices[i] = [An_i; Al_i]
@@ -504,8 +558,8 @@ function predict!(
     P_pred = symmetrize(P_pred)
 
     # Update state and covariance
-    @bangbang f.xn .= μ_pred[1:nxn]
-    μl_pred = μ_pred[nxn+1:end]
+    @bangbang f.xn .= μ_pred[f.n_inds]
+    μl_pred = μ_pred[f.l_inds]
     @bangbang f.P .= P_pred
 
     # Update xl means - all xl[i] are set to marginal mean
@@ -514,7 +568,6 @@ function predict!(
     end
 
     f.t += 1
-    return f
 end
 
 function correct!(
@@ -630,9 +683,7 @@ function correct!(
     # Add the missing term: [0; Γ*Cl_avg'] (from equation 16 in MUT paper)
     # This is the conditional covariance contribution that was causing negative Γ!
     if Σxy isa SMatrix
-        Σxym = MMatrix(Σxy)
-        Σxym[f.l_inds, :] .+= Γ_curr * Cl_avg'
-        Σxy = typeof(Σxy)(Σxym)
+        Σxy += [zero(SMatrix{length(f.n_inds), size(Σxy, 2)});Γ_curr * Cl_avg']
     else
         Σxy[f.l_inds, :] .+= Γ_curr * Cl_avg'
     end
@@ -663,15 +714,8 @@ function correct!(
     end
 
     ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), innovation)
-    return (; ll, e = innovation, S, Sᵪ, K = K[1:nxn, :])  # Return only nonlinear gain for compatibility
+    return (; ll, e = innovation, S, Sᵪ, K) 
 
-end
-
-
-
-function update!(f::MUKF, u, y, p=parameters(f), t=index(f)*f.Ts)
-    predict!(f, u, p, t-f.Ts)
-    correct!(f, u, y, p, t)
 end
 
 # Make MUKF callable
