@@ -339,6 +339,10 @@ function Base.getproperty(f::MUKF, s::Symbol)
         return covariance(f)
     elseif s === :nx
         return length(getfield(f, :xn)) + length(getfield(f, :xl)[1])
+    elseif s === :R2
+        return getfield(f, :kf).R2
+    elseif s === :R1
+        return getfield(f, :kf).R2
     else
         throw(ArgumentError("$(typeof(f)) has no property named $s"))
     end
@@ -806,29 +810,28 @@ function sample_measurement(f::MUKF, x, u, p=parameters(f), t=index(f)*f.Ts; noi
     return y
 end
 
-# Custom forward_trajectory for MUKF
-function forward_trajectory(mukf::MUKF, u::AbstractVector, y::AbstractVector, p=parameters(mukf); debug=false)
-    reset!(mukf)
+function forward_trajectory(kf::MUKF, u::AbstractVector, y::AbstractVector, p=parameters(kf); debug=false, pre_correct_cb=(args...)->nothing, pre_predict_cb=(args...)->nothing, post_predict_cb=(args...)->nothing, post_correct_cb=(args...)->nothing)
+    reset!(kf)
     T    = length(y)
-    x    = Vector{Vector{Float64}}(undef, T)
-    xt   = Vector{Vector{Float64}}(undef, T)
-    R    = Vector{Matrix{Float64}}(undef, T)
-    Rt   = Vector{Matrix{Float64}}(undef, T)
+    x    = Array{particletype(kf)}(undef,T)
+    xt   = Array{particletype(kf)}(undef,T)
+    R    = Array{covtype(kf)}(undef,T)
+    Rt   = Array{covtype(kf)}(undef,T)
     e    = similar(y)
-    ll   = 0.0
+    ll   = zero(eltype(particletype(kf)))
     local t, S, K
-
     try
         for outer t = 1:T
-            ti = (t-1)*mukf.Ts
-            x[t]  = state(mukf)      |> copy
-            R[t]  = covariance(mukf) |> copy
-
-            lli, ei, Si, Sᵪi, Ki = correct!(mukf, u[t], y[t], p, ti)
+            ti = (t-1)*kf.Ts
+            x[t]  = state(kf)      |> copy
+            R[t]  = covariance(kf) |> copy
+            R2 = pre_correct_cb(kf, u[t], y[t], p, ti)
+            lli, ei, Si, Sᵪi, Ki = correct!(kf, u[t], y[t], p, ti)
+            post_correct_cb(kf, p)
             ll += lli
             e[t] = ei
-            xt[t] = state(mukf)      |> copy
-            Rt[t] = covariance(mukf) |> copy
+            xt[t] = state(kf)      |> copy
+            Rt[t] = covariance(kf) |> copy
 
             if t == 1
                 S = Vector{typeof(Sᵪi)}(undef, T)
@@ -836,8 +839,9 @@ function forward_trajectory(mukf::MUKF, u::AbstractVector, y::AbstractVector, p=
             end
             S[t] = Sᵪi
             K[t] = Ki
-
-            predict!(mukf, u[t], p, ti)
+            R1 = pre_predict_cb(kf, u[t], y[t], p, ti, lli, ei, Si, Sᵪi)
+            predict!(kf, u[t], p, ti)
+            post_predict_cb(kf, p)
         end
     catch err
         if debug
@@ -849,5 +853,5 @@ function forward_trajectory(mukf::MUKF, u::AbstractVector, y::AbstractVector, p=
             rethrow()
         end
     end
-    KalmanFilteringSolution(mukf, u, y, x, xt, R, Rt, ll, e, K, S)
+    KalmanFilteringSolution(kf,u,y,x,xt,R,Rt,ll,e,K,S)
 end

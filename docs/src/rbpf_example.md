@@ -54,6 +54,7 @@ Below, we define functions that return the matrix ``A_n`` despite that it is con
 ```@example RBPF
 using LowLevelParticleFilters, LinearAlgebra
 using LowLevelParticleFilters: SimpleMvNormal
+using StaticArrays
 using DisplayAs # hide
 nxn = 1         # Dimension of nonlinear state
 nxl = 3         # Dimension of linear state
@@ -62,25 +63,25 @@ nu  = 0         # Dimension of control input
 ny  = 2         # Dimension of measurement
 N   = 200       # Number of particles
 fn(xn, args...) = atan.(xn)         # Nonlinear part of nonlinear state dynamics
-An  = [1.0 0.0 0.0]     # Linear part of nonlinear state dynamics
-Al  = [1.0  0.3   0.0;  # Linear part of linear state dynamics (the standard Kalman-filter A matrix). It's defined as a matrix here, but it can also be a function of (x, u, p, t)
+An  = SA[1.0 0.0 0.0]     # Linear part of nonlinear state dynamics
+Al  = SA[1.0  0.3   0.0;  # Linear part of linear state dynamics (the standard Kalman-filter A matrix). It's defined as a matrix here, but it can also be a function of (x, u, p, t)
                    0.0  0.92 -0.3; 
                    0.0  0.3   0.92] # 3x3 matrix
-Cl = [0.0  0.0 0.0; 
+Cl = SA[0.0  0.0 0.0; 
       1.0 -1.0 1.0]    # 2x3 measurement matrix
-g(xn, args...) = [0.1 * xn[]^2 * sign(xn[]), 0.0] # 2x1 vector
+g(xn, args...) = SA[0.1 * xn[]^2 * sign(xn[]), 0.0] # 2x1 vector
 
 Bl = zeros(nxl, nu)
 
 # Noise parameters
-R1n = [0.01;;]          # Scalar variance for w^n
+R1n = SA[0.01;;]          # Scalar variance for w^n
 R1l = 0.01 * I(3)       # 3x3 covariance for w^l
 R2  = 0.1 * I(2)         # 2x2 measurement noise (shared between linear and nonlinear parts)
 
 # Initial states (xn ~ N(0,1), xl ~ N(0, 0.01I))
-x0n = zeros(nxn)
-R0n = [1.0;;]
-x0l = zeros(nxl)
+x0n = @SVector zeros(nxn)
+R0n = SA[1.0;;]
+x0l = @SVector zeros(nxl)
 R0l = 0.01 * I(nxl)
 
 d0l = SimpleMvNormal(x0l, R0l)
