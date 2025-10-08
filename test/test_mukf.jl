@@ -8,7 +8,7 @@ using StaticArrays
 # --- Recreate the RBPF tutorial system exactly ---
 nxn, nxl, ny, nu = 1, 3, 2, 0
 fn(xn, u, p, t) = atan.(xn)
-g(xn, u, p, t)  = [0.1 * xn[]^2 * sign(xn[]), 0.0]
+g_mukf(xn, u, p, t)  = [0.1 * xn[]^2 * sign(xn[]), 0.0]
 An_mat = [1.0 0.0 0.0]
 Al = [ 1.0  0.3   0.0;
        0.0  0.92 -0.3;
@@ -31,7 +31,7 @@ d0 = LowLevelParticleFilters.SimpleMvNormal(x0, R0)
 
 # Use package RBPF to generate consistent data
 kf_lin = KalmanFilter(Al, zeros(nxl,nu), Cl, 0, R1l_mat, R2_mat, d0l; ny, nu)
-mm     = RBMeasurementModel(g, R2_mat, ny)
+mm     = RBMeasurementModel(g_mukf, R2_mat, ny)
 
 names = SignalNames(; x=["xnl", "xl1", "xl2", "xl3"], u=[], y=["y1", "y2"], name="RBPF_tutorial")
 rbpf   = RBPF(300, kf_lin, fn, mm, R1n_mat, d0n; nu, An=An_mat, Ts=1.0, names)

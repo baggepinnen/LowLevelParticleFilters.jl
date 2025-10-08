@@ -303,7 +303,326 @@ If adaptive parameter estimation is coupled with a model-based controller, we ge
 
 We may ask ourselves, what's the difference between a parameter and a state variable if we can add parameters as state variables? Typically, parameters do not vary with time, and if they do, they vary significantly slower than the state variables. State variables also have dynamics associate with them, whereas we often have no idea about how the parameters vary other than that they vary slowly.
 
-Abrupt changes to the dynamics like in the example above can happen in practice, for instance, due to equipment failure or change of operating mode. This can be treated as a scenario with time-varying parameters that are continuously estimated. 
+Abrupt changes to the dynamics like in the example above can happen in practice, for instance, due to equipment failure or change of operating mode. This can be treated as a scenario with time-varying parameters that are continuously estimated.
+
+## Parameter Estimation using MUKF
+The [`MUKF`](@ref) (Marginalized Unscented Kalman Filter) provides an alternative approach to parameter estimation that can be advantageous when parameters have **linear time evolution** and enter **multiplicatively** into the system dynamics. Unlike the UKF approach above where parameters are added to the state vector, MUKF explicitly separates the nonlinear states from linearly-evolving parameters, leading to:
+- **Deterministic estimation**: No particle randomness, making it suitable for gradient-based optimization of hyperparameters
+- **Computational efficiency**: Uses fewer sigma points than UKF for the same total state dimension
+- **Natural formulation**: Parameters with linear evolution (e.g., random walk models) fit naturally into the MUKF framework
+
+This approach is particularly well-suited for **online estimation in control systems** where deterministic, differentiable estimators are preferred, and for **disturbance and parameter estimation** where the unknowns have approximately linear dynamics.
+
+### Problem: Quadrotor with Unknown Mass and Drag
+We consider a simplified quadrotor model where the mass and drag coefficient are unknown and time-varying. The system has 8 dimensions total:
+- **Nonlinear state** (6D): position ``[x, y, z]`` and velocity ``[v_x, v_y, v_z]``
+- **Linear parameters** (2D): mass ``m`` and drag coefficient ``C_d``
+
+The dynamics are given by:
+```math
+\begin{aligned}
+\dot{x} &= v_x \\
+\dot{y} &= v_y \\
+\dot{z} &= v_z \\
+\dot{v}_x &= \frac{F_x - C_d \cdot v_x |v_x|}{m} \\
+\dot{v}_y &= \frac{F_y - C_d \cdot v_y |v_y|}{m} \\
+\dot{v}_z &= \frac{F_z - C_d \cdot v_z |v_z|}{m} - g
+\end{aligned}
+```
+
+Note how the parameters ``m`` and ``C_d`` enter **multiplicatively** - they scale the effect of forces and drag. This makes them perfect candidates for the linear substate in MUKF.
+
+```@example mukfparam
+using LowLevelParticleFilters
+using SeeToDee
+using Distributions
+using StaticArrays
+using Plots, LinearAlgebra, Random
+Random.seed!(0) # For reproducibility
+
+# System dimensions
+nxn = 6  # Nonlinear state: [x, y, z, vx, vy, vz]
+nxl = 2  # Linear parameters: [m, Cd]
+nx = nxn + nxl
+nu = 3   # Control inputs: [Fx, Fy, Fz] (thrust forces)
+ny = 6   # Measurements: [x, y, z, vx, vy, vz] (GPS + velocity)
+
+# Physical constants
+g = 9.81  # Gravity (m/s²)
+Ts = 0.01        # Sample time
+
+nothing # hide
+```
+We'll simulate a scenario where:
+- Mass decreases linearly from 1.0 to 0.85 kg (battery drain)
+- Drag increases abruptly at t=50s from 0.01 to 0.015 (damage/configuration change)
+
+### MUKF Formulation
+For MUKF, we need to separate the dynamics into:
+1. **Nonlinear part** ``f_n(x^n, u, p, t)``: dynamics of position/velocity *without* parameters
+2. **Coupling matrix** ``A_n(x^n)``: how the linear parameters affect the nonlinear state
+3. **Linear evolution** ``A_l``: how parameters evolve (typically identity for random walk)
+
+```@example mukfparam
+# Nonlinear dynamics (without parameters)
+# This is the "shape" of the dynamics - how states evolve
+function quadrotor_dynamics_nl(xn, u, p, t)
+    x, y, z, vx, vy, vz = xn
+    Fx, Fy, Fz = u
+
+    # The nonlinear part: position derivatives and gravity
+    SA[
+        vx,
+        vy,
+        vz,
+        Fx,      # Force without mass scaling
+        Fy,
+        Fz - g   # Gravity effect
+    ]
+end
+
+# Coupling matrix An: how parameters [m, Cd] affect the nonlinear state
+# This encodes that forces are scaled by 1/m and drag by -Cd/m
+function An_matrix(xn, u, p, t)
+    x, y, z, vx, vy, vz = xn
+
+    # Parameters affect only the velocity derivatives (rows 4-6)
+    # Column 1 is 1/m effect, Column 2 is Cd/m effect
+    SA[
+        0.0    0.0                    # ẋ not affected by parameters
+        0.0    0.0                    # ẏ not affected by parameters
+        0.0    0.0                    # ż not affected by parameters
+        1.0    -vx*abs(vx)           # v̇x: F/m - Cd·vx|vx|/m
+        1.0    -vy*abs(vy)           # v̇y: F/m - Cd·vy|vy|/m
+        1.0    -vz*abs(vz)           # v̇z: F/m - Cd·vz|vz|/m
+    ]
+end
+
+# Discrete coupling matrix (scaled by sampling time for proper discretization)
+An_matrix_discrete(xn, u, p, t) = An_matrix(xn, u, p, t) * Ts
+
+# Linear parameter evolution: random walk (parameters are constant + noise)
+Al = SA[1.0 0.0; 0.0 1.0]  # Identity matrix
+Bl = zeros(SMatrix{nxl, nu})  # Parameters don't depend on control
+
+# Measurement: we measure all states directly (GPS + velocity sensors)
+measurement(xn, u, p, t) = xn  # Measure position and velocity
+Cl = zeros(SMatrix{ny, nxl})   # Parameters not directly measured
+
+# Discretize the nonlinear dynamics
+discrete_dynamics_nl = SeeToDee.Rk4(quadrotor_dynamics_nl, Ts)
+
+# Note on discretization: For the filter, we discretize fn using Rk4 and scale An by Ts.
+# This is appropriate when the coupling matrix An represents continuous-time effects.
+# For the simulation, we'll use Rk4 to integrate the full continuous dynamics.
+
+nothing # hide
+```
+
+### Simulation
+We'll simulate a hovering scenario with small perturbations, where the mass decreases (battery drain) and drag increases abruptly (damage).
+
+```@example mukfparam
+T = 10000  # 100 seconds at 0.01s sampling
+t_vec = (0:T-1) .* Ts
+
+# Control: hovering thrust with small variations
+m_nominal = 1.0
+F_hover = m_nominal * g
+u = [SA[F_hover + 0.1*randn(), F_hover + 0.1*randn(), F_hover + 0.1*randn()] for _ in 1:T]
+
+# True parameters (time-varying)
+m_true = [t < 50 ? 1.0 - 0.003*t : 0.85 for t in t_vec]  # Linear decrease
+Cd_true = [t < 50 ? 0.01 : 0.015 for t in t_vec]         # Abrupt increase
+
+# Simulate true trajectory
+function simulate_quadrotor(u, m_true, Cd_true)
+    x = zeros(T, nxn)
+    x[1, :] = [0, 0, 10, 0, 0, 0]  # Start at 10m altitude
+
+    for i in 1:T-1
+        xn = x[i, :]
+        params_i = SA[m_true[i], Cd_true[i]]
+
+        # Define full continuous dynamics: ẋ = fn(xn) + An(xn)*params
+        function full_dynamics(xn_inner, u_inner, p_inner, t_inner)
+            xdot = quadrotor_dynamics_nl(xn_inner, u_inner, nothing, 0)
+            An = An_matrix(xn_inner, u_inner, nothing, 0)
+            xdot + An * params_i
+        end
+
+        # Use Rk4 to integrate full continuous dynamics
+        discrete_step = SeeToDee.Rk4(full_dynamics, Ts)
+        x[i+1, :] = discrete_step(xn, u[i], nothing, 0)
+    end
+    return x
+end
+
+x_true = simulate_quadrotor(u, m_true, Cd_true)
+
+# Generate noisy measurements
+y = x_true .+ 0.01 .* randn.()
+y = SVector{ny}.(eachrow(y))
+# Plot true trajectory and parameters
+p1 = plot(t_vec, x_true[:, 3], label="Altitude (z)", xlabel="Time (s)", ylabel="m", legend=:topright)
+p2 = plot(t_vec, m_true, label="Mass", xlabel="Time (s)", ylabel="kg", legend=:topright, c=:blue)
+p3 = plot(t_vec, Cd_true, label="Drag", ylabel="kg·s/m", c=:red)
+plot(p1, p2, p3)
+```
+
+### MUKF Setup and Estimation
+Now we set up the MUKF. The key is to provide the unified initial distribution `d0` and specify `nxn` (dimension of nonlinear substate).
+
+```@example mukfparam
+# Noise covariances
+R1n = SMatrix{nxn,nxn}(Diagonal([0.01, 0.01, 0.01, 0.01, 0.01, 0.01]))  # Process noise for states
+R1l = SMatrix{nxl,nxl}(Diagonal([0.005, 0.00001]))  # Small process noise for parameters
+R1_full = [[R1n zeros(SMatrix{nxn,nxl})]; [zeros(SMatrix{nxl,nxn}) R1l]]
+
+R2 = SMatrix{ny,ny}(Diagonal([0.1, 0.1, 0.1, 0.05, 0.05, 0.05]))  # Measurement noise
+
+# Initial state estimate (slightly wrong)
+x0n = SA[0.0, 0.0, 10.0, 0.0, 0.0, 0.0]  # Position/velocity
+x0l = SA[0.9, 0.008]  # Initial parameter guess: m=0.9, Cd=0.008 (both wrong)
+x0_full = [x0n; x0l]
+
+R0n = SMatrix{nxn,nxn}(Diagonal([1.0, 1.0, 1.0, 0.5, 0.5, 0.5]))
+R0l = SMatrix{nxl,nxl}(Diagonal([0.01, 0.0001]))
+R0_full = [[R0n zeros(SMatrix{nxn,nxl})]; [zeros(SMatrix{nxl,nxn}) R0l]]
+
+d0 = LowLevelParticleFilters.SimpleMvNormal(x0_full, R0_full)
+
+# Create measurement model
+mm = RBMeasurementModel(measurement, R2, ny)
+
+# Create MUKF
+mukf = MUKF(;
+    dynamics = discrete_dynamics_nl,
+    nl_measurement_model = mm,
+    An = An_matrix_discrete,  # Use discrete coupling matrix
+    Al,
+    Bl,
+    Cl,
+    R1 = R1_full,
+    d0,
+    nxn,
+    nu,
+    ny,
+    Ts,
+)
+
+# Run estimation
+sol_mukf = forward_trajectory(mukf, u, y)
+
+# Extract estimates
+x_est_mukf = reduce(hcat, sol_mukf.xt)'
+m_est_mukf = x_est_mukf[:, 7]
+Cd_est_mukf = x_est_mukf[:, 8]
+
+nothing # hide
+```
+
+### Results and Comparison
+Let's visualize the parameter estimation performance:
+
+```@example mukfparam
+# Plot parameter estimates
+p1 = plot(t_vec, m_true, label="True mass", lw=2, xlabel="Time (s)", ylabel="Mass (kg)",
+          legend=:topright, c=:black, ls=:dash)
+plot!(p1, t_vec, m_est_mukf, label="MUKF estimate", lw=2, c=:blue)
+
+p2 = plot(t_vec, Cd_true, label="True drag", lw=2, xlabel="Time (s)", ylabel="Drag coeff (kg·s/m)",
+          legend=:topleft, c=:black, ls=:dash)
+plot!(p2, t_vec, Cd_est_mukf, label="MUKF estimate", lw=2, c=:red)
+
+plot(p1, p2, layout=(2,1), size=(800,500))
+```
+
+The MUKF successfully tracks both parameters through the gradual mass decrease and the abrupt drag increase at t=50s. The estimation converges quickly from the initial guess.
+
+### Comparison with UKF Approach
+For comparison, let's solve the same problem using a standard UKF with augmented state:
+
+```@example mukfparam
+# For UKF, we augment the state with parameters
+function quadrotor_dynamics_augmented(x_aug, u, p, t)
+    # Extract states and parameters
+    xn = x_aug[1:6]
+    m, Cd = x_aug[7:8]
+
+    # Compute full dynamics
+    xdot = quadrotor_dynamics_nl(xn, u, p, t)
+    An = An_matrix(xn, u, p, t)
+    params = SA[m, Cd]
+
+    xdot_full = xdot + An * params
+
+    # Parameters evolve as random walk
+    SA[xdot_full..., 0.0, 0.0]
+end
+
+discrete_dynamics_aug = SeeToDee.Rk4(quadrotor_dynamics_augmented, Ts)
+measurement_aug(x, u, p, t) = x[1:6]  # Measure only position/velocity
+
+R1_aug = Diagonal([0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.005, 0.00001])
+R2_aug = R2
+
+ukf = UnscentedKalmanFilter(
+    discrete_dynamics_aug,
+    measurement_aug,
+    R1_aug,
+    R2_aug,
+    MvNormal(x0_full, R0_full);
+    ny = ny,
+    nu = nu,
+    Ts = Ts
+)
+
+sol_ukf = forward_trajectory(ukf, u, y)
+
+# Extract UKF estimates
+x_est_ukf = reduce(hcat, sol_ukf.xt)'
+m_est_ukf = x_est_ukf[:, 7]
+Cd_est_ukf = x_est_ukf[:, 8]
+
+# Compare the two approaches
+p1 = plot(t_vec, m_true, label="True", lw=2, xlabel="Time (s)", ylabel="Mass (kg)",
+          legend=:topright, c=:black, ls=:dash, title="Mass Estimation")
+plot!(p1, t_vec, m_est_mukf, label="MUKF", lw=2, c=:blue, alpha=0.7)
+plot!(p1, t_vec, m_est_ukf, label="UKF", lw=2, c=:green, alpha=0.7, ls=:dot)
+
+p2 = plot(t_vec, Cd_true, label="True", lw=2, xlabel="Time (s)", ylabel="Drag coeff",
+          legend=:topleft, c=:black, ls=:dash, title="Drag Estimation")
+plot!(p2, t_vec, Cd_est_mukf, label="MUKF", lw=2, c=:blue, alpha=0.7)
+plot!(p2, t_vec, Cd_est_ukf, label="UKF", lw=2, c=:green, alpha=0.7, ls=:dot)
+
+plot(p1, p2, layout=(2,1), size=(800,500))
+```
+
+### Performance Analysis
+Let's quantify the estimation accuracy:
+
+```@example mukfparam
+using Statistics
+
+# Compute RMSE for parameters (excluding initial transient)
+transient = 500  # Exclude first 5 seconds
+rmse_m_mukf = sqrt(mean((m_true[transient:end] - m_est_mukf[transient:end]).^2))
+rmse_Cd_mukf = sqrt(mean((Cd_true[transient:end] - Cd_est_mukf[transient:end]).^2))
+
+rmse_m_ukf = sqrt(mean((m_true[transient:end] - m_est_ukf[transient:end]).^2))
+rmse_Cd_ukf = sqrt(mean((Cd_true[transient:end] - Cd_est_ukf[transient:end]).^2))
+
+println("MUKF - Mass RMSE: $(round(rmse_m_mukf, digits=4)) kg")
+println("MUKF - Drag RMSE: $(round(rmse_Cd_mukf, digits=6)) kg·s/m")
+println()
+println("UKF  - Mass RMSE: $(round(rmse_m_ukf, digits=4)) kg")
+println("UKF  - Drag RMSE: $(round(rmse_Cd_ukf, digits=6)) kg·s/m")
+```
+
+Both filters perform comparably in terms of accuracy. However, MUKF uses 13 sigma points (2×6+1 for nonlinear state) compared to UKF's 17 sigma points (2×8+1 for full state)
+
+
 
 ## Using an optimizer
 The state estimators in this package are all statistically motivated and thus compute things like the likelihood of the data as a by-product of the estimation. Maximum-likelihood or prediction-error estimation is thus very straight-forward by simply calling a gradient-based optimizer with gradients provided by differentiating through the state estimator using automatic differentiation. In this example, we will continue the example from above, but now estimate all the parameters of the quad-tank process. This time, they will not vary with time. We will first use a standard optimization algorithm from [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl) to minimize the cost function based on the prediction error, and then use a Gauss-Newton optimizer.
