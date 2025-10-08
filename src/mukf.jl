@@ -121,7 +121,7 @@ where `x^n` is the nonlinear substate and `x^l` is the linear substate.
 * `weight_params`: Unscented transform parameters (default: MerweParams())
 * `names`: Signal names for plotting
   """
-mutable struct MUKF{IPD,IPM,DT,MMT,ANT,KFT,R1NT,D0NT,XNT,XLT,PT,TS,PARAMS,WP,NT,SPC,SPC2,PRED_C,CORR_C,NINDS,LINDS} <:
+mutable struct MUKF{IPD,IPM,DT,MMT,ANT,KFT,R1NT,D0NT,XNT,XLT,RT,TS,PARAMS,WP,NT,SPC,SPC2,PRED_C,CORR_C,NINDS,LINDS} <:
                AbstractKalmanFilter
 
     # Model functions and parameters
@@ -147,8 +147,8 @@ mutable struct MUKF{IPD,IPM,DT,MMT,ANT,KFT,R1NT,D0NT,XNT,XLT,PT,TS,PARAMS,WP,NT,
     # Current state estimates
 
     xn::XNT                   # Mean of nonlinear state
-    xl::Vector{XLT}           # Mean of linear state (all elements equal)
-    P::PT                     # Joint covariance matrix [xn; xl]
+    xl::XLT                   # Mean of linear state
+    R::RT                     # Joint covariance matrix [xn; xl]
     n_inds::NINDS             # Index vector for nonlinear state (1:nxn)
     l_inds::LINDS             # Index vector for linear state (nxn+1:nxn+nxl)
 
@@ -224,13 +224,13 @@ function MUKF{IPD,IPM}(;
     xp_proto = xn0  # nxn-dimensional
     predict_cache = MUKFPredictCache(x_full_proto, G_proto, xp_proto, ns, static)
 
-    # Initialize joint covariance P0 = blockdiag(Rn0, Γ0) with Rnl=0
+    # Initialize joint covariance R0 = blockdiag(Rn0, Γ0) with Rnl=0
     Rn0  = convert_cov_type(R1n, d0n.Σ)
     Γ0   = convert_cov_type(kf.R1, kf.d0.Σ)
-    P0   = blockdiag(Rn0, Γ0)  # Start with zero cross-covariance
+    R0   = blockdiag(Rn0, Γ0)  # Start with zero cross-covariance
 
-    # Create index vectors for efficient partition_cov (static if P0 is static)
-    if P0 isa StaticArray
+    # Create index vectors for efficient partition_cov (static if R0 is static)
+    if R0 isa StaticArray
         n_inds = SVector{nxn}(1:nxn)
         l_inds = SVector{nxl}((1:nxl) .+ nxn)
     else
@@ -238,8 +238,8 @@ function MUKF{IPD,IPM}(;
         l_inds = nxn+1:nxn+nxl
     end
 
-    # Initialize linear state means (all equal)
-    xl = [copy(xl0) for _ = 1:ns]
+    # Initialize linear state mean
+    xl = xl0
 
     # Initialize sigma points (will be updated in predict!/correct!)
     xn_sigma_points = [copy(xn0) for _ = 1:ns]
@@ -256,7 +256,7 @@ function MUKF{IPD,IPM}(;
         typeof(d0n),
         typeof(xn0),
         typeof(xl0),
-        typeof(P0),
+        typeof(R0),
         typeof(Ts),
         typeof(p),
         typeof(weight_params),
@@ -281,7 +281,7 @@ function MUKF{IPD,IPM}(;
         xn_sigma_points,
         xn0,
         xl,
-        P0,
+        R0,
         n_inds,
         l_inds,
         0,
@@ -315,7 +315,7 @@ function Base.show(io::IO, mukf::MUKF{IPD,IPM}) where {IPD,IPM}
     println(io, "  weight_params: $(typeof(mukf.weight_params))")
     for field in fieldnames(typeof(mukf))
         field in (:ny, :nu, :Ts, :t, :nxn, :nxl, :weight_params) && continue
-        if field in (:nl_measurement_model, :sigma_point_cache, :correct_sigma_point_cache, :predict_cache, :correct_cache, :kf, :An, :xn_sigma_points, :xl, :P, :n_inds, :l_inds)
+        if field in (:nl_measurement_model, :sigma_point_cache, :correct_sigma_point_cache, :predict_cache, :correct_cache, :kf, :An, :xn_sigma_points, :xl, :R, :n_inds, :l_inds)
             println(io, "  $field: $(fieldtype(typeof(mukf), field))")
         else
             println(io, "  $field: $(repr(getfield(mukf, field), context=:compact => true))")
@@ -325,11 +325,11 @@ end
 
 # Convenience accessors
 
-state(f::MUKF) = [f.xn; xl_mean(f)]
-covariance(f::MUKF) = f.P
+state(f::MUKF) = [f.xn; f.xl]
+covariance(f::MUKF) = f.R
 parameters(f::MUKF) = f.p
-particletype(f::MUKF) = typeof([f.xn; f.xl[1]])
-covtype(f::MUKF) = typeof(f.P)
+particletype(f::MUKF) = typeof([f.xn; f.xl])
+covtype(f::MUKF) = typeof(f.R)
 
 function Base.getproperty(f::MUKF, s::Symbol)
     s ∈ fieldnames(typeof(f)) && return getfield(f, s)
@@ -350,37 +350,35 @@ end
 
 """
 xl_mean(f::MUKF)
-Return the mean of the linear substate. All xl[i] are equal by construction.
+Return the mean of the linear substate.
 """
 function xl_mean(f::MUKF)
-    return f.xl[1]  # All xl[i] are kept equal
+    return f.xl
 end
 
 """
 xl_cov(f::MUKF)
-Extract the marginal covariance of the linear substate from joint covariance P.
+Extract the marginal covariance of the linear substate from joint covariance R.
 """
 function xl_cov(f::MUKF)
     nxn = length(f.xn)
-    return f.P[nxn+1:end, nxn+1:end]
+    return f.R[nxn+1:end, nxn+1:end]
 end
 
 """
 xl_cross_cov(f::MUKF)
-Extract cross-covariance between xn and xl from joint covariance P.
+Extract cross-covariance between xn and xl from joint covariance R.
 """
 function xl_cross_cov(f::MUKF)
     nxn = length(f.xn)
-    return f.P[1:nxn, nxn+1:end]
+    return f.R[1:nxn, nxn+1:end]
 end
 
 function reset!(f::MUKF, d0n = f.d0n, d0l = f.kf.d0)
     @bangbang f.xn .= d0n.μ
-    for i in eachindex(f.xl)
-        @bangbang f.xl[i] .= d0l.μ
-    end
+    @bangbang f.xl .= d0l.μ
     # Reset to block diagonal covariance with zero cross-covariance
-    @bangbang f.P .= blockdiag(d0n.Σ, d0l.Σ)
+    @bangbang f.R .= blockdiag(d0n.Σ, d0l.Σ)
     sigmapoints!(f.xn_sigma_points, d0n.μ, d0n.Σ, f.weight_params)
     f.t = 0
     f
@@ -463,7 +461,7 @@ function predict!(
     R1l_mat = get_mat(f.kf.R1, f.xn, u, p, t)  # May be state-dependent
 
     # Extract conditional parameters from current joint covariance
-    Pnn, Pnl, Pln, Pll = partition_cov(f.P, f.n_inds, f.l_inds)
+    Pnn, Pnl, Pln, Pll = partition_cov(f.R, f.n_inds, f.l_inds)
     L, Γ_curr = cond_linear_params(Pnn, Pnl, Pln, Pll)
 
     # Current means
@@ -537,7 +535,7 @@ function predict!(
     end
 
     # Compute spread covariance from transformed sigma points
-    P_spread = zero(f.P)
+    P_spread = zero(f.R)
     @inbounds for i in eachindex(sp)
         w = i == 1 ? W.wc : W.wci
         δ = Y[i] .- μ_pred
@@ -564,12 +562,10 @@ function predict!(
     # Update state and covariance
     @bangbang f.xn .= μ_pred[f.n_inds]
     μl_pred = μ_pred[f.l_inds]
-    @bangbang f.P .= P_pred
+    @bangbang f.R .= P_pred
 
-    # Update xl means - all xl[i] are set to marginal mean
-    @inbounds for i in eachindex(f.xl)
-        f.xl[i] = μl_pred
-    end
+    # Update xl mean
+    f.xl = μl_pred
 
     f.t += 1
 end
@@ -598,7 +594,7 @@ function correct!(
     end
 
     # Extract conditional parameters from current joint covariance
-    Pnn, Pnl, Pln, Pll = partition_cov(f.P, f.n_inds, f.l_inds)
+    Pnn, Pnl, Pln, Pll = partition_cov(f.R, f.n_inds, f.l_inds)
     L, Γ_curr = cond_linear_params(Pnn, Pnl, Pln, Pll)
 
     # Current means
@@ -704,18 +700,16 @@ function correct!(
 
     # Update full state and covariance
     μ_new = μ_full .+ K * innovation
-    P_new = f.P .- K * S * K'
+    P_new = f.R .- K * S * K'
     P_new = symmetrize(P_new)
 
     # Update state and covariance
     @bangbang f.xn .= μ_new[f.n_inds]
     μl_new = μ_new[f.l_inds]
-    @bangbang f.P .= P_new
+    @bangbang f.R .= P_new
 
-    # Update xl means - all xl[i] are set to marginal mean
-    @inbounds for i in eachindex(f.xl)
-        f.xl[i] = μl_new
-    end
+    # Update xl mean
+    f.xl = μl_new
 
     ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), innovation)
     return (; ll, e = innovation, S, Sᵪ, K) 

@@ -84,8 +84,8 @@ end
 
     # Verify types
     @test mukf_s.xn isa SVector
-    @test mukf_s.P isa SMatrix
-    @test mukf_s.xl[1] isa SVector
+    @test mukf_s.R isa SMatrix
+    @test mukf_s.xl isa SVector
     @test mukf_s.sigma_point_cache.x0[1] isa SVector
 
     # Test filtering
