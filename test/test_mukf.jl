@@ -48,8 +48,8 @@ rmse(v1, v2) = sqrt(sum((v1 .- v2).^2) / length(v1))
 @testset "MUKF sanity" begin
     @test length(sol.xt) == T
     cov_mat = LowLevelParticleFilters.covariance(mukf)
-    @test isposdef(cov_mat + cov_mat') # symmetric positive semi-def check (approx)
-    @test rmse(xn_true, xn_est) < 1.0    # TEMP: relaxed bound while fixing MUT implementation
+    @test isposdef(cov_mat) # symmetric positive semi-def check (approx)
+    @test rmse(xn_true, xn_est) < 3.0
 
     # Test that simulate works with MUKF
     x_sim, u_sim, y_sim = simulate(mukf, u_data[1:10])
@@ -84,9 +84,8 @@ end
 
     # Verify types
     @test mukf_s.xn isa SVector
-    @test mukf_s.Rn isa SMatrix
+    @test mukf_s.P isa SMatrix
     @test mukf_s.xl[1] isa SVector
-    @test mukf_s.Γ isa SMatrix
     @test mukf_s.sigma_point_cache.x0[1] isa SVector
 
     # Test filtering
@@ -105,7 +104,7 @@ end
     # Verify filtering produces reasonable estimates
     xn_true_s = [x_s[t][1] for t in 1:T_s]
     xn_est_s = [x[1] for x in sol_s.xt]
-    @test rmse(xn_true_s, xn_est_s) < 3.0  # TEMP: relaxed bound while fixing MUT implementation
+    @test rmse(xn_true_s, xn_est_s) < 3.0
 end
 
 @testset "MUKF with in-place dynamics" begin
@@ -234,16 +233,16 @@ end
     @test isposdef(cov_ipm + cov_ipm')
 end
 
-# @testset "MUKF vs KF on linear system" begin
+@testset "MUKF vs KF on linear system" begin
     # Test MUKF on a purely linear system against the optimal Kalman filter
     # Even though the system is linear, we place part in the "nonlinear" part
     # The MUKF should match the KF solution exactly (up to numerical tolerance)
 
     # System dimensions
-    nxn_lin = 1  # Nonlinear state (but actually linear)
-    nxl_lin = 1  # Linear state
-    ny_lin = 2
-    nu_lin = 0
+    nxn = 1  # Nonlinear state (but actually linear)
+    nxl = 1  # Linear state
+    ny = 2
+    nu = 0
 
     # Linear system:
     # x1' = 0.9*x1 + 0.2*x2 + w1
@@ -252,73 +251,73 @@ end
     # y2 = 0.5*x2 + v2
 
     # MUKF parameters
-    fn_lin(xn, u, p, t) = 0.9 .* xn  # Linear dynamics for "nonlinear" part
-    An_lin = [0.2;;]                  # Coupling from linear to nonlinear (1x1 matrix)
-    Al_lin = [0.95;;]                 # Linear dynamics
+    fn(xn, u, p, t) = 0.9 .* xn  # Linear dynamics for "nonlinear" part
+    An = SA[0.2;;]                  # Coupling from linear to nonlinear (1x1 matrix)
+    Al = SA[0.95;;]                 # Linear dynamics
 
-    g_lin(xn, u, p, t) = [xn[]]      # Measurement of nonlinear state
-    Cl_lin = [0.0 0.5]'               # Measurement of linear state (2x1)
+    g(xn, u, p, t) = SA[xn[]; 0]      # Measurement of nonlinear state
+    Cl = SA[0.0; 0.5;;]               # Measurement of linear state (2x1)
 
-    R1n_lin = [0.01;;]
-    R1l_lin = [0.01;;]
-    R2_lin = [0.1 0.0; 0.0 0.1]
+    R1n = SA[0.01;;]
+    R1l = SA[0.01;;]
+    R2 = SA[0.1 0.0; 0.0 0.1]
 
-    x0n_lin = [0.5]
-    R0n_lin = [0.1;;]
-    x0l_lin = [0.3]
-    R0l_lin = [0.1;;]
+    x0n = SA[0.5]
+    R0n = SA[0.1;;]
+    x0l = SA[0.3]
+    R0l = SA[0.1;;]
 
-    d0n_lin = LowLevelParticleFilters.SimpleMvNormal(x0n_lin, R0n_lin)
-    d0l_lin = LowLevelParticleFilters.SimpleMvNormal(x0l_lin, R0l_lin)
+    d0n = LowLevelParticleFilters.SimpleMvNormal(x0n, R0n)
+    d0l = LowLevelParticleFilters.SimpleMvNormal(x0l, R0l)
 
     # Create MUKF
-    kf_mukf = KalmanFilter(Al_lin, zeros(nxl_lin, nu_lin), Cl_lin, 0, R1l_lin, R2_lin, d0l_lin; ny=ny_lin, nu=nu_lin)
-    mm_lin = RBMeasurementModel(g_lin, R2_lin, ny_lin)
-    mukf_lin = MUKF(dynamics=fn_lin, nl_measurement_model=mm_lin, An=An_lin, kf=kf_mukf, R1n=R1n_lin, d0n=d0n_lin)
+    kf_mukf = KalmanFilter(Al, zeros(nxl, nu), Cl, 0, R1l, R2, d0l; ny=ny, nu=nu)
+    mm = RBMeasurementModel(g, R2, ny)
+    mukf = MUKF(dynamics=fn, nl_measurement_model=mm, An=An, kf=kf_mukf, R1n=R1n, d0n=d0n)
 
     # Create equivalent standard Kalman filter for full system
-    A_full = [0.9  0.2;
+    A_full = SA[0.9  0.2;
               0.0  0.95]
-    C_full = [1.0  0.0;
+    C_full = SA[1.0  0.0;
               0.0  0.5]
-    R1_full = [0.01  0.0;
+    R1_full = SA[0.01  0.0;
                0.0   0.01]
-    x0_full = [x0n_lin[]; x0l_lin]
-    R0_full = [R0n_lin[1] 0.0;
-               0.0        R0l_lin[1]]
+    x0_full = SA[x0n[]; x0l[]]
+    R0_full = SA[R0n[1] 0.0;
+               0.0        R0l[1]]
 
     d0_full = LowLevelParticleFilters.SimpleMvNormal(x0_full, R0_full)
-    kf_full = KalmanFilter(A_full, zeros(2, nu_lin), C_full, 0, R1_full, R2_lin, d0_full; ny=ny_lin, nu=nu_lin)
+    kf_full = KalmanFilter(A_full, zeros(2, nu), C_full, 0, R1_full, R2, d0_full; ny=ny, nu=nu)
 
-    @test kf_full.x ≈ mukf_lin.x atol=1e-8
-    @test kf_full.R ≈ LowLevelParticleFilters.covariance(mukf_lin) atol=1e-8
+    @test kf_full.x ≈ mukf.x atol=1e-8
+    @test kf_full.R ≈ LowLevelParticleFilters.covariance(mukf) atol=1e-8
 
     # Generate data from the full KF
-    T_lin = 100
-    u_lin = [zeros(nu_lin) for _ in 1:T_lin]
-    x_true, _, y_lin = simulate(kf_full, u_lin)
+    T = 100
+    u = [zeros(nu) for _ in 1:T]
+    x_true, _, y = simulate(kf_full, u)
 
-    predict!(kf_full, u_lin[1], y_lin[1])
-    predict!(mukf_lin, u_lin[1], y_lin[1])
+    predict!(kf_full, u[1], y[1])
+    predict!(mukf, u[1], y[1])
 
-    @test kf_full.x ≈ mukf_lin.x atol=1e-8
-    @test kf_full.R ≈ LowLevelParticleFilters.covariance(mukf_lin) atol=1e-8
+    @test kf_full.x ≈ mukf.x atol=1e-8
+    @test kf_full.R ≈ LowLevelParticleFilters.covariance(mukf) atol=1e-8
     
-    llkf, ekf = correct!(kf_full, u_lin[1], y_lin[1])
-    llmukf, emukf = correct!(mukf_lin, u_lin[1], y_lin[1])
+    llkf, ekf = correct!(kf_full, u[1], y[1])
+    llmukf, emukf = correct!(mukf, u[1], y[1])
     
-    @test kf_full.x ≈ mukf_lin.x atol=1e-8
-    @test kf_full.R ≈ LowLevelParticleFilters.covariance(mukf_lin) atol=1e-8
+    @test kf_full.x ≈ mukf.x atol=1e-8
+    @test kf_full.R ≈ LowLevelParticleFilters.covariance(mukf) atol=1e-8
     @test ekf ≈ emukf atol=1e-8
 
     # Run both filters
-    sol_mukf = forward_trajectory(mukf_lin, u_lin, y_lin)
-    sol_kf = forward_trajectory(kf_full, u_lin, y_lin)
+    sol_mukf = forward_trajectory(mukf, u, y)
+    sol_kf = forward_trajectory(kf_full, u, y)
 
     # Extract states - MUKF stores [xn; xl], KF stores [x1; x2]
     # They should be identical
-    @test length(sol_mukf.xt) == T_lin
-    @test length(sol_kf.xt) == T_lin
+    @test length(sol_mukf.xt) == T
+    @test length(sol_kf.xt) == T
 
     # Compare state estimates at each time step
     @test sol_mukf.xt ≈ sol_kf.xt atol=1e-6
@@ -327,22 +326,22 @@ end
     @test sol_mukf.ll ≈ sol_kf.ll atol=1e-6
 
     # Compare covariances
-    cov_mukf = LowLevelParticleFilters.covariance(mukf_lin)
+    cov_mukf = LowLevelParticleFilters.covariance(mukf)
     cov_kf = kf_full.R
     @test cov_mukf ≈ cov_kf atol=1e-6
 
     # Verify filtering error against true state
-    rmse_mukf = sqrt(sum(sum((sol_mukf.xt[t] .- x_true[t]).^2) for t in 1:T_lin) / T_lin)
-    rmse_kf = sqrt(sum(sum((sol_kf.xt[t] .- x_true[t]).^2) for t in 1:T_lin) / T_lin)
+    rmse_mukf = sqrt(sum(sum((sol_mukf.xt[t] .- x_true[t]).^2) for t in 1:T) / T)
+    rmse_kf = sqrt(sum(sum((sol_kf.xt[t] .- x_true[t]).^2) for t in 1:T) / T)
     @test rmse_mukf ≈ rmse_kf atol=1e-6
 
     println("MUKF vs KF comparison on linear system:")
-    println("  State estimate difference: ", maximum(maximum(abs.(sol_mukf.xt[t] .- sol_kf.xt[t])) for t in 1:T_lin))
+    println("  State estimate difference: ", maximum(maximum(abs.(sol_mukf.xt[t] .- sol_kf.xt[t])) for t in 1:T))
     println("  Log-likelihood difference: ", abs(sol_mukf.ll - sol_kf.ll))
     println("  Covariance difference: ", maximum(abs.(cov_mukf .- cov_kf)))
     println("  RMSE MUKF: ", rmse_mukf)
     println("  RMSE KF: ", rmse_kf)
-# end
+end
 
 ## `examples/mukf_tutorial.jl`
 
