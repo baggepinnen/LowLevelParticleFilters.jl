@@ -98,7 +98,7 @@ function correct!(kf::AbstractKalmanFilter, mm::LinearMeasurementModel, u, y, p=
     S = symmetrize(Ct*R*Ct')
     @bangbang S .+= R2
     Sᵪ  = cholesky(Symmetric(S); check = false)
-    issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed, got S = ", S)
+    issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed, got S = $(printarray(S))")
     K   = (R*Ct')/Sᵪ
     kf.x += K*e
     kf.R  = symmetrize((I - K*Ct)*R) # WARNING against I .- A

@@ -45,6 +45,38 @@ macro maybe_threads(flag, expr)
     end |> esc
 end
 
+"""
+    printarray(A)
+
+Simple utility to convert arrays to strings for error messages.
+Required for Julia 1.12+ where arrays cannot be directly interpolated into error messages without JET complaining.
+"""
+function printarray(A::AbstractVector)
+    io = IOBuffer()
+    print(io, "[")
+    for (i, x) in enumerate(A)
+        print(io, x)
+        i < length(A) && print(io, ", ")
+    end
+    print(io, "]")
+    return String(take!(io))
+end
+
+function printarray(A::AbstractMatrix)
+    io = IOBuffer()
+    m, n = size(A)
+    print(io, "[")
+    for i in 1:m
+        for j in 1:n
+            print(io, A[i,j])
+            j < n && print(io, " ")
+        end
+        i < m && print(io, "; ")
+    end
+    print(io, "]")
+    return String(take!(io))
+end
+
 include("indexing_matrix.jl")
 include("signalnames.jl")
 include("PFtypes.jl")

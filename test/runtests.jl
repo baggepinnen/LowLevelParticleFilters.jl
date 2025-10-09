@@ -21,6 +21,9 @@ out = zeros(2, 10000)
 @test_nowarn rand!(Random.default_rng(), d, out)
 @test cov(out, dims=2) ≈ S atol = 0.1
 
+@test LowLevelParticleFilters.printarray([1,2]) == "[1, 2]"
+@test LowLevelParticleFilters.printarray([1 2; 3 4]) == "[1 2; 3 4]"
+
 @testset "LowLevelParticleFilters" begin
     @info "testing LowLevelParticleFilters"
     @testset "logsumexp" begin
