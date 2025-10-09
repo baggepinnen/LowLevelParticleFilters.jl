@@ -55,6 +55,7 @@ Below, we define functions that return the matrix ``A_n`` despite that it is con
 using LowLevelParticleFilters, LinearAlgebra
 using LowLevelParticleFilters: SimpleMvNormal
 using StaticArrays
+using Random
 using DisplayAs # hide
 nxn = 1         # Dimension of nonlinear state
 nxl = 3         # Dimension of linear state
@@ -62,7 +63,7 @@ nx  = nxn + nxl # Total dimension of state
 nu  = 0         # Dimension of control input
 ny  = 2         # Dimension of measurement
 N   = 200       # Number of particles
-fn(xn, args...) = atan.(xn)         # Nonlinear part of nonlinear state dynamics
+fn(xn, args...) = SA[atan(xn[])]         # Nonlinear part of nonlinear state dynamics
 An  = SA[1.0 0.0 0.0]     # Linear part of nonlinear state dynamics
 Al  = SA[1.0  0.3   0.0;  # Linear part of linear state dynamics (the standard Kalman-filter A matrix). It's defined as a matrix here, but it can also be a function of (x, u, p, t)
                    0.0  0.92 -0.3; 
@@ -91,6 +92,7 @@ kf    = KalmanFilter(Al, Bl, Cl, 0, R1l, R2, d0l; ny, nu) # Since we are providi
 mm    = RBMeasurementModel(g, R2, ny)
 names = SignalNames(x=["\$x^n_1\$", "\$x^l_2\$", "\$x^l_3\$", "\$x^l_4\$"], u=[], y=["\$y_1\$", "\$y_2\$"], name="RBPF") # For nicer labels in the plot
 pf    = RBPF(N, kf, fn, mm, R1n, d0n; nu, An, Ts=1.0, names)
+Random.seed!(pf.rng, 1234)
 
 # Simulate some data from the filter dynamics
 u     = [zeros(nu) for _ in 1:100]
@@ -100,7 +102,7 @@ x,u,y = simulate(pf, u)
 sol = forward_trajectory(pf, u, y)
 
 using Plots
-plot(sol, size=(800,600), xreal=x, markersize=1, nbinsy=50, colorbar=false)
+fig_rbpf = plot(sol, size=(800,600), xreal=x, markersize=1, nbinsy=50, colorbar=false)
 for i = 1:nx
     plot!(ylims = extrema(getindex.(x, i)) .+ (-1, 1), sp=i)
 end
@@ -115,17 +117,28 @@ In this example, we made use of standard julia arrays for the dynamics and covar
 The paper referenced above mention a lot of special cases in which the filter can be simplified, it's worth a read if you are considering using this filter.
 
 
-## MUKF
+## Marginalized UKF
 
 The [`MUKF`](@ref) (Marginalized Unscented Kalman Filter) is an alternative to RBPF that uses the Unscented Transform instead of random particles. While RBPF uses ``N`` random particles (each with a Kalman filter), MUKF uses deterministic sigma points (typically ``2n+1`` for an ``n``-dimensional nonlinear state). This makes MUKF:
 - **Deterministic**
 - **Efficient for low-dimensional nonlinear states**: Uses fewer "hypotheses" than typical RBPF
 - **Gaussian assumption**: Like UKF, assumes posterior remains Gaussian (cannot handle multimodal distributions)
 
+The MUKF filter in this package accepts a slightly more general form of the dynamics than RBPF, notably, we allow the ``d_l(x_t^n, u, p, t)`` term in the linear sub state dynamics.
+```math
+\\begin{aligned}
+x_{t+1}^n &= d_n(x_t^n, u, p, t) + A_n(x_t^n)\\, x_t^l + w_t^n \\\\
+x_{t+1}^l &= d_l(x_t^n, u, p, t) + A_l(x_t^n)\\, x_t^l + B_l(x_t^n)\\, u + w_t^l \\\\
+w_t &= \\begin{bmatrix} w_t^n \\\\ w_t^l \\end{bmatrix} &\\sim \\mathcal{N}(0, R_1) \\\\
+y_t &= g(x_t^n, u, p, t) + C_l(x_t^n)\\, x_t^l + e_t, \\quad &e_t \\sim \\mathcal{N}(0, R_2)
+\\end{aligned}
+```
+The MUKF filter takes the nonlinear dynamics term ``[d_n; d_l]`` as a single function `fn(xn, u, p, t)`, so we need to define a new function for this. We also need to combine the process noise covariances into a single matrix ``R_1`` and the initial distributions into a single distribution.
 Let's compare MUKF with RBPF on the same system:
 
 ```@example RBPF
 using Statistics
+fn_mukf(xn, args...) = SA[atan(xn[]); 0.0; 0.0; 0.0] # d_n and d_l combined
 # Create MUKF using the same model components
 # Combine process noise covariances into full R1 matrix
 R1 = [R1n zeros(nxn, nxl); zeros(nxl, nxn) R1l]
@@ -133,7 +146,8 @@ R1 = [R1n zeros(nxn, nxl); zeros(nxl, nxn) R1l]
 x0 = [x0n; x0l]
 R0_full = [R0n zeros(nxn, nxl); zeros(nxl, nxn) R0l]
 d0 = SimpleMvNormal(x0, R0_full)
-mukf = MUKF(; dynamics=fn, nl_measurement_model=mm, An, Al, Bl, Cl, R1, d0, nxn, nu, ny)
+weight_params = MerweParams(α = 0.5) # MUKF does much better at this example if this is set to 0.5 instead of the default 1.0
+mukf = MUKF(; dynamics=fn_mukf, nl_measurement_model=mm, An, Al, Bl, Cl, R1, d0, nxn, nu, ny, weight_params, names=SignalNames(names, "MUKF"))
 
 # Run filtering on the same data
 sol_mukf = forward_trajectory(mukf, u, y)
@@ -152,15 +166,10 @@ println("RBPF RMSE: $(round(rmse_rbpf, digits=4))")
 println("MUKF RMSE: $(round(rmse_mukf, digits=4))")
 ```
 
-Let's visualize the comparison:
+Let's add the MUKF result to the prvious plot for comparison:
 
 ```@example RBPF
-plot(xn_true, label="True x^n", lw=2, legend=:topleft)
-plot!(xn_rbpf, label="RBPF estimate (N=$N)", lw=2, alpha=0.7)
-plot!(xn_mukf, label="MUKF estimate", lw=2, alpha=0.7, ls=:dash)
-xlabel!("Time step")
-ylabel!("x^n")
-title!("Comparison: RBPF vs MUKF")
+plot!(fig_rbpf, sol_mukf, ploty=false, plotx=false, plotRt=true, fillalpha=0.3, linewidth=2)
 DisplayAs.PNG(Plots.current()) # hide
 ```
 

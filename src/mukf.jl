@@ -106,7 +106,7 @@ x_{t+1}^l &= d_l(x_t^n, u, p, t) + A_l(x_t^n)\\, x_t^l + B_l(x_t^n)\\, u + w_t^l
 w_t &= \\begin{bmatrix} w_t^n \\\\ w_t^l \\end{bmatrix} &\\sim \\mathcal{N}(0, R_1) \\\\
 y_t &= g(x_t^n, u, p, t) + C_l(x_t^n)\\, x_t^l + e_t, \\quad &e_t \\sim \\mathcal{N}(0, R_2)
 \\end{aligned}
-````
+```
 
 where `x^n` is the nonlinear substate and `x^l` is the linear substate. This is the **conditionally linear** form from Morelande & Moran (2007), which allows the linear substate to depend on the nonlinear substate through both `d_l(x^n)` and the coupling matrices.
 

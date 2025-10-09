@@ -60,7 +60,7 @@ isinplace(::RBMeasurementModel{IPM}) where IPM = IPM
 has_oop(::RBMeasurementModel{IPM}) where IPM = !IPM
 
 
-struct RBPF{IPD, IPM, AUGD, ST, KFT <: AbstractKalmanFilter, FT, MT, ANT, R1NT, D0NT, TS, P, RNG} <: AbstractParticleFilter # QUESTION: AbstractKalmanFilter?
+struct RBPF{IPD, IPM, AUGD, ST, KFT <: AbstractKalmanFilter, FT, MT, ANT, R1NT, D0NT, TS, P, RNG} <: AbstractParticleFilter
     state::ST
     kf::KFT
     dynamics::FT          # Nonlinear dynamics
