@@ -86,7 +86,7 @@ function MUKFPredictCache(x_full_proto, G_proto, xp_proto, ns, static::Bool)
 end
 
 """
-    MUKF(; dynamics, nl_measurement_model::RBMeasurementModel, An, Al, Cl, R1, d0, nxn, nu, ny, Ts=1.0, p=NullParameters(), weight_params=MerweParams(), names=default_names(length(d0.μ), nu, ny, "MUKF"))
+    MUKF(; dynamics, nl_measurement_model::RBMeasurementModel, A, Cl, R1, d0, nxn, nu, ny, Ts=1.0, p=NullParameters(), weight_params=MerweParams(), names=default_names(length(d0.μ), nu, ny, "MUKF"))
 
 Marginalized Unscented Kalman Filter for mixed linear/nonlinear state-space models.
 
@@ -114,8 +114,7 @@ where ``x^n`` is the nonlinear substate and ``x^`l` is the linear substate. This
 
 * `dynamics`: Function returning nonlinear contribution to the dynamics `[dn(xn, u, p, t); dl(xn, u, p, t)]`. Control input dependence can be encoded directly in both `dn` and `dl`.
 * `nl_measurement_model`: An instance of [`RBMeasurementModel`](@ref) containing `g` and `R_2`
-* `An`: The coupling matrix/function from linear to nonlinear state (matrix or function)
-* `Al`: Linear dynamics matrix/function `Al(xn, u, p, t)` for the linear substate
+* `A`: Combined coupling and dynamics matrix/function `[An(xn); Al(xn)]` (nx × nxl). The first nxn rows (An) couple the linear state to the nonlinear state dynamics, and the last nxl rows (Al) define the linear state dynamics matrix.
 * `Cl`: Measurement matrix/function `Cl(xn, u, p, t)` for the linear substate
 * `R1`: Full process noise covariance matrix (nx × nx) for the combined state [xn; xl] (matrix or function)
 * `d0`: Initial normal distribution for the full state [xn; xl] (`LowLevelParticleFilters.SimpleMvNormal`)
@@ -127,15 +126,14 @@ where ``x^n`` is the nonlinear substate and ``x^`l` is the linear substate. This
 * `weight_params`: Unscented transform parameters (default: MerweParams())
 * `names`: Signal names for plotting
   """
-mutable struct MUKF{IPD,IPM,DT,MMT,ANT,ALT,CLT,R1T,D0T,XNT,XT,RT,TS,PARAMS,WP,NT,SPC,SPC2,PRED_C,CORR_C,NINDS,LINDS} <:
+mutable struct MUKF{IPD,IPM,DT,MMT,AT,CLT,R1T,D0T,XNT,XT,RT,TS,PARAMS,WP,NT,SPC,SPC2,PRED_C,CORR_C,NINDS,LINDS} <:
                AbstractKalmanFilter
 
     # Model functions and parameters
 
     dynamics::DT              # Returns [dₙ(xⁿ, u, p, t); dₗ(xⁿ, u, p, t)] (uncoupled part of dynamics)
     nl_measurement_model::MMT # Nonlinear measurement model
-    An::ANT                   # Coupling from linear to nonlinear state
-    Al::ALT                   # Linear dynamics matrix
+    A::AT                     # Combined coupling and dynamics matrix [An; Al] (nx × nxl)
     Cl::CLT                   # Measurement matrix for linear state
 
     # Noise covariances and initial distributions
@@ -172,8 +170,7 @@ end
 function MUKF{IPD,IPM}(;
     dynamics,
     nl_measurement_model::RBMeasurementModel,
-    An,
-    Al,
+    A,
     Cl,
     R1,
     d0,
@@ -232,8 +229,7 @@ function MUKF{IPD,IPM}(;
 
     # Create predict cache for dynamics transformation
     x_full_proto = x_proto  # nx-dimensional (same as x_proto)
-    G_proto = vcat(get_mat(An, xn0, zeros(T, nu), p, T(0)),
-                   get_mat(Al, xn0, zeros(T, nu), p, T(0)))  # nx×nxl matrix
+    G_proto = get_mat(A, xn0, zeros(T, nu), p, T(0))  # nx×nxl matrix (already concatenated [An; Al])
     xp_proto = x0  # nx-dimensional (full state) - dynamics returns [dn; dl]
     predict_cache = MUKFPredictCache(x_full_proto, G_proto, xp_proto, ns, static)
 
@@ -260,8 +256,7 @@ function MUKF{IPD,IPM}(;
         IPM,
         typeof(dynamics),
         typeof(nl_measurement_model),
-        typeof(An),
-        typeof(Al),
+        typeof(A),
         typeof(Cl),
         typeof(R1),
         typeof(d0),
@@ -281,8 +276,7 @@ function MUKF{IPD,IPM}(;
     }(
         dynamics,
         nl_measurement_model,
-        An,
-        Al,
+        A,
         Cl,
         R1,
         d0,
@@ -326,7 +320,7 @@ function Base.show(io::IO, mukf::MUKF{IPD,IPM}) where {IPD,IPM}
     println(io, "  weight_params: $(typeof(mukf.weight_params))")
     for field in fieldnames(typeof(mukf))
         field in (:ny, :nu, :Ts, :t, :nxn, :nxl, :weight_params) && continue
-        if field in (:nl_measurement_model, :sigma_point_cache, :correct_sigma_point_cache, :predict_cache, :correct_cache, :Al, :Cl, :An, :xn_sigma_points, :x, :R, :n_inds, :l_inds)
+        if field in (:nl_measurement_model, :sigma_point_cache, :correct_sigma_point_cache, :predict_cache, :correct_cache, :A, :Cl, :xn_sigma_points, :x, :R, :n_inds, :l_inds)
             println(io, "  $field: $(fieldtype(typeof(mukf), field))")
         else
             println(io, "  $field: $(repr(getfield(mukf, field), context=:compact => true))")
@@ -474,8 +468,8 @@ function predict!(
     W = UKFWeights(f.weight_params, nxn)
 
     # Transform sigma points through dynamics
-    # Yi = [fn(sp[i]) + An_i*νB_i; fl(sp[i], u) + Al_i*νB_i]
-    # where νB_i = μl + L*(sp[i] - μn) is the conditional mean of xl given xn=sp[i]
+    # Yi = d(sp[i], u) + A_i*νB_i
+    # where A_i = [An_i; Al_i] and νB_i = μl + L*(sp[i] - μn) is the conditional mean of xl given xn=sp[i]
 
     # Use cached arrays (no allocations!)
     Y = f.predict_cache.Y
@@ -485,9 +479,9 @@ function predict!(
     if IPD
         # In-place dynamics
         @inbounds for i in eachindex(sp)
-            # Get state-dependent matrices
-            An_i = get_mat(f.An, sp[i], u, p, t)
-            Al_i = get_mat(f.Al, sp[i], u, p, t)
+            # Get state-dependent matrix A = [An; Al]
+            A_i = get_mat(f.A, sp[i], u, p, t)
+            G_matrices[i] = A_i
 
             # Conditional mean of xl given xn=sp[i]
             νB = μl .+ L * (sp[i] .- μn)
@@ -496,33 +490,23 @@ function predict!(
             xp .= 0
             f.dynamics(xp, sp[i], u, p, t)
 
-            # Partition and add coupling
-            xn_i = xp[f.n_inds] .+ An_i * νB  # dn + An*xl
-            xl_i = xp[f.l_inds] .+ Al_i * νB  # dl + Al*xl
-
-            # Store full transformed state
-            Y[i] = [xn_i; xl_i]
-
-            # Store G matrix: [An_i; Al_i]
-            G_matrices[i] = [An_i; Al_i]
+            # Add coupling: x' = d(xn, u) + A*xl
+            Y[i] = xp .+ A_i * νB
         end
     else
         # Out-of-place dynamics
         @inbounds for i in eachindex(sp)
-            An_i = get_mat(f.An, sp[i], u, p, t)
-            Al_i = get_mat(f.Al, sp[i], u, p, t)
+            # Get state-dependent matrix A = [An; Al]
+            A_i = get_mat(f.A, sp[i], u, p, t)
+            G_matrices[i] = A_i
 
             νB = μl .+ L * (sp[i] .- μn)
 
             # Get full dynamics [dn(xn, u); dl(xn, u)]
             xp_full = f.dynamics(sp[i], u, p, t)
 
-            # Partition and add coupling
-            xn_i = xp_full[f.n_inds] .+ An_i * νB  # dn + An*xl
-            xl_i = xp_full[f.l_inds] .+ Al_i * νB  # dl + Al*xl
-
-            Y[i] = [xn_i; xl_i]
-            G_matrices[i] = [An_i; Al_i]
+            # Add coupling: x' = d(xn, u) + A*xl
+            Y[i] = xp_full .+ A_i * νB
         end
     end
 
@@ -728,8 +712,10 @@ function dynamics(mukf::MUKF)
         xn = x[1:nxn]
         xl = x[nxn+1:end]
 
-        An = get_mat(mukf.An, xn, u, p, t)
-        Al = get_mat(mukf.Al, xn, u, p, t)
+        # Get combined A matrix and extract An, Al by row indexing
+        A_mat = get_mat(mukf.A, xn, u, p, t)
+        An = A_mat[mukf.n_inds, :]  # First nxn rows
+        Al = A_mat[mukf.l_inds, :]  # Remaining nxl rows
 
         dyn_full = mukf.dynamics(xn, u, p, t)
         xn_next = dyn_full[mukf.n_inds] .+ An * xl
@@ -750,8 +736,10 @@ function sample_state(f::MUKF{IPD}, x, u, p=parameters(f), t=index(f)*f.Ts; nois
     xn = x[f.n_inds]
     xl = x[f.l_inds]
 
-    An = get_mat(f.An, xn, u, p, t)
-    Al = get_mat(f.Al, xn, u, p, t)
+    # Get combined A matrix and extract An, Al by row indexing
+    A_mat = get_mat(f.A, xn, u, p, t)
+    An = A_mat[f.n_inds, :]  # First nxn rows
+    Al = A_mat[f.l_inds, :]  # Remaining nxl rows
 
     # Get full dynamics [dn; dl]
     if IPD
