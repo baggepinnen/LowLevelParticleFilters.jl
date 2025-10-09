@@ -312,13 +312,13 @@ The [`MUKF`](@ref) (Marginalized Unscented Kalman Filter) is an estimator partic
 
 
 #### Problem: Quadrotor with Unknown Mass and Drag
-We consider a simplified quadrotor model where the mass and drag coefficient are unknown and time-varying. By cleverly partitioning the state and using inverse mass ``\theta = 1/m``, we exploit the **conditionally linear** structure to reduce computational cost.
+We consider a simplified quadrotor model where the mass and drag coefficient are unknown and time-varying. By cleverly partitioning the state using reparameterizations ``\theta = 1/m`` and ``\varphi = \theta C_d``, we exploit the conditionally linear structure to achieve significant computational savings.
 
-The system has 8 dimensions total with the following partitioning:
-- **Nonlinear substate** (4D): velocities ``[v_x, v_y, v_z]`` and drag coefficient ``C_d``
-- **Linear substate** (4D): positions ``[x, y, z]`` and inverse mass ``\theta = 1/m``
+The system has 8 state dimensions total with the following partitioning:
+- **Nonlinear substate** (3D): velocities ``[v_x, v_y, v_z]``
+- **Linear substate** (5D): positions ``[x, y, z]``, inverse mass ``\theta = 1/m``, and mass-scaled drag ``\varphi = \theta C_d``
 
-The key insight is that positions evolve linearly given the velocities (``\dot{x} = v_x``), which fits the conditionally linear structure. This partitioning reduces sigma points from 17 (for full 8D UKF) to only 9 (for 4D nonlinear MUKF).
+The key insight is that positions evolve linearly given the velocities (``\dot{x} = v_x``), and velocity dynamics depend linearly on both ``\theta`` and ``\varphi``. This clever parameterization reduces sigma points from 17 (for full 8D UKF) to only 7 (for 3D nonlinear MUKF).
 
 The physical dynamics are:
 ```math
@@ -330,16 +330,16 @@ The physical dynamics are:
 \end{aligned}
 ```
 
-Using the inverse mass parameterization ``\theta = 1/m``, we can rewrite the velocity dynamics as:
+Using the inverse mass parameterization ``\theta = 1/m`` and defining ``\varphi = \theta C_d``, we can rewrite the velocity dynamics as:
 ```math
 \begin{aligned}
-\dot{v}_x &= \theta (F_x - C_d \cdot v_x |v_x|), \quad
-\dot{v}_y = \theta (F_y - C_d \cdot v_y |v_y|), \quad
-\dot{v}_z = \theta (F_z - C_d \cdot v_z |v_z|) - g
+\dot{v}_x &= \theta F_x - \varphi v_x |v_x|, \quad
+\dot{v}_y = \theta F_y - \varphi v_y |v_y|, \quad
+\dot{v}_z = \theta F_z - \varphi v_z |v_z| - g
 \end{aligned}
 ```
 
-This reveals the **conditionally linear structure**: the velocity derivatives depend on ``\theta`` in a **linear** fashion, while positions evolve as ``\dot{x} = v_x`` (linear dependence on velocities). This structure perfectly fits MUKF's requirements.
+This reveals the conditionally linear structure: the velocity derivatives depend linearly on both ``\theta`` and ``\varphi``, while positions evolve as ``\dot{x} = v_x`` (linear dependence on velocities). The drag coefficient can be recovered as ``C_d = \varphi / \theta`` when needed. Since ``\theta = 1/m > 0``, this division is well defined as long as the estimate of ``\theta`` is reasonable.
 
 ```@example mukfparam
 using LowLevelParticleFilters
@@ -350,8 +350,8 @@ using Plots, LinearAlgebra, Random
 Random.seed!(0) # For reproducibility
 
 # System dimensions
-nxn = 4  # Nonlinear state: [vx, vy, vz, Cd] (velocities + drag)
-nxl = 4  # Linear state: [x, y, z, θ] where θ = 1/m (positions + inverse mass)
+nxn = 3  # Nonlinear state: [vx, vy, vz] (velocities only)
+nxl = 5  # Linear state: [x, y, z, θ, φ] where θ = 1/m, φ = θ*Cd
 nx = nxn + nxl
 nu = 3   # Control inputs: [Fx, Fy, Fz] (thrust forces)
 ny = 6   # Measurements: [x, y, z, vx, vy, vz] (GPS + velocity)
@@ -368,53 +368,51 @@ We'll simulate a scenario where:
 
 #### MUKF Formulation with Conditionally Linear Structure
 
-By using θ = 1/m (inverse mass) and treating positions as part of the linear substate, we exploit the conditionally linear structure from Morelande & Moran (2007), which has the form:
+By using the parameterization ``\theta = 1/m`` and ``\varphi = \theta C_d``, we exploit the conditionally linear structure from Morelande & Moran (2007), which has the form:
 
 $$\begin{aligned}
 \dot{x}^n &= d_n(x^n) + A_n(x^n) x^l \\
 \dot{x}^l &= d_l(x^n) + A_l x^l
 \end{aligned}$$
 
-where ``x^n = [v_x, v_y, v_z, C_d]`` and ``x^l = [x, y, z, \theta]``. The coupling matrix ``A_n(x^n)`` captures how the inverse mass ``\theta`` scales the forces/drag, while ``d_l(x^n) = [v_x, v_y, v_z, 0]`` captures how positions depend on velocities.
+where ``x^n = [v_x, v_y, v_z]`` and ``x^l = [x, y, z, \theta, \varphi]``. The coupling matrix ``A_n(x^n)`` is ``3 \times 5`` and captures how ``\theta`` scales the thrust forces and ``\varphi`` scales the drag forces. The term ``d_l(x^n) = [v_x, v_y, v_z, 0, 0]`` captures how positions depend on velocities.
 
-This partitioning reduces the number of sigma points from 17 (for a full 8D UKF with 2nx+1 = 2×8+1) to 9 (for a 4D nonlinear MUKF with 2×4+1).
+This clever parameterization reduces the number of sigma points from 17 (for a full 8D UKF with 2nx+1 = 2×8+1) to only 7 (for a 3D nonlinear MUKF with 2×3+1), a 59% reduction.
 
 ```@example mukfparam
 # Nonlinear dynamics function returns [dn; dl] where:
 # - dn: uncoupled part of nonlinear state dynamics
 # - dl: part of linear state dynamics that depends on nonlinear state
 function quadrotor_nonlinear_dynamics(xn, u, p, t)
-    vx, vy, vz, Cd = xn
+    vx, vy, vz = xn
     Fx, Fy, Fz = u
 
     # Nonlinear state dynamics (uncoupled part)
-    # v̇ = dn + An*xl where xl = [x,y,z,θ], θ = 1/m
+    # v̇ = dn + An*xl where xl = [x,y,z,θ,φ]
     dn = SA[
-        0.0,     # v̇x base (forces/drag come from An*θ)
+        0.0,     # v̇x base (thrust/drag coupling through An)
         0.0,     # v̇y base
-        -g,      # v̇z base (gravity independent of θ)
-        0.0      # Ċd (drag parameter is constant)
+        -g       # v̇z base (gravity is independent of θ and φ)
     ]
 
     # Linear state dynamics (part depending on xn)
-    # ẋ, ẏ, ż = velocities, θ̇ = 0
-    dl = SA[vx, vy, vz, 0.0]
+    # ẋ, ẏ, ż = velocities, θ̇ = 0, φ̇ = 0
+    dl = SA[vx, vy, vz, 0.0, 0.0]
 
     return [dn; dl]  # Return 8D vector
 end
 
-# Coupling matrix An: how linear state [x,y,z,θ] affects nonlinear state [vx,vy,vz,Cd]
-# Only the θ (inverse mass) component matters: v̇ = θ*(F - Cd*v|v|)
+# Coupling matrix An: how linear state [x,y,z,θ,φ] affects nonlinear state [vx,vy,vz]
+# θ scales thrust forces, φ scales drag forces: v̇ = θ*F - φ*v|v|
 function An_matrix(xn, u, p, t)
-    vx, vy, vz, Cd = xn
+    vx, vy, vz = xn
     Fx, Fy, Fz = u
 
-    # Only last column (θ) is non-zero
+    # 3×5 matrix: positions don't couple, θ and φ do
     SA[
-        0.0  0.0  0.0  (Fx - Cd*vx*abs(vx))    # v̇x coupling with θ
-        0.0  0.0  0.0  (Fy - Cd*vy*abs(vy))    # v̇y coupling with θ
-        0.0  0.0  0.0  (Fz - Cd*vz*abs(vz))    # v̇z coupling with θ
-        0.0  0.0  0.0  0.0                      # Ċd (no coupling)
+        0.0  0.0  0.0  Fx        -vx*abs(vx)    # v̇x = θ*Fx - φ*vx|vx|
+        0.0  0.0  0.0  Fy        -vy*abs(vy)    # v̇y = θ*Fy - φ*vy|vy|
+        0.0  0.0  0.0  Fz        -vz*abs(vz)    # v̇z = θ*Fz - φ*vz|vz| - g
     ]
 end
 
@@ -427,19 +425,19 @@ Al_discrete = SMatrix{nxl, nxl}(I(nxl))
 Bl = zero(SMatrix{nxl, nu})    # No control input to linear substate
 
 # Measurement: we measure [x,y,z,vx,vy,vz]
-# This comes from d(xn) + Cl*xl where xl = [x,y,z,θ]
+# This comes from d(xn) + Cl*xl where xl = [x,y,z,θ,φ]
 measurement(xn, u, p, t) = SA[0.0, 0.0, 0.0, xn[1], xn[2], xn[3]]  # [0,0,0,vx,vy,vz]
 Cl = SA[
-    1.0  0.0  0.0  0.0    # x measurement
-    0.0  1.0  0.0  0.0    # y measurement
-    0.0  0.0  1.0  0.0    # z measurement
-    0.0  0.0  0.0  0.0    # vx measurement (from xn)
-    0.0  0.0  0.0  0.0    # vy measurement (from xn)
-    0.0  0.0  0.0  0.0    # vz measurement (from xn)
+    1.0  0.0  0.0  0.0  0.0    # x measurement
+    0.0  1.0  0.0  0.0  0.0    # y measurement
+    0.0  0.0  1.0  0.0  0.0    # z measurement
+    0.0  0.0  0.0  0.0  0.0    # vx measurement (from xn)
+    0.0  0.0  0.0  0.0  0.0    # vy measurement (from xn)
+    0.0  0.0  0.0  0.0  0.0    # vz measurement (from xn)
 ]
 
 # Discretize the nonlinear dynamics for the MUKF
-discrete_nonlinear_dynamics(x,u,p,t) = [x; @SVector(zeros(4))] + Ts .* quadrotor_nonlinear_dynamics(x,u,p,t)
+discrete_nonlinear_dynamics(x,u,p,t) = [x; @SVector(zeros(5))] + Ts .* quadrotor_nonlinear_dynamics(x,u,p,t)
 
 nothing # hide
 ```
@@ -448,7 +446,7 @@ nothing # hide
 We'll simulate a hovering scenario with small perturbations, where the mass decreases (fuel drain) and drag increases abruptly (damage).
 
 ```@example mukfparam
-Tf = 100  # 100 seconds at 0.01s sampling
+Tf = 50  # 50 seconds at 0.01s sampling
 t_vec = range(0, stop=Tf, step=Ts)
 T = length(t_vec)
 
@@ -458,9 +456,10 @@ F_hover = m_nominal * g
 u = [SA[F_hover + 0.1*randn(), F_hover + 0.1*randn(), F_hover + 0.1*randn()] for _ in eachindex(t_vec)]
 
 # True parameters (time-varying)
-m_true = [t < 50 ? 1.0 - 0.003*t : 0.85 for t in t_vec]  # Linear decrease
+m_true = [t < 25 ? 1.0 - 0.006*t : 0.85 for t in t_vec]  # Linear decrease
 θ_true = 1.0 ./ m_true                                    # Inverse mass
-Cd_true = [t < 50 ? 0.01 : 0.015 for t in t_vec]         # Abrupt increase
+Cd_true = [t < 25 ? 0.01 : 0.015 for t in t_vec]         # Abrupt increase
+φ_true = θ_true .* Cd_true                                 # Scaled drag φ = θ*Cd
 
 # Simulate true trajectory using known true parameters
 function simulate_quadrotor(u, θ_true, Cd_true)
@@ -482,12 +481,13 @@ function simulate_quadrotor(u, θ_true, Cd_true)
     end
     discrete_step = SeeToDee.Rk4(dynamics_true, Ts)
 
-    x = zeros(T, nx)  # Full state: [vx,vy,vz,Cd,x,y,z,θ]
-    x[1, :] = [0, 0, 0, Cd_true[1], 0, 0, 10, θ_true[1]]  # Start at 10m altitude, zero velocity
+    x = zeros(T, nx)  # Full state: [vx,vy,vz,x,y,z,θ,φ]
+    φ_0 = θ_true[1] * Cd_true[1]
+    x[1, :] = [0, 0, 0, 0, 0, 10, θ_true[1], φ_0]  # Start at 10m altitude, zero velocity
 
     for i in 1:T-1
         vx, vy, vz = x[i, 1], x[i, 2], x[i, 3]
-        pos_x, pos_y, pos_z = x[i, 5], x[i, 6], x[i, 7]
+        pos_x, pos_y, pos_z = x[i, 4], x[i, 5], x[i, 6]
 
         # Use true parameter values at this time step
         θ_i = θ_true[i]
@@ -499,16 +499,18 @@ function simulate_quadrotor(u, θ_true, Cd_true)
         state_next = discrete_step(state_6d, u[i], p, 0)
 
         # Store next state including parameters
-        x[i+1, :] = [state_next[1], state_next[2], state_next[3], Cd_true[i+1],
-                     state_next[4], state_next[5], state_next[6], θ_true[i+1]]
+        φ_next = θ_true[i+1] * Cd_true[i+1]
+        x[i+1, :] = [state_next[1], state_next[2], state_next[3],  # vx,vy,vz
+                     state_next[4], state_next[5], state_next[6],  # x,y,z
+                     θ_true[i+1], φ_next]                           # θ,φ
     end
     return x
 end
 
 x_true = simulate_quadrotor(u, θ_true, Cd_true)
 
-# Extract measurement components: [x,y,z,vx,vy,vz] from state [vx,vy,vz,Cd,x,y,z,θ]
-y_true = [SA[x_true[i, 5], x_true[i, 6], x_true[i, 7],  # x,y,z
+# Extract measurement components: [x,y,z,vx,vy,vz] from state [vx,vy,vz,x,y,z,θ,φ]
+y_true = [SA[x_true[i, 4], x_true[i, 5], x_true[i, 6],  # x,y,z
               x_true[i, 1], x_true[i, 2], x_true[i, 3]]  # vx,vy,vz
           for i in eachindex(t_vec)]
 
@@ -516,7 +518,7 @@ y_true = [SA[x_true[i, 5], x_true[i, 6], x_true[i, 7],  # x,y,z
 y = [y_true[i] .+ 0.01 .* @SVector(randn(ny)) for i in eachindex(t_vec)]
 
 # Plot true trajectory and parameters
-p1 = plot(t_vec, x_true[:, 7], label="Altitude (z)", xlabel="Time (s)", ylabel="m", legend=:topright)
+p1 = plot(t_vec, x_true[:, 6], label="Altitude (z)", xlabel="Time (s)", ylabel="m", legend=:topright)
 p2 = plot(t_vec, m_true, label="Mass", xlabel="Time (s)", ylabel="kg", legend=:topright, c=:blue)
 p3 = plot(t_vec, Cd_true, label="Drag", ylabel="kg·s/m", c=:red)
 plot(p1, p2, p3)
@@ -527,19 +529,23 @@ Now we set up the MUKF, which takes mostly the same configutation options as an 
 
 ```@example mukfparam
 # Noise covariances
-R1n = SMatrix{nxn,nxn}(Diagonal([0.01, 0.01, 0.01, 0.00001]))  # Process noise for [vx,vy,vz,Cd]
-R1l = SMatrix{nxl,nxl}(Diagonal([0.01, 0.01, 0.01, 0.0001]))   # Process noise for [x,y,z,θ]
+R1n = SMatrix{nxn,nxn}(Diagonal([0.01, 0.01, 0.01]))  # Process noise for [vx,vy,vz]
+R1l = SMatrix{nxl,nxl}(Diagonal([0.01, 0.01, 0.01, 0.0001, 0.000001]))   # Process noise for [x,y,z,θ,φ]
 R1 = [[R1n zeros(SMatrix{nxn,nxl})]; [zeros(SMatrix{nxl,nxn}) R1l]]
 
 R2 = SMatrix{ny,ny}(Diagonal([0.1, 0.1, 0.1, 0.05, 0.05, 0.05]))  # Measurement noise
 
 # Initial state estimate (slightly wrong)
-x0n = SA[0.0, 0.0, 0.0, 0.008]  # [vx,vy,vz,Cd] - wrong Cd guess
-x0l = SA[0.0, 0.0, 10.0, 1.0/0.9]  # [x,y,z,θ] - wrong mass guess (θ = 1/0.9 ≠ 1/1.0)
+m_guess = 0.9  # Wrong mass guess
+θ_guess = 1.0 / m_guess
+Cd_guess = 0.008  # Wrong Cd guess
+φ_guess = θ_guess * Cd_guess  # φ = θ*Cd
+x0n = SA[0.0, 0.0, 0.0]  # [vx,vy,vz]
+x0l = SA[0.0, 0.0, 10.0, θ_guess, φ_guess]  # [x,y,z,θ,φ]
 x0_full = [x0n; x0l]
 
-R0n = SMatrix{nxn,nxn}(Diagonal([0.5, 0.5, 0.5, 0.0001]))  # Uncertainty in velocities and Cd
-R0l = SMatrix{nxl,nxl}(Diagonal([1.0, 1.0, 1.0, 0.01]))    # Uncertainty in positions and θ
+R0n = SMatrix{nxn,nxn}(Diagonal([0.5, 0.5, 0.5]))  # Uncertainty in velocities
+R0l = SMatrix{nxl,nxl}(Diagonal([1.0, 1.0, 1.0, 0.01, 0.0001]))    # Uncertainty in positions, θ, and φ
 R0_full = [[R0n zeros(SMatrix{nxn,nxl})]; [zeros(SMatrix{nxl,nxn}) R0l]]
 
 d0 = LowLevelParticleFilters.SimpleMvNormal(x0_full, R0_full)
@@ -568,9 +574,10 @@ sol_mukf = forward_trajectory(mukf, u, y)
 
 # Extract estimates
 x_est_mukf = reduce(hcat, sol_mukf.xt)'
-θ_est_mukf = x_est_mukf[:, 8]  # θ is the 8th state
+θ_est_mukf = x_est_mukf[:, 7]  # θ is the 7th state
+φ_est_mukf = x_est_mukf[:, 8]  # φ is the 8th state
 m_est_mukf = 1.0 ./ θ_est_mukf  # Convert back to mass
-Cd_est_mukf = x_est_mukf[:, 4]  # Cd is the 4th state
+Cd_est_mukf = φ_est_mukf ./ θ_est_mukf  # Recover Cd = φ/θ
 
 nothing # hide
 ```
@@ -586,7 +593,7 @@ plot!(p1, t_vec, m_est_mukf, label="MUKF estimate", lw=2, c=:blue)
 
 p2 = plot(t_vec, Cd_true, label="True drag", lw=2, xlabel="Time (s)", ylabel="Drag coeff (kg·s/m)",
           legend=:topleft, c=:black, ls=:dash)
-plot!(p2, t_vec, Cd_est_mukf, label="MUKF estimate", lw=2, c=:red)
+plot!(p2, t_vec, Cd_est_mukf, label="MUKF estimate", lw=2, c=:blue)
 
 plot(p1, p2, layout=(2,1), size=(800,500))
 ```
@@ -599,8 +606,8 @@ For comparison, let's solve the same problem using a standard UKF with the full 
 ```@example mukfparam
 # For UKF, treat the entire 8D state uniformly (no structure exploitation)
 function quadrotor_dynamics_ukf(x_full, u, p, t)
-    xn = x_full[1:nxn]  # [vx,vy,vz,Cd]
-    xl = x_full[nxn+1:end]  # [x,y,z,θ]
+    xn = x_full[1:nxn]  # [vx,vy,vz]
+    xl = x_full[nxn+1:end]  # [x,y,z,θ,φ]
 
     # Get dynamics and coupling
     dyn = quadrotor_nonlinear_dynamics(xn, u, nothing, 0)
@@ -611,9 +618,9 @@ function quadrotor_dynamics_ukf(x_full, u, p, t)
 end
 
 discrete_dynamics_ukf = SeeToDee.Rk4(quadrotor_dynamics_ukf, Ts)
-measurement_ukf(x, u, p, t) = SA[x[5], x[6], x[7], x[1], x[2], x[3]]  # [x,y,z,vx,vy,vz]
+measurement_ukf(x, u, p, t) = SA[x[4], x[5], x[6], x[1], x[2], x[3]]  # [x,y,z,vx,vy,vz]
 
-R1_ukf = Diagonal([0.01, 0.01, 0.01, 0.00001, 0.01, 0.01, 0.01, 0.0001])
+R1_ukf = Diagonal([0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.0001, 0.000001])
 R2_ukf = R2
 
 ukf = UnscentedKalmanFilter(
@@ -631,9 +638,10 @@ sol_ukf = forward_trajectory(ukf, u, y)
 
 # Extract UKF estimates
 x_est_ukf = reduce(hcat, sol_ukf.xt)'
-θ_est_ukf = x_est_ukf[:, 8]  # θ is the 8th state
+θ_est_ukf = x_est_ukf[:, 7]  # θ is the 7th state
+φ_est_ukf = x_est_ukf[:, 8]  # φ is the 8th state
 m_est_ukf = 1.0 ./ θ_est_ukf  # Convert back to mass
-Cd_est_ukf = x_est_ukf[:, 4]  # Cd is the 4th state
+Cd_est_ukf = φ_est_ukf ./ θ_est_ukf  # Recover Cd = φ/θ
 
 # Compare the two approaches
 p1 = plot(t_vec, m_true, label="True", lw=2, xlabel="Time (s)", ylabel="Mass (kg)",
@@ -670,7 +678,7 @@ println("UKF  - Mass RMSE: $(round(rmse_m_ukf, digits=4)) kg")
 println("UKF  - Drag RMSE: $(round(rmse_Cd_ukf, digits=6)) kg·s/m")
 ```
 
-Both filters perform comparably in terms of accuracy. However, MUKF uses only 9 sigma points (2×4+1 for 4D nonlinear state) compared to UKF's 17 sigma points (2×8+1 for 8D full state), illustrating the computational benefit of exploiting the conditionally linear structure.
+Both filters perform comparably in terms of accuracy. However, MUKF uses only 7 sigma points (2×3+1 for 3D nonlinear state) compared to UKF's 17 sigma points (2×8+1 for 8D full state), a 59% reduction illustrating the computational benefit of exploiting the conditionally linear structure with the φ = θ·Cd parameterization.
 
 We should note here that we have performed slightly different discretizations of the dynamics for the UKF and the MUKF. With the standard UKF, we discretized the entire dynamics using an RK4 method, a very accurate integrator in this context. For the MUKF, we instead discretized the dynamics using a simple forward Euler discretization (by multiplying ``A_n`` and the output of `quadrotor_nonlinear_dynamics` by ``T_s``). The reason for this discrepancy is that the conditionally linearity that holds for this system in continuous time no longer holds after discretization, _unless_ we use forward Euler discretization, which is the only scheme simple enough to not mess with the linearity. This primitive discretization is often sufficient for state estimation when sample intervals are short, which they tend to be when controlling quadrotors. See the note under [Discretization](@ref) for more comments regarding accuracy of integration for state estimation.
 
