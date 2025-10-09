@@ -377,7 +377,7 @@ $$\begin{aligned}
 
 where ``x^n = [v_x, v_y, v_z]`` and ``x^l = [x, y, z, \theta, \varphi]``. The coupling matrix ``A_n(x^n)`` is ``3 \times 5`` and captures how ``\theta`` scales the thrust forces and ``\varphi`` scales the drag forces. The term ``d_l(x^n) = [v_x, v_y, v_z, 0, 0]`` captures how positions depend on velocities.
 
-This clever parameterization reduces the number of sigma points from 17 (for a full 8D UKF with 2nx+1 = 2×8+1) to only 7 (for a 3D nonlinear MUKF with 2×3+1), a 59% reduction.
+This clever parameterization reduces the number of sigma points from 17 (for a full 8D UKF with 2nx+1 = 2×8+1) to only 7 (for a 3D nonlinear MUKF with 2×3+1), a 59% reduction. Unscented Kalman filters internally perform a Cholesky factorization of the covariance matrix (to compute sigma points), which scales roughly cubically with state dimension, but the MUKF gets away with factorizing only the part of the covariance corresponding to the nonlinear substate, leading to significant computational savings.
 
 ```@example mukfparam
 # Nonlinear dynamics function returns [dn; dl] where:
@@ -422,7 +422,6 @@ An_matrix_discrete(xn, u, p, t) = An_matrix(xn, u, p, t) * Ts
 # Linear state evolution for discrete-time filter
 # Al = I to carry over state from previous time step: xl[k+1] = xl[k] + Ts*dl(xn[k])
 Al_discrete = SMatrix{nxl, nxl}(I(nxl))
-Bl = zero(SMatrix{nxl, nu})    # No control input to linear substate
 
 # Measurement: we measure [x,y,z,vx,vy,vz]
 # This comes from d(xn) + Cl*xl where xl = [x,y,z,θ,φ]
@@ -559,7 +558,6 @@ mukf = MUKF(;
     nl_measurement_model = mm,
     An = An_matrix_discrete,  # Use discrete coupling matrix
     Al = Al_discrete,         # Use discrete Al = I for state carry-over
-    Bl,
     Cl,
     R1,
     d0,
