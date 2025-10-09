@@ -445,7 +445,7 @@ nothing # hide
 ```
 
 #### Simulation
-We'll simulate a hovering scenario with small perturbations, where the mass decreases (battery drain) and drag increases abruptly (damage).
+We'll simulate a hovering scenario with small perturbations, where the mass decreases (fuel drain) and drag increases abruptly (damage).
 
 ```@example mukfparam
 Tf = 100  # 100 seconds at 0.01s sampling
