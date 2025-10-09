@@ -38,6 +38,7 @@ We provide a number of filter types
 - [`AuxiliaryParticleFilter`](@ref): This filter is identical to [`ParticleFilter`](@ref), but uses a slightly different proposal mechanism for new particles.
 - [`IMM`](@ref): (Currently considered experimental) The _Interacting Multiple Models_ filter switches between multiple internal filters based on a hidden Markov model. This filter is useful when the system dynamics change over time and the change can be modeled as a discrete Markov chain, i.e., the system may switch between a small number of discrete "modes".
 - [`RBPF`](@ref): A Rao-Blackwellized particle filter that uses a Kalman filter for the linear part of the state and a particle filter for the nonlinear part.
+- [`MUKF`](@ref): A Marginalized Unscented Kalman Filter that combines an Unscented Kalman Filter for the nonlinear substate with a bank of Kalman filters (one per sigma point) for the linear substate. Similar to RBPF but uses deterministic sigma points instead of random particles.
 
 ## Functionality
 This package provides 

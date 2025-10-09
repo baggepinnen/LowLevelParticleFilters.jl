@@ -551,6 +551,11 @@ end
     include("test_rbpf.jl")
 end
 
+@testset "mukf" begin
+    @info "Testing mukf"
+    include("test_mukf.jl")
+end
+
 @testset "function_versions" begin
     @info "Testing function_versions"
     include("test_function_versions.jl")

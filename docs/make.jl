@@ -25,7 +25,7 @@ makedocs(
                   "Noise tuning and disturbance modeling for Kalman filtering" => "noisetuning.md",
                   "Particle-filter tutorial" => "beetle_example.md",
                   "IMM-filter tutorial" => "beetle_example_imm.md",
-                  "Rao-Blackwellized PF tutorial" => "rbpf_example.md",
+                  "Rao-Blackwellized filter tutorial" => "rbpf_example.md",
                   "State estimation for DAE systems" => "dae.md",
                   "Adaptive estimation and control" => "adaptive_control.md",
                   "Adaptive Neural-Network training" => "neural_network.md",

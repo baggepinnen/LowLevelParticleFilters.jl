@@ -1,8 +1,10 @@
 # Rao-Blackwellized particle filter
 
-This example will demonstrate use of the Rao-Blackwellized particle filter ([`RBPF`](@ref)), also called "Marginalized particle filter".
+This example will demonstrate use of the Rao-Blackwellized particle filter and UKF ([`RBPF`](@ref) and [`MUKF`](@ref) respectively), also called "Marginalized particle filter" and "Marginalized Unscented Kalman Filter".
 
-This filter is effectively a particle filter where each particle is a Kalman filter that is responsible for the estimation of a linear sub structure.
+
+## RBPF
+The [`RBPF`](@ref) filter is effectively a particle filter where each particle is a Kalman filter that is responsible for the estimation of a linear sub structure.
 
 The filter assumes that the dynamics follow "model 2" in the article ["Marginalized Particle Filters for Mixed Linear/Nonlinear State-space Models" by Thomas Schön, Fredrik Gustafsson, and Per-Johan Nordlund](https://people.isy.liu.se/rt/schon/Publications/SchonGN2004.pdf), i.e., the dynamics is described by
 ```math
@@ -52,6 +54,7 @@ Below, we define functions that return the matrix ``A_n`` despite that it is con
 ```@example RBPF
 using LowLevelParticleFilters, LinearAlgebra
 using LowLevelParticleFilters: SimpleMvNormal
+using StaticArrays
 using DisplayAs # hide
 nxn = 1         # Dimension of nonlinear state
 nxl = 3         # Dimension of linear state
@@ -60,25 +63,25 @@ nu  = 0         # Dimension of control input
 ny  = 2         # Dimension of measurement
 N   = 200       # Number of particles
 fn(xn, args...) = atan.(xn)         # Nonlinear part of nonlinear state dynamics
-An  = [1.0 0.0 0.0]     # Linear part of nonlinear state dynamics
-Al  = [1.0  0.3   0.0;  # Linear part of linear state dynamics (the standard Kalman-filter A matrix). It's defined as a matrix here, but it can also be a function of (x, u, p, t)
+An  = SA[1.0 0.0 0.0]     # Linear part of nonlinear state dynamics
+Al  = SA[1.0  0.3   0.0;  # Linear part of linear state dynamics (the standard Kalman-filter A matrix). It's defined as a matrix here, but it can also be a function of (x, u, p, t)
                    0.0  0.92 -0.3; 
                    0.0  0.3   0.92] # 3x3 matrix
-Cl = [0.0  0.0 0.0; 
+Cl = SA[0.0  0.0 0.0; 
       1.0 -1.0 1.0]    # 2x3 measurement matrix
-g(xn, args...) = [0.1 * xn[]^2 * sign(xn[]), 0.0] # 2x1 vector
+g(xn, args...) = SA[0.1 * xn[]^2 * sign(xn[]), 0.0] # 2x1 vector
 
 Bl = zeros(nxl, nu)
 
 # Noise parameters
-R1n = [0.01;;]          # Scalar variance for w^n
+R1n = SA[0.01;;]          # Scalar variance for w^n
 R1l = 0.01 * I(3)       # 3x3 covariance for w^l
 R2  = 0.1 * I(2)         # 2x2 measurement noise (shared between linear and nonlinear parts)
 
 # Initial states (xn ~ N(0,1), xl ~ N(0, 0.01I))
-x0n = zeros(nxn)
-R0n = [1.0;;]
-x0l = zeros(nxl)
+x0n = @SVector zeros(nxn)
+R0n = SA[1.0;;]
+x0l = @SVector zeros(nxl)
 R0l = 0.01 * I(nxl)
 
 d0l = SimpleMvNormal(x0l, R0l)
@@ -110,6 +113,62 @@ The cyan markers represent the true state in the state plots, and the measuremen
 In this example, we made use of standard julia arrays for the dynamics and covariances etc., for optimum performance (the difference may be dramatic), make use of static arrays from [StaticArrays.jl](https://github.com/JuliaArrays/StaticArrays.jl). 
 
 The paper referenced above mention a lot of special cases in which the filter can be simplified, it's worth a read if you are considering using this filter.
+
+
+## MUKF
+
+The [`MUKF`](@ref) (Marginalized Unscented Kalman Filter) is an alternative to RBPF that uses the Unscented Transform instead of random particles. While RBPF uses ``N`` random particles (each with a Kalman filter), MUKF uses deterministic sigma points (typically ``2n+1`` for an ``n``-dimensional nonlinear state). This makes MUKF:
+- **Deterministic**
+- **Efficient for low-dimensional nonlinear states**: Uses fewer "hypotheses" than typical RBPF
+- **Gaussian assumption**: Like UKF, assumes posterior remains Gaussian (cannot handle multimodal distributions)
+
+Let's compare MUKF with RBPF on the same system:
+
+```@example RBPF
+using Statistics
+# Create MUKF using the same model components
+# Combine process noise covariances into full R1 matrix
+R1 = [R1n zeros(nxn, nxl); zeros(nxl, nxn) R1l]
+# Unified initial distribution for MUKF
+x0 = [x0n; x0l]
+R0_full = [R0n zeros(nxn, nxl); zeros(nxl, nxn) R0l]
+d0 = SimpleMvNormal(x0, R0_full)
+mukf = MUKF(; dynamics=fn, nl_measurement_model=mm, An, Al, Bl, Cl, R1, d0, nxn, nu, ny)
+
+# Run filtering on the same data
+sol_mukf = forward_trajectory(mukf, u, y)
+
+# Extract nonlinear state estimates for comparison
+xn_true = first.(x)
+xn_rbpf = [mean(sol.x[:, t])[1] for t in 1:length(y)]  # Mean of RBPF particles
+xn_mukf = first.(sol_mukf.xt)                          # MUKF filtered estimate
+
+# Compute RMSE
+using Statistics
+rmse_rbpf = sqrt(mean((xn_true .- xn_rbpf).^2))
+rmse_mukf = sqrt(mean((xn_true .- xn_mukf).^2))
+
+println("RBPF RMSE: $(round(rmse_rbpf, digits=4))")
+println("MUKF RMSE: $(round(rmse_mukf, digits=4))")
+```
+
+Let's visualize the comparison:
+
+```@example RBPF
+plot(xn_true, label="True x^n", lw=2, legend=:topleft)
+plot!(xn_rbpf, label="RBPF estimate (N=$N)", lw=2, alpha=0.7)
+plot!(xn_mukf, label="MUKF estimate", lw=2, alpha=0.7, ls=:dash)
+xlabel!("Time step")
+ylabel!("x^n")
+title!("Comparison: RBPF vs MUKF")
+DisplayAs.PNG(Plots.current()) # hide
+```
+
+Both filters successfully track the nonlinear state. The MUKF uses only 3 sigma points (for the 1D nonlinear state) compared to 200 particles in the RBPF, yet achieves comparable performance. For this problem with a low-dimensional nonlinear state and unimodal posterior, MUKF is more efficient.
+
+**When to use each filter:**
+- **Use MUKF** when: posterior is unimodal, you want deterministic results. The MUKF estimator is often suitable for disturbance and parameter estimation, since it is deterministic, differentiable and disturbances and parameters are often modeled with linear time evolution.
+- **Use RBPF** when: posterior may be multimodal, you need maximum flexibility
 
 
 ## Details of the marginal distribution over the linear sub state

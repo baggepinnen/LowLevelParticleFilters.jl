@@ -18,6 +18,7 @@ We provide a number of Kalman and particle filter types
 - `UnscentedKalmanFilter`: The Unscented kalman filter often performs slightly better than the Extended Kalman filter but may be slightly more computationally expensive. The UKF handles nonlinear dynamics and measurement models, but still requires an Gaussian noise model (may be non additive).
 - `IMM`: The _Interacting Multiple Models_ filter switches between multiple internal filters based on a hidden Markov model.
 - `RBPF`: A Rao-Blackwellized particle filter that uses a Kalman filter for the linear part of the state and a particle filter for the nonlinear part.
+- `MUKF`: The Marginalized Unscented Kalman Filter combines an Unscented Kalman filter for nonlinear state with Kalman filters for the linear part. Similar to RBPF but uses deterministic sigma points instead of random particles, making it efficient for low-dimensional nonlinear states.
 
 
 
