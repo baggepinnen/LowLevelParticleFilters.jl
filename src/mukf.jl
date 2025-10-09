@@ -86,7 +86,7 @@ function MUKFPredictCache(x_full_proto, G_proto, xp_proto, ns, static::Bool)
 end
 
 """
-    MUKF(; dynamics, nl_measurement_model::RBMeasurementModel, An, Al, Bl, Cl, R1, d0, nxn, nu, ny, Ts=1.0, p=NullParameters(), weight_params=MerweParams(), names=default_names(length(d0.μ), nu, ny, "MUKF"))
+    MUKF(; dynamics, nl_measurement_model::RBMeasurementModel, An, Al, Cl, R1, d0, nxn, nu, ny, Ts=1.0, p=NullParameters(), weight_params=MerweParams(), names=default_names(length(d0.μ), nu, ny, "MUKF"))
 
 Marginalized Unscented Kalman Filter for mixed linear/nonlinear state-space models.
 
@@ -102,24 +102,23 @@ The filter assumes dynamics on the form:
 ```math
 \\begin{aligned}
 x_{t+1}^n &= d_n(x_t^n, u, p, t) + A_n(x_t^n)\\, x_t^l + w_t^n \\\\
-x_{t+1}^l &= d_l(x_t^n, u, p, t) + A_l(x_t^n)\\, x_t^l + B_l(x_t^n)\\, u + w_t^l \\\\
+x_{t+1}^l &= d_l(x_t^n, u, p, t) + A_l(x_t^n)\\, x_t^l + w_t^l \\\\
 w_t &= \\begin{bmatrix} w_t^n \\\\ w_t^l \\end{bmatrix} &\\sim \\mathcal{N}(0, R_1) \\\\
 y_t &= g(x_t^n, u, p, t) + C_l(x_t^n)\\, x_t^l + e_t, \\quad &e_t \\sim \\mathcal{N}(0, R_2)
 \\end{aligned}
 ```
 
-where `x^n` is the nonlinear substate and `x^l` is the linear substate. This is the **conditionally linear** form from Morelande & Moran (2007), which allows the linear substate to depend on the nonlinear substate through both `d_l(x^n)` and the coupling matrices.
+where ``x^n`` is the nonlinear substate and ``x^`l` is the linear substate. This is the **conditionally linear** form from Morelande & Moran (2007), which allows the linear substate to depend on the nonlinear substate through both ``d_l(x^n)`` and the coupling matrices. Control input dependence can be encoded directly in the ``d_l(x^n, u)`` term.
 
 # Arguments
 
-* `dynamics`: Function returning full state derivative `[d_n(x^n, u, p, t); d_l(x^n, u, p, t)]`. For backward compatibility with parameter-only models, set `d_l = 0`.
+* `dynamics`: Function returning nonlinear contribution to the dynamics `[dn(xn, u, p, t); dl(xn, u, p, t)]`. Control input dependence can be encoded directly in both `dn` and `dl`.
 * `nl_measurement_model`: An instance of [`RBMeasurementModel`](@ref) containing `g` and `R_2`
 * `An`: The coupling matrix/function from linear to nonlinear state (matrix or function)
-* `Al`: Linear dynamics matrix/function `A_l(x^n, u, p, t)` for the linear substate
-* `Bl`: Input matrix/function `B_l(x^n, u, p, t)` for the linear substate
-* `Cl`: Measurement matrix/function `C_l(x^n, u, p, t)` for the linear substate
-* `R1`: Full process noise covariance matrix (nx × nx) for the combined state [x^n; x^l] (matrix or function)
-* `d0`: Initial distribution for the full state [x^n; x^l] (SimpleMvNormal)
+* `Al`: Linear dynamics matrix/function `Al(xn, u, p, t)` for the linear substate
+* `Cl`: Measurement matrix/function `Cl(xn, u, p, t)` for the linear substate
+* `R1`: Full process noise covariance matrix (nx × nx) for the combined state [xn; xl] (matrix or function)
+* `d0`: Initial normal distribution for the full state [xn; xl] (`LowLevelParticleFilters.SimpleMvNormal`)
 * `nxn`: Dimension of the nonlinear substate
 * `nu`: Number of inputs
 * `ny`: Number of measurements
@@ -128,7 +127,7 @@ where `x^n` is the nonlinear substate and `x^l` is the linear substate. This is 
 * `weight_params`: Unscented transform parameters (default: MerweParams())
 * `names`: Signal names for plotting
   """
-mutable struct MUKF{IPD,IPM,DT,MMT,ANT,ALT,BLT,CLT,R1T,D0T,XNT,XT,RT,TS,PARAMS,WP,NT,SPC,SPC2,PRED_C,CORR_C,NINDS,LINDS} <:
+mutable struct MUKF{IPD,IPM,DT,MMT,ANT,ALT,CLT,R1T,D0T,XNT,XT,RT,TS,PARAMS,WP,NT,SPC,SPC2,PRED_C,CORR_C,NINDS,LINDS} <:
                AbstractKalmanFilter
 
     # Model functions and parameters
@@ -137,7 +136,6 @@ mutable struct MUKF{IPD,IPM,DT,MMT,ANT,ALT,BLT,CLT,R1T,D0T,XNT,XT,RT,TS,PARAMS,W
     nl_measurement_model::MMT # Nonlinear measurement model
     An::ANT                   # Coupling from linear to nonlinear state
     Al::ALT                   # Linear dynamics matrix
-    Bl::BLT                   # Input matrix
     Cl::CLT                   # Measurement matrix for linear state
 
     # Noise covariances and initial distributions
@@ -176,7 +174,6 @@ function MUKF{IPD,IPM}(;
     nl_measurement_model::RBMeasurementModel,
     An,
     Al,
-    Bl,
     Cl,
     R1,
     d0,
@@ -265,7 +262,6 @@ function MUKF{IPD,IPM}(;
         typeof(nl_measurement_model),
         typeof(An),
         typeof(Al),
-        typeof(Bl),
         typeof(Cl),
         typeof(R1),
         typeof(d0),
@@ -287,7 +283,6 @@ function MUKF{IPD,IPM}(;
         nl_measurement_model,
         An,
         Al,
-        Bl,
         Cl,
         R1,
         d0,
@@ -331,7 +326,7 @@ function Base.show(io::IO, mukf::MUKF{IPD,IPM}) where {IPD,IPM}
     println(io, "  weight_params: $(typeof(mukf.weight_params))")
     for field in fieldnames(typeof(mukf))
         field in (:ny, :nu, :Ts, :t, :nxn, :nxl, :weight_params) && continue
-        if field in (:nl_measurement_model, :sigma_point_cache, :correct_sigma_point_cache, :predict_cache, :correct_cache, :Al, :Bl, :Cl, :An, :xn_sigma_points, :x, :R, :n_inds, :l_inds)
+        if field in (:nl_measurement_model, :sigma_point_cache, :correct_sigma_point_cache, :predict_cache, :correct_cache, :Al, :Cl, :An, :xn_sigma_points, :x, :R, :n_inds, :l_inds)
             println(io, "  $field: $(fieldtype(typeof(mukf), field))")
         else
             println(io, "  $field: $(repr(getfield(mukf, field), context=:compact => true))")
@@ -479,7 +474,7 @@ function predict!(
     W = UKFWeights(f.weight_params, nxn)
 
     # Transform sigma points through dynamics
-    # Yi = [fn(sp[i]) + An_i*νB_i; Al_i*νB_i + Bl_i*u]
+    # Yi = [fn(sp[i]) + An_i*νB_i; fl(sp[i], u) + Al_i*νB_i]
     # where νB_i = μl + L*(sp[i] - μn) is the conditional mean of xl given xn=sp[i]
 
     # Use cached arrays (no allocations!)
@@ -493,18 +488,17 @@ function predict!(
             # Get state-dependent matrices
             An_i = get_mat(f.An, sp[i], u, p, t)
             Al_i = get_mat(f.Al, sp[i], u, p, t)
-            Bl_i = get_mat(f.Bl, sp[i], u, p, t)
 
             # Conditional mean of xl given xn=sp[i]
             νB = μl .+ L * (sp[i] .- μn)
 
-            # Get full dynamics [dn(xn); dl(xn)]
+            # Get full dynamics [dn(xn, u); dl(xn, u)]
             xp .= 0
             f.dynamics(xp, sp[i], u, p, t)
 
             # Partition and add coupling
             xn_i = xp[f.n_inds] .+ An_i * νB  # dn + An*xl
-            xl_i = xp[f.l_inds] .+ Al_i * νB .+ Bl_i * u  # dl + Al*xl + Bl*u
+            xl_i = xp[f.l_inds] .+ Al_i * νB  # dl + Al*xl
 
             # Store full transformed state
             Y[i] = [xn_i; xl_i]
@@ -517,19 +511,15 @@ function predict!(
         @inbounds for i in eachindex(sp)
             An_i = get_mat(f.An, sp[i], u, p, t)
             Al_i = get_mat(f.Al, sp[i], u, p, t)
-            Bl_i = get_mat(f.Bl, sp[i], u, p, t)
 
             νB = μl .+ L * (sp[i] .- μn)
 
-            # Get full dynamics [dn(xn); dl(xn)]
+            # Get full dynamics [dn(xn, u); dl(xn, u)]
             xp_full = f.dynamics(sp[i], u, p, t)
 
             # Partition and add coupling
             xn_i = xp_full[f.n_inds] .+ An_i * νB  # dn + An*xl
             xl_i = xp_full[f.l_inds] .+ Al_i * νB  # dl + Al*xl
-            if u !== nothing && length(u) > 0
-                @bangbang xl_i .+= Bl_i * u
-            end
 
             Y[i] = [xn_i; xl_i]
             G_matrices[i] = [An_i; Al_i]
@@ -693,7 +683,7 @@ function correct!(
     # Factorize S and compute Kalman gain
     Sᵪ = cholesky(Symmetric(S), check = false)
     if !issuccess(Sᵪ)
-        error("Cholesky factorization of innovation covariance failed at time step $(f.t)")
+        error("Cholesky factorization of innovation covariance failed at time step $(f.t), got S = $(printarray(S))")
     end
     K = Σxy / Sᵪ
 
@@ -740,10 +730,10 @@ function dynamics(mukf::MUKF)
 
         An = get_mat(mukf.An, xn, u, p, t)
         Al = get_mat(mukf.Al, xn, u, p, t)
-        Bl = get_mat(mukf.Bl, xn, u, p, t)
 
-        xn_next = mukf.dynamics(xn, u, p, t) .+ An * xl
-        xl_next = Al * xl .+ Bl * u
+        dyn_full = mukf.dynamics(xn, u, p, t)
+        xn_next = dyn_full[mukf.n_inds] .+ An * xl
+        xl_next = dyn_full[mukf.l_inds] .+ Al * xl
 
         return [xn_next; xl_next]
     end
@@ -762,18 +752,17 @@ function sample_state(f::MUKF{IPD}, x, u, p=parameters(f), t=index(f)*f.Ts; nois
 
     An = get_mat(f.An, xn, u, p, t)
     Al = get_mat(f.Al, xn, u, p, t)
-    Bl = get_mat(f.Bl, xn, u, p, t)
 
     # Get full dynamics [dn; dl]
     if IPD
         dyn_full = similar(x)
         f.dynamics(dyn_full, xn, u, p, t)
         xn_next = dyn_full[f.n_inds] .+ An * xl
-        xl_next = dyn_full[f.l_inds] .+ Al * xl .+ Bl * u
+        xl_next = dyn_full[f.l_inds] .+ Al * xl
     else
         dyn_full = f.dynamics(xn, u, p, t)
         xn_next = dyn_full[f.n_inds] .+ An * xl
-        xl_next = dyn_full[f.l_inds] .+ Al * xl .+ Bl * u
+        xl_next = dyn_full[f.l_inds] .+ Al * xl
     end
 
     if noise
