@@ -46,6 +46,7 @@ x_true, _, y_meas = simulate(rbpf, u_data)
 # Create full R1 matrix from blocks
 R1_full = [R1n_mat zeros(nxn, nxl); zeros(nxl, nxn) R1l_mat]
 mukf = MUKF(dynamics=fn_mukf, nl_measurement_model=mm, An=An_mat, Al=Al, Bl=zeros(nxl,nu), Cl=Cl, R1=R1_full, d0=d0, nxn=nxn, nu=nu, ny=ny)
+display(mukf)
 sol = forward_trajectory(mukf, u_data, y_meas)
 
 # plot(sol)  # TEMP: commented out while debugging
