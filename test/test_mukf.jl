@@ -12,9 +12,10 @@ fn(xn, u, p, t) = atan.(xn)
 fn_mukf(xn, u, p, t) = [atan(xn[1]); SA[0.0, 0, 0]]
 g_mukf(xn, u, p, t)  = [0.1 * xn[]^2 * sign(xn[]), 0.0]
 An_mat = [1.0 0.0 0.0]
-Al = [ 1.0  0.3   0.0;
-       0.0  0.92 -0.3;
-       0.0  0.3   0.92 ]
+Al_mat = [ 1.0  0.3   0.0;
+           0.0  0.92 -0.3;
+           0.0  0.3   0.92 ]
+A_mat = [An_mat; Al_mat]  # Combined A matrix for MUKF
 Cl = [0.0 0.0 0.0;
       1.0 -1.0 1.0]
 R1n_mat = [0.01;;]
@@ -32,7 +33,7 @@ R0 = [R0n zeros(nxn, nxl); zeros(nxl, nxn) R0l]
 d0 = LowLevelParticleFilters.SimpleMvNormal(x0, R0)
 
 # Use package RBPF to generate consistent data
-kf_lin = KalmanFilter(Al, zeros(nxl,nu), Cl, 0, R1l_mat, R2_mat, d0l; ny, nu)
+kf_lin = KalmanFilter(Al_mat, zeros(nxl,nu), Cl, 0, R1l_mat, R2_mat, d0l; ny, nu)
 mm     = RBMeasurementModel(g_mukf, R2_mat, ny)
 
 names = SignalNames(; x=["xnl", "xl1", "xl2", "xl3"], u=[], y=["y1", "y2"], name="RBPF_tutorial")
@@ -45,7 +46,7 @@ x_true, _, y_meas = simulate(rbpf, u_data)
 # --- Run MUKF ---
 # Create full R1 matrix from blocks
 R1_full = [R1n_mat zeros(nxn, nxl); zeros(nxl, nxn) R1l_mat]
-mukf = MUKF(dynamics=fn_mukf, nl_measurement_model=mm, An=An_mat, Al=Al, Cl=Cl, R1=R1_full, d0=d0, nxn=nxn, nu=nu, ny=ny)
+mukf = MUKF(dynamics=fn_mukf, nl_measurement_model=mm, A=A_mat, Cl=Cl, R1=R1_full, d0=d0, nxn=nxn, nu=nu, ny=ny)
 display(mukf)
 sol = forward_trajectory(mukf, u_data, y_meas)
 
@@ -76,6 +77,7 @@ end
 
     An_s = @SMatrix [1.0 0.0]
     Al_s = @SMatrix [1.0 0.3; 0.0 0.92]
+    A_s = [An_s; Al_s]  # Combined A matrix
     Cl_s = @SMatrix [0.0 0.0; 1.0 -1.0]
     R1n_s = @SMatrix [0.01]
     R1l_s = @SMatrix [0.01 0.0; 0.0 0.01]
@@ -96,7 +98,7 @@ end
 
     R1_s = [[R1n_s zeros(SMatrix{nxn_s,nxl_s})]; [zeros(SMatrix{nxl_s,nxn_s}) R1l_s]]
     mm_s = RBMeasurementModel(g_s, R2_s, ny_s)
-    mukf_s = MUKF(dynamics=fn_s, nl_measurement_model=mm_s, An=An_s, Al=Al_s, Cl=Cl_s, R1=R1_s, d0=d0_s, nxn=nxn_s, nu=nu_s, ny=ny_s)
+    mukf_s = MUKF(dynamics=fn_s, nl_measurement_model=mm_s, A=A_s, Cl=Cl_s, R1=R1_s, d0=d0_s, nxn=nxn_s, nu=nu_s, ny=ny_s)
 
     # Verify types
     @test mukf_s.x isa SVector
@@ -142,6 +144,7 @@ end
 
     An_ip = [1.0 0.0]
     Al_ip = [1.0 0.3; 0.0 0.92]
+    A_ip = [An_ip; Al_ip]  # Combined A matrix
     Cl_ip = [0.0 0.0; 1.0 -1.0]
     R1n_ip = [0.01;;]
     R1l_ip = [0.01 0.0; 0.0 0.01]
@@ -168,10 +171,10 @@ end
     R1_ip_full = [R1n_ip zeros(nxn_ip, nxl_ip); zeros(nxl_ip, nxn_ip) R1l_ip]
 
     # Create out-of-place MUKF for reference
-    mukf_oop = MUKF{false,false}(dynamics=fn_oop, nl_measurement_model=mm_ip, An=An_ip, Al=Al_ip, Cl=Cl_ip, R1=R1_ip_full, d0=d0_ip, nxn=nxn_ip, nu=nu_ip, ny=ny_ip)
+    mukf_oop = MUKF{false,false}(dynamics=fn_oop, nl_measurement_model=mm_ip, A=A_ip, Cl=Cl_ip, R1=R1_ip_full, d0=d0_ip, nxn=nxn_ip, nu=nu_ip, ny=ny_ip)
 
     # Create in-place MUKF
-    mukf_ip = MUKF{true,false}(dynamics=fn_ip, nl_measurement_model=mm_ip, An=An_ip, Al=Al_ip, Cl=Cl_ip, R1=R1_ip_full, d0=d0_ip, nxn=nxn_ip, nu=nu_ip, ny=ny_ip)
+    mukf_ip = MUKF{true,false}(dynamics=fn_ip, nl_measurement_model=mm_ip, A=A_ip, Cl=Cl_ip, R1=R1_ip_full, d0=d0_ip, nxn=nxn_ip, nu=nu_ip, ny=ny_ip)
 
     # Generate data using out-of-place version
     T_ip = 50
@@ -212,6 +215,7 @@ end
 
     An_ipm = [1.0 0.0]
     Al_ipm = [1.0 0.3; 0.0 0.92]
+    A_ipm = [An_ipm; Al_ipm]  # Combined A matrix
     Cl_ipm = [0.0 0.0; 1.0 -1.0]
     R1n_ipm = [0.01;;]
     R1l_ipm = [0.01 0.0; 0.0 0.01]
@@ -236,12 +240,12 @@ end
     # Create out-of-place MUKF for reference
     kf_oop = KalmanFilter(Al_ipm, zeros(nxl_ipm,nu_ipm), Cl_ipm, 0, R1l_ipm, R2_ipm, d0l_ipm; ny=ny_ipm, nu=nu_ipm)
     mm_oop = RBMeasurementModel(g_oop, R2_ipm, ny_ipm)
-    mukf_oop = MUKF{false,false}(dynamics=fn_oop, nl_measurement_model=mm_oop, An=An_ipm, Al=Al_ipm, Cl=Cl_ipm, R1=R1_ipm_full, d0=d0_ipm, nxn=nxn_ipm, nu=nu_ipm, ny=ny_ipm)
+    mukf_oop = MUKF{false,false}(dynamics=fn_oop, nl_measurement_model=mm_oop, A=A_ipm, Cl=Cl_ipm, R1=R1_ipm_full, d0=d0_ipm, nxn=nxn_ipm, nu=nu_ipm, ny=ny_ipm)
 
     # Create in-place measurement MUKF
     kf_ipm = KalmanFilter(Al_ipm, zeros(nxl_ipm,nu_ipm), Cl_ipm, 0, R1l_ipm, R2_ipm, d0l_ipm; ny=ny_ipm, nu=nu_ipm)
     mm_ipm = RBMeasurementModel{true}(g_ip, R2_ipm, ny_ipm)
-    mukf_ipm = MUKF{false,true}(dynamics=fn_oop, nl_measurement_model=mm_ipm, An=An_ipm, Al=Al_ipm, Cl=Cl_ipm, R1=R1_ipm_full, d0=d0_ipm, nxn=nxn_ipm, nu=nu_ipm, ny=ny_ipm)
+    mukf_ipm = MUKF{false,true}(dynamics=fn_oop, nl_measurement_model=mm_ipm, A=A_ipm, Cl=Cl_ipm, R1=R1_ipm_full, d0=d0_ipm, nxn=nxn_ipm, nu=nu_ipm, ny=ny_ipm)
 
     # Generate data using out-of-place version
     T_ipm = 50
@@ -288,6 +292,7 @@ end
     fn(xn, u, p, t) = SA[0.9 * xn[]; 0.0]  # [dn; dl] where dn is linear, dl=0
     An = SA[0.2;;]                  # Coupling from linear to nonlinear (1x1 matrix)
     Al = SA[0.95;;]                 # Linear dynamics
+    A = [An; Al]                    # Combined A matrix
 
     g(xn, u, p, t) = SA[xn[]; 0]      # Measurement of nonlinear state
     Cl = SA[0.0; 0.5;;]               # Measurement of linear state (2x1)
@@ -317,7 +322,7 @@ end
     # Create MUKF
     kf_mukf = KalmanFilter(Al, zeros(nxl, nu), Cl, 0, R1l, R2, d0l; ny=ny, nu=nu)
     mm = RBMeasurementModel(g, R2, ny)
-    mukf = MUKF(; dynamics=fn, nl_measurement_model=mm, An, Al, Cl, R1=R1_full, d0, nxn, nu, ny)
+    mukf = MUKF(; dynamics=fn, nl_measurement_model=mm, A, Cl, R1=R1_full, d0, nxn, nu, ny)
 
     # Create equivalent standard Kalman filter for full system
     A_full = SA[0.9  0.2;

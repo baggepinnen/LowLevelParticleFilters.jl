@@ -423,6 +423,9 @@ An_matrix_discrete(xn, u, p, t) = An_matrix(xn, u, p, t) * Ts
 # Al = I to carry over state from previous time step: xl[k+1] = xl[k] + Ts*dl(xn[k])
 Al_discrete = SMatrix{nxl, nxl}(I(nxl))
 
+# Combined A matrix for MUKF: A = [An; Al] (nx × nxl)
+A_matrix_discrete(xn, u, p, t) = [An_matrix_discrete(xn, u, p, t); Al_discrete]
+
 # Measurement: we measure [x,y,z,vx,vy,vz]
 # This comes from d(xn) + Cl*xl where xl = [x,y,z,θ,φ]
 measurement(xn, u, p, t) = SA[0.0, 0.0, 0.0, xn[1], xn[2], xn[3]]  # [0,0,0,vx,vy,vz]
@@ -556,8 +559,7 @@ mm = RBMeasurementModel(measurement, R2, ny)
 mukf = MUKF(;
     dynamics = discrete_nonlinear_dynamics,  # Returns [dn; dl]
     nl_measurement_model = mm,
-    An = An_matrix_discrete,  # Use discrete coupling matrix
-    Al = Al_discrete,         # Use discrete Al = I for state carry-over
+    A = A_matrix_discrete,    # Combined coupling and dynamics matrix [An; Al]
     Cl,
     R1,
     d0,
