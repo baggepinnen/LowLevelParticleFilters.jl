@@ -108,7 +108,7 @@ y_t &= g(x_t^n, u, p, t) + C_l(x_t^n)\\, x_t^l + e_t, \\quad &e_t \\sim \\mathca
 \\end{aligned}
 ```
 
-where ``x^n`` is the nonlinear substate and ``x^`l` is the linear substate. This is the **conditionally linear** form from Morelande & Moran (2007), which allows the linear substate to depend on the nonlinear substate through both ``d_l(x^n)`` and the coupling matrices. Control input dependence can be encoded directly in the ``d_l(x^n, u)`` term.
+where ``x^n`` is the nonlinear substate and ``x^l`` is the linear substate. This is the **conditionally linear** form from Morelande & Moran (2007), that is, given ``x^n``, the dynamics and measurement models are linear in ``x^l``.
 
 # Arguments
 

@@ -133,7 +133,7 @@ w_t &= \\begin{bmatrix} w_t^n \\\\ w_t^l \\end{bmatrix} &\\sim \\mathcal{N}(0, R
 y_t &= g(x_t^n, u, p, t) + C_l(x_t^n)\\, x_t^l + e_t, \\quad &e_t \\sim \\mathcal{N}(0, R_2)
 \\end{aligned}
 ```
-The MUKF filter takes the nonlinear dynamics term ``[d_n; d_l]`` as a single function `fn(xn, u, p, t)`, so we need to define a new function for this. Control input dependence can be encoded directly in both ``d_n`` and ``d_l``. We also need to combine the process noise covariances into a single matrix ``R_1`` and the initial distributions into a single distribution.
+The MUKF filter takes the nonlinear dynamics term ``[d_n; d_l]`` as a single function `fn(xn, u, p, t)` and the linear coupling matrix ``A = [A_n; A_l]`` as a single matrix or function, so we need to define a new function for these. Control input dependence can be encoded directly in both ``d_n`` and ``d_l``. We also need to combine the process noise covariances into a single matrix ``R_1`` and the initial distributions into a single distribution.
 Let's compare MUKF with RBPF on the same system:
 
 ```@example RBPF
@@ -168,7 +168,7 @@ println("RBPF RMSE: $(round(rmse_rbpf, digits=4))")
 println("MUKF RMSE: $(round(rmse_mukf, digits=4))")
 ```
 
-Let's add the MUKF result to the prvious plot for comparison:
+Let's add the MUKF result to the previous plot for comparison:
 
 ```@example RBPF
 plot!(fig_rbpf, sol_mukf, ploty=false, plotx=false, plotRt=true, fillalpha=0.3, linewidth=2)
