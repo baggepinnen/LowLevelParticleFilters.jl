@@ -126,12 +126,12 @@ The [`MUKF`](@ref) (Marginalized Unscented Kalman Filter) is an alternative to R
 
 The MUKF filter in this package accepts a slightly more general form of the dynamics than RBPF, notably, we allow the ``d_l(x_t^n, u, p, t)`` term in the linear sub state dynamics.
 ```math
-\\begin{aligned}
-x_{t+1}^n &= d_n(x_t^n, u, p, t) + A_n(x_t^n)\\, x_t^l + w_t^n \\\\
-x_{t+1}^l &= d_l(x_t^n, u, p, t) + A_l(x_t^n)\\, x_t^l + w_t^l \\\\
-w_t &= \\begin{bmatrix} w_t^n \\\\ w_t^l \\end{bmatrix} &\\sim \\mathcal{N}(0, R_1) \\\\
-y_t &= g(x_t^n, u, p, t) + C_l(x_t^n)\\, x_t^l + e_t, \\quad &e_t \\sim \\mathcal{N}(0, R_2)
-\\end{aligned}
+\begin{aligned}
+x_{t+1}^n &= d_n(x_t^n, u, p, t) + A_n(x_t^n)\, x_t^l + w_t^n \\
+x_{t+1}^l &= d_l(x_t^n, u, p, t) + A_l(x_t^n)\, x_t^l + w_t^l \\
+w_t &= \begin{bmatrix} w_t^n \\ w_t^l \end{bmatrix} &\sim \mathcal{N}(0, R_1) \\
+y_t &= g(x_t^n, u, p, t) + C_l(x_t^n)\, x_t^l + e_t, \quad &e_t \sim \mathcal{N}(0, R_2)
+\end{aligned}
 ```
 The MUKF filter takes the nonlinear dynamics term ``[d_n; d_l]`` as a single function `fn(xn, u, p, t)` and the linear coupling matrix ``A = [A_n; A_l]`` as a single matrix or function, so we need to define a new function for these. Control input dependence can be encoded directly in both ``d_n`` and ``d_l``. We also need to combine the process noise covariances into a single matrix ``R_1`` and the initial distributions into a single distribution.
 Let's compare MUKF with RBPF on the same system:
