@@ -36,9 +36,13 @@ We provide a number of filter types
 - [`ParticleFilter`](@ref): The particle filter is a nonlinear estimator. This version of the particle filter is simple to use and assumes that both dynamics noise and measurement noise are additive. Particle filters handle multi-modal posteriors.
 - [`AdvancedParticleFilter`](@ref): This filter gives you more flexibility, at the expense of having to define a few more functions. This filter does not require the noise to be additive and is thus the most flexible filter type.
 - [`AuxiliaryParticleFilter`](@ref): This filter is identical to [`ParticleFilter`](@ref), but uses a slightly different proposal mechanism for new particles.
-- [`IMM`](@ref): (Currently considered experimental) The _Interacting Multiple Models_ filter switches between multiple internal filters based on a hidden Markov model. This filter is useful when the system dynamics change over time and the change can be modeled as a discrete Markov chain, i.e., the system may switch between a small number of discrete "modes".
-- [`RBPF`](@ref): A Rao-Blackwellized particle filter that uses a Kalman filter for the linear part of the state and a particle filter for the nonlinear part.
-- [`MUKF`](@ref): A Marginalized Unscented Kalman Filter that combines an Unscented Kalman Filter for the nonlinear substate with a bank of Kalman filters (one per sigma point) for the linear substate. Similar to RBPF but uses deterministic sigma points instead of random particles.
+
+### Experimental estimator types
+Additionally, these filter types are currently considered experimental and may change in future releases without respecting semantic versioning.
+
+- [`IMM`](@ref): The _Interacting Multiple Models_ filter switches between multiple internal filters based on a hidden Markov model. This filter is useful when the system dynamics change over time and the change can be modeled as a discrete Markov chain, i.e., the system may switch between a small number of discrete "modes".
+- [`RBPF`](@ref): A Rao-Blackwellized (marginalized) particle filter that uses a Kalman filter for the linear part of the state and a particle filter for the nonlinear part.
+- [`MUKF`](@ref): A Rao-Blackwellized (marginalized) Unscented Kalman Filter that combines an Unscented Kalman Filter for the nonlinear substate with a bank of Kalman filters (one per sigma point) for the linear substate. Similar to RBPF but uses deterministic sigma points instead of random particles.
 
 ## Functionality
 This package provides 

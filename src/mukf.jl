@@ -93,7 +93,7 @@ Marginalized Unscented Kalman Filter for mixed linear/nonlinear state-space mode
 !!! warning "Experimental"
     This filter is currently considered experimental and the user interface may change in the future without respecting semantic versioning.
 
-This filter combines the Unscented Kalman Filter (UKF) for the nonlinear substate with a bank of Kalman filters (one per sigma point) for the linear substate. This approach provides improved accuracy compared to linearization-based methods while remaining more efficient than a full particle filter. This filter is sometimes referred to as a Rao-Blackwellized Unscented Kalman Filter, similar to the [`RBPF`](@ref).
+This filter combines the Unscented Kalman Filter (UKF) for the nonlinear substate with a standard Kalman filters for the linear substate. This approach provides improved accuracy compared to linearization-based methods while remaining more efficient than standard UKF. This filter is sometimes referred to as a Rao-Blackwellized Unscented Kalman Filter, similar to the [`RBPF`](@ref).
 
 Ref: Morelande, M.R. & Moran, Bill. (2007). An Unscented Transformation for Conditionally Linear Models
 
@@ -101,10 +101,10 @@ Ref: Morelande, M.R. & Moran, Bill. (2007). An Unscented Transformation for Cond
 The filter assumes dynamics on the form:
 ```math
 \\begin{aligned}
-x_{t+1}^n &= d_n(x_t^n, u, p, t) + A_n(x_t^n)\\, x_t^l + w_t^n \\\\
-x_{t+1}^l &= d_l(x_t^n, u, p, t) + A_l(x_t^n)\\, x_t^l + w_t^l \\\\
+x_{t+1}^n &= d_n(x_t^n, u, p, t) + A_n(x_t^n, u, p, t)\\, x_t^l + w_t^n \\\\
+x_{t+1}^l &= d_l(x_t^n, u, p, t) + A_l(x_t^n, u, p, t)\\, x_t^l + w_t^l \\\\
 w_t &= \\begin{bmatrix} w_t^n \\\\ w_t^l \\end{bmatrix} &\\sim \\mathcal{N}(0, R_1) \\\\
-y_t &= g(x_t^n, u, p, t) + C_l(x_t^n)\\, x_t^l + e_t, \\quad &e_t \\sim \\mathcal{N}(0, R_2)
+y_t &= g(x_t^n, u, p, t) + C_l(x_t^n, u, p, t)\\, x_t^l + e_t, \\quad &e_t \\sim \\mathcal{N}(0, R_2)
 \\end{aligned}
 ```
 
@@ -125,8 +125,10 @@ where ``x^n`` is the nonlinear substate and ``x^l`` is the linear substate. This
 * `p`: Parameters (default: NullParameters())
 * `weight_params`: Unscented transform parameters (default: MerweParams())
 * `names`: Signal names for plotting
+* `n_inds`: Optional index vector for nonlinear state elements in full state vector (default: `1:nxn`). Allows arbitrary state ordering.
+* `l_inds`: Optional index vector for linear state elements in full state vector (default: `nxn+1:nx`). Must be provided together with `n_inds`.
   """
-mutable struct MUKF{IPD,IPM,DT,MMT,AT,CLT,R1T,D0T,XNT,XT,RT,TS,PARAMS,WP,NT,SPC,SPC2,PRED_C,CORR_C,NINDS,LINDS} <:
+mutable struct MUKF{IPD,IPM,DT,MMT,AT,CLT,R1T,D0T,XNT,XT,RT,TS,PARAMS,WP,NT,SPC,SPC2,PRED_C,CORR_C,NINDS,LINDS,LSM} <:
                AbstractKalmanFilter
 
     # Model functions and parameters
@@ -156,6 +158,10 @@ mutable struct MUKF{IPD,IPM,DT,MMT,AT,CLT,R1T,D0T,XNT,XT,RT,TS,PARAMS,WP,NT,SPC,
     n_inds::NINDS             # Index vector for nonlinear state (1:nxn)
     l_inds::LINDS             # Index vector for linear state (nxn+1:nxn+nxl)
 
+    # Precomputed matrices for efficiency
+
+    linear_state_mapping::LSM # Matrix M (nx × nxl) such that M*term places term rows at l_inds positions
+
     # Metadata
 
     t::Int
@@ -181,6 +187,8 @@ function MUKF{IPD,IPM}(;
     p = NullParameters(),
     weight_params = MerweParams(),
     names = default_names(length(d0.μ), nu, ny, "MUKF"),
+    n_inds = nothing,
+    l_inds = nothing,
 ) where {IPD,IPM}
 
     nx = length(d0.μ)
@@ -236,13 +244,50 @@ function MUKF{IPD,IPM}(;
     # Initialize joint covariance from unified d0
     R0 = convert_cov_type(R1, d0.Σ)  # Use R1 as type reference
 
-    # Create index vectors for efficient partition_cov (static if R0 is static)
-    if R0 isa StaticArray
-        n_inds = SVector{nxn}(1:nxn)
-        l_inds = SVector{nxl}((1:nxl) .+ nxn)
+    # Create or validate index vectors for state partitioning
+    if isnothing(n_inds) && isnothing(l_inds)
+        # Default: sequential ordering [xn; xl]
+        if R0 isa StaticArray
+            n_inds = SVector{nxn}(1:nxn)
+            l_inds = SVector{nxl}((1:nxl) .+ nxn)
+        else
+            n_inds = 1:nxn
+            l_inds = nxn+1:nx
+        end
     else
-        n_inds = 1:nxn
-        l_inds = nxn+1:nx
+        # Custom indices provided - validate them
+        if isnothing(n_inds) || isnothing(l_inds)
+            error("Both n_inds and l_inds must be provided together, or neither")
+        end
+
+        # Validate dimensions
+        length(n_inds) == nxn || error("n_inds must have length nxn=$nxn, got $(length(n_inds))")
+        length(l_inds) == nxl || error("l_inds must have length nxl=$nxl, got $(length(l_inds))")
+
+        # Validate no overlap and complete coverage
+        all_inds = sort([collect(n_inds); collect(l_inds)])
+        all_inds == 1:nx || error("n_inds and l_inds must together cover exactly indices 1:$nx without overlap")
+
+        # Convert to appropriate type (SVector if R0 is static for type stability)
+        if R0 isa StaticArray
+            n_inds = SVector{nxn}(n_inds)
+            l_inds = SVector{nxl}(l_inds)
+        else
+            # Ensure indices are vectors (not ranges) for consistency
+            n_inds = collect(n_inds)
+            l_inds = collect(l_inds)
+        end
+    end
+
+    # Compute linear state mapping matrix for efficient cross-covariance correction
+    # M is nx × nxl where M[i,j] = 1 if i == l_inds[j], else 0
+    # This allows computing bigterm = M * term to place term rows at l_inds positions
+    linear_state_mapping = zeros(T, nx, nxl)
+    for (j, i) in enumerate(l_inds)
+        linear_state_mapping[i, j] = one(T)
+    end
+    if R0 isa StaticArray
+        linear_state_mapping = SMatrix{nx, nxl, T}(linear_state_mapping)
     end
 
     # Initialize sigma points (will be updated in predict!/correct!)
@@ -273,6 +318,7 @@ function MUKF{IPD,IPM}(;
         typeof(correct_cache),
         typeof(n_inds),
         typeof(l_inds),
+        typeof(linear_state_mapping),
     }(
         dynamics,
         nl_measurement_model,
@@ -289,6 +335,7 @@ function MUKF{IPD,IPM}(;
         R0,
         n_inds,
         l_inds,
+        linear_state_mapping,
         0,
         Ts,
         nu,
@@ -320,7 +367,7 @@ function Base.show(io::IO, mukf::MUKF{IPD,IPM}) where {IPD,IPM}
     println(io, "  weight_params: $(typeof(mukf.weight_params))")
     for field in fieldnames(typeof(mukf))
         field in (:ny, :nu, :Ts, :t, :nxn, :nxl, :weight_params) && continue
-        if field in (:nl_measurement_model, :sigma_point_cache, :correct_sigma_point_cache, :predict_cache, :correct_cache, :A, :Cl, :xn_sigma_points, :x, :R, :n_inds, :l_inds)
+        if field in (:nl_measurement_model, :sigma_point_cache, :correct_sigma_point_cache, :predict_cache, :correct_cache, :A, :Cl, :xn_sigma_points, :x, :R, :n_inds, :l_inds, :linear_state_mapping)
             println(io, "  $field: $(fieldtype(typeof(mukf), field))")
         else
             println(io, "  $field: $(repr(getfield(mukf, field), context=:compact => true))")
@@ -445,32 +492,31 @@ function predict!(
     u = zeros(f.nu),
     p = parameters(f),
     t::Real = index(f)*f.Ts;
-    R1 = get_mat(f.R1, f.x[f.n_inds], u, p, t),
+    R1 = get_mat(f.R1, f.x, u, p, t),
 ) where {IPD}
     nxn = length(f.n_inds)
     nxl = length(f.l_inds)
     nx = nxn + nxl
-
     # Get process noise covariance (full state)
     
-
+    
     # Extract conditional parameters from current joint covariance
     Pnn, Pnl, Pln, Pll = partition_cov(f.R, f.n_inds, f.l_inds)
     L, Γ_curr = cond_linear_params(Pnn, Pnl, Pln, Pll)
-
+    
     # Current means
     μn = f.x[f.n_inds]
     μl = f.x[f.l_inds]
-
+    
     # Generate sigma points for nonlinear state only
     sp = f.sigma_point_cache.x0
     sigmapoints!(sp, μn, Pnn, f.weight_params)
     W = UKFWeights(f.weight_params, nxn)
-
+    
     # Transform sigma points through dynamics
     # Yi = d(sp[i], u) + A_i*νB_i
     # where A_i = [An_i; Al_i] and νB_i = μl + L*(sp[i] - μn) is the conditional mean of xl given xn=sp[i]
-
+    
     # Use cached arrays (no allocations!)
     Y = f.predict_cache.Y
     G_matrices = f.predict_cache.G_matrices
@@ -486,7 +532,7 @@ function predict!(
             # Conditional mean of xl given xn=sp[i]
             νB = μl .+ L * (sp[i] .- μn)
 
-            # Get full dynamics [dn(xn, u); dl(xn, u)]
+            # Get full dynamics (user's function returns state in their chosen order)
             xp .= 0
             f.dynamics(xp, sp[i], u, p, t)
 
@@ -495,16 +541,13 @@ function predict!(
         end
     else
         # Out-of-place dynamics
-        @inbounds for i in eachindex(sp)
+        for i in eachindex(Y, sp, G_matrices)
             # Get state-dependent matrix A = [An; Al]
             A_i = get_mat(f.A, sp[i], u, p, t)
             G_matrices[i] = A_i
-
             νB = μl .+ L * (sp[i] .- μn)
-
-            # Get full dynamics [dn(xn, u); dl(xn, u)]
+            # Get full dynamics (user's function returns state in their chosen order)
             xp_full = f.dynamics(sp[i], u, p, t)
-
             # Add coupling: x' = d(xn, u) + A*xl
             Y[i] = xp_full .+ A_i * νB
         end
@@ -512,14 +555,14 @@ function predict!(
 
     # Compute predicted mean
     μ_pred = zero(Y[1])
-    @inbounds for i in eachindex(sp)
+    @inbounds for i in eachindex(Y)
         w = i == 1 ? W.wm : W.wmi
         μ_pred = μ_pred .+ w .* Y[i]
     end
 
     # Compute spread covariance from transformed sigma points
     P_spread = zero(f.R)
-    @inbounds for i in eachindex(sp)
+    @inbounds for i in eachindex(Y)
         w = i == 1 ? W.wc : W.wci
         δ = Y[i] .- μ_pred
         P_spread = P_spread .+ w .* (δ * δ')
@@ -527,7 +570,7 @@ function predict!(
 
     # Compute weighted average of G matrices for analytic term
     G_avg = zero(G_matrices[1])
-    @inbounds for i in eachindex(sp)
+    @inbounds for i in eachindex(G_matrices)
         w = i == 1 ? W.wm : W.wmi
         G_avg = G_avg .+ w .* G_matrices[i]
     end
@@ -595,7 +638,7 @@ function correct!(
 
     if IPM
         # In-place measurement
-        @inbounds for i in eachindex(sp)
+        @inbounds for i in eachindex(sp, Y_meas, X_full, Cl_matrices)
             Cl_i = get_mat(f.Cl, sp[i], u, p, t)
             νB = μl .+ L * (sp[i] .- μn)
 
@@ -603,7 +646,16 @@ function correct!(
             Y_meas[i] = y_temp .+ Cl_i * νB
 
             # Store full state vector for cross-covariance
-            X_full[i] = [sp[i]; νB]
+            # Need to construct rather than mutate for SVectors
+            if X_full[i] isa StaticArray
+                x_temp = similar(X_full[i])
+                x_temp[f.n_inds] = sp[i]
+                x_temp[f.l_inds] = νB
+                X_full[i] = x_temp
+            else
+                X_full[i][f.n_inds] .= sp[i]
+                X_full[i][f.l_inds] .= νB
+            end
             Cl_matrices[i] = Cl_i
         end
     else
@@ -613,21 +665,32 @@ function correct!(
             νB = μl .+ L * (sp[i] .- μn)
 
             Y_meas[i] = g(sp[i], u, p, t) .+ Cl_i * νB
-            X_full[i] = [sp[i]; νB]
+
+            # Store full state vector for cross-covariance
+            # Need to construct rather than mutate for SVectors
+            if X_full[i] isa StaticArray
+                x_temp = similar(X_full[i])
+                x_temp[f.n_inds] = sp[i]
+                x_temp[f.l_inds] = νB
+                X_full[i] = x_temp
+            else
+                X_full[i][f.n_inds] .= sp[i]
+                X_full[i][f.l_inds] .= νB
+            end
             Cl_matrices[i] = Cl_i
         end
     end
 
     # Compute predicted measurement mean
     yhat = zero(Y_meas[1])
-    @inbounds for i in eachindex(sp)
+    @inbounds for i in eachindex(Y_meas)
         w = i == 1 ? W.wm : W.wmi
         yhat = yhat .+ w .* Y_meas[i]
     end
 
     # Compute innovation covariance: S = spread + Cl*Γ*Cl' + R2
     S = zero(R2_mat)
-    @inbounds for i in eachindex(sp)
+    @inbounds for i in eachindex(Y_meas)
         w = i == 1 ? W.wc : W.wci
         δy = Y_meas[i] .- yhat
         S = S .+ w .* (δy * δy')
@@ -635,7 +698,7 @@ function correct!(
 
     # Compute weighted average of Cl matrices for analytic term
     Cl_avg = zero(Cl_matrices[1])
-    @inbounds for i in eachindex(sp)
+    @inbounds for i in eachindex(Cl_matrices)
         w = i == 1 ? W.wm : W.wmi
         @bangbang Cl_avg .= Cl_avg .+ w .* Cl_matrices[i]
     end
@@ -649,19 +712,23 @@ function correct!(
     δx_proto = X_full[1] .- μ_full
     δy_proto = Y_meas[1] .- yhat
     Σxy = zero(δx_proto * δy_proto')
-    @inbounds for i in eachindex(sp)
+    @inbounds for i in eachindex(X_full, Y_meas)
         w = i == 1 ? W.wc : W.wci
         δx = X_full[i] .- μ_full
         δy = Y_meas[i] .- yhat
         @bangbang Σxy .+= w .* (δx * δy')
     end
 
-    # Add the missing term: [0; Γ*Cl_avg'] (from equation 16 in MUT paper)
-    # This is the conditional covariance contribution that was causing negative Γ!
+    # Add the missing term from equation 16 in MUT paper
+    # This adds Γ*Cl_avg' to the rows corresponding to the linear substate
+    term = Γ_curr * Cl_avg'  # nxl × ny matrix
     if Σxy isa SMatrix
-        Σxy += [zero(SMatrix{length(f.n_inds), size(Σxy, 2)});Γ_curr * Cl_avg']
+        # For static arrays, use precomputed mapping to avoid allocations
+        bigterm = f.linear_state_mapping * term  # nx × ny matrix with term rows at l_inds positions
+        Σxy = Σxy .+ bigterm
     else
-        Σxy[f.l_inds, :] .+= Γ_curr * Cl_avg'
+        # For regular arrays, direct indexing is more efficient
+        Σxy[f.l_inds, :] .+= term
     end
 
     # Factorize S and compute Kalman gain
@@ -691,35 +758,32 @@ end
 # Make MUKF callable
 (f::MUKF)(u, y, p=parameters(f), t=index(f)*f.Ts) = update!(f, u, y, p, t)
 
-# Measurement function for MUKF
-function measurement(mukf::MUKF)
-    function (x, u, p, t)
-        nxn = length(mukf.n_inds)
-        xn = x[1:nxn]
-        xl = x[nxn+1:end]
 
-        g = mukf.nl_measurement_model.measurement
-        Cl = get_mat(mukf.Cl, xn, u, p, t)
+function measurement(f::MUKF)
+    function (x, u, p, t)
+        xn = x[f.n_inds]
+        xl = x[f.l_inds]
+
+        g = f.nl_measurement_model.measurement
+        Cl = get_mat(f.Cl, xn, u, p, t)
 
         return g(xn, u, p, t) .+ Cl * xl
     end
 end
 
-# Dynamics function for MUKF
-function dynamics(mukf::MUKF)
+function dynamics(f::MUKF)
     function (x, u, p, t)
-        nxn = length(mukf.n_inds)
-        xn = x[1:nxn]
-        xl = x[nxn+1:end]
+        xn = x[f.n_inds]
+        xl = x[f.l_inds]
 
         # Get combined A matrix and extract An, Al by row indexing
-        A_mat = get_mat(mukf.A, xn, u, p, t)
-        An = A_mat[mukf.n_inds, :]  # First nxn rows
-        Al = A_mat[mukf.l_inds, :]  # Remaining nxl rows
+        A_mat = get_mat(f.A, xn, u, p, t)
+        An = A_mat[f.n_inds, :]  # First nxn rows
+        Al = A_mat[f.l_inds, :]  # Remaining nxl rows
 
-        dyn_full = mukf.dynamics(xn, u, p, t)
-        xn_next = dyn_full[mukf.n_inds] .+ An * xl
-        xl_next = dyn_full[mukf.l_inds] .+ Al * xl
+        dyn_full = f.dynamics(xn, u, p, t)
+        xn_next = dyn_full[f.n_inds] .+ An * xl
+        xl_next = dyn_full[f.l_inds] .+ Al * xl
 
         return [xn_next; xl_next]
     end
@@ -731,47 +795,33 @@ function sample_state(f::MUKF, p=parameters(f); noise=true)
 end
 
 function sample_state(f::MUKF{IPD}, x, u, p=parameters(f), t=index(f)*f.Ts; noise=true) where IPD
-    nxn = length(f.n_inds)
-    nxl = length(f.l_inds)
+
     xn = x[f.n_inds]
     xl = x[f.l_inds]
+    A = get_mat(f.A, xn, u, p, t)
 
-    # Get combined A matrix and extract An, Al by row indexing
-    A_mat = get_mat(f.A, xn, u, p, t)
-    An = A_mat[f.n_inds, :]  # First nxn rows
-    Al = A_mat[f.l_inds, :]  # Remaining nxl rows
-
-    # Get full dynamics [dn; dl]
     if IPD
         dyn_full = similar(x)
         f.dynamics(dyn_full, xn, u, p, t)
-        xn_next = dyn_full[f.n_inds] .+ An * xl
-        xl_next = dyn_full[f.l_inds] .+ Al * xl
+        x_next = dyn_full .+ A * xl
     else
         dyn_full = f.dynamics(xn, u, p, t)
-        xn_next = dyn_full[f.n_inds] .+ An * xl
-        xl_next = dyn_full[f.l_inds] .+ Al * xl
+        x_next = dyn_full .+ A * xl
     end
 
     if noise
-        R1n_mat = get_mat(f.R1, xn, u, p, t)[f.n_inds, f.n_inds]  # Extract nonlinear block
-        xn_next = xn_next .+ rand(SimpleMvNormal(R1n_mat))
-
-        R1l_mat = get_mat(f.R1, xn, u, p, t)[f.l_inds, f.l_inds]  # Extract linear block
-        xl_next = xl_next .+ rand(SimpleMvNormal(R1l_mat))
+        R1 = get_mat(f.R1, x, u, p, t)
+        x_next = x_next .+ rand(SimpleMvNormal(R1))
     end
 
-    return [xn_next; xl_next]
+    return x_next
 end
 
 function sample_measurement(f::MUKF, x, u, p=parameters(f), t=index(f)*f.Ts; noise=true)
-    nxn = length(f.n_inds)
-    xn = x[1:nxn]
-    xl = x[nxn+1:end]
-
     g = f.nl_measurement_model.measurement
+    xn = x[f.n_inds]
+    xl = x[f.l_inds]
     Cl = get_mat(f.Cl, xn, u, p, t)
-
     y = g(xn, u, p, t) .+ Cl * xl
     if noise
         y = y .+ rand(f.nl_measurement_model.R2)

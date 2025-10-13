@@ -312,7 +312,7 @@ The [`MUKF`](@ref) (Marginalized Unscented Kalman Filter) is an estimator partic
 
 
 #### Problem: Quadrotor with Unknown Mass and Drag
-We consider a simplified quadrotor model where the mass and drag coefficient are unknown and time-varying. By cleverly partitioning the state using reparameterizations ``\theta = 1/m`` and ``\varphi = \theta C_d``, we exploit the conditionally linear structure to achieve significant computational savings.
+We consider a simplified quadrotor model where the mass and drag coefficient are unknown and time-varying. By cleverly partitioning the state using reparameterizations ``\theta = 1/m`` and ``\varphi = \theta C_d``, we exploit a conditionally linear structure to achieve significant computational savings.
 
 The system has 8 state dimensions total with the following partitioning:
 - **Nonlinear substate** (3D): velocities ``[v_x, v_y, v_z]``
@@ -363,21 +363,23 @@ Ts = 0.02   # Sample time
 nothing # hide
 ```
 We'll simulate a scenario where:
-- Mass decreases linearly from 1.0 to 0.85 kg (battery drain)
+- Mass decreases linearly from 1.0 to 0.85 kg (fuel drain)
 - Drag increases abruptly at t=50s from 0.01 to 0.015 (damage/configuration change)
 
 #### MUKF Formulation with Conditionally Linear Structure
 
 By using the parameterization ``\theta = 1/m`` and ``\varphi = \theta C_d``, we exploit the conditionally linear structure from Morelande & Moran (2007), which has the form:
 
-$$\begin{aligned}
+$$
+\dot{x} = d(x^n) + A(x^n)x^l = \begin{aligned}
 \dot{x}^n &= d_n(x^n) + A_n(x^n) x^l \\
-\dot{x}^l &= d_l(x^n) + A_l x^l
-\end{aligned}$$
+\dot{x}^l &= d_l(x^n) + A_l(x^n) x^l
+\end{aligned}
+$$
 
 where ``x^n = [v_x, v_y, v_z]`` and ``x^l = [x, y, z, \theta, \varphi]``. The coupling matrix ``A_n(x^n)`` is ``3 \times 5`` and captures how ``\theta`` scales the thrust forces and ``\varphi`` scales the drag forces. The term ``d_l(x^n) = [v_x, v_y, v_z, 0, 0]`` captures how positions depend on velocities.
 
-This clever parameterization reduces the number of sigma points from 17 (for a full 8D UKF with 2nx+1 = 2×8+1) to only 7 (for a 3D nonlinear MUKF with 2×3+1), a 59% reduction. Unscented Kalman filters internally perform a Cholesky factorization of the covariance matrix (to compute sigma points), which scales roughly cubically with state dimension, but the MUKF gets away with factorizing only the part of the covariance corresponding to the nonlinear substate, leading to significant computational savings.
+This clever parameterization reduces the number of sigma points from 17 (for a full 8D UKF with 2nx+1 = 2×8+1) to only 7 (for a 3D nonlinear MUKF with 2×3+1), a 59% reduction. Unscented Kalman filters internally perform a Cholesky factorization of the covariance matrix (to compute sigma points), which scales roughly cubically with state dimension, but the MUKF gets away with factorizing only the part of the covariance corresponding to the nonlinear substate, leading to further computational savings.
 
 ```@example mukfparam
 # Nonlinear dynamics function returns [dn; dl] where:
@@ -680,7 +682,9 @@ println("UKF  - Drag RMSE: $(round(rmse_Cd_ukf, digits=6)) kg·s/m")
 
 Both filters perform comparably in terms of accuracy. However, MUKF uses only 7 sigma points (2×3+1 for 3D nonlinear state) compared to UKF's 17 sigma points (2×8+1 for 8D full state), a 59% reduction illustrating the computational benefit of exploiting the conditionally linear structure with the φ = θ·Cd parameterization.
 
-We should note here that we have performed slightly different discretizations of the dynamics for the UKF and the MUKF. With the standard UKF, we discretized the entire dynamics using an RK4 method, a very accurate integrator in this context. For the MUKF, we instead discretized the dynamics using a simple forward Euler discretization (by multiplying ``A_n`` and the output of `quadrotor_nonlinear_dynamics` by ``T_s``). The reason for this discrepancy is that the conditionally linearity that holds for this system in continuous time no longer holds after discretization, _unless_ we use forward Euler discretization, which is the only scheme simple enough to not mess with the linearity. This primitive discretization is often sufficient for state estimation when sample intervals are short, which they tend to be when controlling quadrotors. See the note under [Discretization](@ref) for more comments regarding accuracy of integration for state estimation.
+We should note here that we have performed slightly different discretizations of the dynamics for the UKF and the MUKF. With the standard UKF, we discretized the entire dynamics using an RK4 method, a very accurate integrator in this context. For the MUKF, we instead discretized the dynamics using a simple forward Euler discretization (by multiplying ``A_n`` and the output of `quadrotor_nonlinear_dynamics` by ``T_s``). The reason for this discrepancy is that the conditional linearity that holds for this system in continuous time no longer holds after discretization, _unless_ we use forward Euler discretization, which is the only scheme simple enough to not mess with the linearity. This primitive discretization is often sufficient for state estimation when sample intervals are short, which they tend to be when controlling quadrotors. See the note under [Discretization](@ref) for more comments regarding accuracy of integration for state estimation.
+
+In special cases, more accurate integration is possible also for MUKF estimators. For example, when ``d_l(x^n) = 0``, the linear state evolves purely linearly as ``x^l_{k+1} = A_l x^l_k``, and we can use the matrix exponential to compute a discretized ``A_l``. When ``A_n = 0``, the nonlinear state evolves purely nonlinearly as ``x^n_{k+1} = f(x^n_k, u_k)``, and we can use any accurate integrator for this part. Even when ``A_n \neq 0``, we could treat the linear part of the nonlinear state evolution ``A_n x^l`` as an additional input to the nonlinear dynamics and use an accurate integrator for this part, this is not yet implemented due to the added complexity it would bring.
 
 
 

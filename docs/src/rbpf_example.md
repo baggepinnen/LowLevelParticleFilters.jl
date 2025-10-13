@@ -121,14 +121,14 @@ The paper referenced above mention a lot of special cases in which the filter ca
 
 The [`MUKF`](@ref) (Marginalized Unscented Kalman Filter) is an alternative to RBPF that uses the Unscented Transform instead of random particles. While RBPF uses ``N`` random particles (each with a Kalman filter), MUKF uses deterministic sigma points (typically ``2n+1`` for an ``n``-dimensional nonlinear state). This makes MUKF:
 - **Deterministic**
-- **Efficient for low-dimensional nonlinear states**: Uses fewer "hypotheses" than typical RBPF
+- **Efficient for low-dimensional nonlinear states**: Uses fewer "hypotheses" than typical RBPF and fewer sigma points than the corresponding UKF
 - **Gaussian assumption**: Like UKF, assumes posterior remains Gaussian (cannot handle multimodal distributions)
 
 The MUKF filter in this package accepts a slightly more general form of the dynamics than RBPF, notably, we allow the ``d_l(x_t^n, u, p, t)`` term in the linear sub state dynamics.
 ```math
 \begin{aligned}
-x_{t+1}^n &= d_n(x_t^n, u, p, t) + A_n(x_t^n)\, x_t^l + w_t^n \\
-x_{t+1}^l &= d_l(x_t^n, u, p, t) + A_l(x_t^n)\, x_t^l + w_t^l \\
+x_{t+1}^n &= d_n(x_t^n, u, p, t) + A_n(x_t^n, u, p, t)\, x_t^l + w_t^n \\
+x_{t+1}^l &= d_l(x_t^n, u, p, t) + A_l(x_t^n, u, p, t)\, x_t^l + w_t^l \\
 w_t &= \begin{bmatrix} w_t^n \\ w_t^l \end{bmatrix} &\sim \mathcal{N}(0, R_1) \\
 y_t &= g(x_t^n, u, p, t) + C_l(x_t^n)\, x_t^l + e_t, \quad &e_t \sim \mathcal{N}(0, R_2)
 \end{aligned}
