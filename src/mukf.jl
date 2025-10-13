@@ -555,14 +555,14 @@ function predict!(
 
     # Compute predicted mean
     μ_pred = zero(Y[1])
-    @inbounds for i in eachindex(sp)
+    @inbounds for i in eachindex(Y)
         w = i == 1 ? W.wm : W.wmi
         μ_pred = μ_pred .+ w .* Y[i]
     end
 
     # Compute spread covariance from transformed sigma points
     P_spread = zero(f.R)
-    @inbounds for i in eachindex(sp)
+    @inbounds for i in eachindex(Y)
         w = i == 1 ? W.wc : W.wci
         δ = Y[i] .- μ_pred
         P_spread = P_spread .+ w .* (δ * δ')
@@ -570,7 +570,7 @@ function predict!(
 
     # Compute weighted average of G matrices for analytic term
     G_avg = zero(G_matrices[1])
-    @inbounds for i in eachindex(sp)
+    @inbounds for i in eachindex(G_matrices)
         w = i == 1 ? W.wm : W.wmi
         G_avg = G_avg .+ w .* G_matrices[i]
     end
@@ -638,7 +638,7 @@ function correct!(
 
     if IPM
         # In-place measurement
-        @inbounds for i in eachindex(sp)
+        @inbounds for i in eachindex(sp, Y_meas, X_full, Cl_matrices)
             Cl_i = get_mat(f.Cl, sp[i], u, p, t)
             νB = μl .+ L * (sp[i] .- μn)
 
@@ -683,14 +683,14 @@ function correct!(
 
     # Compute predicted measurement mean
     yhat = zero(Y_meas[1])
-    @inbounds for i in eachindex(sp)
+    @inbounds for i in eachindex(Y_meas)
         w = i == 1 ? W.wm : W.wmi
         yhat = yhat .+ w .* Y_meas[i]
     end
 
     # Compute innovation covariance: S = spread + Cl*Γ*Cl' + R2
     S = zero(R2_mat)
-    @inbounds for i in eachindex(sp)
+    @inbounds for i in eachindex(Y_meas)
         w = i == 1 ? W.wc : W.wci
         δy = Y_meas[i] .- yhat
         S = S .+ w .* (δy * δy')
@@ -698,7 +698,7 @@ function correct!(
 
     # Compute weighted average of Cl matrices for analytic term
     Cl_avg = zero(Cl_matrices[1])
-    @inbounds for i in eachindex(sp)
+    @inbounds for i in eachindex(Cl_matrices)
         w = i == 1 ? W.wm : W.wmi
         @bangbang Cl_avg .= Cl_avg .+ w .* Cl_matrices[i]
     end
@@ -712,7 +712,7 @@ function correct!(
     δx_proto = X_full[1] .- μ_full
     δy_proto = Y_meas[1] .- yhat
     Σxy = zero(δx_proto * δy_proto')
-    @inbounds for i in eachindex(sp)
+    @inbounds for i in eachindex(X_full, Y_meas)
         w = i == 1 ? W.wc : W.wci
         δx = X_full[i] .- μ_full
         δy = Y_meas[i] .- yhat
