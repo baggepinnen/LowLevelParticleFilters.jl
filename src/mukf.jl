@@ -93,7 +93,7 @@ Marginalized Unscented Kalman Filter for mixed linear/nonlinear state-space mode
 !!! warning "Experimental"
     This filter is currently considered experimental and the user interface may change in the future without respecting semantic versioning.
 
-This filter combines the Unscented Kalman Filter (UKF) for the nonlinear substate with a bank of Kalman filters (one per sigma point) for the linear substate. This approach provides improved accuracy compared to linearization-based methods while remaining more efficient than a full particle filter. This filter is sometimes referred to as a Rao-Blackwellized Unscented Kalman Filter, similar to the [`RBPF`](@ref).
+This filter combines the Unscented Kalman Filter (UKF) for the nonlinear substate with a standard Kalman filters for the linear substate. This approach provides improved accuracy compared to linearization-based methods while remaining more efficient than standard UKF. This filter is sometimes referred to as a Rao-Blackwellized Unscented Kalman Filter, similar to the [`RBPF`](@ref).
 
 Ref: Morelande, M.R. & Moran, Bill. (2007). An Unscented Transformation for Conditionally Linear Models
 
@@ -101,10 +101,10 @@ Ref: Morelande, M.R. & Moran, Bill. (2007). An Unscented Transformation for Cond
 The filter assumes dynamics on the form:
 ```math
 \\begin{aligned}
-x_{t+1}^n &= d_n(x_t^n, u, p, t) + A_n(x_t^n)\\, x_t^l + w_t^n \\\\
-x_{t+1}^l &= d_l(x_t^n, u, p, t) + A_l(x_t^n)\\, x_t^l + w_t^l \\\\
+x_{t+1}^n &= d_n(x_t^n, u, p, t) + A_n(x_t^n, u, p, t)\\, x_t^l + w_t^n \\\\
+x_{t+1}^l &= d_l(x_t^n, u, p, t) + A_l(x_t^n, u, p, t)\\, x_t^l + w_t^l \\\\
 w_t &= \\begin{bmatrix} w_t^n \\\\ w_t^l \\end{bmatrix} &\\sim \\mathcal{N}(0, R_1) \\\\
-y_t &= g(x_t^n, u, p, t) + C_l(x_t^n)\\, x_t^l + e_t, \\quad &e_t \\sim \\mathcal{N}(0, R_2)
+y_t &= g(x_t^n, u, p, t) + C_l(x_t^n, u, p, t)\\, x_t^l + e_t, \\quad &e_t \\sim \\mathcal{N}(0, R_2)
 \\end{aligned}
 ```
 
@@ -492,32 +492,31 @@ function predict!(
     u = zeros(f.nu),
     p = parameters(f),
     t::Real = index(f)*f.Ts;
-    R1 = get_mat(f.R1, f.x[f.n_inds], u, p, t),
+    R1 = get_mat(f.R1, f.x, u, p, t),
 ) where {IPD}
     nxn = length(f.n_inds)
     nxl = length(f.l_inds)
     nx = nxn + nxl
-
     # Get process noise covariance (full state)
     
-
+    
     # Extract conditional parameters from current joint covariance
     Pnn, Pnl, Pln, Pll = partition_cov(f.R, f.n_inds, f.l_inds)
     L, Γ_curr = cond_linear_params(Pnn, Pnl, Pln, Pll)
-
+    
     # Current means
     μn = f.x[f.n_inds]
     μl = f.x[f.l_inds]
-
+    
     # Generate sigma points for nonlinear state only
     sp = f.sigma_point_cache.x0
     sigmapoints!(sp, μn, Pnn, f.weight_params)
     W = UKFWeights(f.weight_params, nxn)
-
+    
     # Transform sigma points through dynamics
     # Yi = d(sp[i], u) + A_i*νB_i
     # where A_i = [An_i; Al_i] and νB_i = μl + L*(sp[i] - μn) is the conditional mean of xl given xn=sp[i]
-
+    
     # Use cached arrays (no allocations!)
     Y = f.predict_cache.Y
     G_matrices = f.predict_cache.G_matrices
@@ -542,16 +541,13 @@ function predict!(
         end
     else
         # Out-of-place dynamics
-        @inbounds for i in eachindex(sp)
+        for i in eachindex(Y, sp, G_matrices)
             # Get state-dependent matrix A = [An; Al]
             A_i = get_mat(f.A, sp[i], u, p, t)
             G_matrices[i] = A_i
-
             νB = μl .+ L * (sp[i] .- μn)
-
             # Get full dynamics (user's function returns state in their chosen order)
             xp_full = f.dynamics(sp[i], u, p, t)
-
             # Add coupling: x' = d(xn, u) + A*xl
             Y[i] = xp_full .+ A_i * νB
         end

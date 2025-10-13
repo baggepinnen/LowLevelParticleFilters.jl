@@ -50,7 +50,7 @@ mukf = MUKF(dynamics=fn_mukf, nl_measurement_model=mm, A=A_mat, Cl=Cl, R1=R1_ful
 display(mukf)
 sol = forward_trajectory(mukf, u_data, y_meas)
 
-# plot(sol)  # TEMP: commented out while debugging
+plot(sol)
 # Helpers
 xn_true = [x_true[t][1] for t in 1:T]
 xn_est  = [x[1] for x in sol.xt]  # First element is xn (nonlinear state)
