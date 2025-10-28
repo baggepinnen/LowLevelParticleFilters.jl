@@ -158,31 +158,61 @@ function sse(f::AbstractFilter, u, y, p=parameters(f), λ=1; post_update_cb=(arg
 end
 
 """
-    prediction_errors!(res, f::AbstractFilter, u, y, p = parameters(f), λ = 1)
+    prediction_errors!(res, f::AbstractFilter, u, y, p = parameters(f), λ = 1; loglik = false)
 
 Calculate the prediction errors and store the result in `res`. Similar to [`sse`](@ref), this function is useful for sum-of-squares optimization. In contrast to `sse`, this function returns the residuals themselves rather than their sum of squares. This is useful for Gauss-Newton style optimizers, such as [LeastSquaresOptim.LevenbergMarquardt](https://github.com/matthieugomez/LeastSquaresOptim.jl).
 
 # Arguments:
-- `res`: A vector of length `ny*length(y)`. Note, for each datapoint in `u` and `u`, there are `ny` outputs, and thus `ny` residuals.
-- `f`: Any filter
-- `λ`: A weighting factor to minimize `dot(e, λ, e`). A commonly used metric is `λ = Diagonal(1 ./ (mag.^2))`, where `mag` is a vector of the "typical magnitude" of each output. Internally, the square root of `W = sqrt(λ)` is calculated so that the residuals stored in `res` are `W*e`.
+- `res`: A vector of length `ny*length(y)`. Note, for each datapoint in `u` and `u`, there are `ny` outputs, and thus `ny` residuals. If `loglik = true`, the length of `res` must be `length(y)*(ny+1)`, since an extra residual is added for the log-determinant term.
+- `f`: Any Kalman type filter
+- `λ`: A weighting factor to minimize `dot(e, λ, e)`. A commonly used metric is `λ = Diagonal(1 ./ (mag.^2))`, where `mag` is a vector of the "typical magnitude" of each output. Internally, the square root of `W = sqrt(λ)` is calculated so that the residuals stored in `res` are `W*e`.
+- `loglik`: If `true`, the residuals are calculated as `Sᵪ\e`, where `Sᵪ` is the Cholesky factor of the innovation covariance. This turns least-squares optimization into maximum likelihood estimation. When this is true, the `λ` argument is ignored and the length of `res` must be `length(y)*(ny+1)`, where an extra residual per time step is added for the log-determinant term.
+- `offset`: When using `loglik = true`, an offset may be added to the log-determinant term to avoid negative values inside the square root. The result of adding this offset is that the log-liklihood is shifted by a constant value, which does not affect optimization.
 
 See example in [Solving using Gauss-Newton optimization](@ref).
 """
-function prediction_errors!(res, f::AbstractFilter, u, y, p=parameters(f), λ=1)
+function prediction_errors!(res, f::AbstractFilter, u, y, p=parameters(f), λ=1; loglik=false, offset=0)
     reset!(f)
-    W = sqrt(λ)
     ny = f.ny
-    length(u)*ny == length(y)*ny == length(res) || error("The residual vector must be of length ny*length(data) (there is one residual per output for each datapoint)")
-    inds = 1:ny
-    for (i, (u,y)) in enumerate(zip(u, y))
-        ll, e = f(u,y,p)
-        @views mul!(res[inds], W, e)
-        inds = inds .+ ny
+    N = length(u)
+    if loglik
+        # Need one extra residual per time step for the constant term
+        length(res) == N*(ny + 1) || error("When loglik=true, residual vector length must be N*(ny+1)")
+    else
+        length(res) == N*ny ||
+        error("Residual vector length must be N*ny")
+        W = sqrt(λ)  # only used in non-loglik branch
     end
-    res
-end
+    # index ranges
+    idx = 0
+    for (uk, yk) in zip(u, y)
+        ll, e, S, Sᵪ = f(uk, yk, p)  # Sᵪ is a Cholesky factorization of S (lower)
+        # Place for the ny residuals for this timestep
+        inds = (idx+1):(idx+ny)
 
+        if loglik
+            # whitened residual: r = (1/√2) * L\e, since S = L L', so r'r = ½ e' S⁻¹ e
+            @views ldiv!(res[inds], Sᵪ.L, e)
+            res[inds] .*= inv(sqrt(2))
+
+            # extra scalar residual for ½[logdet(S)+ny*log(2π)]
+            # logdet(S) from Cholesky: logdet(S) = 2*sum(log, diag(L))
+            # LinearAlgebra.logdet(Cholesky) also works:
+            const_term = 0.5*(logdet(Sᵪ) + ny*log(2π)) + offset
+            const_term < 0 && error("Negative value ($const_term) inside square root when calculating log-likelihood residuals. Increase the offset argument to prediction_errors! (currently set to offset=$offset)")
+            # The offset may not be computed automatically based on the smallest constant term since it would imply a unique offset for each call during optimization.
+            res[idx + ny + 1] = sqrt(const_term)
+
+            idx += ny + 1
+        else
+            # plain weighted prediction errors for LS fitting
+            # r'r = λ * e'e
+            @views res[inds] .= W .* e
+            idx += ny
+        end
+    end
+    return res
+end
 
 """
     ll = loglik(filter, u, y, p=parameters(filter))
