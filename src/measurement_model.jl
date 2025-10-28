@@ -355,12 +355,12 @@ LinearMeasurementModel(C, D, R2; ny = size(R2, 1), cache = nothing, nx=nothing) 
 isinplace(::LinearMeasurementModel) = false
 
 function (model::LinearMeasurementModel)(x,u,p,t)
-    y = model.C*x
+    y = get_mat(model.C,x,u,p,t)*x
     if !iszero(model.D)
         if y isa SVector
-            y += model.D*u
+            y += get_mat(model.D,x,u,p,t)*u
         else
-            mul!(y, model.D, u, 1, 1)
+            mul!(y, get_mat(model.D,x,u,p,t), u, 1, 1)
         end
     end
     y
@@ -369,7 +369,7 @@ end
 function (model::LinearMeasurementModel)(y,x,u,p,t)
     mul!(y, model.C, x)
     if !iszero(model.D)
-        mul!(y, model.D, u, 1, 1)
+        mul!(y, get_mat(model.D,x,u,p,t), u, 1, 1)
     end
     y
 end

@@ -334,6 +334,14 @@ out = zeros(2, 10000)
 
         @test_nowarn simulate(sqkf, T, du)
 
+        @testset "Diagonal static covariance" begin
+            R1_diag = Diagonal(SVector(0.01, 0.01))
+            kf_diag = KalmanFilter(A_test, B_test, C_test, 0, R1_diag, eye(p), d0)
+            x_d, u_d, y_d = LowLevelParticleFilters.simulate(kf_diag, 50, du)
+            sol_diag = forward_trajectory(kf_diag, u_d, y_d)
+            @test length(sol_diag.x) == 50
+            @test sol_diag.x[1] isa SVector{2, Float64}
+        end
 
         kf   = KalmanFilter(A_test, B_test, C_test, 0, 0.01eye(n), eye(p), d0)
         x,u,y = LowLevelParticleFilters.simulate(kf,2000,du)
