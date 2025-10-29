@@ -340,7 +340,7 @@ out = zeros(2, 10000)
             x_d, u_d, y_d = LowLevelParticleFilters.simulate(kf_diag, 50, du)
             sol_diag = forward_trajectory(kf_diag, u_d, y_d)
             @test length(sol_diag.x) == 50
-            @test sol_diag.x[1] isa SVector{2, Float64}
+            @test sol_diag.R[1] isa SMatrix{2, 2, Float64, 4}
         end
 
         kf   = KalmanFilter(A_test, B_test, C_test, 0, 0.01eye(n), eye(p), d0)

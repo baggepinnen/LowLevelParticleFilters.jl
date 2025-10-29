@@ -87,7 +87,7 @@ end
 @testset "Dynamic C/D matrices in LinearMeasurementModel" begin
     # Test with functional C matrix
     C_func(x,u,p,t) = __C_
-    mm_C_func = LinearMeasurementModel(C_func, 0, R2; nx, ny)
+    mm_C_func = LinearMeasurementModel(C_func, __D_, R2; nx, ny)
     @test_nowarn correct!(kf, mm_C_func, u[1], y[1])
 
     # Test with functional D matrix
