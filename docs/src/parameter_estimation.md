@@ -65,7 +65,13 @@ We can do the same with a Kalman filter, shown below. When using Kalman-type fil
 eye(n) = SMatrix{n,n}(1.0I(n))
 llskf = map(svec) do s
     kfs = KalmanFilter(A, B, C, 0, s^2*eye(nx), eye(ny), d0)
-    loglik(kfs, u, y, p)
+    # loglik(kfs, u, y, p)
+
+
+    res3 = zeros((length(y[1])+1)*length(y))
+    LowLevelParticleFilters.prediction_errors!(res3, kfs, u, y, loglik=true)
+    -res3'res3
+
 end
 llskfx = map(svec) do s # Kalman filter with known state sequence, possible when data is simulated
     kfs = KalmanFilter(A, B, C, 0, s^2*eye(nx), eye(ny), d0)
@@ -719,6 +725,7 @@ Similar to previous example, we simulate the system, this time using a more exci
 using Random; Random.seed!(1) # hide
 Tperiod = 200
 t = 0:Ts:1000
+nu = 2
 u1 = vcat.(0.25 .* sign.(sin.(2pi/Tperiod .* (t ./ 40).^2)) .+ 0.25)
 u2 = vcat.(0.25 .* sign.(sin.(2pi/Tperiod .* (t ./ 40).^2 .+ pi/2)) .+ 0.25)
 u  = SVector{nu}.(vcat.(u1,u2))
@@ -790,7 +797,7 @@ using LeastSquaresOptim
 
 function residuals!(res, p::Vector{T}) where T
     kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), T.(R1)); ny, nu, Ts)
-    LowLevelParticleFilters.prediction_errors!(res, kf, u, y, p) 
+    LowLevelParticleFilters.prediction_errors!(res, kf, u, y, p)
 end
 
 res_gn = optimize!(LeastSquaresProblem(x = copy(p_guess), f! = residuals!, output_length = length(y)*ny, autodiff = :forward), LevenbergMarquardt())
@@ -811,6 +818,23 @@ svdvals(Λ)
 In this case, the precision matrix is singular, indicating that there is at least one diretion in parameter space that yields no increase in cost, and we can thus not determine where along a line in this direction the true parameter lies.
 
 Gauss-Newton algorithms are often more efficient at sum-of-squares minimization than the more generic BFGS optimizer. This form of Gauss-Newton optimization of prediction errors is also available through [ControlSystemIdentification.jl](https://baggepinnen.github.io/ControlSystemIdentification.jl/dev/nonlinear/#Identification-of-nonlinear-models), which uses this package undernath the hood.
+
+
+#### Optimizing log-likelihood using Gauss-Newton optimization
+We can use a Gauss-Newton optimizer to maximize the log-likelihood as well, the only thing we need to change is to pass `loglik = true` to the `prediction_errors!` function, adjust the residual output length accordingly (notice the `(ny+1)` below, we now have an additional residual per time step corresponding to a `logdet` term in the likelihood) as well as possibly providing an `offset` argument. The reason for the offset is that the `logdet` term may be negative and cannot be the result of squaring a real number. The addition of the offset does not affect the optimization process, but adds a constant offset to the computed log liklihood value (cost function). If the offset is needed, you will get an error message indicating that when calling `prediction_errors!`. The code looks like this:
+```@example paramest
+using LeastSquaresOptim
+
+function residuals!(res, p::Vector{T}) where T
+    kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), T.(R1)); ny, nu, Ts)
+    LowLevelParticleFilters.prediction_errors!(res, kf, u, y, p, loglik=true, offset=12)
+end
+
+res_gn = optimize!(LeastSquaresProblem(x = copy(p_guess), f! = residuals!, output_length = length(y)*(ny+1), autodiff = :forward), LevenbergMarquardt())
+
+p_opt_gn = res_gn.minimizer
+norm(p_true - p_opt_gn) / norm(p_true)
+```
 
 ## Which method should I use?
 The methods demonstrated above have slightly different applicability, here, we try to outline which methods to consider for different problems
@@ -869,27 +893,6 @@ indicating that we can not hope to resolve all of the parameters. However, using
 
 ### Linear methods
 This package also contains an interface to [ControlSystemsBase](https://juliacontrol.github.io/ControlSystems.jl/stable/), which allows you to call `ControlSystemsBase.observability(f, x, u, p, t)` on a filter `f` to linearize (if needed) it in the point `x,u,p,t` and assess observability using linear methods (the PHB test). Also `ControlSystemsBase.obsv(f, x, u, p, t)` for computing the observability matrix is available.
-
-## Videos
-Examples of parameter estimation are available here
-
-By using an optimizer to optimize the likelihood of an [`UnscentedKalmanFilter`](@ref):
-```@raw html
-<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/0RxQwepVsoM" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-```
-
-Estimation of time-varying parameters:
-```@raw html
-<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/zJcOPPLqv4A?si=XCvpo3WD-4U3PJ2S" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-```
-
-Adaptive control by means of estimation of time-varying parameters:
-```@raw html
-<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/Ip_prmA7QTU?si=Fat_srMTQw5JtW2d" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-```
-
-
-
 
 ## Fisher Information and Augmented State Covariance
 
@@ -992,3 +995,21 @@ This link provides a principled way to analyze *parameter identifiability* and *
 
 
 This relationship is useful for understanding how well parameters can be estimated from data, and it explains why *insufficient excitation* or *poor observability* leads to *slow decay of ($R_{pp,k}$)* and unreliable parameter estimates in practice. The FIM is also equal to the Hessian of the negative log-likelihood function at the optimum found when performing maximum-likelihood parameter estimation.
+
+## Videos
+Examples of parameter estimation are available here
+
+By using an optimizer to optimize the likelihood of an [`UnscentedKalmanFilter`](@ref):
+```@raw html
+<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/0RxQwepVsoM" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+```
+
+Estimation of time-varying parameters:
+```@raw html
+<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/zJcOPPLqv4A?si=XCvpo3WD-4U3PJ2S" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+```
+
+Adaptive control by means of estimation of time-varying parameters:
+```@raw html
+<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/Ip_prmA7QTU?si=Fat_srMTQw5JtW2d" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+```

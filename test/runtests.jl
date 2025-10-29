@@ -414,6 +414,10 @@ out = zeros(2, 10000)
             LowLevelParticleFilters.prediction_errors!(res2, kf, u, y)
 
             @test res1 ≈ res2
+
+            res3 = zeros((length(y[1])+1)*length(y))
+            LowLevelParticleFilters.prediction_errors!(res3, kf, u, y, loglik=true)
+            @test loglik(kf, u, y) ≈ -res3'res3 rtol=1e-6
         end
 
     end
