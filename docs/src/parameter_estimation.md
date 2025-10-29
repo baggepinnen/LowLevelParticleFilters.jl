@@ -920,12 +920,12 @@ y_k = C_k x_k + e_k,
 
 where
 
-* ( $x_k$ ) = original system state
-* ( $p$ ) = constant parameters (no process noise)
-* ( $w_k \sim \mathcal{N}(0,R_1)$ ) = process noise driving the state
-* ( $e_k \sim \mathcal{N}(0,R_2)$ ) = measurement noise
-* ( $A^{(p)}_k = \frac{\partial f}{\partial p}\big|_{(x_k,u_k,p)}$ ) encodes the parameter influence
-* Parameters evolve as ( $p_{k+1} = p_k$ ), modeled here as a random walk with zero covariance
+* $x_k$ = original system state
+* $p$ = constant parameters (no process noise)
+* $w_k \sim \mathcal{N}(0,R_1)$ = process noise driving the state
+* $e_k \sim \mathcal{N}(0,R_2)$ = measurement noise
+* $A^{(p)}_k = \frac{\partial f}{\partial p}\big|_{(x_k,u_k,p)}$ encodes the parameter influence
+* Parameters evolve as $p_{k+1} = p_k$, modeled here as a random walk with zero covariance
 
 ---
 
@@ -942,7 +942,7 @@ R_{xp,k}^\top & R_{pp,k}
 ```
 
 The block ($R_{pp,k}$) represents the *covariance of the parameter estimates* at time index ``k``.
-For *constant parameters* ($(R_1^p = 0)$), this parameter covariance evolves by accumulating information from measurements:
+For *constant parameters* ($R_1^p = 0$), this parameter covariance evolves by accumulating information from measurements:
 
 ```math
 R_{pp,k+1}^{-1}
@@ -953,9 +953,9 @@ J_k^\top S_k^{-1} J_k,
 
 where
 
-* ($J_k = C_k S^{(p)}_k$) is the *output sensitivity* to parameters,
-* ($S_k = C_k R_{xx,k} C_k^\top + R_2$) is the *innovation covariance*,
-* ($S^{(p)}_k = \frac{\partial x_k}{\partial p}$) is the *state sensitivity* satisfying the recursion (from the chain rule applied to the nonlinear dynamics)
+* $J_k = C_k S^{(p)}_k$ is the *output sensitivity* to parameters,
+* $S_k = C_k R_{xx,k} C_k^\top + R_2$ is the *innovation covariance*,
+* $S^{(p)}_k = \frac{\partial x_k}{\partial p}$ is the *state sensitivity* satisfying the recursion (from the chain rule applied to the nonlinear dynamics)
 
   ```math
   S^{(p)}_{k+1} = A_k S^{(p)}_k + A^{(p)}_k, \qquad S^{(p)}_0 = 0.
@@ -980,7 +980,7 @@ R_{pp,0}^{-1} + \mathcal{I}(p).
 This shows a connection between the Fisher Information Matrix and the parameter covariance arising from augmented-state filtering:
 
 - The FIM measures how much _information_ the data contains about the parameters
-- When parameters are constant (($R_1^p = 0$)), the *augmented Kalman filter accumulates FIM over time*
+- When parameters are constant ($R_1^p = 0$), the *augmented Kalman filter accumulates FIM over time*
 - The *Cramér–Rao lower bound* becomes
 
 ```math
@@ -990,11 +990,11 @@ This shows a connection between the Fisher Information Matrix and the parameter 
 
 #### Summary
 
-In joint state–parameter estimation with constant parameters, the parameter covariance block ($R_{pp,k}$) of the augmented Kalman filter (or EKF/UKF approximation) decreases as information is accumulated according to the *Fisher information matrix.
+In joint state–parameter estimation with constant parameters, the parameter covariance block $R_{pp,k}$ of the augmented Kalman filter (or EKF/UKF approximation) decreases as information is accumulated according to the *Fisher information matrix.
 This link provides a principled way to analyze *parameter identifiability* and *experiment excitation design* using information theory.
 
 
-This relationship is useful for understanding how well parameters can be estimated from data, and it explains why *insufficient excitation* or *poor observability* leads to *slow decay of ($R_{pp,k}$)* and unreliable parameter estimates in practice. The FIM is also equal to the Hessian of the negative log-likelihood function at the optimum found when performing maximum-likelihood parameter estimation.
+This relationship is useful for understanding how well parameters can be estimated from data, and it explains why *insufficient excitation* or *poor observability* leads to *slow decay of $R_{pp,k}$* and unreliable parameter estimates in practice. The FIM is also equal to the Hessian of the negative log-likelihood function at the optimum found when performing maximum-likelihood parameter estimation.
 
 ## Videos
 Examples of parameter estimation are available here
