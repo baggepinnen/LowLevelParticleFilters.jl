@@ -894,7 +894,7 @@ indicating that we can not hope to resolve all of the parameters. However, using
 ### Linear methods
 This package also contains an interface to [ControlSystemsBase](https://juliacontrol.github.io/ControlSystems.jl/stable/), which allows you to call `ControlSystemsBase.observability(f, x, u, p, t)` on a filter `f` to linearize (if needed) it in the point `x,u,p,t` and assess observability using linear methods (the PHB test). Also `ControlSystemsBase.obsv(f, x, u, p, t)` for computing the observability matrix is available.
 
-## Fisher Information and Augmented State Covariance
+### Fisher Information and Augmented State Covariance
 
 When using augmented-state methods for *joint state and parameter estimation*, we embed the parameters as additional state variables, often with zero process noise, i.e.
 
@@ -929,7 +929,7 @@ where
 
 ---
 
-### Connection to Fisher Information
+#### Connection to Fisher Information
 
 Running an Extended or Unscented Kalman Filter on this augmented system produces a covariance matrix
 
@@ -979,7 +979,7 @@ R_{pp,0}^{-1} + \mathcal{I}(p).
 
 This shows a connection between the Fisher Information Matrix and the parameter covariance arising from augmented-state filtering:
 
-- The FIM measures how much $information$ the data contains about the parameters
+- The FIM measures how much _information_ the data contains about the parameters
 - When parameters are constant (($R_1^p = 0$)), the *augmented Kalman filter accumulates FIM over time*
 - The *Cramér–Rao lower bound* becomes
 
@@ -988,7 +988,7 @@ This shows a connection between the Fisher Information Matrix and the parameter 
 ```
 
 
-### Summary
+#### Summary
 
 In joint state–parameter estimation with constant parameters, the parameter covariance block ($R_{pp,k}$) of the augmented Kalman filter (or EKF/UKF approximation) decreases as information is accumulated according to the *Fisher information matrix.
 This link provides a principled way to analyze *parameter identifiability* and *experiment excitation design* using information theory.
