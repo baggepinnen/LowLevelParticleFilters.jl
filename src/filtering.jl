@@ -13,6 +13,7 @@ function reset!(pf::AbstractParticleFilter)
     s.t[] = 1
 end
 
+@inline get_mat(A::Nothing,x,u,p,t) = 0
 @inline get_mat(A::Union{AbstractMatrix, Number},x,u,p,t) = A
 @inline get_mat(A::AbstractArray{<:Any, 3},x,u,p,t) = @view A[:,:,t+1]
 @inline get_mat(A::Function,x,u,p,t) = A(x,u,p,t)
@@ -42,7 +43,7 @@ If `R1` stored in `kf` is a function `R1(x, u, p, t)`, this function is evaluate
 The dynamics noise covariance matrix `R1` stored in `kf` can optionally be overridden by passing the argument `R1`, in this case `R1` must be a matrix.
 """
 function predict!(kf::AbstractKalmanFilter, u, p=parameters(kf), t::Real = index(kf)*kf.Ts; R1 = get_mat(kf.R1, kf.x, u, p, t), α = kf.α, At = get_mat(kf.A, kf.x, u, p, t), Bt = get_mat(kf.B, kf.x, u, p, t))
-    (; A,B,x,R) = kf
+    (; x,R) = kf
     if u === nothing || length(u) == 0
         # Special case useful since empty input is common special case
         kf.x = At*x

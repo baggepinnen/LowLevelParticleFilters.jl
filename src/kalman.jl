@@ -1,5 +1,5 @@
 
-const StaticCovMat = Union{SMatrix, UpperTriangular{<:Any, <:SMatrix}}
+const StaticCovMat = Union{SMatrix, UpperTriangular{<:Any, <:SMatrix}, Diagonal{<:Any, <:SVector}}
 
 function convert_cov_type(R1, R)
     if !(eltype(R) <: AbstractFloat)
@@ -114,7 +114,7 @@ function measurement(kf::AbstractKalmanFilter)
     function (x,u,p,t)
         y = get_mat(kf.C, x, u, p, t)*x
         if !(isa(kf.D, Union{Number, AbstractArray}) && iszero(kf.D))
-            y .+= get_mat(kf.D, x, u, p, t)*u
+            @bangbang y .+= get_mat(kf.D, x, u, p, t)*u
         end
         y
     end

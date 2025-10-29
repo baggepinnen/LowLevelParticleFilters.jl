@@ -82,3 +82,25 @@ for mm in mms
         @test length(sol_ukf.e[1]) == 3ny
     end
 end
+
+## Test dynamic C/D matrices in LinearMeasurementModel
+@testset "Dynamic C/D matrices in LinearMeasurementModel" begin
+    # Test with functional C matrix
+    C_func(x,u,p,t) = __C_
+    mm_C_func = LinearMeasurementModel(C_func, __D_, R2; nx, ny)
+    @test_nowarn correct!(kf, mm_C_func, u[1], y[1])
+
+    # Test with functional D matrix
+    D_func(x,u,p,t) = __D_
+    mm_D_func = LinearMeasurementModel(__C_, D_func, R2; nx, ny)
+    @test_nowarn correct!(kf, mm_D_func, u[1], y[1])
+
+    # Verify consistency with standard KalmanFilter
+    kf2 = KalmanFilter(__A_, __B_, __C_, __D_, R1, R2)
+    sol_kf = forward_trajectory(kf2, u, y)
+
+    ekf_mm = ExtendedKalmanFilter(dynamics_l, mm_C_func, R1; nu)
+    sol_ekf_mm = forward_trajectory(ekf_mm, u, y)
+
+    @test sol_kf.x ≈ sol_ekf_mm.x
+end
