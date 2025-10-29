@@ -13,7 +13,7 @@ function reset!(pf::AbstractParticleFilter)
     s.t[] = 1
 end
 
-@inline get_mat(A::Nothing,x,u,p,t) = nothing
+@inline get_mat(A::Nothing,x,u,p,t) = 0
 @inline get_mat(A::Union{AbstractMatrix, Number},x,u,p,t) = A
 @inline get_mat(A::AbstractArray{<:Any, 3},x,u,p,t) = @view A[:,:,t+1]
 @inline get_mat(A::Function,x,u,p,t) = A(x,u,p,t)
