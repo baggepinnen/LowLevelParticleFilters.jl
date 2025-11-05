@@ -4,14 +4,10 @@ Base.length(sol::AbstractFilteringSolution) = length(getfield(sol, :u))
 
 function Base.getproperty(sol::AbstractFilteringSolution, s::Symbol)
     s ∈ fieldnames(typeof(sol)) && return getfield(sol, s)
-    if s === :t
-        return range(0, step=sol.f.Ts, length=length(sol))
-    else
-        throw(ArgumentError("$(typeof(sol)) has no property named $s"))
-    end
+    throw(ArgumentError("$(typeof(sol)) has no property named $s"))
 end
 
-Base.propertynames(sol::AbstractFilteringSolution) = (fieldnames(typeof(sol))..., :t)
+Base.propertynames(sol::AbstractFilteringSolution) = fieldnames(typeof(sol))
 
 
 """
@@ -47,7 +43,7 @@ where
 
 To modify the signal names used in legend entries, construct an instance of [`SignalNames`](@ref) and pass this to the filter (or directly to the plot command) using the `names` keyword argument.
 """
-struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll,Te,TK,TS,Et} <: AbstractFilteringSolution
+struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll,Te,TK,TS,Et,Tt} <: AbstractFilteringSolution
     f::F
     u::Tu
     y::Ty
@@ -60,9 +56,11 @@ struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll,Te,TK,TS,Et} <: Abstrac
     K::TK
     S::TS
     extra::Et
+    t::Tt
 end
 
 KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e,K,S) = KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e,K,S,nothing)
+KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e,K,S,extra) = KalmanFilteringSolution(f,u,y,x,xt,R,Rt,ll,e,K,S,extra,range(0, step=f.Ts, length=length(x)))
 
 function Base.show(io::IO, sol::KalmanFilteringSolution)
     println(io, "KalmanFilteringSolution:")
@@ -279,7 +277,7 @@ plot(sol; nbinsy=30, xreal=nothing, dim=nothing, ploty=true, q=nothing)
 
 By default, a weighted 2D histogram is plotted, one for each state variable. If a vector of quantiles are provided in `q`, the quantiles are plotted instead of the histogram. If `xreal` is provided, the true state is plotted as a scatter plot on top of the histogram. If `dim` is provided, only the specified dimension is plotted. If `ploty` is true, the measurements are plotted as well.
 """
-struct ParticleFilteringSolution{F,Tu,Ty,Tx,Tw,Twe,Tll} <: AbstractFilteringSolution
+struct ParticleFilteringSolution{F,Tu,Ty,Tx,Tw,Twe,Tll,Tt} <: AbstractFilteringSolution
     f::F
     u::Tu
     y::Ty
@@ -287,7 +285,10 @@ struct ParticleFilteringSolution{F,Tu,Ty,Tx,Tw,Twe,Tll} <: AbstractFilteringSolu
     w::Tw
     we::Twe
     ll::Tll
+    t::Tt
 end
+
+ParticleFilteringSolution(f,u,y,x,w,we,ll) = ParticleFilteringSolution(f,u,y,x,w,we,ll,range(0, step=f.Ts, length=size(x,2)))
 
 function td_getargs(sol::ParticleFilteringSolution, d::Int=1)
     (; f,x,w,u,y) = sol

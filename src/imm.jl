@@ -263,7 +263,7 @@ When performing batch filtering using an [`IMM`](@ref) filter, one may
 
 The returned solution object is of type [`KalmanFilteringSolution`](@ref) and has the following fields:
 """
-function forward_trajectory(imm::IMM, u::AbstractVector, y::AbstractVector, p=parameters(imm); interact = imm.interact)
+function forward_trajectory(imm::IMM, u::AbstractVector, y::AbstractVector, p=parameters(imm); t = range(0, step=imm.Ts, length=length(y)), interact = imm.interact)
     reset!(imm)
     T    = length(y)
     x    = Array{particletype(imm)}(undef,T)
@@ -273,20 +273,20 @@ function forward_trajectory(imm::IMM, u::AbstractVector, y::AbstractVector, p=pa
     μ    = zeros(length(imm.μ), T)
     e    = similar(y)
     ll   = zero(eltype(particletype(imm)))
-    for t = 1:T
-        ti = (t-1)*imm.Ts
-        x[t]  = state(imm)      |> copy
-        R[t]  = covariance(imm) |> copy
-        lli, _ = correct!(imm, u[t], y[t], p, ti)
+    for k = 1:T
+        ti = t[k]
+        x[k]  = state(imm)      |> copy
+        R[k]  = covariance(imm) |> copy
+        lli, _ = correct!(imm, u[k], y[k], p, ti)
         ll += lli
-        μ[:, t] .= imm.μ
+        μ[:, k] .= imm.μ
         combine!(imm)
-        yh = measurement(imm)(state(imm), u[t], p, ti)
-        e[t] = y[t] .- yh
+        yh = measurement(imm)(state(imm), u[k], p, ti)
+        e[k] = y[k] .- yh
         interact && interact!(imm)
-        xt[t] = state(imm)      |> copy
-        Rt[t] = covariance(imm) |> copy
-        predict!(imm, u[t], p, ti)
+        xt[k] = state(imm)      |> copy
+        Rt[k] = covariance(imm) |> copy
+        predict!(imm, u[k], p, ti)
     end
-    KalmanFilteringSolution(imm,u,y,x,xt,R,Rt,ll,e,nothing,nothing,μ)
+    KalmanFilteringSolution(imm,u,y,x,xt,R,Rt,ll,e,nothing,nothing,μ,t)
 end
