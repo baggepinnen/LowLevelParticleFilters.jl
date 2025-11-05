@@ -257,7 +257,7 @@ The filter loop consists of the following steps, in this order:
 3. `pre_predict_cb`
 4. `predict!`
 """
-function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf); debug=false, pre_correct_cb=(args...)->nothing, pre_predict_cb=(args...)->nothing, post_predict_cb=(args...)->nothing, post_correct_cb=(args...)->nothing)
+function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf); t = range(0, step=kf.Ts, length=length(y)), debug=false, pre_correct_cb=(args...)->nothing, pre_predict_cb=(args...)->nothing, post_predict_cb=(args...)->nothing, post_correct_cb=(args...)->nothing)
     reset!(kf)
     T    = length(y)
     x    = Array{particletype(kf)}(undef,T)
@@ -266,41 +266,41 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
     Rt   = Array{covtype(kf)}(undef,T)
     e    = similar(y)
     ll   = zero(eltype(particletype(kf)))
-    local t, S, K
+    local k, S, K
     try
-        for outer t = 1:T
-            ti = (t-1)*kf.Ts
-            x[t]  = state(kf)      |> copy
-            R[t]  = covariance(kf) |> copy
-            R2 = pre_correct_cb(kf, u[t], y[t], p, ti)
-            lli, ei, Si, Sᵪi, Ki = correct!(kf, u[t], y[t], p, ti; R2 = something(R2, get_mat(kf.R2, kf.x, u[t], p, ti)))
+        for outer k = 1:T
+            ti = t[k]
+            x[k]  = state(kf)      |> copy
+            R[k]  = covariance(kf) |> copy
+            R2 = pre_correct_cb(kf, u[k], y[k], p, ti)
+            lli, ei, Si, Sᵪi, Ki = correct!(kf, u[k], y[k], p, ti; R2 = something(R2, get_mat(kf.R2, kf.x, u[k], p, ti)))
             post_correct_cb(kf, p)
             ll += lli
-            e[t] = ei
-            xt[t] = state(kf)      |> copy
-            Rt[t] = covariance(kf) |> copy
+            e[k] = ei
+            xt[k] = state(kf)      |> copy
+            Rt[k] = covariance(kf) |> copy
 
-            if t == 1
+            if k == 1
                 S = Vector{typeof(Sᵪi)}(undef, T)
                 K = Vector{typeof(Ki)}(undef, T)
             end
-            S[t] = Sᵪi
-            K[t] = Ki
-            R1 = pre_predict_cb(kf, u[t], y[t], p, ti, lli, ei, Si, Sᵪi)
-            predict!(kf, u[t], p, ti; R1 = something(R1, get_mat(kf.R1, kf.x, u[t], p, ti)))
+            S[k] = Sᵪi
+            K[k] = Ki
+            R1 = pre_predict_cb(kf, u[k], y[k], p, ti, lli, ei, Si, Sᵪi)
+            predict!(kf, u[k], p, ti; R1 = something(R1, get_mat(kf.R1, kf.x, u[k], p, ti)))
             post_predict_cb(kf, p)
         end
     catch err
         if debug
-            t -= 1
-            x, xt, R, Rt, e, u, y = x[1:t], xt[1:t], R[1:t], Rt[1:t], e[1:t], u[1:t], y[1:t]
+            k -= 1
+            x, xt, R, Rt, e, u, y = x[1:k], xt[1:k], R[1:k], Rt[1:k], e[1:k], u[1:k], y[1:k]
             @error "State estimation failed, returning partial solution" err
         else
             @error "State estimation failed, pass `debug = true` to forward_trajectory to return a partial solution"
             rethrow()
         end
     end
-    KalmanFilteringSolution(kf,u,y,x,xt,R,Rt,ll,e,K,S)
+    KalmanFilteringSolution(kf,u,y,x,xt,R,Rt,ll,e,K,S,t)
 end
 
 
