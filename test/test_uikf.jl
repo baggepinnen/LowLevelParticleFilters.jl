@@ -71,3 +71,8 @@ soluikf = forward_trajectory(uikf, u, y)
 
 @test norm(soluikf.xt .- x) < 1.3*norm(solkf.xt .- x)
 @test norm(soluikf.x .- x) < 1.3*norm(solkf.x .- x)
+
+@test_nowarn simulate(uikf, u)
+@test LowLevelParticleFilters.measurement(uikf) isa Function
+@test LowLevelParticleFilters.dynamics(uikf) isa Function
+@test LowLevelParticleFilters.index(uikf) == T
