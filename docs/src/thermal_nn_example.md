@@ -594,7 +594,7 @@ kf_projection = UnscentedKalmanFilter(
     ny, nu, Ts
 )
 
-post_predict_cb(kf, p) = post_update_cb(kf, 0, 0, p, 0, 0)
+post_predict_cb(kf, p, args...) = post_update_cb(kf, 0, 0, p, 0, 0)
 sol_projection = forward_trajectory(kf_projection, data.u, data.y; post_predict_cb, post_correct_cb=post_predict_cb)
 
 eval_projection = evaluate_solution(sol_projection, data, params_projection)

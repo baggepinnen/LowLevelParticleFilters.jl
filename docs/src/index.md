@@ -43,6 +43,7 @@ Additionally, these filter types are currently considered experimental and may c
 - [`IMM`](@ref): The _Interacting Multiple Models_ filter switches between multiple internal filters based on a hidden Markov model. This filter is useful when the system dynamics change over time and the change can be modeled as a discrete Markov chain, i.e., the system may switch between a small number of discrete "modes".
 - [`RBPF`](@ref): A Rao-Blackwellized (marginalized) particle filter that uses a Kalman filter for the linear part of the state and a particle filter for the nonlinear part.
 - [`MUKF`](@ref): A Rao-Blackwellized (marginalized) Unscented Kalman Filter that combines an Unscented Kalman Filter for the nonlinear substate with a bank of Kalman filters (one per sigma point) for the linear substate. Similar to RBPF but uses deterministic sigma points instead of random particles.
+- [`UIKalmanFilter`](@ref): An Unknown Input Kalman Filter that estimates both the state and unknown inputs to a linear system without augmenting the state vector. See Gillijns & De Moor (2007), "Unbiased minimum-variance input and state estimation for linear discrete-time systems".
 
 ## Functionality
 This package provides 

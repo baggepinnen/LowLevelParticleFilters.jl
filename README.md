@@ -19,6 +19,7 @@ We provide a number of Kalman and particle filter types
 - `IMM`: The _Interacting Multiple Models_ filter switches between multiple internal filters based on a hidden Markov model.
 - `RBPF`: A Rao-Blackwellized particle filter that uses a Kalman filter for the linear part of the state and a particle filter for the nonlinear part.
 - `MUKF`: The Marginalized Unscented Kalman Filter combines an Unscented Kalman filter for nonlinear state with Kalman filters for the linear part. Similar to RBPF but uses deterministic sigma points instead of random particles, making it efficient for low-dimensional nonlinear states.
+- `UIKalmanFilter`: An Unknown Input Kalman Filter that estimates both the state and unknown inputs to a linear system without augmenting the state vector. See Gillijns & De Moor (2007), "Unbiased minimum-variance input and state estimation for linear discrete-time systems".
 
 
 
