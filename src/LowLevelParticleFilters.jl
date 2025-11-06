@@ -6,6 +6,7 @@ export UKFWeights, TrivialParams, MerweParams, WikiParams
 export IMM, interact!, combine!
 export RBPF, RBParticle, RBMeasurementModel
 export MUKF
+export UIKalmanFilter
 export LinearMeasurementModel, EKFMeasurementModel, IEKFMeasurementModel, UKFMeasurementModel, CompositeMeasurementModel
 export KalmanFilteringSolution, KalmanSmoothingSolution, ParticleFilteringSolution
 @deprecate weigthed_mean weighted_mean
@@ -96,6 +97,7 @@ include("sq_ekf.jl")
 include("imm.jl")
 include("rbpf.jl")
 include("mukf.jl")
+include("uikf.jl")
 
 index(f::AbstractFilter) = f.t
 

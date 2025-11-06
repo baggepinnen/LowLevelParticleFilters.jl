@@ -254,8 +254,10 @@ For advanced usage, such as implementing conditional resetting and adaptive cova
 The filter loop consists of the following steps, in this order:
 1. `pre_correct_cb`
 2. `correct!`
-3. `pre_predict_cb`
-4. `predict!`
+3. `post_correct_cb` # This callback is considered internal, the signature is subject to change. This happens after correction, but before state and covariance is saved
+4. `pre_predict_cb`
+5. `predict!`
+6. `post_predict_cb` # This happens after prediction, but before next iteration when the state and covariance is saved
 """
 function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf); t = range(0, step=kf.Ts, length=length(y)), debug=false, pre_correct_cb=(args...)->nothing, pre_predict_cb=(args...)->nothing, post_predict_cb=(args...)->nothing, post_correct_cb=(args...)->nothing)
     reset!(kf)
@@ -273,8 +275,9 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
             x[k]  = state(kf)      |> copy
             R[k]  = covariance(kf) |> copy
             R2 = pre_correct_cb(kf, u[k], y[k], p, ti)
-            lli, ei, Si, Sᵪi, Ki = correct!(kf, u[k], y[k], p, ti; R2 = something(R2, get_mat(kf.R2, kf.x, u[k], p, ti)))
-            post_correct_cb(kf, p)
+            ret = correct!(kf, u[k], y[k], p, ti; R2 = something(R2, get_mat(kf.R2, kf.x, u[k], p, ti)))
+            lli, ei, Si, Sᵪi, Ki = ret
+            post_correct_cb(kf, p, ret)
             ll += lli
             e[k] = ei
             xt[k] = state(kf)      |> copy
@@ -300,7 +303,7 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
             rethrow()
         end
     end
-    KalmanFilteringSolution(kf,u,y,x,xt,R,Rt,ll,e,K,S,t)
+    KalmanFilteringSolution(kf,u,y,x,xt,R,Rt,ll,e,K,S,nothing,t)
 end
 
 
