@@ -869,9 +869,14 @@ function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter{IPD,IPM,
 
     for t = T-1:-1:1
         tt = (t-1)*kf.Ts
+        R1 = get_mat(kf.R1, xt[t], u[t], p, tt)
         m = xt[t]
-        m̃ = [m; 0*m]
-        P̃ = cat(Rt[t], get_mat(kf.R1, xt[t], u[t], p, tt), dims=(1,2))
+        m̃ = if AUGD
+            [m; zeros(size(R1, 1))]
+        else
+            [m; 0*m]
+        end
+        P̃ = cat(Rt[t], R1, dims=(1,2))
         X̃ = sigmapoints(m̃, P̃)
         X̃⁻ = map(X̃) do xq
             @views xqxi .= xq[xi]

@@ -288,7 +288,7 @@ ekf = LLPF.ExtendedKalmanFilter(kf, error_dynamics, measurement_ekf)
     sqekf_ip = LLPF.SqExtendedKalmanFilter(dynamics_inplace!, measurement_test, R1, R2, d0; nu)
     sol_ip = forward_trajectory(sqekf_ip, u[1:10], y[1:10])
     @test length(sol_ip.x) == 10
-    plot(sol_ip)
+    plot(sol_ip, plotS=true)
     
     # Test in-place measurement (covers lines 204-207)
     function measurement_inplace!(yout, x, u, p, t)
