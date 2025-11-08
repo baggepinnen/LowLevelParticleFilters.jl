@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Fault detection · LowLevelParticleFilters Documentation</title><meta name="title" content="Fault detection · LowLevelParticleFilters Documentation"/><meta property="og:title" content="Fault detection · LowLevelParticleFilters Documentation"/><meta property="twitter:title" content="Fault detection · LowLevelParticleFilters Documentation"/><meta name="description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="og:description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="twitter:description" content="Documentation for LowLevelParticleFilters Documentation."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">LowLevelParticleFilters Documentation</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../discretization/">Discretization</a></li><li><a class="tocitem" href="../measurement_models/">Multiple measurement models</a></li><li><a class="tocitem" href="../parameter_estimation/">Parameter estimation</a></li><li><a class="tocitem" href="../benchmark/">Benchmark</a></li><li><a class="tocitem" href="../distributions/">Performance tips</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../adaptive_kalmanfilter/">Kalman-filter tutorial with LowLevelParticleFilters</a></li><li><a class="tocitem" href="../noisetuning/">Noise tuning and disturbance modeling for Kalman filtering</a></li><li><a class="tocitem" href="../beetle_example/">Particle-filter tutorial</a></li><li><a class="tocitem" href="../beetle_example_imm/">IMM-filter tutorial</a></li><li><a class="tocitem" href="../rbpf_example/">Rao-Blackwellized filter tutorial</a></li><li><a class="tocitem" href="../dae/">State estimation for DAE systems</a></li><li><a class="tocitem" href="../adaptive_control/">Adaptive estimation and control</a></li><li><a class="tocitem" href="../neural_network/">Adaptive Neural-Network training</a></li><li><a class="tocitem" href="../friction_nn_example/">SciML: Adaptive Universal Differential Equation</a></li><li><a class="tocitem" href="../thermal_nn_example/">SciML: Learning a sunshine disturbance model</a></li><li class="is-active"><a class="tocitem" href>Fault detection</a><ul class="internal"><li class="toplevel"><a class="tocitem" href="#Fault-detection-using-state-estimation"><span>Fault detection using state estimation</span></a></li><li><a class="tocitem" href="#Load-data"><span>Load data</span></a></li><li><a class="tocitem" href="#Look-at-the-data"><span>Look at the data</span></a></li><li><a class="tocitem" href="#Design-Kalman-filter"><span>Design Kalman filter</span></a></li><li><a class="tocitem" href="#Estimate-the-dynamics-covariance-using-maximum-likelihood-estimation-(MLE)"><span>Estimate the dynamics covariance using maximum-likelihood estimation (MLE)</span></a></li><li><a class="tocitem" href="#Optimize-&quot;friction&quot;-and-covariance-jointly"><span>Optimize &quot;friction&quot; and covariance jointly</span></a></li><li><a class="tocitem" href="#Fault-detection-2"><span>Fault detection</span></a></li><li><a class="tocitem" href="#Summary"><span>Summary</span></a></li></ul></li><li><a class="tocitem" href="../ut/">Unscented transform</a></li><li><a class="tocitem" href="../disturbance_gallery/">Disturbance gallery</a></li><li><a class="tocitem" href="../sample_rate/">Influence of sample rate on performance</a></li></ul></li><li><a class="tocitem" href="../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Fault detection</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Fault detection</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/docs/src/fault_detection.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Fault-detection"><a class="docs-heading-anchor" href="#Fault-detection">Fault detection</a><a id="Fault-detection-1"></a><a class="docs-heading-anchor-permalink" href="#Fault-detection" title="Permalink"></a></h1><p>This is also a video tutorial, available below:</p><iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/NgDcMuewPbI?si=6_bgIDiz9PFIE_gQ" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe><h1 id="Fault-detection-using-state-estimation"><a class="docs-heading-anchor" href="#Fault-detection-using-state-estimation">Fault detection using state estimation</a><a id="Fault-detection-using-state-estimation-1"></a><a class="docs-heading-anchor-permalink" href="#Fault-detection-using-state-estimation" title="Permalink"></a></h1><p>This tutorial explores the use of a Kalman filter for fault detection in a thermal system</p><ul><li>Modeling</li><li>Filtering</li><li>Maximum-likelihood estimation of covariance and model parameters</li><li>Monitor prediction-error Z-score to detect faults<ul><li>A fault may be faulty sensor or unexpected temperature fluctuations</li></ul></li></ul><pre><code class="language-julia hljs">using DelimitedFiles, Plots, Dates
+using LowLevelParticleFilters, LinearAlgebra, StaticArrays
+using LowLevelParticleFilters: AbstractKalmanFilter, particletype, covtype,state,  covariance, parameters, KalmanFilteringSolution
+using Optim</code></pre><h2 id="Load-data"><a class="docs-heading-anchor" href="#Load-data">Load data</a><a id="Load-data-1"></a><a class="docs-heading-anchor-permalink" href="#Load-data" title="Permalink"></a></h2><p>From <a href="https://www.kaggle.com/datasets/arashnic/sensor-fault-detection-data">kaggle.com/datasets/arashnic/sensor-fault-detection-data</a></p><p>A time series of temperature measurements</p><pre><code class="language-julia hljs">using Downloads
+url = &quot;https://drive.google.com/uc?export=download&amp;id=1zuIBaOhhrCxnifbvY7qJQTOyKWBDeBRh&quot;
+filename = &quot;sensor-fault-detection.csv&quot;
+Downloads.download(url, filename)
+raw_data = readdlm(filename, &#39;;&#39;)
+header = raw_data[1,:]
+df = dateformat&quot;yyyy-mm-ddTHH:MM:SS&quot;</code></pre><p>The data is not stored in order</p><pre><code class="language-julia hljs">time_unsorted = DateTime.(getindex.(raw_data[2:end, 1], Ref(1:19)), df)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">62629-element Vector{Dates.DateTime}:
+ 2017-03-01T23:20:00
+ 2017-03-02T04:00:00
+ 2017-03-23T06:25:00
+ 2017-03-23T19:35:00
+ 2017-04-04T15:10:00
+ 2017-04-04T23:50:00
+ 2017-04-05T04:55:00
+ 2017-04-05T16:25:00
+ 2017-04-07T16:20:00
+ 2017-04-07T23:50:00
+ ⋮
+ 2017-07-21T19:40:00
+ 2017-07-21T21:20:00
+ 2017-06-27T16:10:00
+ 2017-06-29T03:45:00
+ 2017-05-05T17:00:00
+ 2017-07-07T16:40:00
+ 2017-05-07T09:20:00
+ 2017-05-07T14:55:00
+ 2017-05-07T20:40:00</code></pre><p>so we compute a sorting permutation that brings it into chronological order</p><pre><code class="language-julia hljs">perm = sortperm(time_unsorted)
+time = time_unsorted[perm]
+y = raw_data[2:end, 3][perm] .|&gt; float</code></pre><p><code>y</code> is the recorded temperature data.</p><h2 id="Look-at-the-data"><a class="docs-heading-anchor" href="#Look-at-the-data">Look at the data</a><a id="Look-at-the-data-1"></a><a class="docs-heading-anchor-permalink" href="#Look-at-the-data" title="Permalink"></a></h2><pre><code class="language-julia hljs">plot(time, y, ylabel=&quot;Temperature&quot;, legend=false)</code></pre><img src="eeb611d0.png" alt="Example block output"/><pre><code class="language-julia hljs">timev = Dates.value.(time)  ./ 1000 # A numerical time vector, time was in milliseconds
+plot(diff(timev), yscale=:log10, title=&quot;Time interval between measurement points&quot;, legend=false)</code></pre><img src="8b7dc37a.png" alt="Example block output"/><p>Samples are not evenly spaced (lots of missing data), but the interval is always a multiple of Ts</p><pre><code class="language-julia hljs">intervals = sort(unique(diff(timev)))
+intervals ./ intervals[1]
+Ts = intervals[1]</code></pre><pre><code class="language-julia hljs">Tf = intervals[end] - intervals[1]</code></pre><p>We expand the data arrays such that we can treat them as having a constant sample interval, time points where there is no data available are indicated as <code>missing</code></p><pre><code class="language-julia hljs">time_full = range(timev[1], timev[end], step=Ts)
+
+available_inds = [findfirst(==(t), time_full) for t in timev]
+
+y_full = fill(NaN, length(time_full))
+y_full[available_inds] .= y
+y_full = replace(y_full, NaN=&gt;missing)
+y_full = SVector{1}.(y_full)</code></pre><h2 id="Design-Kalman-filter"><a class="docs-heading-anchor" href="#Design-Kalman-filter">Design Kalman filter</a><a id="Design-Kalman-filter-1"></a><a class="docs-heading-anchor-permalink" href="#Design-Kalman-filter" title="Permalink"></a></h2><h3 id="Modeling"><a class="docs-heading-anchor" href="#Modeling">Modeling</a><a id="Modeling-1"></a><a class="docs-heading-anchor-permalink" href="#Modeling" title="Permalink"></a></h3><p>A simple model of temperature change is</p><p class="math-container">\[\dot T(t) = \alpha \big(T(t) - T_{env}(t)\big) + w(t)\]</p><p>Where <span>$T$</span> is the temperature of the system, <span>$T_{env}$</span> the temperature of the environment and <span>$w$</span> represents thermal energy added or removed by unmodeled sources.</p><p>Since we have no knowledge of <span>$T_{env}$</span> and <span>$w$</span>, but we observe that they vary slowly, we add yet another state variable to the model corresponding to an integrating disturbance model:</p><p class="math-container">\[\begin{aligned}
+\dot T(t) &amp;= z(t) + b_T w_T(t) \\
+\dot z(t) &amp;=  b_z w_z(t)
+\end{aligned}\]</p><p>This model is linear, and can be written on the form</p><p class="math-container">\[\begin{aligned}
+\dot x &amp;= Ax + Bw \\
+y &amp;= Cx + e
+\end{aligned}\]</p><p>with <span>$A$</span> matrix </p><p class="math-container">\[A = \begin{bmatrix}
+0 &amp; 1 \\
+0 &amp; 0
+\end{bmatrix}\]</p><p>which, when discretized (assuming unit sample interval), becomes</p><p class="math-container">\[A = \begin{bmatrix}
+1 &amp; 1 \\
+0 &amp; 1
+\end{bmatrix}\]</p><pre><code class="language-julia hljs">A,B,C,D = SA[1.0 1; 0 1], @SMatrix(zeros(2,0)), SA[1.0 0], 0;</code></pre><h3 id="Picking-covariance-matrices"><a class="docs-heading-anchor" href="#Picking-covariance-matrices">Picking covariance matrices</a><a id="Picking-covariance-matrices-1"></a><a class="docs-heading-anchor-permalink" href="#Picking-covariance-matrices" title="Permalink"></a></h3><pre><code class="language-julia hljs">R1 = 1e-4LowLevelParticleFilters.double_integrator_covariance(1) |&gt; SMatrix{2,2}
+R2 = SA[0.1^2;;]
+d0 = LowLevelParticleFilters.SimpleMvNormal(SA[y[1], 0], SA[100.0 0; 0 0.1])
+kf = KalmanFilter(A,B,C,D,R1,R2,d0; Ts)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">KalmanFilter{StaticArraysCore.SMatrix{2, 2, Float64, 4}, StaticArraysCore.SMatrix{2, 0, Float64, 0}, StaticArraysCore.SMatrix{1, 2, Float64, 2}, Matrix{Float64}, StaticArraysCore.SMatrix{2, 2, Float64, 4}, StaticArraysCore.SMatrix{1, 1, Float64, 1}, LowLevelParticleFilters.SimpleMvNormal{StaticArraysCore.SVector{2, Float64}, StaticArraysCore.SMatrix{2, 2, Float64, 4}}, StaticArraysCore.SVector{2, Float64}, StaticArraysCore.SMatrix{2, 2, Float64, 4}, Float64, LowLevelParticleFilters.NullParameters, Float64}([1.0 1.0; 0.0 1.0], 2×0 StaticArraysCore.SMatrix{2, 0, Float64, 0} with indices SOneTo(2)×SOneTo(0), [1.0 0.0], Matrix{Float64}(undef, 1, 0), [2.5e-5 5.0e-5; 5.0e-5 0.0001], [0.010000000000000002;;], LowLevelParticleFilters.SimpleMvNormal{StaticArraysCore.SVector{2, Float64}, StaticArraysCore.SMatrix{2, 2, Float64, 4}}([27.63677025, 0.0], [100.0 0.0; 0.0 0.1]), [27.63677025, 0.0], [100.0 0.0; 0.0 0.1], 0, 300.0, LowLevelParticleFilters.NullParameters(), 1.0, 2, 0, 1, SignalNames([&quot;x1&quot;, &quot;x2&quot;], String[], [&quot;y1&quot;], &quot;KF&quot;))</code></pre><h3 id="Perform-filtering"><a class="docs-heading-anchor" href="#Perform-filtering">Perform filtering</a><a id="Perform-filtering-1"></a><a class="docs-heading-anchor-permalink" href="#Perform-filtering" title="Permalink"></a></h3><p>When data is missing, we omit the call to <code>correct!</code>. We still perform the prediction step though.</p><pre><code class="language-julia hljs">function special_forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf))
+    reset!(kf)
+    T    = length(y)
+    x    = Array{particletype(kf)}(undef,T)
+    xt   = Array{particletype(kf)}(undef,T)
+    R    = Array{covtype(kf)}(undef,T)
+    Rt   = Array{covtype(kf)}(undef,T)
+    e    = zeros(eltype(particletype(kf)), length(y))
+	σs   = zeros(eltype(particletype(kf)), length(y))
+    ll   = zero(eltype(particletype(kf)))
+    S    = Vector{Any}(undef, T)
+    K    = Vector{Any}(undef, T)
+    for t = 1:T
+        ti = (t-1)*kf.Ts
+        x[t]  = state(kf)      |&gt; copy
+        R[t]  = covariance(kf) |&gt; copy
+		if !any(ismissing, y[t])
+        	lli, ei, Si, Sᵪi, Ki = correct!(kf, u[t], y[t], p, ti)
+			σs[t] = √(ei&#39;*(Sᵪi\ei)) # Compute the Z-score
+			e[t] = ei[]
+			ll += lli
+            S[t] = Sᵪi
+            K[t] = Ki
+		end
+        xt[t] = state(kf)      |&gt; copy
+        Rt[t] = covariance(kf) |&gt; copy
+        predict!(kf, u[t], p, ti)
+    end
+    KalmanFilteringSolution(kf,u,y,x,xt,R,Rt,ll,vcat.(e),K,S), σs
+end
+
+u_full = [@SVector(zeros(0)) for y in y_full];
+
+start = 1 # Change this value to display different parts of the data set
+N = 1000  # Number of data points to include (to limit plot size in the docs, plot with Plots.plotly() and N = length(y_full) to see the full data set with the ability to zoom interactively in the plot)
+
+sol, σs = special_forward_trajectory(kf, u_full[(1:N) .+ (start-1)], y_full[(1:N) .+ (start-1)])
+
+sol.ll</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">-33.70147554944659</code></pre><h4 id="Smoothing"><a class="docs-heading-anchor" href="#Smoothing">Smoothing</a><a id="Smoothing-1"></a><a class="docs-heading-anchor-permalink" href="#Smoothing" title="Permalink"></a></h4><p>For good measure, we also perform smoothing, computing</p><p class="math-container">\[x(k \,|\, T_f)\]</p><p>as opposed to filtering which is computing</p><p class="math-container">\[x(k \,|\, k)\]</p><p>or prediction</p><p class="math-container">\[x(k \,|\, k-1)\]</p><pre><code class="language-julia hljs">smoothsol = smooth(sol)</code></pre><h3 id="Visualize-the-filtered-and-smoothed-trajectories"><a class="docs-heading-anchor" href="#Visualize-the-filtered-and-smoothed-trajectories">Visualize the filtered and smoothed trajectories</a><a id="Visualize-the-filtered-and-smoothed-trajectories-1"></a><a class="docs-heading-anchor-permalink" href="#Visualize-the-filtered-and-smoothed-trajectories" title="Permalink"></a></h3><pre><code class="language-julia hljs">timevec = range(0, step=Ts, length=length(sol.y))
+
+plot(smoothsol,
+    plotx   = false, # prediction
+    plotxt  = true,  # filtered
+    plotxT  = true,  # smoothed
+    plotRt  = true,
+    plotRT  = true,
+    plotyh  = false,
+    plotyht = true,
+    size = (650,600), seriestype = [:line :line :scatter :line], link = :x,
+)
+plot!(timevec, reduce(hcat, smoothsol.xT)[1,:], sp=3, label=&quot;Smoothed&quot;)</code></pre><img src="cbdcad15.png" alt="Example block output"/><h2 id="Estimate-the-dynamics-covariance-using-maximum-likelihood-estimation-(MLE)"><a class="docs-heading-anchor" href="#Estimate-the-dynamics-covariance-using-maximum-likelihood-estimation-(MLE)">Estimate the dynamics covariance using maximum-likelihood estimation (MLE)</a><a id="Estimate-the-dynamics-covariance-using-maximum-likelihood-estimation-(MLE)-1"></a><a class="docs-heading-anchor-permalink" href="#Estimate-the-dynamics-covariance-using-maximum-likelihood-estimation-(MLE)" title="Permalink"></a></h2><p>Since we have a single parameter only, we may plot the loss landscape.</p><pre><code class="language-julia hljs">svec = exp10.(range(-5, -2, length=30)) # Covariance values to try
+
+# Compute the log-likelihood for all covariance values
+lls = map(svec) do s #
+	R1 = s*LowLevelParticleFilters.double_integrator_covariance(1) |&gt; SMatrix{2,2}
+	kf = KalmanFilter(A,B,C,D,R1,R2,d0; Ts)
+	sol, σs = special_forward_trajectory(kf, u_full, y_full)
+	sol.ll
+end
+
+plot(svec, lls, xscale=:log10, title=&quot;Log-likelihood estimation&quot;)</code></pre><img src="0e7c0c8a.svg" alt="Example block output"/><p>Get the covariance parameter associated with the maximum likelihood:</p><pre><code class="language-julia hljs">svec[argmax(lls)]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.0002807216203941176</code></pre><h2 id="Optimize-&quot;friction&quot;-and-covariance-jointly"><a class="docs-heading-anchor" href="#Optimize-&quot;friction&quot;-and-covariance-jointly">Optimize &quot;friction&quot; and covariance jointly</a><a id="Optimize-&quot;friction&quot;-and-covariance-jointly-1"></a><a class="docs-heading-anchor-permalink" href="#Optimize-&quot;friction&quot;-and-covariance-jointly" title="Permalink"></a></h2><p>We can add some damping to the velocity state in the double-integrator model. When doing so, we should also estimate the full covariance matrix of the dynamics noise. This gives us an estimation problem with 1 + 3 parameters, 3 for the triangular part of the covariance matrix Cholesky factor. Estimating the Cholesky factor instead of the full covariance matrix yields fewer optimizaiton variables and ensures that the result is a valid, positive definite and symmetric covariance matrix. To ensure that the &quot;friction parameter&quot; is positive, we optimize the <span>$\log$</span> of the parameter.</p><p>A double integrator has the dynamics matrix</p><p class="math-container">\[\begin{bmatrix}
+1 &amp; 1 \\
+0 &amp; 1
+\end{bmatrix}\]</p><p>By modifying this to</p><p class="math-container">\[\begin{bmatrix}
+1 &amp; 1 \\
+0 &amp; \alpha
+\end{bmatrix}\]</p><p>where <span>$0 \leq \alpha \leq 1$</span>, we can add some damping to the velocity, i.e., if no force is acting on it it will eventually slow down to velocity zero. It&#39;s not quite correct to call the parameter <span>$\alpha$</span> a &quot;damping term&quot;, the formulation <span>$\beta = 1 - \alpha$</span> would be closer to an actual discrete-time damping factor.</p><pre><code class="language-julia hljs">function triangular(x)
+    m = length(x)
+    n = round(Int, sqrt(2m-1))
+    T = zeros(eltype(x), n, n)
+    k = 1
+    for i = 1:n, j = i:n
+        T[i,j] = x[k]
+        k += 1
+    end
+    T
+end
+
+invtriangular(T) = [T[i,j] for i = 1:size(T,1) for j = i:size(T,1)]
+
+params = log.([invtriangular(cholesky(R1).U); 1])
+
+function get_opt_kf(logp)
+	T = eltype(logp)
+	p = exp.(logp)
+	R1c = triangular(p[1:3]) |&gt; SMatrix{2,2}
+	R1 = R1c&#39;R1c + 1e-8I
+	vel = p[4]
+	vel &gt; 1 &amp;&amp; (return T(Inf))
+	A = SA[1 1; 0 vel]
+	d0T = LowLevelParticleFilters.SimpleMvNormal(T.(d0.μ), T.(d0.Σ + 0.01I))
+	kf = KalmanFilter(A,B,C,D,R1,R2,d0T; Ts, check=false)
+end
+
+function cost(logp)
+	try
+		kf = get_opt_kf(logp)
+		soli, σs = special_forward_trajectory(kf, u_full, y_full)
+		return -soli.ll
+	catch e
+		return eltype(logp)(Inf)
+	end
+end
+
+cost(params)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">-43253.36986585714</code></pre><h3 id="Optimize"><a class="docs-heading-anchor" href="#Optimize">Optimize</a><a id="Optimize-1"></a><a class="docs-heading-anchor-permalink" href="#Optimize" title="Permalink"></a></h3><pre><code class="language-julia hljs">res = Optim.optimize(
+    cost,
+    params,
+    LBFGS(),
+    Optim.Options(
+        show_trace        = true,
+        show_every        = 5,
+        iterations        = 1000,
+		x_tol 			  = 1e-7,
+    ),
+	autodiff = :forward,
+)
+get_opt_kf(res.minimizer).R1</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">2×2 StaticArraysCore.SMatrix{2, 2, Float64, 4} with indices SOneTo(2)×SOneTo(2):
+ 2.501e-5  5.0e-5
+ 5.0e-5    0.00010001</code></pre><p>The initial guess was </p><pre><code class="language-julia hljs">R1</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">2×2 StaticArraysCore.SMatrix{2, 2, Float64, 4} with indices SOneTo(2)×SOneTo(2):
+ 2.5e-5  5.0e-5
+ 5.0e-5  0.0001</code></pre><p>Compare optimized parameter vector with initial guess:</p><pre><code class="language-julia hljs">exp.([params res.minimizer])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">4×2 Matrix{Float64}:
+ 0.005        0.005
+ 0.01         0.01
+ 2.50766e-11  2.50766e-11
+ 1.0          1.0</code></pre><h3 id="Visualize-optimized-filtering-trajectory"><a class="docs-heading-anchor" href="#Visualize-optimized-filtering-trajectory">Visualize optimized filtering trajectory</a><a id="Visualize-optimized-filtering-trajectory-1"></a><a class="docs-heading-anchor-permalink" href="#Visualize-optimized-filtering-trajectory" title="Permalink"></a></h3><pre><code class="language-julia hljs">kf2 = get_opt_kf(res.minimizer)
+sol2, σs2 = special_forward_trajectory(kf2, u_full[(1:N) .+ (start-1)], y_full[(1:N) .+ (start-1)])
+
+smoothsol2 = smooth(sol2, kf2, sol2.u, sol2.y)
+
+plot(smoothsol2, plotx=false, plotxt=true, plotRt=true, plotyh=false, plotyht=true, size=(650,600), seriestype=[:line :line :scatter :line], link=:x)
+plot!(timevec, reduce(hcat, smoothsol2.xT)[1,:], sp=3, label=&quot;Smoothed&quot;)
+
+outliers = findall(σs2 .&gt; 5)
+vline!([timevec[outliers]], sp=3)</code></pre><img src="e034ffd7.png" alt="Example block output"/><h2 id="Fault-detection-2"><a class="docs-heading-anchor" href="#Fault-detection-2">Fault detection</a><a class="docs-heading-anchor-permalink" href="#Fault-detection-2" title="Permalink"></a></h2><p>We implement a simple fault detector using Z-scores. When the Z-score is higher than 4, we consider it a fault.</p><pre><code class="language-julia hljs">plot(timevec, σs2); hline!([1 2 3 4], label=false)</code></pre><img src="65bc1b41.png" alt="Example block output"/><p>(change the value of the variable <code>start</code> to see different parts of the data set, e.g., set <code>start = 30_000</code>)</p><p>Z-scores may not capture large outliers if they occur when the estimator is very uncertain Does Z-score correlate with &quot;velocity&quot;, i.e., are faults correlated with large continuous slopes in the data?</p><pre><code class="language-julia hljs">sol_full, σs_full = special_forward_trajectory(kf2, u_full, y_full)
+scatter(abs.(getindex.(sol_full.xt, 2)), σs_full, ylabel=&quot;Z-score&quot;, xlabel=&quot;velocity&quot;)</code></pre><img src="1e63171a.png" alt="Example block output"/><p>not really, it looks like large Z-scores can appear even when the estimated velocity is small.</p><h3 id="Alternative-fault-detection-strategies"><a class="docs-heading-anchor" href="#Alternative-fault-detection-strategies">Alternative fault-detection strategies</a><a id="Alternative-fault-detection-strategies-1"></a><a class="docs-heading-anchor-permalink" href="#Alternative-fault-detection-strategies" title="Permalink"></a></h3><p>In this tutorial, we used the Z-score of the prediction error to detect faults. A Kalman filter, being a statistical estimator, maintains a <em>belief</em> about the state of the system, whenever this belief is inconsistent with fault-free operation, we may experiencing a fault. Below are some alternative ways in which we can detect faults using a Kalman filter:</p><ul><li>A single measurement has a Z-score larger than a threshold. The benefit of this approach is that it can isolate issues to a single sensor.</li><li>The entire measurement vector has a large Z-score. This can detect issues that cause unexpected correlation in the output, but where each individual output looks as expected on its own.</li><li>The filter may be augmented with a <em>disturbance model</em>. If the estimated disturbance is larger than expected, e.g., significantly different from zero, it may indicate a fault. See <a href="../noisetuning/#How-to-tune-a-Kalman-filter">How to tune a Kalman filter</a> and <a href="../disturbance_gallery/#Disturbance-gallery">Disturbance gallery</a> for more information on how to do this.</li><li>Parameters of the system may be modeled as time-varying and estimated online. If, e.g., an estimated gain parameter decreases significantly, it may indicate a fault. This is similar in spirit to adding a disturbance model, but instead of estimating an input disturbance, we estimate a property of the system. See <a href="../parameter_estimation/#Joint-state-and-parameter-estimation">Joint state and parameter estimation</a> for an example of this.</li><li>An article suggesting several consistency checks similar to the Z-score check used here is &quot;New Kalman filter and smoother consistency tests&quot; by Gibbs, all of which can be readily computed from the quantities saved in the <code>KalmanFilteringSolution</code> object and the result of <code>smooth</code>. One suggestion is to use the filter error and associated filter-error covariance instead of the prediction error, another one is similar but using a smoothed error instead. The last suggestion is to use the smoothed stat error in a similar check.</li></ul><h2 id="Summary"><a class="docs-heading-anchor" href="#Summary">Summary</a><a id="Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Summary" title="Permalink"></a></h2><ul><li>A state estimator can indicate faults when the error is larger than <em>expected</em></li><li>What is <em>expected</em> is determined by the model</li></ul><p>The notebook used in the tutorial is available here:</p><ul><li><a href="https://github.com/baggepinnen/notebooks/blob/main/system_identification/identification_12_fault_detection.jl"><code>identification_12_fault_detection.jl</code> on GitHub</a></li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../thermal_nn_example/">« SciML: Learning a sunshine disturbance model</a><a class="docs-footer-nextpage" href="../ut/">Unscented transform »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.15.0 on <span class="colophon-date" title="Saturday 8 November 2025 09:24">Saturday 8 November 2025</span>. Using Julia version 1.11.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
