@@ -38,6 +38,7 @@ where
 - `ploty`: Plot the measurements
 - `plotyh`: Plot the predicted measurements `ŷ(t|t-1)`
 - `plotyht`: Plot the filtered measurements `ŷ(t|t)`
+- `plotS`: Plot the innovation covariances `S(t|t-1)` as ribbons at ±2σ on predicted measurements `ŷ(t|t-1)` (requires `plotyh=true`)
 - `name`: a string that is prepended to the labels of the plots, which is useful when plotting multiple solutions in the same plot.
 - `σ = 1.96` The number of standard deviations covered by covariance ribbons
 
@@ -75,8 +76,9 @@ end
 
 cov_diag(R::AbstractMatrix) = diag(R)
 cov_diag(U::UpperTriangular) = diag(U'U)
+cov_diag(Sᵪ::Cholesky) = diag(Sᵪ.U'Sᵪ.U)
 
-@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotR=false, plotRt=false, names = sol.f.names, name = names.name, σ=1.96, always_include_x=false)
+@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotR=false, plotRt=false, plotS=false, names = sol.f.names, name = names.name, σ=1.96, always_include_x=false)
     isempty(name) || (name = name*" ")
     kf = sol.f
     nx, nu, ny = length(sol.x[1]), length(sol.u[1]), length(sol.y[1])
@@ -135,12 +137,17 @@ cov_diag(U::UpperTriangular) = diag(U'U)
     end
     if plotyh
         series = reduce(hcat, measurement_oop(kf).(sol.x, sol.u, Ref(kf.p), timevec))'
+        if plotS && !isempty(sol.S) && !isnothing(sol.S[1])
+            twoσ = σ .* sqrt.(reduce(hcat, cov_diag.(sol.S))')
+        end
         for i = 1:ny
             @series begin
                 label -->"$(name)ŷ$(i)(t|t-1)" 
                 subplot --> i + (nx*(plotx || plotxt || always_include_x) + nu*plotu)
                 linestyle --> :dash
-                
+                if plotS && !isempty(sol.S) && !isnothing(sol.S[1])
+                    ribbon := twoσ[:,i]
+                end
                 timevec, series[:, i]
             end
         end
