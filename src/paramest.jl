@@ -109,11 +109,13 @@ end
         show_trace = true,
         show_every = 1,
         autodiff = :forward,
+        v_R1 = nothing,
+        v_R2 = nothing,
         kwargs...
     )
 
 Automatically tune the covariance matrices R1 and R2 (and optionally x0) of a Kalman-style filter
-by maximizing the log-likelihood using Gauss-Newton optimization.
+by maximizing the log-likelihood (MLE) or log-posterior (MAP) using Gauss-Newton optimization.
 
 !!! info "Requires LeastSquaresOptim.jl"
     This function is available only if LeastSquaresOptim.jl is manually installed and loaded by the user.
@@ -128,6 +130,8 @@ by maximizing the log-likelihood using Gauss-Newton optimization.
 - `show_trace::Bool`: Show optimization progress (default: true)
 - `show_every::Int`: Show progress every N iterations (default: 1)
 - `autodiff`: Automatic differentiation method (default: :forward)
+- `v_R1::Union{Nothing,Real}`: Degrees of freedom for Inverse-Wishart prior on R1 (default: nothing, no prior). Must be > nw-1 for proper prior, where nw = size(R1,1). The prior mean is automatically set to the initial R1 from the filter.
+- `v_R2::Union{Nothing,Real}`: Degrees of freedom for Inverse-Wishart prior on R2 (default: nothing, no prior). Must be > ny-1 for proper prior. The prior mean is automatically set to the initial R2 from the filter.
 - `kwargs...`: Additional keyword arguments passed to LeastSquaresOptim.optimize!
 
 # Returns
@@ -139,30 +143,57 @@ A named tuple containing:
 - `x0`: The optimized initial state (if `optimize_x0=true`)
 - `sol_opt`: The solution from running `forward_trajectory` with the optimized filter
 
-# Example
+# Maximum Likelihood Estimation (MLE)
+By default (when `v_R1` and `v_R2` are `nothing`), performs maximum likelihood estimation:
 ```julia
-using LeastSquaresOptim  # Must be loaded explicitly
+using LeastSquaresOptim
 
-# After running forward_trajectory
 sol = forward_trajectory(kf, u, y)
+result = autotune_covariances(sol)  # Pure MLE
+```
 
-# Tune covariances automatically
-result = autotune_covariances(sol)
+# Maximum A Posteriori (MAP) Estimation
+Use Inverse-Wishart priors for Bayesian regularization. The Inverse-Wishart distribution is the conjugate prior
+for covariance matrices. For a covariance matrix Σ with dimension n:
 
-# If you get an error about negative squared residuals, increase the offset
-result = autotune_covariances(sol, offset=20.0)
+`p(Σ) = InverseWishart(v, Ψ)`
 
-# Use the optimized filter
-kf_opt = result.filter
-@show result.result.converged
-@show sol.ll  # Original log-likelihood
-@show result.sol_opt.ll  # Optimized log-likelihood
+where:
+- `v` (degrees of freedom): Controls prior strength. Larger v = stronger prior. Must be > n-1.
+- Prior mean is automatically set to the initial covariance matrices (R1_orig and R2_orig) from the filter.
+- Internally, the scale matrix is computed as: Ψ = (v - n - 1) * R_orig
+
+The mean of the Inverse-Wishart prior is E[Σ] = Ψ/(v - n - 1) = R_orig.
+
+Typical choices for v:
+- Weak prior: `v = n + 2` (prior has low confidence, stays close to MLE)
+- Moderate prior: `v = n + 5` to `n + 10`
+- Strong prior: `v = n + 20` or higher (high confidence, stays close to initial guess)
+
+```julia
+# MAP with weak Inverse-Wishart prior on both R1 and R2
+nx, ny = 2, 2
+v1 = nx + 2  # Weak prior
+v2 = ny + 2
+
+result = autotune_covariances(sol; v_R1=v1, v_R2=v2)
+
+# MAP with prior only on R1 (useful when measurement noise is well-known)
+result = autotune_covariances(sol; v_R1=nx+5)
+
+# Strong prior to prevent overfitting with limited data
+v1_strong = nx + 20
+result = autotune_covariances(sol; v_R1=v1_strong)
 ```
 
 # Notes
 - The function uses log-likelihood optimization via `prediction_errors!` with `loglik=true`
 - For diagonal parametrization, log-diagonal elements are optimized to ensure positivity
 - For full parametrization, a triangular (Cholesky-like) parametrization is used
-- The `offset` parameter is passed to `prediction_errors!` and shifts the log-likelihood residuals. This is necessary because the Gauss-Newton optimization requires the cost function to be expressible as a sum of squared residuals, but log-likelihood terms (especially logdet terms) can be negative. The offset does not affect the location of the optimum, only the reported cost function value.
+- MAP estimation adds Inverse-Wishart prior terms to the objective function
+- The prior mean is the initial covariance matrix from the filter, regularizing toward the initial guess
+- The `offset` parameter is passed to `prediction_errors!` and shifts the log-likelihood residuals
+- When using MAP, the optimized covariances balance fit to data (likelihood) and prior belief (prior)
+- x0 optimization uses MLE only (no prior on initial state)
 """
 function autotune_covariances end

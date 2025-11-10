@@ -1,4 +1,5 @@
 abstract type AbstractFilteringSolution end
+abstract type AbstractKalmanFilteringSolution <: AbstractFilteringSolution end
 
 Base.length(sol::AbstractFilteringSolution) = length(getfield(sol, :u))
 
@@ -11,7 +12,7 @@ Base.propertynames(sol::AbstractFilteringSolution) = fieldnames(typeof(sol))
 
 
 """
-    KalmanFilteringSolution <: AbstractFilteringSolution
+    KalmanFilteringSolution <: AbstractKalmanFilteringSolution
 
 # Fields
 - `x`: predictions ``x(t+1|t)`` (plotted if `plotx=true`)
@@ -44,7 +45,7 @@ where
 
 To modify the signal names used in legend entries, construct an instance of [`SignalNames`](@ref) and pass this to the filter (or directly to the plot command) using the `names` keyword argument.
 """
-struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll,Te,TK,TS,Et,Tt} <: AbstractFilteringSolution
+struct KalmanFilteringSolution{F,Tu,Ty,Tx,Txt,TR,TRt,Tll,Te,TK,TS,Et,Tt} <: AbstractKalmanFilteringSolution
     f::F
     u::Tu
     y::Ty
@@ -202,7 +203,7 @@ where
 
 When plotting a smoothing solution, the filtering solution is also plotted. The same keyword arguments as for [`KalmanFilteringSolution`](@ref) may be used to control which signals are plotted
 """
-struct KalmanSmoothingSolution
+struct KalmanSmoothingSolution <: AbstractKalmanFilteringSolution
     sol
     xT
     RT
