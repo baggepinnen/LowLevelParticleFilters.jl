@@ -309,3 +309,7 @@ function reset!(kf::SqExtendedKalmanFilter; x0 = kf.d0.μ)
     kf.R = UpperTriangular(convert_cov_type(kf.R1, cholesky(kf.d0.Σ).U))
     kf.t = 0
 end
+
+# For smooth_mbf and plotting
+get_A(kf::Union{ExtendedKalmanFilter, SqExtendedKalmanFilter}, x, u, p, t) = kf.Ajac(x,u,p,t)
+get_C(kf::Union{ExtendedKalmanFilter, SqExtendedKalmanFilter}, x, u, p, t) = kf.Cjac(x,u,p,t)
