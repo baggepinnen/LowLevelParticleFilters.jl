@@ -27,7 +27,7 @@ Base.propertynames(sol::AbstractFilteringSolution) = fieldnames(typeof(sol))
 # Plot
 The solution object can be plotted
 ```
-plot(sol, plotx=true, plotxt=true, plotR=true, plotRt=true, plote=true, plotu=true, ploty=true, plotyh=true, plotyht=true, name="")
+plot(sol, plotx=true, plotxt=true, plotR=true, plotRt=true, plote=true, plotu=true, ploty=true, plotyh=true, plotyht=true, plotSt=false, name="")
 ```
 where
 - `plotx`: Plot the predictions `x(t|t-1)`
@@ -40,6 +40,7 @@ where
 - `plotyh`: Plot the predicted measurements `ŷ(t|t-1)`
 - `plotyht`: Plot the filtered measurements `ŷ(t|t)`
 - `plotS`: Plot the innovation covariances `S(t|t-1)` as ribbons at ±2σ on predicted measurements `ŷ(t|t-1)` (requires `plotyh=true`)
+- `plotSt`: Plot the filtered output covariances `St = C*Rt*C'` as ribbons at ±2σ on filtered measurements `ŷ(t|t)` (requires `plotyht=true`, not supported for UnscentedKalmanFilter)
 - `name`: a string that is prepended to the labels of the plots, which is useful when plotting multiple solutions in the same plot.
 - `σ = 1.96` The number of standard deviations covered by covariance ribbons
 
@@ -79,9 +80,12 @@ cov_diag(R::AbstractMatrix) = diag(R)
 cov_diag(U::UpperTriangular) = diag(U'U)
 cov_diag(Sᵪ::Cholesky) = diag(Sᵪ.U'Sᵪ.U)
 
-@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotR=false, plotRt=false, plotS=false, names = sol.f.names, name = names.name, σ=1.96, always_include_x=false)
+@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotR=false, plotRt=false, plotS=false, plotSt=false, names = sol.f.names, name = names.name, σ=1.96, always_include_x=false)
     isempty(name) || (name = name*" ")
     kf = sol.f
+
+    kf isa UnscentedKalmanFilter && plotSt && error("Output covariance plotting (plotSt) is not yet supported for UnscentedKalmanFilter")
+
     nx, nu, ny = length(sol.x[1]), length(sol.u[1]), length(sol.y[1])
     lay = nx*(plotx || plotxt || always_include_x) + plotu*nu + (ploty || plotyh || plotyht || plote)*ny
     layout --> lay
@@ -155,11 +159,24 @@ cov_diag(Sᵪ::Cholesky) = diag(Sᵪ.U'Sᵪ.U)
     end
     if plotyht
         series = reduce(hcat, measurement_oop(kf).(sol.xt, sol.u, Ref(kf.p), timevec))'
+        if plotSt
+            # Compute filtered output covariances: St = C * Rt * C'
+            twoσ0 = map(1:length(sol.xt)) do i
+                C = get_C(kf, sol.xt[i], sol.u[i], kf.p, timevec[i])
+                R = eltype(sol.Rt) <: UpperTriangular ? sol.Rt[i]'sol.Rt[i] : sol.Rt[i]
+                St = C * R * C'
+                σ .* sqrt.(diag(St))
+            end
+            twoσ = reduce(hcat, twoσ0)'
+        end
         for i = 1:ny
             @series begin
                 label --> "$(name)ŷ$(i)(t|t)"
                 subplot --> i + (nx*(plotx || plotxt || always_include_x) + nu*plotu)
                 linestyle --> :dash
+                if plotSt
+                    ribbon := twoσ[:,i]
+                end
                 timevec, series[:, i]
             end
         end
@@ -194,11 +211,13 @@ A structure representing the solution to a Kalman smoothing problem.
 
 The solution object can be plotted
 ```
-plot(sol; plotxT=true, plotRT=true, kwargs...)
+plot(sol; plotxT=true, plotRT=true, plotyhT=false, plotST=false, kwargs...)
 ```
 where
 - `plotxT`: Plot the smoothed estimates `x(t|T)`
 - `plotRT`: Plot the smoothed covariances `R(t|T)` as ribbons at ±2σ (1.96 σ to be precise)
+- `plotyhT`: Plot the smoothed output estimates `ŷ(t|T) = C*x(t|T)`
+- `plotST`: Plot the smoothed output covariances `ST = C*RT*C'` as ribbons at ±2σ on smoothed measurements `ŷ(t|T)` (requires `plotyhT=true`, not supported for UnscentedKalmanFilter)
 - The rest of the keyword arguments are the same as for [`KalmanFilteringSolution`](@ref)
 
 When plotting a smoothing solution, the filtering solution is also plotted. The same keyword arguments as for [`KalmanFilteringSolution`](@ref) may be used to control which signals are plotted
@@ -220,14 +239,17 @@ Base.iterate(r::KalmanSmoothingSolution, ::Val{:ll})   = (r.x, Val(:done))
 Base.iterate(r::KalmanSmoothingSolution, ::Val{:done}) = nothing
 
 
-@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanSmoothingSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotxT = true, plotRT=true, names = sol.f.names, name = names.name, σ = 1.96)
+@recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanSmoothingSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotxT = true, plotRT=true, plotyhT=false, plotST=false, names = sol.f.names, name = names.name, σ = 1.96)
     isempty(name) || (name = name*" ")
     kf = sol.f
+
+    kf isa UnscentedKalmanFilter && plotST && error("Output covariance plotting (plotST) is not supported for UnscentedKalmanFilter")
+
     nx, nu, ny = length(sol.x[1]), length(sol.u[1]), length(sol.y[1])
     xnames = names.x
 
     # The mess of replicating all plotx kwargs in this recipe is due to an obscure bug in Plots that causes the layout that is set in the lower KalmanFilteringSolution recipe to only take effect if anything is actually drawn in the recipe. When the user wants to plot only xT, the lower level recipe only sets the layout but plots nothing, and then we get an indexing error here due to there not being any layout > 1 subplot set.
-    lay = nx*(plotx || plotxt || plotxT) + plotu*nu + (ploty || plotyh || plotyht || plote)*ny
+    lay = nx*(plotx || plotxt || plotxT) + plotu*nu + (ploty || plotyh || plotyht || plote || plotyhT)*ny
     layout --> lay
     @series begin
         # This is unfortunately also required
@@ -255,6 +277,30 @@ Base.iterate(r::KalmanSmoothingSolution, ::Val{:done}) = nothing
                     ribbon := twoσ[:,i]
                 end
                 timevec, m[:,i]
+            end
+        end
+    end
+    if plotyhT
+        ynames = names.y
+        series = reduce(hcat, measurement_oop(kf).(sol.xT, sol.u, Ref(kf.p), timevec))'
+        if plotST
+            # Compute smoothed output covariances: ST = C * RT * C'
+            twoσ0 = map(1:length(sol.xT)) do i
+                C = get_C(kf, sol.xT[i], sol.u[i], kf.p, timevec[i])
+                ST = C * sol.RT[i] * C'
+                σ .* sqrt.(diag(ST))
+            end
+            twoσ = reduce(hcat, twoσ0)'
+        end
+        for i = 1:ny
+            @series begin
+                label --> "$(name)ŷ$(i)(t|T)"
+                subplot --> i + (nx*(plotx || plotxt || plotxT) + nu*plotu)
+                linestyle --> :dot
+                if plotST
+                    ribbon := twoσ[:,i]
+                end
+                timevec, series[:, i]
             end
         end
     end

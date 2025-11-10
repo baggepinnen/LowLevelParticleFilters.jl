@@ -85,8 +85,10 @@ sol2 = forward_trajectory(ekf, u, y)
 # plot!(reduce(hcat, sol.x)', lab="Kf")
 # plot!(reduce(hcat, sol2.x)', lab="EKF")
 
-xT,RT,ll = smooth(ekf, u, y)
+smoothsol = smooth(ekf, u, y)
+xT,RT,ll = smoothsol
 @test norm(reduce(hcat, x .- xT)) < norm(reduce(hcat, x .- sol2.x)) # Smoothing solution better than filtering sol (normally around 8-20% better)
+plot(smoothsol, plotS=true, plotSt=true, plotST=true, plotyht=true, plotyhT=true)
 
 
 ## Compare all
@@ -288,7 +290,7 @@ ekf = LLPF.ExtendedKalmanFilter(kf, error_dynamics, measurement_ekf)
     sqekf_ip = LLPF.SqExtendedKalmanFilter(dynamics_inplace!, measurement_test, R1, R2, d0; nu)
     sol_ip = forward_trajectory(sqekf_ip, u[1:10], y[1:10])
     @test length(sol_ip.x) == 10
-    plot(sol_ip, plotS=true)
+    plot(sol_ip, plotS=true, plotSt=true, plotST=true, plotyht=true, plotyhT=true)
     
     # Test in-place measurement (covers lines 204-207)
     function measurement_inplace!(yout, x, u, p, t)
@@ -340,7 +342,8 @@ ekf = LLPF.ExtendedKalmanFilter(kf, error_dynamics, measurement_ekf)
     @test haskey(res, :K)
     
     # Test alternative smooth function (covers lines 289-293)
-    xT_alt, RT_alt, ll_alt = smooth(sqekf_nl, u_nl, y_nl)
+    smoothsol = smooth(sqekf_nl, u_nl, y_nl)
+    xT_alt, RT_alt, ll_alt = smoothsol
     @test reduce(hcat, xT_alt) ≈ reduce(hcat, xT_sq) rtol=1e-5
     @test reduce(hcat, RT_alt) ≈ reduce(hcat, RT_sq) rtol=1e-4
 
@@ -353,4 +356,6 @@ ekf = LLPF.ExtendedKalmanFilter(kf, error_dynamics, measurement_ekf)
     
     # Test error in property access
     @test_throws ErrorException sqekf.nonexistent_property 
+
+    plot(smoothsol, plotS=true, plotSt=true, plotST=true, plotyht=true, plotyhT=true)
 end

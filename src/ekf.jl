@@ -220,5 +220,5 @@ dynamics(kf::AbstractExtendedKalmanFilter) = kf.dynamics
 
 
 # For smooth_mbf
-get_A(kf::ExtendedKalmanFilter, x, u, p, t) = kf.Ajac(x,u,p,t)
-get_C(kf::ExtendedKalmanFilter, x, u, p, t) = kf.Cjac(x,u,p,t)
+get_A(kf::Union{ExtendedKalmanFilter, SqExtendedKalmanFilter}, x, u, p, t) = kf.Ajac(x,u,p,t)
+get_C(kf::Union{ExtendedKalmanFilter, SqExtendedKalmanFilter}, x, u, p, t) = kf.Cjac(x,u,p,t)
