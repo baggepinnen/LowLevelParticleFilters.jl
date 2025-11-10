@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Disturbance gallery · LowLevelParticleFilters Documentation</title><meta name="title" content="Disturbance gallery · LowLevelParticleFilters Documentation"/><meta property="og:title" content="Disturbance gallery · LowLevelParticleFilters Documentation"/><meta property="twitter:title" content="Disturbance gallery · LowLevelParticleFilters Documentation"/><meta name="description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="og:description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="twitter:description" content="Documentation for LowLevelParticleFilters Documentation."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">LowLevelParticleFilters Documentation</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../discretization/">Discretization</a></li><li><a class="tocitem" href="../measurement_models/">Multiple measurement models</a></li><li><a class="tocitem" href="../parameter_estimation/">Parameter estimation</a></li><li><a class="tocitem" href="../benchmark/">Benchmark</a></li><li><a class="tocitem" href="../distributions/">Performance tips</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../adaptive_kalmanfilter/">Kalman-filter tutorial with LowLevelParticleFilters</a></li><li><a class="tocitem" href="../noisetuning/">Noise tuning and disturbance modeling for Kalman filtering</a></li><li><a class="tocitem" href="../beetle_example/">Particle-filter tutorial</a></li><li><a class="tocitem" href="../beetle_example_imm/">IMM-filter tutorial</a></li><li><a class="tocitem" href="../rbpf_example/">Rao-Blackwellized filter tutorial</a></li><li><a class="tocitem" href="../dae/">State estimation for DAE systems</a></li><li><a class="tocitem" href="../adaptive_control/">Adaptive estimation and control</a></li><li><a class="tocitem" href="../neural_network/">Adaptive Neural-Network training</a></li><li><a class="tocitem" href="../friction_nn_example/">SciML: Adaptive Universal Differential Equation</a></li><li><a class="tocitem" href="../thermal_nn_example/">SciML: Learning a sunshine disturbance model</a></li><li><a class="tocitem" href="../fault_detection/">Fault detection</a></li><li><a class="tocitem" href="../ut/">Unscented transform</a></li><li class="is-active"><a class="tocitem" href>Disturbance gallery</a><ul class="internal"><li><a class="tocitem" href="#Stochastic-vs.-deterministic-but-unknown"><span>Stochastic vs. deterministic but unknown</span></a></li><li><a class="tocitem" href="#White-noise"><span>White noise</span></a></li><li><a class="tocitem" href="#Integrated-white-noise"><span>Integrated white noise</span></a></li><li><a class="tocitem" href="#Double-integrated-white-noise"><span>Double integrated white noise</span></a></li><li><a class="tocitem" href="#Low-pass-filtered-white-noise"><span>Low-pass filtered white noise</span></a></li><li><a class="tocitem" href="#Higher-order-low-pass-filtered-white-noise"><span>Higher-order low-pass filtered white noise</span></a></li><li><a class="tocitem" href="#Periodic-disturbance"><span>Periodic disturbance</span></a></li><li><a class="tocitem" href="#One-sided-random-bumps"><span>One sided random bumps</span></a></li><li><a class="tocitem" href="#One-sided-periodic-bumps"><span>One sided periodic bumps</span></a></li><li><a class="tocitem" href="#Deterministic-disturbances"><span>Deterministic disturbances</span></a></li><li><a class="tocitem" href="#Heteroschedastic-disturbances"><span>Heteroschedastic disturbances</span></a></li><li><a class="tocitem" href="#Non-Gaussian-driving-noise"><span>Non-Gaussian driving noise</span></a></li><li><a class="tocitem" href="#Dynamical-models-of-measurement-disturbance"><span>Dynamical models of measurement disturbance</span></a></li><li><a class="tocitem" href="#Continuous-vs.-discrete-time-covariance"><span>Continuous vs. discrete time covariance</span></a></li></ul></li><li><a class="tocitem" href="../sample_rate/">Influence of sample rate on performance</a></li></ul></li><li><a class="tocitem" href="../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Disturbance gallery</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Disturbance gallery</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/docs/src/disturbance_gallery.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Disturbance-gallery"><a class="docs-heading-anchor" href="#Disturbance-gallery">Disturbance gallery</a><a id="Disturbance-gallery-1"></a><a class="docs-heading-anchor-permalink" href="#Disturbance-gallery" title="Permalink"></a></h1><p>Most filters in this package assume that the disturbances acting on the system are comprised of Gaussian white noise. This may at first appear as a severe limitation, but together with a dynamical model, this is a surprisingly flexible combination. Most disturbance models we list are linear, which means that they work for any state estimator, including standard Kalman filters. In the end, we also mention some nonlinear disturbance models that require a nonlinear state estimator, such as an <a href="../api/#LowLevelParticleFilters.UnscentedKalmanFilter-Union{Tuple{AUGM}, Tuple{AUGD}, Tuple{IPM}, Tuple{IPD}, Tuple{Any, LowLevelParticleFilters.AbstractMeasurementModel, Any}, Tuple{Any, LowLevelParticleFilters.AbstractMeasurementModel, Any, Any}} where {IPD, IPM, AUGD, AUGM}"><code>UnscentedKalmanFilter</code></a>. For each disturbance model, we provide a statespace model and show a number of samples from the model, we also list a number of example scenarios where the model is useful. In many cases, models have an interpretation also in the Laplace domain or as a temporal Gaussian process. </p><h2 id="Stochastic-vs.-deterministic-but-unknown"><a class="docs-heading-anchor" href="#Stochastic-vs.-deterministic-but-unknown">Stochastic vs. deterministic but unknown</a><a id="Stochastic-vs.-deterministic-but-unknown-1"></a><a class="docs-heading-anchor-permalink" href="#Stochastic-vs.-deterministic-but-unknown" title="Permalink"></a></h2><p>While some sources of errors are random, such as sensor noise, other sources of errors are deterministic but unknown. For example, a miscalibrated sensor is affected by a static but unknown error. We may communicate these properties to our state estimator by</p><ol><li>Providing the <em>initial distribution</em> of the state. If this is, e.g., a wide Gaussian distribution, we indicate that we are uncertain about the initial state. If the covariance is zero, we indicate that the initial state is perfectly known. The initial state distribution is usually denoted <span>$d_0$</span> in this documentation.</li><li>Providing the <em>covariance</em> of the driving disturbance noise. If this is zero, the disturbance is deterministic and the uncertainty about it comes solely from the initial state distribution. If this is positive, the disturbance is random and the uncertainty about it comes from both the initial state distribution and the disturbance noise. Where distributions are assumed to be Gaussian, we refer to the covariance matrix of the dynamics noise as <span>$R_1$</span> and the measurement noise <span>$R_2$</span>. When noises can take any distribution, we refer to these distributions as <code>df</code> and <code>dg</code> instead.</li></ol><h2 id="White-noise"><a class="docs-heading-anchor" href="#White-noise">White noise</a><a id="White-noise-1"></a><a class="docs-heading-anchor-permalink" href="#White-noise" title="Permalink"></a></h2><p>This is the simplest possible disturbance model and require no dynamical system at all, just the driving white-noise input. Most state estimators in this package assume that the noise is Gaussian, but particle filters can also be used with non-Gaussian noise.</p><p>White noise has a flat spectrum (analogous to how white light contains all colors). </p><h3 id="Samples"><a class="docs-heading-anchor" href="#Samples">Samples</a><a id="Samples-1"></a><a class="docs-heading-anchor-permalink" href="#Samples" title="Permalink"></a></h3><pre><code class="language-julia hljs">using Plots
+w = randn(100)
+plot(
+    plot(w, label=&quot;Gaussian white noise&quot;),
+    histogram(w, title=&quot;Histogram&quot;),
+)</code></pre><img src="629926f9.svg" alt="Example block output"/><h2 id="Integrated-white-noise"><a class="docs-heading-anchor" href="#Integrated-white-noise">Integrated white noise</a><a id="Integrated-white-noise-1"></a><a class="docs-heading-anchor-permalink" href="#Integrated-white-noise" title="Permalink"></a></h2><p>This simplest dynamical disturbance model is white noise integrated once. This is a non-stationary process since the variance grows over time, which means that this model is suitable for disturbances that can have any arbitrary magnitude, but no particular properties of the evolution of the disturbance over time is known. This models is sometimes called a Brownian random walk, or a Wiener process.</p><h3 id="Model"><a class="docs-heading-anchor" href="#Model">Model</a><a id="Model-1"></a><a class="docs-heading-anchor-permalink" href="#Model" title="Permalink"></a></h3><p><strong>Continuous time</strong></p><p class="math-container">\[\dot{x} = w\]</p><p><strong>Discrete time</strong></p><p class="math-container">\[x_{k+1} = x_k + T_s w_k\]</p><p><strong>Frequency domain</strong></p><p class="math-container">\[G(s) = \frac{1}{s}\]</p><h3 id="Samples-2"><a class="docs-heading-anchor" href="#Samples-2">Samples</a><a class="docs-heading-anchor-permalink" href="#Samples-2" title="Permalink"></a></h3><p>Below, we draw samples from the disturbance model by creating a linear statespace system from ControlSystemsBase.jl and call <code>lsim</code> to simulate the system with white noise <span>$w \sim \mathcal{N}(0, 1)$</span> input. We also compute the time-varying covariance of the disturbance process, assuming that the covariance of the initial state is zero. This is done by solving the discrete time-varying Lyapunov equation</p><p class="math-container">\[\begin{aligned}
+R_{k+1} &amp;= A R_k A^T + BB^T \\
+R_0 &amp;= \mathbf{0} \\
+{R_y}_k &amp;= C R_k C^T
+\end{aligned}\]</p><p>implemented in the function <code>covariance_dynamics</code>. </p><pre><code class="language-julia hljs">using ControlSystemsBase, Plots, LinearAlgebra
+
+function covariance_dynamics(sys, N=1000; R1=I)
+    # Calculate the covariance of the dynamics noise
+    iscontinuous(sys) &amp;&amp; error(&quot;Only discrete-time systems are supported&quot;)
+    (; A, B, C) = sys
+    Q = B * R1 * B&#39; # Covariance of the dynamics noise
+    R = 0*I(size(A, 1)) # Initial covariance
+    Ry = [(C*R*C&#39;)[]] # Covariance of the output
+    for i = 1:N-1
+        R = A*R*A&#39; + Q # Discrete-time Lyapunov equation
+        push!(Ry, (C*R*C&#39;)[])
+    end
+    return 2 .* sqrt.(Ry) # 2σ(t)
+end
+
+Ts = 0.01 # Sampling time
+sys = ss(1, Ts, 1, 0, Ts) # Discrete-time integrator
+res = map(1:10) do i
+    w = randn(1, 1000) # White noise input
+    lsim(sys, w)
+end
+figsim = plot(res)
+plot!(res[1].t, [1 -1] .* covariance_dynamics(sys), lab=&quot;2σ(t)&quot;, color=:black, linestyle=:dash)
+figspec = bodeplot(sys, plotphase=false)
+figimp = plot(impulse(sys, 10), title=&quot;Impulse response&quot;)
+plot(figsim, figspec, figimp, plot_title=&quot;Integrated white noise&quot;)</code></pre><img src="a1c28826.svg" alt="Example block output"/><p>Note, the samples from this process do not look random and step like, but a random step-like process can nevertheless be well modeled by such a process (this is hinted at by the transfer function <span>$1/s$</span> which is identical to the Laplace transform of the step function). This model is used in a number of examples that demonstrate this property:</p><ul><li><a href="../parameter_estimation/#Joint-state-and-parameter-estimation">Joint state and parameter estimation</a></li><li><a href="@ref">Fault detection</a></li><li><a href="https://juliacontrol.github.io/RobustAndOptimalControl.jl/dev/lqg_disturbance/">LQG control with integral action</a></li></ul><p>When the noise <span>$w$</span> has the variance 1, this leads to a process that has a linearly increasing variance with slope <span>$BB^T / T_s = T_s^2 / T_s = T_s$</span>, that is, after 10 seconds the variance is <span>$10T_s = 0.1$</span>. To make the covariance dynamics invariant to the choice of sample interval, we can use the variance <code>R1 = σ² / Ts</code>, in which case the variance is <span>$σ²$</span> after 1 second and <span>$10σ²$</span> after 10 seconds, irrespective of the choice of sample interval <span>$T_s$</span>.</p><h3 id="Suitable-for"><a class="docs-heading-anchor" href="#Suitable-for">Suitable for</a><a id="Suitable-for-1"></a><a class="docs-heading-anchor-permalink" href="#Suitable-for" title="Permalink"></a></h3><ul><li>Random-step like disturbances</li><li>Friction</li><li>Unknown change of operating point or set point</li><li>Static or slowly varying calibration errors (if the error is completely static but initially unknown, use nonzero initial covariance but zero covariance for <span>$w$</span>).</li><li>Gyroscope drift</li></ul><h2 id="Double-integrated-white-noise"><a class="docs-heading-anchor" href="#Double-integrated-white-noise">Double integrated white noise</a><a id="Double-integrated-white-noise-1"></a><a class="docs-heading-anchor-permalink" href="#Double-integrated-white-noise" title="Permalink"></a></h2><p>This is a second-order dynamical disturbance model that is white noise integrated twice. This is a non-stationary process since the variance grows over time, which means that this model is suitable for disturbances that can have any arbitrary magnitude, and where the evolution of the disturbance is subject to inertia, that is, the disturbance is expected to evolve be smoothly. </p><h3 id="Model-2"><a class="docs-heading-anchor" href="#Model-2">Model</a><a class="docs-heading-anchor-permalink" href="#Model-2" title="Permalink"></a></h3><p><strong>Continuous time</strong></p><p class="math-container">\[\ddot{x} = w\]</p><p><strong>Discrete time</strong></p><p class="math-container">\[\begin{aligned}
+x_{k+1} &amp;= x_k + T_s v_k + \frac{T_s^2}{2}w_k \\
+v_{k+1} &amp;= v_k + T_s w_k
+\end{aligned}\]</p><p><strong>Frequency domain</strong></p><p class="math-container">\[G(s) = \frac{1}{s^2}\]</p><h3 id="Samples-3"><a class="docs-heading-anchor" href="#Samples-3">Samples</a><a class="docs-heading-anchor-permalink" href="#Samples-3" title="Permalink"></a></h3><pre><code class="language-julia hljs">using ControlSystemsBase, Plots
+Ts = 0.01 # Sampling time
+sys = ss([1 Ts; 0 1], [Ts^2/2; Ts], [1 0], 0, Ts) # Discrete-time double integrator
+res = map(1:10) do i
+    w = randn(1, 1000) # White noise input
+    lsim(sys, w)
+end
+figsim = plot(res)
+plot!(res[1].t, [1 -1] .* covariance_dynamics(sys), lab=&quot;2σ(t)&quot;, color=:black, linestyle=:dash)
+figspec = bodeplot(sys, plotphase=false)
+plot(figsim, figspec, plot_title=&quot;Double integrated white noise&quot;)</code></pre><img src="e3f03bc3.svg" alt="Example block output"/><h3 id="Suitable-for-2"><a class="docs-heading-anchor" href="#Suitable-for-2">Suitable for</a><a class="docs-heading-anchor-permalink" href="#Suitable-for-2" title="Permalink"></a></h3><ul><li>Random ramp-like disturbances</li><li>Smoothly varying disturbances</li></ul><h2 id="Low-pass-filtered-white-noise"><a class="docs-heading-anchor" href="#Low-pass-filtered-white-noise">Low-pass filtered white noise</a><a id="Low-pass-filtered-white-noise-1"></a><a class="docs-heading-anchor-permalink" href="#Low-pass-filtered-white-noise" title="Permalink"></a></h2><p>If we pass white noise through a low-pass filter, we get a signal that is random but primarily contains low frequencies. This is a stationary process, which means that the variance does not grow indefinitely over time, and we can calculate the stationary covariance of the process by solving a Lyapunov equation (done by <code>ControlSystemsBase.covar</code>). We do this below in order to indicate the stationary standard deviation of the process in the plot of the samples. This model is associated with a tuning parameter that determines the cutoff frequency of the low-pass filter, `<span>$\tau$</span>. </p><h3 id="Model-3"><a class="docs-heading-anchor" href="#Model-3">Model</a><a class="docs-heading-anchor-permalink" href="#Model-3" title="Permalink"></a></h3><p><strong>Continuous time</strong></p><p class="math-container">\[\dot{x} = \frac{1}{\tau}(-x + w)\]</p><p><strong>Discrete time</strong></p><p class="math-container">\[x_{k+1} = α x_k + (1-α) w_k, \qquad α = e^{-T_s/\tau}\]</p><h3 id="Transfer-function"><a class="docs-heading-anchor" href="#Transfer-function">Transfer function</a><a id="Transfer-function-1"></a><a class="docs-heading-anchor-permalink" href="#Transfer-function" title="Permalink"></a></h3><p class="math-container">\[G(s) = \frac{1}{\tau s + 1}\]</p><h3 id="Samples-4"><a class="docs-heading-anchor" href="#Samples-4">Samples</a><a class="docs-heading-anchor-permalink" href="#Samples-4" title="Permalink"></a></h3><pre><code class="language-julia hljs">using ControlSystemsBase, Plots
+Ts = 0.01 # Sampling time
+τ = 1.0
+sys = ss(c2d(tf(1, [τ, 1]), Ts)) # Discrete-time first-order low-pass filter
+res = map(1:10) do i
+    w = randn(1, 1000) # White noise input
+    lsim(sys, w)
+end
+figsim = plot(res)
+hline!(2*sqrt.(covar(sys, I(1))) .* [1 -1], color=:black, linestyle=:dash, linewidth=2, label=&quot;2σ(∞)&quot;) # Stationary standard deviation
+plot!(res[1].t, [1 -1] .* covariance_dynamics(sys), lab=&quot;2σ(t)&quot;, color=:black, linestyle=:dash)
+figspec = bodeplot(sys, plotphase=false)
+figimp = plot(impulse(sys, 10), title=&quot;Impulse response&quot;)
+plot(figsim, figspec, figimp, plot_title=&quot;Low-pass filtered white noise&quot;)</code></pre><img src="a3252f61.svg" alt="Example block output"/><h3 id="Suitable-for-3"><a class="docs-heading-anchor" href="#Suitable-for-3">Suitable for</a><a class="docs-heading-anchor-permalink" href="#Suitable-for-3" title="Permalink"></a></h3><ul><li>Stationary noise dominated by low frequencies</li></ul><h3 id="Alternative-names"><a class="docs-heading-anchor" href="#Alternative-names">Alternative names</a><a id="Alternative-names-1"></a><a class="docs-heading-anchor-permalink" href="#Alternative-names" title="Permalink"></a></h3><ul><li>Ornstein–Uhlenbeck process</li><li>Gaussian process: Exponential covariance function</li></ul><h2 id="Higher-order-low-pass-filtered-white-noise"><a class="docs-heading-anchor" href="#Higher-order-low-pass-filtered-white-noise">Higher-order low-pass filtered white noise</a><a id="Higher-order-low-pass-filtered-white-noise-1"></a><a class="docs-heading-anchor-permalink" href="#Higher-order-low-pass-filtered-white-noise" title="Permalink"></a></h2><p>If we add more poles to the low-pass filter, we can model Gaussian processes with the Matérn covariance function with half-integer smoothness. The Matérn covariance with <span>$ν=1/2$</span> is equivalent to the first-order low-pass filter above, and with <span>$ν=3/2$</span> we get the model</p><p class="math-container">\[\begin{aligned}
+A &amp;= \begin{bmatrix}
+0 &amp; 1 \\
+-\lambda^2 &amp; -2 \lambda
+\end{bmatrix} \\
+B &amp;= \begin{bmatrix}
+0 \\ 1
+\end{bmatrix} \\
+C &amp;= \begin{bmatrix}
+1 &amp; 0
+\end{bmatrix} \\
+\lambda &amp;= \sqrt{3} / l
+\end{aligned}\]</p><p>where <span>$l$</span> is the length scale of the covariance function.</p><h3 id="Samples-from-Matérn-3/2-covariance-function"><a class="docs-heading-anchor" href="#Samples-from-Matérn-3/2-covariance-function">Samples from Matérn 3/2 covariance function</a><a id="Samples-from-Matérn-3/2-covariance-function-1"></a><a class="docs-heading-anchor-permalink" href="#Samples-from-Matérn-3/2-covariance-function" title="Permalink"></a></h3><pre><code class="language-julia hljs">using ControlSystemsBase, Plots
+Ts = 0.01 # Sampling time
+l = 1.0 # Length scale
+λ = sqrt(3) / l
+A = [0 1; -λ^2 -2λ]
+B = [0; 1]
+C = [1 0]
+sys = c2d(ss(A, B, C, 0), Ts)
+res = map(1:10) do i
+    w = randn(1, 1000) # White noise input
+    lsim(sys, w)
+end
+figsim = plot(res)
+(; B,C) = sys
+plot!(res[1].t, [1 -1] .* covariance_dynamics(sys), lab=&quot;2σ(t)&quot;, color=:black, linestyle=:dash)
+figspec = bodeplot(sys, plotphase=false)
+figimp = plot(impulse(sys, 10), title=&quot;Impulse response&quot;)
+plot(figsim, figspec, figimp, plot_title=&quot;Low-pass (second order) filtered white noise&quot;)</code></pre><img src="b9c71005.svg" alt="Example block output"/><p>Note how this produces smoother signals compared to the first-order low-pass filter. The Matérn covariance function with <span>$ν=5/2$</span> can be modeled by adding a third state to the system above, and so on.</p><p>For more details on the relation between temporal Gaussian processes and linear systems, see <a href="https://aaltodoc.aalto.fi/server/api/core/bitstreams/aaf7725c-7955-4d21-8d31-e27fdd23c503/content">section 3.3 in &quot;Stochastic Differential Equation Methods for Spatio-Temporal Gaussian Process Regression&quot;, Arno Solin</a>.</p><h2 id="Periodic-disturbance"><a class="docs-heading-anchor" href="#Periodic-disturbance">Periodic disturbance</a><a id="Periodic-disturbance-1"></a><a class="docs-heading-anchor-permalink" href="#Periodic-disturbance" title="Permalink"></a></h2><p>If disturbances have a dominant frequency or period, such as 50Hz from the electrical grid, or 24hr from the sun, a periodic disturbance model can be used. A second-order linear system with a complex-conjugate pair of poles close to the imaginary axis has a resonance peak in the frequency response which is suitable for modeling periodic disturbances. If the disturbance is perfectly sinusoidal but the phase is unknown, we may indicate this by setting the covariance of the driving noise to zero and placing the poles exactly on the imaginary axis. </p><h3 id="Model-4"><a class="docs-heading-anchor" href="#Model-4">Model</a><a class="docs-heading-anchor-permalink" href="#Model-4" title="Permalink"></a></h3><p><strong>Continuous time</strong></p><p class="math-container">\[\begin{aligned}
+\dot{x} &amp;= \begin{bmatrix}
+-\zeta &amp; -\omega_0 \\
+\omega_0 &amp; -\zeta
+\end{bmatrix} x + \begin{bmatrix}
+\omega_0 \\
+0
+\end{bmatrix} w \\
+y &amp;= \begin{bmatrix}
+0 &amp; \omega_0
+\end{bmatrix} x
+\end{aligned}\]</p><p><strong>Frequency domain</strong></p><p class="math-container">\[G(s) = \frac{\omega_0}{s^2 + 2\zeta \omega_0 s + \omega_0^2}\]</p><h3 id="Samples-5"><a class="docs-heading-anchor" href="#Samples-5">Samples</a><a class="docs-heading-anchor-permalink" href="#Samples-5" title="Permalink"></a></h3><pre><code class="language-julia hljs">using ControlSystemsBase, Plots
+ω0 = 2π/3 # Resonance frequency [rad/s]
+ζ = 0.1 # Damping ratio, smaller value gives higher amplitude
+Ts = 0.05
+t = 0:Ts:20 # Time vector
+sys = c2d(ss([-ζ -ω0; ω0 -ζ], [ω0; 0], [0 ω0], 0), Ts)
+res = map(1:10) do i
+    w = randn(1, length(t)) # White noise input
+    lsim(sys, w, t)
+end
+figsim = plot(res)
+(; B,C) = sys
+plot!(res[1].t, [1 -1] .* covariance_dynamics(sys, length(res[1].t)), lab=&quot;2σ(t)&quot;, color=:black, linestyle=:dash)
+figspec = bodeplot(sys, plotphase=false)
+figimp = plot(impulse(sys, 10), title=&quot;Impulse response&quot;)
+plot(figsim, figspec, figimp, plot_title=&quot;Periodic disturbance&quot;)</code></pre><img src="547997bb.svg" alt="Example block output"/><h2 id="One-sided-random-bumps"><a class="docs-heading-anchor" href="#One-sided-random-bumps">One sided random bumps</a><a id="One-sided-random-bumps-1"></a><a class="docs-heading-anchor-permalink" href="#One-sided-random-bumps" title="Permalink"></a></h2><p>This is a <strong>nonlinear</strong> disturbance model that is useful when the disturbance is expected to be non-negative (or non-positive). The model is a combination of low-pass filtered white noise and a nonlinear integrator that integrates the low-pass filtered white noise only when it is positive. </p><h3 id="Model-5"><a class="docs-heading-anchor" href="#Model-5">Model</a><a class="docs-heading-anchor-permalink" href="#Model-5" title="Permalink"></a></h3><p><strong>Continuous time</strong></p><p class="math-container">\[\begin{aligned}
+\dot{x} &amp;= \begin{bmatrix}
+-a x_1 + w \\
+-b x_2 + \max(0, x_1)^n
+\end{bmatrix} \\
+y &amp;= x_2
+\end{aligned}\]</p><h3 id="Samples-6"><a class="docs-heading-anchor" href="#Samples-6">Samples</a><a class="docs-heading-anchor-permalink" href="#Samples-6" title="Permalink"></a></h3><p>Since this is a nonlinear model, we cannot use the <code>lsim</code> function to simulate it. Instead, we use the package <a href="https://github.com/baggepinnen/SeeToDee.jl/"><code>SeeToDee.jl</code></a> to discretize the nonlinear dynamics model, learn more under <a href="../discretization/#Discretization">Discretization</a>.</p><pre><code class="language-julia hljs">using LowLevelParticleFilters, SeeToDee, Plots, Random
+Ts = 0.1 # Sampling time
+a = 1 # Low-pass filter (inverse) time constant, controls how often the bumps appear (higher value ⟹ more often)
+b = 2 # Bump decay (inverse) time constant
+n = 2 # Nonlinearity exponent
+
+# Define dynamics function
+function dynamics(x, w, p, t) # We assume that the noise is coming in through the second argument here. When using this model with an UnscentedKalmanFilter, we may instead add w as the 5:th argument and let the second argument be the control input.
+    x1, x2 = x
+    dx1 = -a * x1 + w[1]
+    dx2 = -b * x2 + max(0.0, x1)^n
+    return [dx1, dx2]
+end
+discrete_dynamics = SeeToDee.Rk4(dynamics, Ts)
+# Measurement function (only observes x2)
+function measurement(x, w, p, t)
+    return [x[2]]
+end
+# Simulate the model
+t = 0:Ts:20 # Time vector
+x0 = [0.0; 0.0] # Initial state
+Random.seed!(0) # For reproducibility
+res = map(1:10) do i
+    if i == 1
+        w = [(j==0)/Ts for j in t] # Pulse input for first sample
+    else
+        w = [randn(1) for j in t] # White noise input
+    end
+    x = LowLevelParticleFilters.rollout(discrete_dynamics, x0, w)
+    reduce(hcat, measurement.(x[1:end-1], w, nothing, t))&#39;
+end
+plot(t, res, title=&quot;One-sided random bumps&quot;, lw=[5 ones(1,9)])</code></pre><img src="86958946.svg" alt="Example block output"/><p>Note how the samples are all nonnegative, achieved by the nonlinearity. The first sample is the impulse response of the system, and this is drawn with a greater linewidth.</p><h3 id="Observability"><a class="docs-heading-anchor" href="#Observability">Observability</a><a id="Observability-1"></a><a class="docs-heading-anchor-permalink" href="#Observability" title="Permalink"></a></h3><p>This is a nonlinear model, but it is piecewise linear and we may use linear observability tests to check if the system is observable in each mode.</p><pre><code class="language-julia hljs">Ap = [-a 0; 1 -b]
+An = [-a 0; 0 -b]
+B = [1.0; 0]
+C = [0 1]
+sysp = ss(Ap, B, C, 0)
+sysn = ss(An, B, C, 0)
+
+observability(sysp)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(isobservable = true, ranks = [2, 2], sigma_min = [1.0, 0.6180339887498948])</code></pre><p>When <span>$x_2$</span> is positive, the system is observable, but when <span>$x_2$</span> is negative</p><pre><code class="language-julia hljs">observability(sysn)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(isobservable = false, ranks = [2, 1], sigma_min = [1.0, 0.0])</code></pre><p>we have lost observability of the first state variable. This may pose a problem for, e.g., an ExtendedKalmanFilter, which performs linearization around the current state estimate. To mitigate the observability issue, we may change the nonlinearity to, e.g., a softplus function:</p><pre><code class="language-julia hljs">softplus(x, hardness=10) = log(1 + exp(hardness*x))/hardness # A softer version of ReLU
+
+function dynamics(x, w, p, t) # We assume that the noise is coming in through the second argument here. When using this model with an UnscentedKalmanFilter, we may instead add w as the 5:th argument and let the second argument be the control input.
+    x1, x2 = x
+    dx1 = -a * x1 + w[1]
+    dx2 = -b * x2 + softplus(x1)^n
+    return [dx1, dx2]
+end
+discrete_dynamics = SeeToDee.Rk4(dynamics, Ts)
+Random.seed!(0) # For reproducibility
+
+res = map(1:10) do i
+    w = [randn(1) for i in t] # White noise input
+    x = LowLevelParticleFilters.rollout(discrete_dynamics, x0, w)
+    reduce(hcat, measurement.(x[1:end-1], w, nothing, t))&#39;
+end
+plot(t, res, title=&quot;One-sided random bumps (softplus)&quot;)</code></pre><img src="7f638e43.svg" alt="Example block output"/><p>This produces a very similar result to the previous model, but adds a tunable hardness parameter that can trade off observability and tendency to output values that are closer to zero.</p><div class="admonition is-info" id="Tip-324b44e1ce09a1f6"><header class="admonition-header">Tip<a class="admonition-anchor" href="#Tip-324b44e1ce09a1f6" title="Permalink"></a></header><div class="admonition-body"><p>The function <code>ControlSystemsBase.observability(f::AbstractKalmanFilter, x, u, p, t=0.0)</code> is overloaded for nonlinear state estimators from this package.</p></div></div><h2 id="One-sided-periodic-bumps"><a class="docs-heading-anchor" href="#One-sided-periodic-bumps">One sided periodic bumps</a><a id="One-sided-periodic-bumps-1"></a><a class="docs-heading-anchor-permalink" href="#One-sided-periodic-bumps" title="Permalink"></a></h2><p>This is similar to the previous model, but with a periodic disturbance driving the nonlinear integrator, causing the bumps to have a dominant period.</p><h3 id="Model-6"><a class="docs-heading-anchor" href="#Model-6">Model</a><a class="docs-heading-anchor-permalink" href="#Model-6" title="Permalink"></a></h3><p><strong>Continuous time</strong></p><p class="math-container">\[\begin{aligned}
+\dot{x} &amp;= \begin{bmatrix}
+x_2 \\
+-2 \zeta \omega_0 x_2 - \omega_0^2 x_1 + w \\
+-b x_3 + \max(0, x_1)^n
+\end{bmatrix} \\
+y &amp;= x_3
+\end{aligned}\]</p><h3 id="Samples-7"><a class="docs-heading-anchor" href="#Samples-7">Samples</a><a class="docs-heading-anchor-permalink" href="#Samples-7" title="Permalink"></a></h3><pre><code class="language-julia hljs">using SeeToDee, LowLevelParticleFilters, Plots
+period = 24.0
+ω = 2π / period # Resonance frequency [rad/s]
+ζ = 0.1
+b = 0.9 # Bump decay (inverse) time constant
+n = 2 # Nonlinearity exponent
+Ts = 0.1 # Sampling time
+
+# Define dynamics function
+function dynamics(x, w, p, t)
+    x1, x2, x3 = x
+    dx1 = x2
+    dx2 = -2 * ζ * ω * x2 - ω^2 * x1 + w[1]
+    relu_x1 = max(0.0, x1)
+    dx3 = -b * x3 + relu_x1^n
+    return [dx1, dx2, dx3]
+end
+
+discrete_dynamics = SeeToDee.Rk4(dynamics, Ts)
+
+# Measurement function (only observes x3)
+function measurement(x, u, p, t)
+    return [x[3]]
+end
+
+# Simulate the model
+t = 0:Ts:120 # Time vector
+x0 = [0.0; 0.0; 0.0] # Initial state
+
+res = map(1:10) do i
+    if i == 1
+        w = [2*(j==0)/Ts for j in t] # Pulse input for first sample
+    else
+        w = [randn(1) for j in t] # White noise input
+    end
+    x = LowLevelParticleFilters.rollout(discrete_dynamics, x0, w)
+    reduce(hcat, measurement.(x[1:end-1], w, nothing, t))&#39;
+end
+plot(t, res, title=&quot;One sided periodic bumps&quot;, lw=[5 ones(1,9)])</code></pre><img src="4c611169.svg" alt="Example block output"/><p>The first sample is one possible impulse response of the system (the system is nonlinear and does not have a single unique impulse response), and this is drawn with a greater linewidth.</p><h3 id="Useful-for"><a class="docs-heading-anchor" href="#Useful-for">Useful for</a><a id="Useful-for-1"></a><a class="docs-heading-anchor-permalink" href="#Useful-for" title="Permalink"></a></h3><ul><li>One-sided periodic disturbances</li><li>Example: Sunlight hitting a thermometer once per day, but only if it is sunny</li></ul><h2 id="Deterministic-disturbances"><a class="docs-heading-anchor" href="#Deterministic-disturbances">Deterministic disturbances</a><a id="Deterministic-disturbances-1"></a><a class="docs-heading-anchor-permalink" href="#Deterministic-disturbances" title="Permalink"></a></h2><p>If there is a deterministic aspect to the disturbance, we may use the fact that dynamics and measurement functions (as well as Kalman filter matrices) may depend on time. For exactly, the perfectly deterministic measurement disturbance disturbance <span>$\sin(t)$</span> is easily modeled by including it in the measurement function. </p><pre><code class="language-julia hljs">measurement(x, u, p, t) = ... + sin(t)</code></pre><h2 id="Heteroschedastic-disturbances"><a class="docs-heading-anchor" href="#Heteroschedastic-disturbances">Heteroschedastic disturbances</a><a id="Heteroschedastic-disturbances-1"></a><a class="docs-heading-anchor-permalink" href="#Heteroschedastic-disturbances" title="Permalink"></a></h2><p>If the disturbance is heteroschedastic, i.e., the variance of the disturbance depends on time or on the state, we may easily indicate this to the state estimator by either</p><ul><li>Let the covariance matrix depend on time or state, applicable to all estimators.</li><li>Encode varying the gain from disturbance to state/measurement in the corresponding dynamics/measurement function, applicable to nonlinear state estimators only.</li></ul><h2 id="Non-Gaussian-driving-noise"><a class="docs-heading-anchor" href="#Non-Gaussian-driving-noise">Non-Gaussian driving noise</a><a id="Non-Gaussian-driving-noise-1"></a><a class="docs-heading-anchor-permalink" href="#Non-Gaussian-driving-noise" title="Permalink"></a></h2><p>All Kalman-type estimators assume that the driving noise is Gaussian. Particle filters are not limited to this assumption and can generally be used with any distribution that can be sampled from, see <a href="../beetle_example/#Smoothing-the-track-of-a-moving-beetle">Smoothing the track of a moving beetle</a> for an example, where the mode is affected by Binomial noise.</p><h2 id="Dynamical-models-of-measurement-disturbance"><a class="docs-heading-anchor" href="#Dynamical-models-of-measurement-disturbance">Dynamical models of measurement disturbance</a><a id="Dynamical-models-of-measurement-disturbance-1"></a><a class="docs-heading-anchor-permalink" href="#Dynamical-models-of-measurement-disturbance" title="Permalink"></a></h2><p>When using any of the <em>dynamical</em> models above to model <em>measurement disturbances</em>, the noise driving the disturbance dynamics must be sourced from the dynamics noise, e.g., for a Kalman filter for the model</p><p class="math-container">\[\begin{aligned}
+x&#39; &amp;= Ax + Bu + w \\
+y  &amp;= Cx + Du + e
+\end{aligned}\]</p><p>we must let the dynamics noise <span>$w$</span> drive the disturbance model, and design <span>$C$</span> such that the estimated disturbance has the desired effect on the measurement. This model leaves no room to let the measurement noise <span>$e$</span> to pass through a dynamical system, and this is thus only useful (and required) to model white Gaussian measurement noise. See <a href="../noisetuning/#How-to-tune-a-Kalman-filter">How to tune a Kalman filter</a> for more insights.</p><p>Dynamical models of measurement disturbances are useful in a lot of situations, such as</p><ul><li>Periodic measurement noise, such as 50Hz noise from the electrical grid.</li><li>Slow sensor drift, such as gyroscopic drift.</li><li>Calibration errors.</li><li>Sensor misalignment in rotating systems.</li><li>Complimentary filtering for accelerometers and gyroscopes.</li><li>Sensor degradation, such as deposition of dust or algae growth.</li></ul><h2 id="Continuous-vs.-discrete-time-covariance"><a class="docs-heading-anchor" href="#Continuous-vs.-discrete-time-covariance">Continuous vs. discrete time covariance</a><a id="Continuous-vs.-discrete-time-covariance-1"></a><a class="docs-heading-anchor-permalink" href="#Continuous-vs.-discrete-time-covariance" title="Permalink"></a></h2><p>See Discretization: <a href="../discretization/#Covariance-matrices">Covariance matrices</a>.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../ut/">« Unscented transform</a><a class="docs-footer-nextpage" href="../sample_rate/">Influence of sample rate on performance »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.15.0 on <span class="colophon-date" title="Monday 10 November 2025 12:57">Monday 10 November 2025</span>. Using Julia version 1.11.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
