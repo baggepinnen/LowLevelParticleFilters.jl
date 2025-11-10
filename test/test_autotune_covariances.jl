@@ -292,4 +292,94 @@ using LeastSquaresOptim
         # Optimizing x0 should give at least as good or better results
         @test result_diag_x0.sol_opt.ll >= result_diag.sol_opt.ll - 1e-6  # Allow small numerical difference
     end
+
+    @testset "MAP estimation with Inverse-Wishart prior" begin
+        # Setup
+        R1_initial = 0.5^2 * I(nx)
+        R2_initial = 2.0^2 * I(ny)
+
+        kf = KalmanFilter(
+            A, B, C, 0,
+            SMatrix{nx,nx}(R1_initial),
+            SMatrix{ny,ny}(R2_initial),
+            d0
+        )
+
+        sol_initial = forward_trajectory(kf, u, y)
+
+        # MLE for comparison
+        result_mle = autotune_covariances(
+            sol_initial;
+            diagonal = true,
+            optimize_x0 = false,
+            show_trace = false,
+            iterations = 30
+        )
+
+        @testset "Weak prior on R1 only" begin
+            v1 = nx + 2  # Weak prior
+
+            result = autotune_covariances(
+                sol_initial;
+                diagonal = true,
+                optimize_x0 = false,
+                show_trace = false,
+                iterations = 30,
+                v_R1 = v1
+            )
+
+            @test result.sol_opt.ll > sol_initial.ll  # Should improve over initial
+            # With weak prior, result should be close to MLE
+            @test norm(diag(result.R1) - diag(result_mle.R1)) < 0.5
+        end
+
+        @testset "Strong prior on R1" begin
+            v1_strong = nx + 20  # Strong prior
+
+            result = autotune_covariances(
+                sol_initial;
+                diagonal = true,
+                optimize_x0 = false,
+                show_trace = false,
+                iterations = 30,
+                v_R1 = v1_strong
+            )
+
+            @test result.sol_opt.ll > sol_initial.ll  # Should improve over initial
+            # With strong prior, R1 should be closer to prior mean (R1_initial) than MLE is
+            @test norm(diag(result.R1) - diag(R1_initial)) < norm(diag(result_mle.R1) - diag(R1_initial))
+        end
+
+        @testset "Prior on both R1 and R2" begin
+            v1 = nx + 3
+            v2 = ny + 3
+
+            result = autotune_covariances(
+                sol_initial;
+                diagonal = true,
+                optimize_x0 = false,
+                show_trace = false,
+                iterations = 30,
+                v_R1 = v1,
+                v_R2 = v2
+            )
+
+            @test result.sol_opt.ll > sol_initial.ll
+            @test result.filter isa KalmanFilter
+        end
+
+        @testset "Prior validation" begin
+            # Test v too small
+            @test_throws ArgumentError autotune_covariances(
+                sol_initial;
+                v_R1 = nx - 1  # Too small
+            )
+
+            @test_throws ArgumentError autotune_covariances(
+                sol_initial;
+                v_R2 = ny - 1  # Too small
+            )
+        end
+
+    end
 end

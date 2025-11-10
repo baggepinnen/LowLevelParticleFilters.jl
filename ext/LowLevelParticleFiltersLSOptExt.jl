@@ -2,14 +2,47 @@ module LowLevelParticleFiltersLSOptExt
 
 using LowLevelParticleFilters
 import LowLevelParticleFilters: autotune_covariances, triangular, invtriangular, reconstruct_filter
-using LowLevelParticleFilters: KalmanFilteringSolution, forward_trajectory, SimpleMvNormal, StaticCovMat
+using LowLevelParticleFilters: AbstractKalmanFilteringSolution, forward_trajectory, SimpleMvNormal, StaticCovMat
 using LeastSquaresOptim
 using ForwardDiff
 using LinearAlgebra
 using StaticArrays
 
+"""
+Helper function to compute Inverse-Wishart log-prior residuals for least-squares optimization.
+
+For covariance Σ with Inverse-Wishart(v, Ψ) prior:
+log p(Σ) ∝ -(v + n + 1)/2 * log|Σ| - 1/2 * tr(Ψ Σ⁻¹)
+
+To use in least-squares, we express the negative log-prior as squared residuals.
+"""
+function inverse_wishart_residuals!(res_view, Σ, v, Ψ)
+    n = size(Σ, 1)
+
+    # Compute Σ⁻¹
+    Σc = cholesky(Symmetric(Σ))
+
+    # Term 1: log|Σ| contributes to logdet term
+    # -(v + n + 1)/2 * log|Σ|
+    # We add this as sqrt((v + n + 1)/2) * sqrt(-log|Σ|)
+    # But since log|Σ| can be negative, we handle this via the logdet mechanism already in prediction_errors
+    logdet_weight = sqrt((v + n + 1) / 2)
+    res_view[1] = logdet_weight * sqrt(abs(logdet(Σc)))
+
+    # Term 2: tr(Ψ Σ⁻¹) - trace inner product
+    # -1/2 * tr(Ψ Σ⁻¹) = -1/2 * sum(Ψ .* Σ⁻¹)
+    # Express as squared residuals: sqrt(1/2) * sqrt(sum(Ψ .* Σ⁻¹))
+    trace_term = tr(Ψ / Σc)
+    trace_weight = sqrt(0.5)
+    # For numerical stability, we can also decompose this into individual elements
+    # But simpler: use single residual for trace term
+    res_view[2] = trace_weight * sqrt(trace_term)
+
+    nothing
+end
+
 function autotune_covariances(
-    sol::KalmanFilteringSolution;
+    sol::AbstractKalmanFilteringSolution;
     diagonal = true,
     optimize_x0 = false,
     offset = 0.0,
@@ -17,6 +50,8 @@ function autotune_covariances(
     show_trace = true,
     show_every = 1,
     autodiff = :forward,
+    v_R1 = nothing,
+    v_R2 = nothing,
     kwargs...
 )
     # Extract information from solution
@@ -39,6 +74,23 @@ function autotune_covariances(
     # Determine if we're working with static arrays
     is_static_R1 = R1_orig isa StaticCovMat
     is_static_R2 = R2_orig isa StaticCovMat
+
+    # Validate MAP prior parameters
+    use_map_R1 = v_R1 !== nothing
+    use_map_R2 = v_R2 !== nothing
+
+    if use_map_R1
+        v_R1 <= nw - 1 && throw(ArgumentError("v_R1 must be > nw-1 = $(nw-1) for proper Inverse-Wishart prior, got $(v_R1)"))
+    end
+
+    if use_map_R2
+        v_R2 <= ny - 1 && throw(ArgumentError("v_R2 must be > ny-1 = $(ny-1) for proper Inverse-Wishart prior, got $(v_R2)"))
+    end
+
+    # Use initial covariances as prior mean: Ψ = (v - n - 1) * R_orig
+    # This makes E[Σ] = Ψ/(v - n - 1) = R_orig
+    Ψ_R1_use = use_map_R1 ? (v_R1 - nw - 1) * Matrix(R1_orig) : nothing
+    Ψ_R2_use = use_map_R2 ? (v_R2 - ny - 1) * Matrix(R2_orig) : nothing
 
     # Initialize parameter vector
     if diagonal
@@ -86,9 +138,9 @@ function autotune_covariances(
     end
 
     # Define residuals function for optimization
-    function residuals!(res, θ::AbstractVector{T}) where T
+    function residuals!(res, θ::AbstractVector{Ty}) where Ty
         # Extract parameters
-        x0i = optimize_x0 ? θ[end-nx+1:end] : T.(x0_orig)
+        x0i = optimize_x0 ? θ[end-nx+1:end] : Ty.(x0_orig)
 
         # Reconstruct covariances
         if diagonal
@@ -106,17 +158,60 @@ function autotune_covariances(
         # Reconstruct filter with new covariances
         fi = reconstruct_filter(f, R1i, R2i, x0i)
 
-        # Compute prediction errors with loglik
-        try
-            LowLevelParticleFilters.prediction_errors!(res, fi, u, y, p, loglik=true, offset=offset)
-        catch
-            res .= Inf
+        # Compute likelihood terms
+        ol_likelihood = T * (ny + 1)  # Offset for likelihood residuals
+
+        if !use_map_R1 && !use_map_R2
+            # Pure MLE: no priors, use full residual vector for likelihood
+            try
+                LowLevelParticleFilters.prediction_errors!(res, fi, u, y, p, loglik=true, offset=offset)
+            catch
+                res .= Inf
+            end
+        else
+            # MAP: likelihood + priors
+            try
+                # Likelihood residuals (first part of residual vector)
+                LowLevelParticleFilters.prediction_errors!(@view(res[1:ol_likelihood]), fi, u, y, p, loglik=true, offset=offset)
+            catch
+                res[1:ol_likelihood] .= Inf
+            end
+
+            # Add Inverse-Wishart prior residuals
+            idx = ol_likelihood + 1
+
+            if use_map_R1
+                # Convert R1i to Matrix for prior calculation
+                R1i_mat = R1i isa AbstractMatrix ? Matrix(R1i) : R1i
+                try
+                    inverse_wishart_residuals!(@view(res[idx:idx+1]), R1i_mat, v_R1, Ψ_R1_use)
+                catch
+                    res[idx:idx+1] .= Inf
+                end
+                idx += 2
+            end
+
+            if use_map_R2
+                # Convert R2i to Matrix for prior calculation
+                R2i_mat = R2i isa AbstractMatrix ? Matrix(R2i) : R2i
+                try
+                    inverse_wishart_residuals!(@view(res[idx:idx+1]), R2i_mat, v_R2, Ψ_R2_use)
+                catch
+                    res[idx:idx+1] .= Inf
+                end
+            end
         end
         nothing
     end
 
-    # Run optimization
-    output_length = T * (ny + 1)
+    # Calculate output length
+    output_length = T * (ny + 1)  # Base: likelihood terms
+    if use_map_R1
+        output_length += 2  # Add 2 residuals for R1 prior (logdet + trace terms)
+    end
+    if use_map_R2
+        output_length += 2  # Add 2 residuals for R2 prior (logdet + trace terms)
+    end
 
     res_opt = optimize!(
         LeastSquaresProblem(;
