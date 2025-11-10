@@ -591,6 +591,11 @@ end
     include("test_indexing_matrix.jl")
 end
 
+@testset "autotune_covariances" begin
+    @info "Testing autotune_covariances"
+    include("test_autotune_covariances.jl")
+end
+
 
 end
 

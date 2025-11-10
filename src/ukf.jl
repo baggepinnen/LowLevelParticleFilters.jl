@@ -407,7 +407,7 @@ function UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement_model::A
     end
 
     R = convert_cov_type(R1, d0.Σ)
-    x0 = convert_x0_type(d0.μ)
+    x0 = eltype(predict_sigma_point_cache.x1)(convert_x0_type(d0.μ))
     UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,typeof(dynamics),typeof(measurement_model),typeof(R1),typeof(d0),
         typeof(predict_sigma_point_cache),typeof(x0),typeof(R),typeof(p),typeof(reject),typeof(state_mean),typeof(state_cov), typeof(cholesky!), typeof(weight_params), typeof(R1x)}(
         dynamics, measurement_model, R1, d0, predict_sigma_point_cache, x0, R, 0, Ts, ny, nu, p, reject, state_mean, state_cov, cholesky!, names, weight_params, R1x)
@@ -844,7 +844,7 @@ function add_to_C!(C::SMatrix, xsm, x, d, xinds)
 end
 
 function add_to_C!(C, xsm, x, d, xinds)
-    @views if length(xinds) == length(x)
+    @views if length(xinds) == length(xsm)
         @bangbang xsm .-= x
         mul!(C, xsm, d', one(eltype(d)), one(eltype(d)))
     else
