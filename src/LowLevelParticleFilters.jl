@@ -13,7 +13,7 @@ export KalmanFilteringSolution, KalmanSmoothingSolution, ParticleFilteringSoluti
 @deprecate weigthed_cov weighted_cov
 
 export densityplot, debugplot, commandplot
-export unscentedplot, unscentedplot!, covplot, covplot!, validationplot, validationplot!
+export unscentedplot, unscentedplot!, covplot, covplot!, validationplot, validationplot!, sampleplot, sampleplot!
 
 using StatsAPI
 import StatsAPI: weights, predict!
