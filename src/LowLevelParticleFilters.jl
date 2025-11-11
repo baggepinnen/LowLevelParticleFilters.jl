@@ -13,7 +13,7 @@ export KalmanFilteringSolution, KalmanSmoothingSolution, ParticleFilteringSoluti
 @deprecate weigthed_cov weighted_cov
 
 export densityplot, debugplot, commandplot
-export unscentedplot, unscentedplot!, covplot, covplot!
+export unscentedplot, unscentedplot!, covplot, covplot!, validationplot, validationplot!
 
 using StatsAPI
 import StatsAPI: weights, predict!
@@ -192,4 +192,42 @@ See also `unscentedplot`.
 """
 function covplot end
 function covplot! end
+
+"""
+    validationplot(sol::KalmanFilteringSolution)
+
+Perform statistical validation of Kalman filter performance by analyzing the innovation sequence.
+
+Creates a 4-subplot figure with the following diagnostics:
+
+1. **Root Mean Square (RMS) of Innovation**: Shows the RMS value for each output dimension.
+   - Lower values indicate better filter performance
+
+2. **Normalized Innovation Squared (NIS)**: Plots NIS over time with 95% confidence bounds
+   - NIS = ``e(t)' * S(t)⁻¹ * e(t)`` where ``e`` is innovation and ``S`` is innovation covariance
+   - Should follow a chi-squared distribution with ``n_y`` degrees of freedom
+   - Points consistently outside bounds indicate filter mistuning (wrong R1 or R2)
+
+3. **Autocorrelation of Innovation**: Shows autocorrelation vs lag with white noise bounds
+   - Innovations should be white (uncorrelated over time)
+   - Autocorrelation outside ±1.96/√T bounds indicates filter issues
+   - High autocorrelation suggests model mismatch or underestimated noise
+
+4. **Cross-correlation between Innovation and Past Inputs**: Shows correlation vs lag
+   - Should be near zero at all lags (innovations independent of past inputs)
+   - Correlation outside ±1.96/√T bounds indicates model errors
+   - Non-zero cross-correlation suggests incorrect system model
+
+# Usage
+```julia
+using Plots, Distributions
+sol = forward_trajectory(kf, u, y)
+validationplot(sol)
+```
+
+!!! note "Requires Distributions.jl"
+    This function requires Distributions.jl to be manually installed and loaded.
+"""
+function validationplot end
+function validationplot! end
 end # module
