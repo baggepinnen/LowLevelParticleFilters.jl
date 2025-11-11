@@ -349,10 +349,10 @@ A commonly occurring error is "Cholesky factorization failed", which may occur d
 
 
 ## Tuning noise parameters through optimization
-See examples in [Parameter Estimation](@ref).
+See examples in [Parameter Estimation](@ref). See also [`autotune_covariances`](@ref) and [`validationplot`](@ref) for validation of tuning.
 
 ## Tuning through simulation
-It is possible to sample from the Bayesian model implied by a filter and its parameters by calling the function [`simulate`](@ref). A simple tuning strategy is to adjust the noise parameters such that a simulation looks "similar" to the data, i.e., the data must not be too unlikely under the model.
+It is possible to sample from the Bayesian model implied by a filter and its parameters by calling the function [`simulate`](@ref). A simple tuning strategy is to adjust the noise parameters such that a simulation looks "similar" to the data, i.e., the data must not be too unlikely under the model. See also [`sampleplot`](@ref) that facilitates this procedure.
 
 # Videos
 Several video tutorials using this package are available in the playlists

@@ -454,6 +454,54 @@ function simulate(f::AbstractFilter,u,p=parameters(f); dynamics_noise=true, meas
     x,u,y
 end
 
+@userplot Sampleplot
+
+@recipe function sampleplot(p::Sampleplot; plotx = true, ploty=true, dynamics_noise=true, measurement_noise=true, sample_initial=false)
+    kf, u, N = p.args
+    T = length(u)
+    (; nx, ny, Ts, names) = kf
+    X = Array{Float64, 3}(undef, nx, T+1, N)
+    Y = Array{Float64, 3}(undef, ny, T+1, N)
+    lay = plotx*nx+ploty*ny
+    layout --> lay
+    alpha --> 0.5
+    for i = 1:N
+        x, _, y = simulate(kf, u; dynamics_noise, measurement_noise, sample_initial)
+        X[:,1:end-1,i] = reduce(hcat, x)
+        Y[:,1:end-1,i] = reduce(hcat, y)
+    end
+    X[:,end,:] .= Inf
+    Y[:,end,:] .= Inf
+    timevec = repeat([range(0, length=T, step=Ts); Inf], N)
+    
+    X = reshape(X, nx, :)'
+    Y = reshape(Y, ny, :)'
+
+    if plotx
+        for i = 1:nx
+            @series begin
+                label --> names.x[i]
+                timevec, X[:, i]
+            end
+        end
+    end
+    if ploty
+        for i = 1:ny
+            @series begin
+                label --> names.y[i]
+                timevec, Y[:, i]
+            end
+        end
+    end
+end
+
+"""
+    sampleplot(f, u, N; plotx=true, ploty=true, alpha=0.5)
+
+Plot ``N`` draws from the prior distribution encoded by filter `f` using input trajectory `u`.
+"""
+sampleplot
+
 function rollout(f, x0::AbstractVector, u, p=nothing; Ts=f.Ts)
     x = [x0]
     for (i,u) in enumerate(u)
