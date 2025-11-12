@@ -19,12 +19,12 @@ d0 = SimpleMvNormal(randn(nx), 2.0*eye(nx))   # Initial state Distribution
 du = SimpleMvNormal(zeros(nu), eye(nu)) # Control input distribution
 
 # Define linear state-space system
-_A = SA[0.99 0.1; 0 0.2]
-_B = @SMatrix [-0.7400216956683083 1.6097265310456392; -1.4384539113366408 1.7467811974822818]
-_C = SMatrix{ny,ny}(eye(ny))
+_AA_ = SA[0.99 0.1; 0 0.2]
+_BB_ = @SMatrix [-0.7400216956683083 1.6097265310456392; -1.4384539113366408 1.7467811974822818]
+_CC_ = SMatrix{ny,ny}(eye(ny))
 
-dynamics(x,u,p,t) = _A*x .+ _B*u
-measurement(x,u,p,t) = _C*x
+dynamics(x,u,p,t) = _AA_*x .+ _BB_*u
+measurement(x,u,p,t) = _CC_*x
 
 R1 = eye(nx)
 R2 = eye(ny)
@@ -32,11 +32,11 @@ R2 = eye(ny)
 T = 2000 # Number of time steps for convergence
 
 # Create filters
-kf = KalmanFilter(_A, _B, _C, 0, R1, R2, d0)
+kf = KalmanFilter(_AA_, _BB_, _CC_, 0, R1, R2, d0)
 ukf = UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0; ny, nu)
 
 # Augmented dynamics for UKF with noise input
-dynamics_w(x,u,p,t,w) = _A*x .+ _B*u .+ w
+dynamics_w(x,u,p,t,w) = _AA_*x .+ _BB_*u .+ w
 ukfw = UnscentedKalmanFilter{false,false,true,false}(dynamics_w, measurement, R1, R2, d0; ny, nu)
 
 # Simulate data
@@ -115,7 +115,7 @@ end
     # Create a system with uncontrollable mode from noise input
     # Use a system where noise only affects one state
     Bw_partial = @SMatrix [1.0; 0.0]
-    dynamics_w_partial(x,u,p,t,w) = _A*x .+ _B*u .+ Bw_partial*w
+    dynamics_w_partial(x,u,p,t,w) = _AA_*x .+ _BB_*u .+ Bw_partial*w
     ukfw_partial = UnscentedKalmanFilter{false,false,true,false}(
         dynamics_w_partial, measurement, [1.0;;], R2, d0; ny, nu
     )
@@ -132,15 +132,15 @@ end
     # Verify consistency with existing linearization tests from test_ukf.jl
 
     Al, Bl, Cl, Dl = ControlSystemsBase.linearize(ukf, x[1], u[1], nothing)
-    @test Al ≈ _A
-    @test Bl ≈ _B
-    @test Cl ≈ _C
+    @test Al ≈ _AA_
+    @test Bl ≈ _BB_
+    @test Cl ≈ _CC_
     @test iszero(Dl)
 
     Al_kf, Bl_kf, Cl_kf, Dl_kf = ControlSystemsBase.linearize(kf, x[1], u[1], nothing)
-    @test Al_kf ≈ _A
-    @test Bl_kf ≈ _B
-    @test Cl_kf ≈ _C
+    @test Al_kf ≈ _AA_
+    @test Bl_kf ≈ _BB_
+    @test Cl_kf ≈ _CC_
     @test iszero(Dl_kf)
 
     # The linearization should be used consistently in kalman/covar functions
