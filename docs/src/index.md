@@ -343,9 +343,19 @@ You can also manually step through the time-series using
 For options to the debug plots, see `?pplot`.
 
 ## Troubleshooting Kalman filters
-A commonly occurring error is "Cholesky factorization failed", which may occur due to several different reasons
-- The dynamics is diverging and the covariance matrices end up with NaNs or Infs. If this is the case, verify that the dynamics is correctly implemented and that the integration is sufficiently accurate, especially if using a fixed-step integrator like any of those from SeeToDee.jl.
-- The covariance matrix is poorly conditioned and numerical issues make causes it to lose positive definiteness. This issue is rare, but can be mitigated by using the [`SqKalmanFilter`](@ref), rescaling the dynamics or by using a different cholesky factorization method (available in UKF only).
+- **Filter state diverges**: This may be due to an unstable system model, forgetting to discretize a continuous-time model, or inadequate integration of a nonlinear model (too large time step etc.).
+- **Covariance estimate blows up**: If the estimated covariance for one or several state variables grows without bound, the system may be _unobservable_. Observability is a property of the dynamics and the measurement model (i.e., which sensors are available), see [Identifiability](@ref) for more details. If the estimated mean blows up as well, inadequate integration may be at fault.
+- A persistent **difference between predicted and filtered state estimates**: This may have several causes
+    - The dynamics noise covariance is tuned too low, or the model is not controllable from the noise inputs (not enough degrees of freedom in the noise / the covariance matrix of the noise is singular).
+    - Model error that is not accounted for by any disturbance model.
+    - Sensor bias. This can be handled by an integrating disturbance model affecting the output.
+- Sluggish filter performance (lag): _Increase_ the dynamics noise covariance ``R_1`` or _decrease_ the measurement noise covariance ``R_2``.
+- Noisy state estimates: If the filter is affected too much by measurement noise, _decrease_ the dynamics noise covariance ``R_1`` or _increase_ the measurement noise covariance ``R_2`` (the opposite action to when the filter is too sluggish).
+- A commonly occurring error is **"Cholesky factorization failed"**, which may occur due to several different reasons
+    - The dynamics is diverging and the covariance matrices end up with NaNs or Infs. If this is the case, verify that the dynamics is correctly implemented and that the integration is sufficiently accurate, especially if using a fixed-step integrator like any of those from SeeToDee.jl.
+    - The covariance matrix is poorly conditioned and numerical issues make causes it to lose positive definiteness. This issue is rare, but can be mitigated by using the [`SqKalmanFilter`](@ref), rescaling the dynamics or by using a different cholesky factorization method (available in UKF only).
+
+See [`sampleplot`](@ref) for help with sampling-based tuning and [`validationplot`](@ref) for tuning validation. 
 
 
 ## Tuning noise parameters through optimization

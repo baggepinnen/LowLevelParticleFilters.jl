@@ -431,6 +431,8 @@ Simulate dynamical system forward in time `T` steps, or for the duration of `u`.
 A simulation can be considered a draw from the prior distribution over the evolution of the system implied by the selected noise models. Such a simulation is useful in order to evaluate whether or not the noise models are reasonable.
 
 If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurements.jl) is loaded, the argument `N::Int` can be supplied, in which case `N` simulations are done and the result is returned in the form of `Vector{MonteCarloMeasurements.Particles}`.
+
+See also [`sampleplot`](@ref) for a plot recipe that automatically performs many simulations.
 """
 function simulate(f::AbstractFilter, T::Int, du, p=parameters(f); dynamics_noise=true, measurement_noise=true, sample_initial=false)
     u = [rand(du) for t=1:T]

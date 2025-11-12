@@ -6,6 +6,8 @@ function exp_map!(we, w)
     end
 end
 
+exp_map!(we, w::AbstractVector{<:ForwardDiff.Dual}) = we .= exp.(w)
+
 """
     ll = logsumexp!(w, we [, maxw])
 Normalizes the weight vector `w` and returns the weighted log-likelihood
