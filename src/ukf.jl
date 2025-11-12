@@ -251,13 +251,16 @@ mutable struct UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,RT,P
     R1x::R1XT
 end
 
-function Base.getproperty(ukf::UnscentedKalmanFilter, s::Symbol)
+function Base.getproperty(ukf::UnscentedKalmanFilter{<:Any, <:Any, AUGD}, s::Symbol) where AUGD
     s ∈ fieldnames(typeof(ukf)) && return getfield(ukf, s)
     mm = getfield(ukf, :measurement_model)
     if s ∈ fieldnames(typeof(mm))
         return getfield(mm, s)
     elseif s === :nx
         return length(getfield(ukf, :x))
+    elseif s === :nw
+        nx = length(getfield(ukf, :x))
+        return AUGD ? length(getfield(ukf, :predict_sigma_point_cache).x0[1])-nx : nx
     elseif s === :measurement
         return measurement(mm)
     else
@@ -642,7 +645,6 @@ function correct!(
     innovation::IF = measurement_model.innovation,
     measurement = measurement_model.measurement,
 ) where {MF, CCF, IF}
-
     sigma_point_cache = measurement_model.cache
     xsm = sigma_point_cache.x0
     ys = sigma_point_cache.x1
