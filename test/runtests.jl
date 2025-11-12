@@ -596,6 +596,11 @@ end
     include("test_autotune_covariances.jl")
 end
 
+@testset "controlsystemsbase_ext" begin
+    @info "Testing ControlSystemsBase extension"
+    include("test_controlsystemsbase_ext.jl")
+end
+
 
 end
 
