@@ -244,6 +244,8 @@ measurement_vs(x,u,p,t,v) = _C*x .+ Bv*v
 ukfv  = UnscentedKalmanFilter{false,false,false,true}(dynamics, measurement_vs, eye(nx), [1.0;;], d0; ny, nu, cholesky! = R->cholesky!(Positive, Matrix(R)))
 resukfv = forward_trajectory(ukfv, u, y)
 
+@test_nowarn simulate(ukfv, u)
+
 ukfv2 = UnscentedKalmanFilter{false,false,false,false}(dynamics, measurement, eye(nx), Bv*Bv', d0; ny, nu, cholesky! = R->cholesky!(Positive, Matrix(R)))
 resukfv2 = forward_trajectory(ukfv2, u, y)
 
