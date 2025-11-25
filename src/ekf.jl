@@ -156,7 +156,7 @@ function correct!(ekf::AbstractExtendedKalmanFilter, u, y, p, t::Real; kwargs...
     correct!(ekf, measurement_model, u, y, p, t::Real; kwargs...)
 end
 
-function correct!(kf::AbstractKalmanFilter, measurement_model::EKFMeasurementModel{IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(measurement_model.R2, kf.x, u, p, t), R12 = get_mat(measurement_model.R12, x, u, p, t)) where IPM
+function correct!(kf::AbstractKalmanFilter, measurement_model::EKFMeasurementModel{IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(measurement_model.R2, kf.x, u, p, t), R12 = get_mat(measurement_model.R12, kf.x, u, p, t)) where IPM
     (; x,R) = kf
     (; measurement, Cjac) = measurement_model
     C = Cjac(x, u, p, t)
