@@ -245,11 +245,12 @@ Base.eltype(spc::SigmaPointCache) = eltype(spc.x0)
 
 ## EKF measurement model =======================================================
 
-struct EKFMeasurementModel{IPM,MT,RT,CJ,CAT} <: AbstractMeasurementModel
+struct EKFMeasurementModel{IPM,MT,RT,CJ,R12T,CAT} <: AbstractMeasurementModel
     measurement::MT
     R2::RT
     ny::Int
     Cjac::CJ
+    R12::R12T
     cache::CAT
 end
 
@@ -257,7 +258,7 @@ isinplace(::EKFMeasurementModel{IPM}) where IPM = IPM
 has_oop(::EKFMeasurementModel{IPM}) where IPM = !IPM
 
 """
-    EKFMeasurementModel{IPM}(measurement, R2, ny, Cjac, cache = nothing)
+    EKFMeasurementModel{IPM}(measurement, R2, ny, Cjac, R12 = nothing, cache = nothing)
 
 A measurement model for the Extended Kalman Filter.
 
@@ -267,32 +268,37 @@ A measurement model for the Extended Kalman Filter.
 - `R2`: The measurement noise covariance matrix
 - `ny`: The number of measurement variables
 - `Cjac`: The Jacobian of the measurement function `Cjac(x, u, p, t)`. If none is provided, ForwardDiff will be used.
+- `R12`: Cross-covariance between dynamics noise at step `k` and measurement noise at step `k+1`. See Simon, D.: "Optimal state estimation: Kalman, H Infinity, and nonlinear approaches" sec. 7.1
 """
 EKFMeasurementModel{IPM}(
     measurement,
     R2,
     ny,
     Cjac,
+    R12 = nothing,
     cache = nothing,
 ) where {IPM} = EKFMeasurementModel{
     IPM,
     typeof(measurement),
     typeof(R2),
     typeof(Cjac),
+    typeof(R12),
     typeof(cache),
 }(
     measurement,
     R2,
     ny,
     Cjac,
+    R12,
     cache,
 )
 
 """
-    EKFMeasurementModel{T,IPM}(measurement::M, R2; nx, ny, Cjac = nothing)
+    EKFMeasurementModel{T,IPM}(measurement::M, R2; nx, ny, Cjac = nothing, R12 = nothing)
 
 - `T` is the element type used for arrays
 - `IPM` is a boolean indicating if the measurement function is inplace
+- `R12` is the cross-covariance between dynamics noise and measurement noise
 """
 function EKFMeasurementModel{T,IPM}(
     measurement::M,
@@ -300,9 +306,10 @@ function EKFMeasurementModel{T,IPM}(
     nx,
     ny,
     Cjac = nothing,
+    R12 = nothing,
 ) where {T,IPM,M}
 
-    
+
     if Cjac === nothing
         if IPM
             outy = zeros(T, ny)
@@ -319,12 +326,14 @@ function EKFMeasurementModel{T,IPM}(
         typeof(measurement),
         typeof(R2),
         typeof(Cjac),
+        typeof(R12),
         typeof(nothing),
     }(
         measurement,
         R2,
         ny,
         Cjac,
+        R12,
         nothing,
     )
 end

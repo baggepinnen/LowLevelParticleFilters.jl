@@ -383,24 +383,25 @@ end
 
     d0 = MvNormal(SA[0.0], SA[1.0;;])
 
-    # Test 1: Construction with R12
+    # Test 1: Construction with R12 - R12 is now stored in measurement_model
     kf = KalmanFilter(A, B, C, 0, R1, R2, d0)
     ekf_with_r12 = ExtendedKalmanFilter(kf, dynamics_r12, measurement_r12; R12)
-    @test ekf_with_r12.R12 === R12
+    @test ekf_with_r12.measurement_model.R12 === R12
+    @test ekf_with_r12.R12 === R12  # Via getproperty forwarding
 
     ekf_without_r12 = ExtendedKalmanFilter(kf, dynamics_r12, measurement_r12)
-    @test ekf_without_r12.R12 === nothing
+    @test ekf_without_r12.measurement_model.R12 === nothing
 
     # Test 2: Alternative constructor with R12
     ekf_alt = ExtendedKalmanFilter(dynamics_r12, measurement_r12, R1, R2, d0; nu, R12)
-    @test ekf_alt.R12 === R12
+    @test ekf_alt.measurement_model.R12 === R12
 
     # Generate input sequence (not used since B=0, but needed for API)
     T = 50
     u = [SA[0.0] for _ in 1:T]
 
 
-    # Test 4: Simulate with R12 (correlated noise) and compare filter performance
+    # Test 3: Simulate with R12 (correlated noise) and compare filter performance
     x_sim, u_sim, y_sim = simulate(ekf_alt, u)
 
     # Compare filter performance with and without R12
@@ -411,12 +412,19 @@ end
     var_with_r12 = var(sol_with_r12.xt .- x_sim)[]
     var_without_r12 = var(sol_without_r12.xt .- x_sim)[]
 
-
     # Filter using correct R12 should have lower estimation-error variance
     @test var_with_r12 < var_without_r12
 
-    # Note to future self, if R12 is added to C in UKF correct! and 2*R12 is added to `S`, we get similar performance of the UKF as the EKF with R12. The 2*R12 only works here since the output equation is y = x, but we could potentially mix UKF dynamics update with EKF measurement update to get correct handling of R12 in UKF.
-    # ukf_r2 = UnscentedKalmanFilter(dynamics_r12, measurement_r12, R1, R2, d0; nu, ny)
-    # sol_ukf = forward_trajectory(ukf_r2, u_sim, y_sim)
-    # var_ukf = var(sol_ukf.xt .- x_sim)[]
+    # Test 4: UKF with EKFMeasurementModel that has R12
+    # The UKF can use EKFMeasurementModel for the correction step, which supports R12
+    mm_with_r12 = LLPF.EKFMeasurementModel{Float64, false}(measurement_r12, R2; nx, ny, R12)
+    ukf_ekf_mm = UnscentedKalmanFilter(dynamics_r12, mm_with_r12, R1, d0; nu, ny)
+
+    sol_ukf_r12 = forward_trajectory(ukf_ekf_mm, u_sim, y_sim)
+    var_ukf_r12 = var(sol_ukf_r12.xt .- x_sim)[]
+
+    # UKF with EKFMeasurementModel+R12 should also have good performance
+    @test var_ukf_r12 < var_without_r12
+
+    @info "Estimation-error variances:" var_with_r12 var_without_r12 var_ukf_r12
 end

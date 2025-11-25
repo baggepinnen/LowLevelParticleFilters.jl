@@ -1,11 +1,10 @@
 abstract type AbstractExtendedKalmanFilter{IPD,IPM} <: AbstractKalmanFilter end
-struct ExtendedKalmanFilter{IPD, IPM, KF <: KalmanFilter, F, G, A, R12T} <: AbstractExtendedKalmanFilter{IPD,IPM}
+struct ExtendedKalmanFilter{IPD, IPM, KF <: KalmanFilter, F, G, A} <: AbstractExtendedKalmanFilter{IPD,IPM}
     kf::KF
     dynamics::F
     measurement_model::G
     Ajac::A
     names::SignalNames
-    R12::R12T
 end
 
 """
@@ -64,10 +63,10 @@ function ExtendedKalmanFilter(dynamics, measurement_model::AbstractMeasurementMo
     return ExtendedKalmanFilter(kf, dynamics, measurement_model; Ajac, kwargs...)
 end
 
-function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(R1); nu::Int, ny=size(R2,1), nx::Int=size(R1,1), Cjac = nothing, kwargs...)
+function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(R1); nu::Int, ny=size(R2,1), nx::Int=size(R1,1), Cjac = nothing, R12 = nothing, kwargs...)
     IPM = !has_oop(measurement)
     T = promote_type(eltype(R1), eltype(R2), eltype(d0))
-    measurement_model = EKFMeasurementModel{T, IPM}(measurement, R2; nx, ny, Cjac)
+    measurement_model = EKFMeasurementModel{T, IPM}(measurement, R2; nx, ny, Cjac, R12)
     return ExtendedKalmanFilter(dynamics, measurement_model, R1, d0; nu, nx, ny, kwargs...)
 end
 
@@ -80,7 +79,7 @@ function ExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing, Cjac = 
     else
         IPM = has_ip(measurement)
         T = promote_type(eltype(kf.R1), eltype(kf.R2), eltype(kf.d0))
-        measurement_model = EKFMeasurementModel{T, IPM}(measurement, kf.R2; kf.nx, kf.ny, Cjac)
+        measurement_model = EKFMeasurementModel{T, IPM}(measurement, kf.R2; kf.nx, kf.ny, Cjac, R12)
     end
     if Ajac === nothing
         # if IPD
@@ -103,7 +102,7 @@ function ExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing, Cjac = 
         end
     end
 
-    return ExtendedKalmanFilter{IPD,IPM,typeof(kf),typeof(dynamics),typeof(measurement_model),typeof(Ajac),typeof(R12)}(kf, dynamics, measurement_model, Ajac, names, R12)
+    return ExtendedKalmanFilter{IPD,IPM,typeof(kf),typeof(dynamics),typeof(measurement_model),typeof(Ajac)}(kf, dynamics, measurement_model, Ajac, names)
 end
 
 function Base.getproperty(ekf::EKF, s::Symbol) where EKF <: AbstractExtendedKalmanFilter
@@ -157,15 +156,20 @@ function correct!(ekf::AbstractExtendedKalmanFilter, u, y, p, t::Real; R12 = _ge
     correct!(ekf, measurement_model, u, y, p, t::Real; R12, kwargs...)
 end
 
-# Helper to get R12 from filter, returns nothing if not present or if R12 field is nothing
+# Helper to get R12 from measurement model, returns nothing if not present or if R12 field is nothing
 function _get_R12(ekf::AbstractExtendedKalmanFilter, u, p, t)
-    if hasproperty(ekf, :R12) && ekf.R12 !== nothing
-        return get_mat(ekf.R12, ekf.x, u, p, t)
+    mm = ekf.measurement_model
+    return _get_R12_from_mm(mm, ekf.x, u, p, t)
+end
+
+function _get_R12_from_mm(mm, x, u, p, t)
+    if hasproperty(mm, :R12) && mm.R12 !== nothing
+        return get_mat(mm.R12, x, u, p, t)
     end
     return nothing
 end
 
-function correct!(kf::AbstractKalmanFilter,  measurement_model::EKFMeasurementModel{IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(measurement_model.R2, kf.x, u, p, t), R12 = nothing) where IPM
+function correct!(kf::AbstractKalmanFilter, measurement_model::EKFMeasurementModel{IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(measurement_model.R2, kf.x, u, p, t), R12 = _get_R12_from_mm(measurement_model, kf.x, u, p, t)) where IPM
     (; x,R) = kf
     (; measurement, Cjac) = measurement_model
     C = Cjac(x, u, p, t)
@@ -239,8 +243,9 @@ sample_measurement(kf::AbstractExtendedKalmanFilter, x, u, p, t; noise=true) = k
 measurement(kf::AbstractExtendedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractExtendedKalmanFilter) = kf.dynamics
 
-function simulate(f::ExtendedKalmanFilter, u, p=parameters(f); dynamics_noise=true, measurement_noise=true, sample_initial=false)
-    if f.R12 === nothing
+function simulate(f::ExtendedKalmanFilter, u::AbstractArray, p=parameters(f); dynamics_noise=true, measurement_noise=true, sample_initial=false)
+    mm = f.measurement_model
+    if !hasproperty(mm, :R12) || mm.R12 === nothing
         # Fall back to generic simulate when no cross-covariance
         return invoke(simulate, Tuple{AbstractFilter, typeof(u), typeof(p)}, f, u, p; dynamics_noise, measurement_noise, sample_initial)
     end
@@ -257,7 +262,7 @@ function simulate(f::ExtendedKalmanFilter, u, p=parameters(f); dynamics_noise=tr
         ti = (t-2)*f.Ts  # Time for previous state
         R1 = get_mat(f.R1, x[t-1], u[t-1], p, ti)
         R2 = get_mat(f.R2, x[t-1], u[t-1], p, ti)
-        R12 = get_mat(f.R12, x[t-1], u[t-1], p, ti)
+        R12 = get_mat(mm.R12, x[t-1], u[t-1], p, ti)
 
         # Sample from joint distribution [w; v] ~ N(0, [R1 R12; R12' R2])
         nw = size(R1, 1)
@@ -278,46 +283,3 @@ function simulate(f::ExtendedKalmanFilter, u, p=parameters(f); dynamics_noise=tr
 
     x, u, y
 end
-
-# function simulate(f::ExtendedKalmanFilter, u, p=parameters(f); dynamics_noise=true, measurement_noise=true, sample_initial=false)
-#     if f.R12 === nothing
-#         # Fall back to generic simulate when no cross-covariance
-#         return invoke(simulate, Tuple{AbstractFilter, typeof(u), typeof(p)}, f, u, p; dynamics_noise, measurement_noise, sample_initial)
-#     end
-
-#     T = length(u)
-#     x1 = sample_state(f, p; noise=sample_initial)
-#     y1 = f.measurement(x1, u[1], p, 0)
-#     y = Vector{typeof(y1)}(undef, T)
-#     x = Vector{typeof(x1)}(undef, T)
-#     x[1] = x1
-#     y[1] = y1
-
-#     for t = 1:T
-#         ti = (t-1)*f.Ts  # Time for previous state
-#         R1 = get_mat(f.R1, x[t], u[t], p, ti)
-#         R2 = get_mat(f.R2, x[t], u[t], p, ti)
-#         R12 = get_mat(f.R12, x[t], u[t], p, ti)
-
-#         # Sample from joint distribution [w; v] ~ N(0, [R1 R12; R12' R2])
-#         nw = size(R1, 1)
-#         nv = size(R2, 1)
-#         if dynamics_noise || measurement_noise
-#             Rjoint = [R1 R12; R12' R2]
-#             wv = rand(SimpleMvNormal(Rjoint))
-#             w = dynamics_noise ? wv[1:nw] : zeros(eltype(wv), nw)
-#             v = measurement_noise ? wv[nw+1:end] : zeros(eltype(wv), nv)
-#         else
-#             w = zeros(eltype(x1), nw)
-#             v = zeros(eltype(y1), nv)
-#         end
-
-#         y[t] = f.measurement(x[t], u[t], p, ti) .+ v
-#         if t < T
-#             x[t+1] = f.dynamics(x[t], u[t], p, ti) .+ w
-#         end
-#     end
-
-#     x, u, y
-# end
-
