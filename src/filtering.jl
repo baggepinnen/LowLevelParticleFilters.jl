@@ -458,7 +458,7 @@ end
 
 @userplot Sampleplot
 
-@recipe function sampleplot(p::Sampleplot; plotx = true, ploty=true, dynamics_noise=true, measurement_noise=true, sample_initial=false)
+@recipe function sampleplot(p::Sampleplot; plotx = true, ploty=true, dynamics_noise=true, measurement_noise=true, sample_initial=true)
     kf, u, N = p.args
     T = length(u)
     (; nx, ny, Ts, names) = kf
@@ -498,7 +498,7 @@ end
 end
 
 """
-    sampleplot(f, u, N; plotx=true, ploty=true, alpha=0.5)
+    sampleplot(f, u, N; plotx=true, ploty=true, alpha=0.5, dynamics_noise=true, measurement_noise=true, sample_initial=true)
 
 Plot ``N`` draws from the prior distribution encoded by filter `f` using input trajectory `u`.
 """

@@ -359,3 +359,64 @@ ekf = LLPF.ExtendedKalmanFilter(kf, error_dynamics, measurement_ekf)
 
     plot(smoothsol, plotS=true, plotSt=true, plotST=true, plotyht=true, plotyhT=true)
 end
+
+
+## Test R12 cross-covariance support
+# Based on Simon's "Optimal State Estimation" Example 7.1
+@testset "ExtendedKalmanFilter with R12 cross-covariance" begin
+    # System: x(k+1) = 0.8*x(k) + w(k), y(k) = x(k) + v(k)
+    # With correlated noise: E[w*v'] = M = 0.25
+    nx = 1
+    nu = 1
+    ny = 1
+
+    A = SA[0.8;;]
+    B = SA[0.0;;]
+    C = SA[1.0;;]
+
+    R1 = SA[1.0;;]
+    R2 = SA[0.1;;]
+    R12 = SA[0.25;;]  # Cross-covariance M
+
+    dynamics_r12(x,u,p,t) = A*x
+    measurement_r12(x,u,p,t) = C*x
+
+    d0 = MvNormal(SA[0.0], SA[1.0;;])
+
+    # Test 1: Construction with R12
+    kf = KalmanFilter(A, B, C, 0, R1, R2, d0)
+    ekf_with_r12 = ExtendedKalmanFilter(kf, dynamics_r12, measurement_r12; R12)
+    @test ekf_with_r12.R12 === R12
+
+    ekf_without_r12 = ExtendedKalmanFilter(kf, dynamics_r12, measurement_r12)
+    @test ekf_without_r12.R12 === nothing
+
+    # Test 2: Alternative constructor with R12
+    ekf_alt = ExtendedKalmanFilter(dynamics_r12, measurement_r12, R1, R2, d0; nu, R12)
+    @test ekf_alt.R12 === R12
+
+    # Generate input sequence (not used since B=0, but needed for API)
+    T = 50
+    u = [SA[0.0] for _ in 1:T]
+
+
+    # Test 4: Simulate with R12 (correlated noise) and compare filter performance
+    x_sim, u_sim, y_sim = simulate(ekf_alt, u)
+
+    # Compare filter performance with and without R12
+    sol_with_r12 = forward_trajectory(ekf_with_r12, u_sim, y_sim)
+    sol_without_r12 = forward_trajectory(ekf_without_r12, u_sim, y_sim)
+
+    # Compute estimation-error variance
+    var_with_r12 = var(sol_with_r12.xt .- x_sim)[]
+    var_without_r12 = var(sol_without_r12.xt .- x_sim)[]
+
+
+    # Filter using correct R12 should have lower estimation-error variance
+    @test var_with_r12 < var_without_r12
+
+    # Note to future self, if R12 is added to C in UKF correct! and 2*R12 is added to `S`, we get similar performance of the UKF as the EKF with R12. The 2*R12 only works here since the output equation is y = x, but we could potentially mix UKF dynamics update with EKF measurement update to get correct handling of R12 in UKF.
+    # ukf_r2 = UnscentedKalmanFilter(dynamics_r12, measurement_r12, R1, R2, d0; nu, ny)
+    # sol_ukf = forward_trajectory(ukf_r2, u_sim, y_sim)
+    # var_ukf = var(sol_ukf.xt .- x_sim)[]
+end

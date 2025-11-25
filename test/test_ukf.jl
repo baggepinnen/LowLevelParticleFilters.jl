@@ -559,3 +559,54 @@ end
 ## Conclusion
 # If the noise input is discretized, such as when using rk4 with augmented dynamics, or if the noise inputs are explicitly added to c2d, then we should scale R1 by 1/Ts
 # If the noise input is not discretized, i.e., when using `Ax + Bu + w, or dynamics(x,u,p,t), we should instead scale R1 by Ts
+
+## Test R12 cross-covariance between dynamics and measurement noise
+@testset "R12 cross-covariance" begin
+    nx = 2
+    nu = 2
+    ny = 2
+
+    d0 = mvnormal(@SVector(randn(nx)), 2.0)
+    R1 = eye(nx)
+    R2 = eye(ny)
+
+    # Create UKF without R12
+    ukf_no_r12 = UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0; ny, nu)
+    @test ukf_no_r12.R12 === nothing
+
+    # Create UKF with R12 matrix
+    R12 = @SMatrix [0.23 0.0; 0.0 0.23]
+    ukf_with_r12 = UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0; ny, nu, R12)
+    @test ukf_with_r12.R12 === R12
+
+    x,u,y = simulate(ukf_with_r12, u)
+
+
+    # Run both filters and verify they produce different results
+    reset!(ukf_no_r12)
+    reset!(ukf_with_r12)
+
+    res_no_r12 = forward_trajectory(ukf_no_r12, u, y)
+    res_with_r12 = forward_trajectory(ukf_with_r12, u, y)
+
+    # Results should be different when R12 is non-zero
+    @test res_no_r12.xt != res_with_r12.xt
+    @test res_no_r12.Rt != res_with_r12.Rt
+
+    # Test with R12 as a function
+    R12_func(x, u, p, t) = @SMatrix [0.23 0.0; 0.0 0.23]
+    ukf_r12_func = UnscentedKalmanFilter(dynamics, measurement, R1, R2, d0; ny, nu, R12=R12_func)
+    reset!(ukf_r12_func)
+    res_r12_func = forward_trajectory(ukf_r12_func, u, y)
+
+    # Results should match between matrix and function forms when they return the same value
+    @test reduce(hcat, res_with_r12.xt) ≈ reduce(hcat, res_r12_func.xt)
+    @test reduce(hcat, res_with_r12.Rt) ≈ reduce(hcat, res_r12_func.Rt)
+
+    # compare error of filter with and without R12
+    X = reduce(hcat, x)
+    sse_no_r12 = sum((reduce(hcat, res_no_r12.xt) .- X).^2)
+    sse_with_r12 = sum((reduce(hcat, res_with_r12.xt) .- X).^2)
+
+
+end
