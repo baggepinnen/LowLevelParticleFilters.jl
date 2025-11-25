@@ -151,25 +151,12 @@ function predict!(kf::AbstractExtendedKalmanFilter{IPD}, u, p = parameters(kf), 
     kf.t += 1
 end
 
-function correct!(ekf::AbstractExtendedKalmanFilter, u, y, p, t::Real; R12 = _get_R12(ekf, u, p, t), kwargs...)
+function correct!(ekf::AbstractExtendedKalmanFilter, u, y, p, t::Real; kwargs...)
     measurement_model = ekf.measurement_model
-    correct!(ekf, measurement_model, u, y, p, t::Real; R12, kwargs...)
+    correct!(ekf, measurement_model, u, y, p, t::Real; kwargs...)
 end
 
-# Helper to get R12 from measurement model, returns nothing if not present or if R12 field is nothing
-function _get_R12(ekf::AbstractExtendedKalmanFilter, u, p, t)
-    mm = ekf.measurement_model
-    return _get_R12_from_mm(mm, ekf.x, u, p, t)
-end
-
-function _get_R12_from_mm(mm, x, u, p, t)
-    if hasproperty(mm, :R12) && mm.R12 !== nothing
-        return get_mat(mm.R12, x, u, p, t)
-    end
-    return nothing
-end
-
-function correct!(kf::AbstractKalmanFilter, measurement_model::EKFMeasurementModel{IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(measurement_model.R2, kf.x, u, p, t), R12 = _get_R12_from_mm(measurement_model, kf.x, u, p, t)) where IPM
+function correct!(kf::AbstractKalmanFilter, measurement_model::EKFMeasurementModel{IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(measurement_model.R2, kf.x, u, p, t), R12 = get_mat(measurement_model.R12, x, u, p, t)) where IPM
     (; x,R) = kf
     (; measurement, Cjac) = measurement_model
     C = Cjac(x, u, p, t)
