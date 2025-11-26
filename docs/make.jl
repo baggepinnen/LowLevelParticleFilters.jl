@@ -17,7 +17,15 @@ makedocs(
             "Home" => "index.md",
             "Discretization" => "discretization.md",
             "Multiple measurement models" => "measurement_models.md",
-            "Parameter estimation" => "parameter_estimation.md",
+            "Parameter estimation" => [
+                  "Overview" => "parameter_estimation.md",
+                  "Maximum-likelihood and MAP" => "param_est_ml.md",
+                  "Bayesian inference" => "param_est_bayesian.md",
+                  "Joint state and parameter estimation" => "param_est_joint.md",
+                  "MUKF for parameter estimation" => "param_est_mukf.md",
+                  "Using an optimizer" => "param_est_optimizer.md",
+                  "Identifiability" => "param_est_identifiability.md",
+            ],
             "Benchmark" => "benchmark.md",
             "Performance tips" => "distributions.md",
             "Tutorials" => [
@@ -45,4 +53,5 @@ makedocs(
 deploydocs(
       # deps = Deps.pip("pygments", "mkdocs", "python-markdown-math", "mkdocs-cinder"),
       repo = "github.com/baggepinnen/LowLevelParticleFilters.jl.git",
+      push_preview = true,
 )
