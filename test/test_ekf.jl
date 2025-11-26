@@ -426,16 +426,25 @@ end
     # UKF with EKFMeasurementModel+R12 should also have good performance
     @test var_ukf_r12 < var_without_r12
 
-    # Test 5: KalmanFilter with LinearMeasurementModel that has R12
+    # Test 5: UKF with LinearMeasurementModel that has R12
     mm_linear_r12 = LLPF.LinearMeasurementModel(C, SA[0.0;;], R2; ny, R12)
-    kf_linear_mm = UnscentedKalmanFilter(dynamics_r12, mm_linear_r12, R1, d0; nu, ny)
+    ukf_linear_mm = UnscentedKalmanFilter(dynamics_r12, mm_linear_r12, R1, d0; nu, ny)
 
-    # Run forward trajectory using the LinearMeasurementModel with R12
-    sol_kf_linear_r12 = forward_trajectory(kf_linear_mm, u_sim, y_sim)
-    var_kf_linear_r12 = var(sol_kf_linear_r12.xt .- x_sim)[]
+    sol_linear_r12 = forward_trajectory(ukf_linear_mm, u_sim, y_sim)
+    var_linear_r12 = var(sol_linear_r12.xt .- x_sim)[]
 
-    # KalmanFilter with LinearMeasurementModel+R12 should also have good performance
-    @test var_kf_linear_r12 < var_without_r12
+    # UKF with LinearMeasurementModel+R12 should also have good performance
+    @test var_linear_r12 < var_without_r12
 
-    @info "Estimation-error variances:" var_with_r12 var_without_r12 var_ukf_r12 var_kf_linear_r12
+    # Test 6: UKF with IEKFMeasurementModel that has R12
+    mm_iekf_r12 = LLPF.IEKFMeasurementModel{Float64, false}(measurement_r12, R2; nx, ny, R12)
+    ukf_iekf_mm = UnscentedKalmanFilter(dynamics_r12, mm_iekf_r12, R1, d0; nu, ny)
+
+    sol_iekf_r12 = forward_trajectory(ukf_iekf_mm, u_sim, y_sim)
+    var_iekf_r12 = var(sol_iekf_r12.xt .- x_sim)[]
+
+    # UKF with IEKFMeasurementModel+R12 should also have good performance
+    @test var_iekf_r12 < var_without_r12
+
+    @info "Estimation-error variances:" var_with_r12 var_without_r12 var_ukf_r12 var_linear_r12 var_iekf_r12
 end

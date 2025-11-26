@@ -60,10 +60,10 @@ function IteratedExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing,
 end
 
 
-function correct!(kf::AbstractKalmanFilter,  measurement_model::IEKFMeasurementModel{IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(measurement_model.R2, kf.x, u, p, t)) where IPM
+function correct!(kf::AbstractKalmanFilter,  measurement_model::IEKFMeasurementModel{IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(measurement_model.R2, kf.x, u, p, t), R12 = measurement_model.R12 === nothing ? nothing : get_mat(measurement_model.R12, kf.x, u, p, t)) where IPM
     (; x,R) = kf
     (; measurement, Cjac, step, maxiters, epsilon) = measurement_model
-    
+
     xi = copy(x)
 
     if IPM
@@ -88,16 +88,29 @@ function correct!(kf::AbstractKalmanFilter,  measurement_model::IEKFMeasurementM
                 @bangbang e .= y .- measurement(xi, u, p, t)
             end
         end
-        S = symmetrize(C*R*C') + R2
-        Sᵪ  = cholesky(Symmetric(S); check=false)
-        issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed, got S = $(printarray(S))")
-        K = (R*C')/Sᵪ
+        if R12 !== nothing
+            # Simon's "Optimal State Estimation" Section 7.1 (Eq. 7.14)
+            CR12 = C*R12
+            S = symmetrize(C*R*C' + CR12 + CR12') + R2
+            Sᵪ  = cholesky(Symmetric(S); check=false)
+            issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed, got S = $(printarray(S))")
+            K = (R*C' + R12)/Sᵪ
+        else
+            S = symmetrize(C*R*C') + R2
+            Sᵪ  = cholesky(Symmetric(S); check=false)
+            issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed, got S = $(printarray(S))")
+            K = (R*C')/Sᵪ
+        end
         dx = x-xi
         xi += vec(step*(dx + K*(e-C*dx)))
         # @show i, sum(abs, xi-prev)
         if sum(abs, xi-prev) < epsilon || i >= maxiters
             kf.x = xi
-            kf.R = symmetrize((I - K*C)*R) # WARNING against I .- A
+            if R12 !== nothing
+                kf.R = symmetrize((I - K*C)*R - K*R12')
+            else
+                kf.R = symmetrize((I - K*C)*R) # WARNING against I .- A
+            end
             ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), pred_err)[]# - 1/2*logdet(S) # logdet is included in logpdf
             e = pred_err
             return (; ll, e, S, Sᵪ, K)
