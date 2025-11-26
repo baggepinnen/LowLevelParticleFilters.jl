@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>SciML: Learning a sunshine disturbance model · LowLevelParticleFilters Documentation</title><meta name="title" content="SciML: Learning a sunshine disturbance model · LowLevelParticleFilters Documentation"/><meta property="og:title" content="SciML: Learning a sunshine disturbance model · LowLevelParticleFilters Documentation"/><meta property="twitter:title" content="SciML: Learning a sunshine disturbance model · LowLevelParticleFilters Documentation"/><meta name="description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="og:description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="twitter:description" content="Documentation for LowLevelParticleFilters Documentation."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">LowLevelParticleFilters Documentation</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../discretization/">Discretization</a></li><li><a class="tocitem" href="../measurement_models/">Multiple measurement models</a></li><li><a class="tocitem" href="../parameter_estimation/">Parameter estimation</a></li><li><a class="tocitem" href="../benchmark/">Benchmark</a></li><li><a class="tocitem" href="../distributions/">Performance tips</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../adaptive_kalmanfilter/">Kalman-filter tutorial with LowLevelParticleFilters</a></li><li><a class="tocitem" href="../noisetuning/">Noise tuning and disturbance modeling for Kalman filtering</a></li><li><a class="tocitem" href="../beetle_example/">Particle-filter tutorial</a></li><li><a class="tocitem" href="../beetle_example_imm/">IMM-filter tutorial</a></li><li><a class="tocitem" href="../rbpf_example/">Rao-Blackwellized filter tutorial</a></li><li><a class="tocitem" href="../dae/">State estimation for DAE systems</a></li><li><a class="tocitem" href="../adaptive_control/">Adaptive estimation and control</a></li><li><a class="tocitem" href="../neural_network/">Adaptive Neural-Network training</a></li><li><a class="tocitem" href="../friction_nn_example/">SciML: Adaptive Universal Differential Equation</a></li><li class="is-active"><a class="tocitem" href>SciML: Learning a sunshine disturbance model</a><ul class="internal"><li><a class="tocitem" href="#System-Description"><span>System Description</span></a></li><li><a class="tocitem" href="#Data-Generation"><span>Data Generation</span></a></li><li><a class="tocitem" href="#Radial-Basis-Function-Model"><span>Radial Basis Function Model</span></a></li><li><a class="tocitem" href="#Hybrid-Dynamics-for-Estimation"><span>Hybrid Dynamics for Estimation</span></a></li><li><a class="tocitem" href="#Parameter-Estimation"><span>Parameter Estimation</span></a></li><li><a class="tocitem" href="#Results-Analysis"><span>Results Analysis</span></a></li><li><a class="tocitem" href="#Learned-vs-True-Insolation-Pattern"><span>Learned vs True Insolation Pattern</span></a></li><li><a class="tocitem" href="#Discussion"><span>Discussion</span></a></li><li><a class="tocitem" href="#Diving-deeper:-How-to-handle-constraints"><span>Diving deeper: How to handle constraints</span></a></li><li><a class="tocitem" href="#Comparison-of-Constraint-Handling-Methods"><span>Comparison of Constraint Handling Methods</span></a></li></ul></li><li><a class="tocitem" href="../fault_detection/">Fault detection</a></li><li><a class="tocitem" href="../ut/">Unscented transform</a></li><li><a class="tocitem" href="../disturbance_gallery/">Disturbance gallery</a></li><li><a class="tocitem" href="../sample_rate/">Influence of sample rate on performance</a></li></ul></li><li><a class="tocitem" href="../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>SciML: Learning a sunshine disturbance model</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>SciML: Learning a sunshine disturbance model</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/docs/src/thermal_nn_example.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Learning-a-disturbance-model-using-SciML"><a class="docs-heading-anchor" href="#Learning-a-disturbance-model-using-SciML">Learning a disturbance model using SciML</a><a id="Learning-a-disturbance-model-using-SciML-1"></a><a class="docs-heading-anchor-permalink" href="#Learning-a-disturbance-model-using-SciML" title="Permalink"></a></h1><p>In this example we will attempt to learn how an unknown and stochastic input, sun shining in through a window, influences a dynamical system, the temperature in a house. How the sun is shining on a house on a cloud-free day, absent any surrounding trees or buildings can be readily simulated. However, the real world offers a number of challenges that influence the effect this has on the inside temperature</p><ul><li>Surrounding trees and buildings may cast shadows on the house at certain parts of the day.</li><li>The sun shining in through a window has much greater effect than if it&#39;s shining on a wall.</li><li>Cloud cover modulates the effect of the sun.</li><li>As a vendor of, e.g., HVAC equipment with interesting control systems, you may not want to model each individual site in detail, including the location and size of windows and surrounding shading elements. Even if these are static, they are thus to be considered unknown.</li></ul><p>We can model this as some deterministic parts and some stochastic parts, some known and some unknown. The path of the sun across the sky is deterministic and periodic, with one daily and one yearly component. The surroundings, like trees and buildings, are for the most part static, but the influence these have on the insolation is unknown, and so is the exact location of windows on the house. However, the cloud cover is stochastic. We can thus model insolation by</p><ul><li>Treating the current cloud cover as a stochastic variable <span>$C_{cloud} \in [0, 1]$</span> to be estimated continuously. We achieve this by including the cloud cover as a state variable in our system.</li><li>Treating the insolation when there is <em>no cloud cover</em> as a deterministic function of the time of day (we ignore the yearly component here for simplicity). This function will be modeled as a basis-function expansion that will be learned from data.</li><li>The effective insolation at any point in time is thus <span>$I_{solar} = (1 - C_{cloud}) I_{solar, clear}$</span>, that is, the cloud-free insolation is modulated by the current cloud cover.</li></ul><h2 id="System-Description"><a class="docs-heading-anchor" href="#System-Description">System Description</a><a id="System-Description-1"></a><a class="docs-heading-anchor-permalink" href="#System-Description" title="Permalink"></a></h2><p>We consider a simplified thermal model of a single-room house:</p><ul><li>State variable: room temperature <code>T</code></li><li>Control input: heater power <code>P_heater</code></li><li>Disturbances: external temperature <code>T_ext</code> and solar insolation through windows</li></ul><p>The heat transfer dynamics follow Newton&#39;s law of cooling with additional terms for heating and solar gains:</p><p class="math-container">\[C_{thermal} Ṫ = -k_{loss}  (T - T_{ext}) + η  P_{heater} + A_{window} I_{solar}\]</p><p>where:</p><ul><li><code>C_thermal</code>: thermal capacity of the room</li><li><code>k_loss</code>: heat loss coefficient</li><li><code>η</code>: heater efficiency</li><li><code>A_window</code>: effective window area</li><li><code>I_solar</code>: solar insolation (W/m²)</li></ul><h2 id="Data-Generation"><a class="docs-heading-anchor" href="#Data-Generation">Data Generation</a><a id="Data-Generation-1"></a><a class="docs-heading-anchor-permalink" href="#Data-Generation" title="Permalink"></a></h2><p>First, let&#39;s generate realistic thermal data with time-varying external conditions:</p><pre><code class="language-julia hljs">using LowLevelParticleFilters, Random, SeeToDee, StaticArrays, Plots, LinearAlgebra, Statistics
+using LowLevelParticleFilters: SimpleMvNormal
+using Optim
+
+# System parameters
+const C_thermal = 10.0f0      # Thermal capacity (kWh/°C)
+const k_loss = 0.5f0          # Heat loss coefficient (kW/°C)
+const η = 0.95f0              # Heater efficiency
+const A_window = 20.0f0       # Effective window area factor
+
+# Time constants
+const hours_per_day = 24.0f0
+const Ts = 0.25f0            # Sample time (15 minutes)
+
+# Helper function for time of day (0-24 hours)
+time_of_day(t) = mod(t, hours_per_day)
+
+# External temperature (sinusoidal daily variation)
+function external_temp(t)
+    tod = time_of_day(t)
+    T_mean = 10.0f0  # Mean temperature (°C)
+    T_amplitude = 5.0f0  # Daily variation amplitude
+    T_mean + T_amplitude * sin(2π * (tod - 6) / hours_per_day)  # Peak at 12:00
+end
+
+# True solar insolation pattern (W/m²)
+function true_insolation(t, cloud_cover)
+    tod = time_of_day(t)
+    # Cropped sinusoid
+    base_insolation = max(500.0f0 * (0.2 + sin(π * (tod - 6) / 12)), 0)
+    return base_insolation * (1 - cloud_cover)
+end
+
+# Plot the daily patterns
+t_plot = 0:0.1:48  # Two days for visualization
+plot(t_plot, external_temp.(t_plot), label=&quot;External Temperature (°C)&quot;, lw=2)
+plot!(t_plot, true_insolation.(t_plot, 0) ./ 100, label=&quot;Clear Sky Insolation (×100 W/m²)&quot;, lw=2)
+plot!(t_plot, true_insolation.(t_plot, 0.5) ./ 100, label=&quot;50% Cloud Cover (×100 W/m²)&quot;, lw=2, ls=:dash)
+xlabel!(&quot;Time (hours)&quot;)
+title!(&quot;Daily Environmental Patterns&quot;)</code></pre><img src="15714849.svg" alt="Example block output"/><p>Now let&#39;s define the true system dynamics and generate training data:</p><pre><code class="language-julia hljs"># True system dynamics with time-varying cloud cover
+function thermal_dynamics_true(x, u, p, t)
+    T_room, cloud_cover = x
+    P_heater = u[1]
+
+    # External conditions
+    T_ext = external_temp(t)
+    I_solar = true_insolation(t, cloud_cover)
+
+    # Heat balance
+    dT_dt = (-k_loss * (T_room - T_ext) + η * P_heater + A_window * I_solar / 1000) / C_thermal
+
+    # Cloud cover changes slowly (random walk)
+    dcloud_dt = 0.0f0  # Driven by process noise, zero deterministic dynamics
+
+    SA[dT_dt, dcloud_dt]
+end
+
+# Discretize the dynamics
+discrete_dynamics_true = SeeToDee.Rk4(thermal_dynamics_true, Ts)
+
+# Generate training data
+function generate_thermal_data(; days=7, measure_cloud_cover=true)
+    rng = Random.default_rng()
+    Random.seed!(rng, 123)
+
+    t = 0:Ts:(days * hours_per_day)
+    N = length(t)
+
+    # Generate control inputs (varied heating patterns)
+    u = Vector{SVector{1, Float32}}(undef, N)
+    for (i, t) in enumerate(t)
+        tod = time_of_day(t)
+        # Different heating strategies throughout the day
+        if 6 &lt;= tod &lt; 8 || 17 &lt;= tod &lt; 22  # Morning and evening comfort
+            u[i] = SA[3.0f0 + 0.5f0 * randn(rng)]  # Higher heating
+        elseif 22 &lt;= tod || tod &lt; 6  # Night setback
+            u[i] = SA[1.0f0 + 0.2f0 * randn(rng)]  # Lower heating
+        else  # Day time
+            u[i] = SA[2.0f0 + 0.3f0 * randn(rng)]  # Moderate heating
+        end
+        u[i] = SA[clamp(u[i][1], 0.0f0, 5.0f0)]  # Heater power limits
+    end
+
+    # Initial conditions
+    x0 = SA[20.0f0, 0.3f0]  # Initial room temp and cloud cover
+
+    # Simulate with slowly varying cloud cover
+    x = Vector{SVector{2, Float32}}(undef, N)
+    x[1] = x0
+    for i in 2:N
+        # Process noise (small for temperature, larger for cloud cover)
+        w = SA[0.01f0 * randn(rng), 0.06f0 * randn(rng)]
+        x_next = discrete_dynamics_true(x[i-1], u[i-1], nothing, t[i-1])
+        x[i] = x_next + w
+        # Keep cloud cover in [0, 1]
+        x[i] = SA[x[i][1], clamp(x[i][2]*0.999, 0.0f0, 1.0f0)]
+    end
+
+    # Measurements - optionally include cloud cover
+    if measure_cloud_cover
+        y = [SA[x_i[1] + 0.1f0 * randn(rng), x_i[2] + 0.01f0 * randn(rng)] for x_i in x]
+        ny = 2
+    else
+        y = [SA[x_i[1] + 0.1f0 * randn(rng)] for x_i in x]
+        ny = 1
+    end
+
+    (; x, u, y, t, N, Ts, ny, measure_cloud_cover)
+end
+
+# Generate data (with cloud cover measurements by default)
+measure_cloud_cover = false  # Set to false to exclude cloud cover measurements
+data = generate_thermal_data(; days=14, measure_cloud_cover)
+
+# Visualize the generated data
+p1 = plot(data.t, [x[1] for x in data.x], label=&quot;Room Temperature&quot;, ylabel=&quot;Temperature (°C)&quot;)
+plot!(data.t, [external_temp(t) for t in data.t], label=&quot;External Temperature&quot;, ls=:dash, alpha=0.7)
+
+p2 = plot(data.t, [x[2] for x in data.x], label=&quot;Cloud Cover&quot;, ylabel=&quot;Cloud Cover (0-1)&quot;, color=:orange)
+p3 = plot(data.t, [u[1] for u in data.u], label=&quot;Heater Power&quot;, ylabel=&quot;Power (kW)&quot;, color=:red)
+
+plot(p1, p2, p3, layout=(3,1), size=(900, 600), xlabel=&quot;Time (hours)&quot;)</code></pre><img src="94987e61.svg" alt="Example block output"/><h2 id="Radial-Basis-Function-Model"><a class="docs-heading-anchor" href="#Radial-Basis-Function-Model">Radial Basis Function Model</a><a id="Radial-Basis-Function-Model-1"></a><a class="docs-heading-anchor-permalink" href="#Radial-Basis-Function-Model" title="Permalink"></a></h2><p>We&#39;ll use a radial basis function expansion to learn the solar insolation pattern. This provides a more interpretable model than a neural network, with basis functions centered during daylight hours:</p><pre><code class="language-julia hljs"># Initialize RBF weights (parameters to be learned)
+rng = Random.default_rng()
+Random.seed!(rng, 456)
+const n_basis = 8  # Number of basis functions
+# Initialize with positive weights since insolation is always positive (&quot;negative insolation&quot; could model things like someone always opening a window in the morning letting cold air in)
+rbf_weights = 100.0f0 * rand(Float32, n_basis)  # Random positive initialization
+
+function basis_functions(t)
+    tod = time_of_day(t)
+    centers = LinRange(7.0f0, 17.0f0, n_basis) # Centers spread from 9 AM to 5 PM
+    width = 1.5f0  # Width of each Gaussian basis function (in hours)
+    @. exp(-((tod - centers) / width)^2)
+end
+
+# RBF evaluation function
+function compute_nn_insolation(t, weights)
+    return weights&#39;basis_functions(t) # Linear combination of basis functions
+end</code></pre><h2 id="Hybrid-Dynamics-for-Estimation"><a class="docs-heading-anchor" href="#Hybrid-Dynamics-for-Estimation">Hybrid Dynamics for Estimation</a><a id="Hybrid-Dynamics-for-Estimation-1"></a><a class="docs-heading-anchor-permalink" href="#Hybrid-Dynamics-for-Estimation" title="Permalink"></a></h2><p>Define the dynamics model that uses the neural network for insolation estimation. Since our measurement is linear (we directly observe parts of the state), we can use a <code>LinearMeasurementModel</code> for improved efficiency:</p><pre><code class="language-julia hljs"># Linear measurement model - more efficient than nonlinear for direct state measurements
+if data.measure_cloud_cover
+    C = SA[1.0f0 0.0f0; 0.0f0 1.0f0]  # Measure both temperature and cloud cover
+else
+    C = SA[1.0f0 0.0f0]  # Only measure temperature
+end
+measurement_model = LinearMeasurementModel(C, 0, data.measure_cloud_cover ? Diagonal([0.1f0^2, 0.01f0^2]) : Diagonal([0.1f0^2]); ny=data.ny)
+
+# Hybrid dynamics with neural network and cloud cover state
+function thermal_dynamics_hybrid(x, u, p, t)
+    T_room, cloud_cover = x
+    P_heater = u[1]
+
+    # External temperature (known)
+    T_ext = external_temp(t)
+
+    # Solar insolation from neural network
+    I_base = compute_nn_insolation(t, p)
+    I_solar = I_base * (1 - cloud_cover)
+
+    # Heat balance
+    dT_dt = (-k_loss * (T_room - T_ext) + η * P_heater + A_window * I_solar / 1000) / C_thermal
+
+    # Cloud cover changes slowly
+    dcloud_dt = 0.0001f0*(0.5f0 - cloud_cover)  # Driven by process noise, assume we know mean cloud cover over time
+
+    SA[dT_dt, dcloud_dt]
+end
+
+# Discretize hybrid dynamics
+const discrete_dynamics_hybrid = SeeToDee.ForwardEuler(thermal_dynamics_hybrid, Ts)
+
+function clamped_dynamics(x,u,p,t)
+    xp = discrete_dynamics_hybrid(x,u,p,t)
+    SA[xp[1], clamp(xp[2], 0.0f0, 1.0f0)]
+end
+
+# System dimensions for the filter
+nx = 2  # State: [temperature, cloud_cover]
+nu = 1  # Input: heater power
+ny = data.ny  # Output dimension depends on whether cloud cover is measured</code></pre><h2 id="Parameter-Estimation"><a class="docs-heading-anchor" href="#Parameter-Estimation">Parameter Estimation</a><a id="Parameter-Estimation-1"></a><a class="docs-heading-anchor-permalink" href="#Parameter-Estimation" title="Permalink"></a></h2><p>Now we&#39;ll set up the state estimator and the optimization problem using a quasi-Newton method:</p><pre><code class="language-julia hljs"># Process and measurement noise for the filter
+R1 = SMatrix{nx, nx}(Diagonal([0.01f0, 0.06f0]))  # Process noise
+if data.measure_cloud_cover
+    R2 = SMatrix{ny, ny}(Diagonal([0.1f0^2, 0.01f0^2]))  # Temperature and cloud cover noise
+else
+    R2 = SMatrix{ny, ny}(Diagonal([0.1f0^2]))  # Only temperature noise
+end
+
+# Initial state estimate
+x0 = SA[20.0f0, 0.5f0]  # Initial temperature and cloud cover guess
+
+# Cost function for optimization (sum of squared errors)
+function cost(θ)
+    T = eltype(θ)
+
+    # Create filter with current parameters and linear measurement model
+    kf = UnscentedKalmanFilter(
+        clamped_dynamics,
+        measurement_model,  # Use the linear measurement model
+        R1,
+        SimpleMvNormal(T.(x0), T.(2*R1));
+        ny, nu, Ts,
+    )
+
+    # Compute sum of squared prediction errors
+    LowLevelParticleFilters.sse(kf, data.u, data.y, θ)
+end
+
+# Initial parameters from the neural network initialization
+θ_init = copy(rbf_weights)
+
+# Define optimization options once for reuse
+opt_options = Optim.Options(
+    show_trace = false,
+    store_trace = true,
+    iterations = 200,
+    g_tol = 1e-12,
+)
+
+result = Optim.optimize(
+    cost,
+    θ_init,
+    BFGS(),
+    opt_options;
+    autodiff = :forward,  # Use forward-mode AD for gradients
+)
+
+params_opt = result.minimizer
+
+@info &quot;Optimization complete. Converged: $(Optim.converged(result)), Iterations: $(Optim.iterations(result))&quot;
+@info &quot;Final cost: $(Optim.minimum(result))&quot;
+
+# Plot convergence history
+# plot(getfield.(result.trace, :value), #yscale=:log10,
+#      xlabel=&quot;Iteration&quot;, ylabel=&quot;Cost (SSE)&quot;,
+#      title=&quot;Convergence&quot;, lw=2)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">[ Info: Optimization complete. Converged: true, Iterations: 67
+[ Info: Final cost: 23.895609</code></pre><h2 id="Results-Analysis"><a class="docs-heading-anchor" href="#Results-Analysis">Results Analysis</a><a id="Results-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Results-Analysis" title="Permalink"></a></h2><p>Let&#39;s analyze the results by running the filter with optimized parameters:</p><pre><code class="language-julia hljs"># Run filter with optimized parameters and linear measurement model
+kf_final = UnscentedKalmanFilter(
+    clamped_dynamics,
+    measurement_model,  # Use the linear measurement model
+    R1,
+    SimpleMvNormal(x0, R1);
+    p = params_opt,
+    ny, nu, Ts
+)
+
+sol = forward_trajectory(kf_final, data.u, data.y)
+
+# Extract estimated states
+T_est = [sol.xt[i][1] for i in 1:length(sol.xt)]
+cloud_est = [sol.xt[i][2] for i in 1:length(sol.xt)]
+T_true = [data.x[i][1] for i in 1:length(data.x)]
+cloud_true = [data.x[i][2] for i in 1:length(data.x)]
+
+# Only compute cloud RMSE when sun is above horizon
+sun_up_mask = [true_insolation(data.t[i], 0.0f0) &gt; 0 for i in 1:length(data.t)]
+cloud_error = sqrt(mean(abs2, cloud_true[sun_up_mask] .- cloud_est[sun_up_mask]))
+
+# Plot temperature estimation
+p1 = plot(data.t, T_true, label=&quot;True Temperature&quot;, lw=2, color=:blue)
+plot!(data.t, T_est, label=&quot;Estimated Temperature&quot;, lw=2, ls=:dash, color=:red)
+plot!(data.t, [y[1] for y in data.y], label=&quot;Measurements&quot;, alpha=0.3, seriestype=:scatter, ms=1, color=:gray)
+ylabel!(&quot;Temperature (°C)&quot;)
+title!(&quot;Temperature Estimation&quot;)
+
+# Plot cloud cover estimation
+p2 = plot(data.t, cloud_true, label=&quot;True Cloud Cover&quot;, lw=2, color=:blue)
+plot!(data.t, cloud_est, label=&quot;Estimated Cloud Cover&quot;, lw=2, ls=:dash, color=:red)
+ylabel!(&quot;Cloud Cover&quot;)
+xlabel!(&quot;Time (hours)&quot;)
+title!(&quot;Cloud Cover Estimation&quot;)
+
+plot(p1, p2, layout=(2,1), size=(1200, 800))</code></pre><img src="ad2f0aa8.svg" alt="Example block output"/><p>As we can see, it&#39;s easy to estimate the internal temperature, after all, we measure this directly. Estimating the cloud cover is significantly harder, notice in particular how the estimation drifts to 0.5 each night when there is no sun. This is expected since it is impossible to observe (in the estimation-theoretical sense) the cloud cover when there is no sun, since when there is no sun there is no effect of the cloud cover on the variable we do measure, the temperature. The fact that it drifts to 0.5 in particular can be explained by the growing estimated covariance during night combined with the clamping of the estimated cloud cover variable between 0 and 1.</p><h2 id="Learned-vs-True-Insolation-Pattern"><a class="docs-heading-anchor" href="#Learned-vs-True-Insolation-Pattern">Learned vs True Insolation Pattern</a><a id="Learned-vs-True-Insolation-Pattern-1"></a><a class="docs-heading-anchor-permalink" href="#Learned-vs-True-Insolation-Pattern" title="Permalink"></a></h2><p>We now have a look at the function we learned for the effect of insolation on the internal temperature, absent of clouds. Since this is a simulated example, we have access to the true function to compare with:</p><pre><code class="language-julia hljs"># Generate time points for one day
+tod_test = LinRange(0.0f0, 24.0f0, 100)
+
+# Compute true insolation (without clouds)
+I_true = [true_insolation(t, 0.0f0) for t in tod_test]
+
+# Compute learned insolation
+I_learned = [compute_nn_insolation(t, params_opt) for t in tod_test]
+
+# Plot comparison
+plot(tod_test, I_true, label=&quot;True Insolation&quot;, lw=3, color=:blue)
+plot!(tod_test, I_learned, label=&quot;Learned Insolation&quot;, lw=2, ls=:dash, color=:red)
+xlabel!(&quot;Time of Day (hours)&quot;)
+ylabel!(&quot;Insolation (W/m²)&quot;)
+title!(&quot;Learned Solar Insolation Pattern&quot;)</code></pre><img src="095570b5.svg" alt="Example block output"/><p>Hopefully, we see that the estimation has captured the general shape of the true insolation pattern, but perhaps not perfectly, since this function is &quot;hidden&quot; behind an unknown and noisy estimate of the cloud cover.</p><h2 id="Discussion"><a class="docs-heading-anchor" href="#Discussion">Discussion</a><a id="Discussion-1"></a><a class="docs-heading-anchor-permalink" href="#Discussion" title="Permalink"></a></h2><p>This example demonstrates a classical SciML workflow, the combination of physics-based thermal dynamics with a data-driven model to capture unknown solar patterns. During the day, we were able to roughly estimate the cloud cover despite not being directly measured, by leveraging its effect on the temperature dynamics, but during night our estimator has no fighting chance of doing a good job here, a limitation inherent to the unobservability of the cloud cover in the absence of sunlight.</p><h2 id="Diving-deeper:-How-to-handle-constraints"><a class="docs-heading-anchor" href="#Diving-deeper:-How-to-handle-constraints">Diving deeper: How to handle constraints</a><a id="Diving-deeper:-How-to-handle-constraints-1"></a><a class="docs-heading-anchor-permalink" href="#Diving-deeper:-How-to-handle-constraints" title="Permalink"></a></h2><p>The variable cloud cover is constrained to be between 0 and 1. The Kalman-filtering framework does not handle such a constraint natively, but there are several different more or less heuristic methods available to handle it. Above, we simply clamped the estimated value to be between 0 and 1, simple but effective. Can we do any better? This section compares a number of different methods</p><ul><li>The clamping method</li><li>Reformulating the dynamics to use an unconstrained variable that is projected onto the constraint set using a sigmoid function</li><li>Projection implemented as a &quot;perfect measurement&quot;: We may treat the projection as a fictitious measurement update, imagining that we have obtained a zero-variance measurement that the constrained variable is at the constraint boundary. This is similar to the naive clamping above, but also updates the covariance. We perform this projection using the function <code>LowLevelParticleFilters.project_bound</code> and make use of a callback in order to apply it during the estimation.</li><li>Sigma-point rejection, when we use an <a href="../api/#LowLevelParticleFilters.UnscentedKalmanFilter-Union{Tuple{AUGM}, Tuple{AUGD}, Tuple{IPM}, Tuple{IPD}, Tuple{Any, LowLevelParticleFilters.AbstractMeasurementModel, Any}, Tuple{Any, LowLevelParticleFilters.AbstractMeasurementModel, Any, Any}} where {IPD, IPM, AUGD, AUGM}"><code>UnscentedKalmanFilter</code></a>, we may reject sigma points that fall outside of the feasible region.</li></ul><pre><code class="language-julia hljs"># Evaluation function to compare methods
+function evaluate_solution(sol, data, params)
+    # Extract estimated states
+    T_est = [sol.xt[i][1] for i in 1:length(sol.xt)]
+    cloud_est = [sol.xt[i][2] for i in 1:length(sol.xt)]
+    T_true = [data.x[i][1] for i in 1:length(data.x)]
+    cloud_true = [data.x[i][2] for i in 1:length(data.x)]
+
+    # Compute errors
+    temp_rmse = sqrt(mean(abs2, T_true .- T_est))
+    # Only compute cloud RMSE when sun is above horizon (true insolation &gt; 0)
+    sun_up_mask = [true_insolation(data.t[i], 0.0f0) &gt; 0 for i in 1:length(data.t)]
+    cloud_rmse = sqrt(mean(abs2, cloud_true[sun_up_mask] .- cloud_est[sun_up_mask]))
+
+    # Compute learned insolation vs true
+    tod_test = LinRange(0.0f0, 24.0f0, 100)
+    I_true = [true_insolation(t, 0.0f0) for t in tod_test]
+    I_learned = [compute_nn_insolation(t, params) for t in tod_test]
+    insolation_rmse = sqrt(mean(abs2, I_true .- I_learned))
+
+    return (;
+        temp_rmse,
+        cloud_rmse,
+        insolation_rmse,
+        T_est,
+        cloud_est,
+        I_learned
+    )
+end
+
+# Evaluate the clamping method (already optimized)
+eval_clamping = evaluate_solution(sol, data, params_opt)
+@info &quot;Clamping method - Temperature RMSE: $(round(eval_clamping.temp_rmse, digits=3))°C, Cloud RMSE: $(round(eval_clamping.cloud_rmse, digits=3))&quot;</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">[ Info: Clamping method - Temperature RMSE: 0.075°C, Cloud RMSE: 0.215</code></pre><h2 id="Comparison-of-Constraint-Handling-Methods"><a class="docs-heading-anchor" href="#Comparison-of-Constraint-Handling-Methods">Comparison of Constraint Handling Methods</a><a id="Comparison-of-Constraint-Handling-Methods-1"></a><a class="docs-heading-anchor-permalink" href="#Comparison-of-Constraint-Handling-Methods" title="Permalink"></a></h2><p>The cloud cover state must be constrained to lie in the interval [0, 1]. We have explored several different methods to handle this constraint:</p><ol><li><strong>Clamping</strong>: Directly clamp the cloud cover after each dynamics update</li><li><strong>Sigmoid transformation</strong>: Transform the state through a sigmoid function  </li><li><strong>Projection</strong>: Project the state back to the constraint set after filter updates</li><li><strong>Sigma-point rejection</strong>: Reject sigma points that violate constraints</li><li><strong>Truncated moment matching</strong>: Use truncated normal distribution moments</li></ol><p>Let&#39;s compare these approaches:</p><h3 id="Method-1:-Clamping-(Already-Implemented)"><a class="docs-heading-anchor" href="#Method-1:-Clamping-(Already-Implemented)">Method 1: Clamping (Already Implemented)</a><a id="Method-1:-Clamping-(Already-Implemented)-1"></a><a class="docs-heading-anchor-permalink" href="#Method-1:-Clamping-(Already-Implemented)" title="Permalink"></a></h3><p>The clamping method was used in the main tutorial above. It simply clips the cloud cover to [0, 1] after each dynamics step:</p><pre><code class="language-julia hljs">function clamped_dynamics(x,u,p,t)
+    xp = discrete_dynamics_hybrid(x,u,p,t)
+    SA[xp[1], clamp(xp[2], 0.0f0, 1.0f0)]
+end</code></pre><h3 id="Method-2:-Sigmoid-Transformation"><a class="docs-heading-anchor" href="#Method-2:-Sigmoid-Transformation">Method 2: Sigmoid Transformation</a><a id="Method-2:-Sigmoid-Transformation-1"></a><a class="docs-heading-anchor-permalink" href="#Method-2:-Sigmoid-Transformation" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Sigmoid transformation method
+sigmoid(x) = 1 / (1 + exp(-x))
+sigmoid_inv(y) = log(y / (1 - y))
+
+function thermal_dynamics_sigmoid(x, u, p, t)
+    T_room, log_cloud_cover = x
+    cloud_cover = sigmoid(log_cloud_cover)
+    P_heater = u[1]
+
+    # External temperature (known)
+    T_ext = external_temp(t)
+
+    # Solar insolation from RBF model
+    I_base = compute_nn_insolation(t, p)
+    I_solar = I_base * (1 - cloud_cover)
+
+    # Heat balance
+    dT_dt = (-k_loss * (T_room - T_ext) + η * P_heater + A_window * I_solar / 1000) / C_thermal
+
+    # Cloud cover changes slowly (in transformed space)
+    dlogcloud_dt = 0.0001f0*(sigmoid_inv(0.5f0) - log_cloud_cover)
+
+    SA[dT_dt, dlogcloud_dt]
+end
+
+# Discretize sigmoid dynamics
+discrete_dynamics_sigmoid = SeeToDee.ForwardEuler(thermal_dynamics_sigmoid, Ts)
+
+# Measurement model for sigmoid method
+measurement_sigmoid = if data.measure_cloud_cover
+    (x, u, p, t) -&gt; SA[x[1], sigmoid(x[2])]
+else
+    (x, u, p, t) -&gt; SA[x[1]]
+end
+
+# Optimize sigmoid method
+function cost_sigmoid(θ)
+    T = eltype(θ)
+    x0_sigmoid = SA[20.0f0, sigmoid_inv(0.5f0)]
+
+    kf = UnscentedKalmanFilter(
+        discrete_dynamics_sigmoid,
+        measurement_sigmoid,
+        R1,
+        R2,
+        SimpleMvNormal(T.(x0_sigmoid), T.(2*R1));
+        ny, nu, Ts,
+    )
+
+    LowLevelParticleFilters.sse(kf, data.u, data.y, θ)
+end
+
+# Run optimization for sigmoid method
+@info &quot;Optimizing sigmoid method...&quot;
+result_sigmoid = Optim.optimize(
+    cost_sigmoid,
+    θ_init,
+    BFGS(),
+    opt_options;
+    autodiff = :forward,
+)
+
+params_sigmoid = result_sigmoid.minimizer
+
+# Evaluate sigmoid method
+x0_sigmoid = SA[20.0f0, sigmoid_inv(0.5f0)]
+kf_sigmoid = UnscentedKalmanFilter(
+    discrete_dynamics_sigmoid,
+    measurement_sigmoid,
+    R1,
+    R2,
+    SimpleMvNormal(x0_sigmoid, R1);
+    p = params_sigmoid,
+    ny, nu, Ts
+)
+
+sol_sigmoid = forward_trajectory(kf_sigmoid, data.u, data.y)
+
+# Transform cloud estimates back from log space
+sol_sigmoid_transformed = deepcopy(sol_sigmoid)
+for i in 1:length(sol_sigmoid_transformed.xt)
+    x = sol_sigmoid_transformed.xt[i]
+    sol_sigmoid_transformed.xt[i] = SA[x[1], sigmoid(x[2])]
+end
+
+eval_sigmoid = evaluate_solution(sol_sigmoid_transformed, data, params_sigmoid)
+@info &quot;Sigmoid method - Temperature RMSE: $(round(eval_sigmoid.temp_rmse, digits=3))°C, Cloud RMSE: $(round(eval_sigmoid.cloud_rmse, digits=3))&quot;</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">[ Info: Optimizing sigmoid method...
+[ Info: Sigmoid method - Temperature RMSE: 0.073°C, Cloud RMSE: 0.207</code></pre><h3 id="Method-3:-Projection"><a class="docs-heading-anchor" href="#Method-3:-Projection">Method 3: Projection</a><a id="Method-3:-Projection-1"></a><a class="docs-heading-anchor-permalink" href="#Method-3:-Projection" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Projection method - uses standard dynamics but projects after updates
+
+function post_update_cb(kf, u, y, p, ll, e)
+    if !(0 &lt;= kf.x[2] &lt;= 1)
+        xn, Rn = LowLevelParticleFilters.project_bound(kf.x, kf.R, 2; lower=0, upper=1, tol=1e-9)
+        kf.x = xn
+        kf.R = Rn
+    end
+    nothing
+end
+
+# Use original unclamped dynamics for projection method
+discrete_dynamics_unclamped = discrete_dynamics_hybrid
+
+# Optimize projection method
+function cost_projection(θ)
+    T = eltype(θ)
+
+    kf = UnscentedKalmanFilter(
+        discrete_dynamics_unclamped,
+        measurement_model,  # Use the linear measurement model
+        R1,
+        SimpleMvNormal(T.(x0), T.(2*R1));
+        ny, nu, Ts,
+    )
+
+    LowLevelParticleFilters.sse(kf, data.u, data.y, θ; post_update_cb)
+end
+
+# Run optimization for projection method
+@info &quot;Optimizing projection method...&quot;
+result_projection = Optim.optimize(
+    cost_projection,
+    θ_init,
+    BFGS(),
+    opt_options;
+    autodiff = :forward,
+)
+
+params_projection = result_projection.minimizer
+
+# Evaluate projection method
+kf_projection = UnscentedKalmanFilter(
+    discrete_dynamics_unclamped,
+    measurement_model,  # Use the linear measurement model
+    R1,
+    SimpleMvNormal(x0, R1);
+    p = params_projection,
+    ny, nu, Ts
+)
+
+post_predict_cb(kf, p, args...) = post_update_cb(kf, 0, 0, p, 0, 0)
+sol_projection = forward_trajectory(kf_projection, data.u, data.y; post_predict_cb, post_correct_cb=post_predict_cb)
+
+eval_projection = evaluate_solution(sol_projection, data, params_projection)
+@info &quot;Projection method - Temperature RMSE: $(round(eval_projection.temp_rmse, digits=3))°C, Cloud RMSE: $(round(eval_projection.cloud_rmse, digits=3))&quot;</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">[ Info: Optimizing projection method...
+[ Info: Projection method - Temperature RMSE: 0.075°C, Cloud RMSE: 0.255</code></pre><h3 id="Method-4:-Sigma-point-rejection"><a class="docs-heading-anchor" href="#Method-4:-Sigma-point-rejection">Method 4: Sigma-point rejection</a><a id="Method-4:-Sigma-point-rejection-1"></a><a class="docs-heading-anchor-permalink" href="#Method-4:-Sigma-point-rejection" title="Permalink"></a></h3><p>The UKF provides a mechanism to reject sigma points that violate constraints. When a sigma point falls outside [0,1] for cloud cover, we can reject it and replace it with the mean point:</p><pre><code class="language-julia hljs"># Sigma-point rejection method
+function reject_sigma_point(x)
+    # Reject if cloud cover is outside [0, 1]
+    return !(0.0f0 &lt;= x[2] &lt;= 1.0f0)
+end
+
+# Use unclamped dynamics for rejection method
+discrete_dynamics_rejection = discrete_dynamics_hybrid
+
+# Optimize with sigma-point rejection
+function cost_rejection(θ)
+    T = eltype(θ)
+
+    kf = UnscentedKalmanFilter(
+        discrete_dynamics_rejection,
+        measurement_model,  # Use the linear measurement model
+        R1,
+        SimpleMvNormal(T.(x0), T.(2*R1));
+        ny, nu, Ts,
+        reject = reject_sigma_point  # Add rejection function
+    )
+
+    LowLevelParticleFilters.sse(kf, data.u, data.y, θ)
+end
+
+# Run optimization for rejection method
+@info &quot;Optimizing sigma-point rejection method...&quot;
+result_rejection = Optim.optimize(
+    cost_rejection,
+    θ_init,
+    BFGS(),
+    opt_options;
+    autodiff = :forward,
+)
+
+params_rejection = result_rejection.minimizer
+
+# Evaluate rejection method
+kf_rejection = UnscentedKalmanFilter(
+    discrete_dynamics_rejection,
+    measurement_model,  # Use the linear measurement model
+    R1,
+    SimpleMvNormal(x0, R1);
+    p = params_rejection,
+    ny, nu, Ts,
+    reject = reject_sigma_point
+)
+
+sol_rejection = forward_trajectory(kf_rejection, data.u, data.y)
+
+eval_rejection = evaluate_solution(sol_rejection, data, params_rejection)
+@info &quot;Rejection method - Temperature RMSE: $(round(eval_rejection.temp_rmse, digits=3))°C, Cloud RMSE: $(round(eval_rejection.cloud_rmse, digits=3))&quot;</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">[ Info: Optimizing sigma-point rejection method...
+[ Info: Rejection method - Temperature RMSE: 0.077°C, Cloud RMSE: 0.281</code></pre><h3 id="Method-5:-Truncated-Moment-Matching"><a class="docs-heading-anchor" href="#Method-5:-Truncated-Moment-Matching">Method 5: Truncated Moment Matching</a><a id="Method-5:-Truncated-Moment-Matching-1"></a><a class="docs-heading-anchor-permalink" href="#Method-5:-Truncated-Moment-Matching" title="Permalink"></a></h3><p>This method uses truncated normal distribution moments to handle the constraint, providing a statistically principled approach:</p><pre><code class="language-julia hljs"># Truncated moment matching method - uses standard dynamics but applies moment matching after updates
+function post_update_tmm(kf, u, y, p, ll, e)
+    if !(0 &lt;= kf.x[2] &lt;= 1)
+        xn, Rn = LowLevelParticleFilters.truncated_moment_match(kf.x, kf.R, 2; lower=0, upper=1, tol=1e-9)
+        kf.x = xn
+        kf.R = Rn
+    end
+    nothing
+end
+
+# Use original unclamped dynamics for truncated moment matching
+discrete_dynamics_tmm = discrete_dynamics_hybrid
+
+# Optimize truncated moment matching method
+function cost_tmm(θ)
+    T = eltype(θ)
+
+    kf = UnscentedKalmanFilter(
+        discrete_dynamics_tmm,
+        measurement_model,  # Use the linear measurement model
+        R1,
+        SimpleMvNormal(T.(x0), T.(2*R1));
+        ny, nu, Ts,
+    )
+
+    LowLevelParticleFilters.sse(kf, data.u, data.y, θ; post_update_cb=post_update_tmm)
+end
+
+# Run optimization for truncated moment matching
+@info &quot;Optimizing truncated moment matching method...&quot;
+result_tmm = Optim.optimize(
+    cost_tmm,
+    θ_init,
+    BFGS(),
+    opt_options;
+    autodiff = :forward,
+)
+
+params_tmm = result_tmm.minimizer
+
+# Evaluate truncated moment matching method
+kf_tmm = UnscentedKalmanFilter(
+    discrete_dynamics_tmm,
+    measurement_model,  # Use the linear measurement model
+    R1,
+    SimpleMvNormal(x0, R1);
+    p = params_tmm,
+    ny, nu, Ts
+)
+
+post_predict_tmm(kf, p, args...) = post_update_tmm(kf, 0, 0, p, 0, 0)
+sol_tmm = forward_trajectory(kf_tmm, data.u, data.y; post_predict_cb=post_predict_tmm, post_correct_cb=post_predict_tmm)
+
+eval_tmm = evaluate_solution(sol_tmm, data, params_tmm)
+@info &quot;Truncated moment matching - Temperature RMSE: $(round(eval_tmm.temp_rmse, digits=3))°C, Cloud RMSE: $(round(eval_tmm.cloud_rmse, digits=3))&quot;</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">[ Info: Optimizing truncated moment matching method...
+[ Info: Truncated moment matching - Temperature RMSE: 0.075°C, Cloud RMSE: 0.21</code></pre><h3 id="Comparison-Results"><a class="docs-heading-anchor" href="#Comparison-Results">Comparison Results</a><a id="Comparison-Results-1"></a><a class="docs-heading-anchor-permalink" href="#Comparison-Results" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Plot comparison of all methods
+p1 = plot(data.t, [data.x[i][2] for i in 1:length(data.x)],
+    label=&quot;True Cloud Cover&quot;, lw=3, color=:black, alpha=0.7)
+plot!(data.t, eval_clamping.cloud_est, label=&quot;Clamping&quot;, lw=2, color=:blue)
+plot!(data.t, eval_sigmoid.cloud_est, label=&quot;Sigmoid&quot;, lw=2, color=:red, ls=:dash)
+plot!(data.t, eval_projection.cloud_est, label=&quot;Projection&quot;, lw=2, color=:green, ls=:dot)
+plot!(data.t, eval_rejection.cloud_est, label=&quot;Rejection&quot;, lw=2, color=:purple, ls=:dashdot)
+plot!(data.t, eval_tmm.cloud_est, label=&quot;Truncated MM&quot;, lw=2, color=:orange, ls=:dashdotdot)
+ylabel!(&quot;Cloud Cover&quot;)
+xlabel!(&quot;Time (hours)&quot;)
+title!(&quot;Cloud Cover Estimation - Method Comparison&quot;)
+
+# Compare learned insolation patterns
+tod_test = LinRange(0.0f0, 24.0f0, 100)
+I_true_plot = [true_insolation(t, 0.0f0) for t in tod_test]
+
+p2 = plot(tod_test, I_true_plot, label=&quot;True&quot;, lw=3, color=:black, alpha=0.7)
+plot!(tod_test, eval_clamping.I_learned, label=&quot;Clamping&quot;, lw=2, color=:blue)
+plot!(tod_test, eval_sigmoid.I_learned, label=&quot;Sigmoid&quot;, lw=2, color=:red, ls=:dash)
+plot!(tod_test, eval_projection.I_learned, label=&quot;Projection&quot;, lw=2, color=:green, ls=:dot)
+plot!(tod_test, eval_rejection.I_learned, label=&quot;Rejection&quot;, lw=2, color=:purple, ls=:dashdot)
+plot!(tod_test, eval_tmm.I_learned, label=&quot;Truncated MM&quot;, lw=2, color=:orange, ls=:dashdotdot)
+xlabel!(&quot;Time of Day (hours)&quot;)
+ylabel!(&quot;Insolation (W/m²)&quot;)
+title!(&quot;Learned Insolation Patterns&quot;)
+
+plot(p1, p2, layout=(2,1), size=(1200, 800))</code></pre><img src="7694a1a8.svg" alt="Example block output"/><h4 id="Summary-table"><a class="docs-heading-anchor" href="#Summary-table">Summary table</a><a id="Summary-table-1"></a><a class="docs-heading-anchor-permalink" href="#Summary-table" title="Permalink"></a></h4><pre><code class="language-julia hljs">println(&quot;\n=== Method Comparison Summary ===&quot;)
+println(&quot;Method        | Temp RMSE | Cloud RMSE | Insolation RMSE&quot;)
+println(&quot;------------- | --------- | ---------- | ---------------&quot;)
+println(&quot;Clamping      | $(round(eval_clamping.temp_rmse, digits=3))     | $(round(eval_clamping.cloud_rmse, digits=3))      | $(round(eval_clamping.insolation_rmse, digits=1))&quot;)
+println(&quot;Sigmoid       | $(round(eval_sigmoid.temp_rmse, digits=3))     | $(round(eval_sigmoid.cloud_rmse, digits=3))      | $(round(eval_sigmoid.insolation_rmse, digits=1))&quot;)
+println(&quot;Projection    | $(round(eval_projection.temp_rmse, digits=3))     | $(round(eval_projection.cloud_rmse, digits=3))      | $(round(eval_projection.insolation_rmse, digits=1))&quot;)
+println(&quot;Rejection     | $(round(eval_rejection.temp_rmse, digits=3))     | $(round(eval_rejection.cloud_rmse, digits=3))      | $(round(eval_rejection.insolation_rmse, digits=1))&quot;)
+println(&quot;Truncated MM  | $(round(eval_tmm.temp_rmse, digits=3))     | $(round(eval_tmm.cloud_rmse, digits=3))      | $(round(eval_tmm.insolation_rmse, digits=1))&quot;)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">
+=== Method Comparison Summary ===
+Method        | Temp RMSE | Cloud RMSE | Insolation RMSE
+------------- | --------- | ---------- | ---------------
+Clamping      | 0.075     | 0.215      | 43.0
+Sigmoid       | 0.073     | 0.207      | 32.7
+Projection    | 0.075     | 0.255      | 60.5
+Rejection     | 0.077     | 0.281      | 182.2
+Truncated MM  | 0.075     | 0.21      | 31.2</code></pre><h3 id="Discussion-of-Constraint-Methods"><a class="docs-heading-anchor" href="#Discussion-of-Constraint-Methods">Discussion of Constraint Methods</a><a id="Discussion-of-Constraint-Methods-1"></a><a class="docs-heading-anchor-permalink" href="#Discussion-of-Constraint-Methods" title="Permalink"></a></h3><p>Each method has different trade-offs:</p><ol><li><p><strong>Clamping</strong>: Simple and computationally efficient, but creates discontinuities in the dynamics that some filters may not like.</p></li><li><p><strong>Sigmoid</strong>: Smooth transformation that naturally keeps variables bounded, but changes the noise characteristics and may introduce &quot;stickyness&quot; at the boundaries.</p></li><li><p><strong>Projection</strong>: Similar to clamping, but takes correlation between variables into account, updating also non-clamped variables and covariance.</p></li><li><p><strong>Sigma-point Rejection</strong>: Simple method that often introduces large bias.</p></li><li><p><strong>Truncated Moment Matching</strong>: Provides a statistically principled approach by computing the exact moments of the truncated normal distribution. May be <em>slightly</em> computationally expensive.</p></li></ol><p>The results show that the sigmoidal transformation and the truncated moment matching appear to perform best on this particular problem. We didn&#39;t use all that much data, so there is bound to be some randomness in these findings. I did try with 10x more data and the findings were quite similar.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../friction_nn_example/">« SciML: Adaptive Universal Differential Equation</a><a class="docs-footer-nextpage" href="../fault_detection/">Fault detection »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Wednesday 26 November 2025 06:23">Wednesday 26 November 2025</span>. Using Julia version 1.11.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
