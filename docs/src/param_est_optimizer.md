@@ -1,6 +1,9 @@
-# Using an optimizer
+# Prediction-Error minimization using an optimizer
 
 The state estimators in this package are all statistically motivated and thus compute things like the likelihood of the data as a by-product of the estimation. Maximum-likelihood or prediction-error estimation is thus very straight-forward by simply calling a gradient-based optimizer with gradients provided by differentiating through the state estimator using automatic differentiation. In this example, we will use the quad-tank process and estimate all its parameters. We will first use a standard optimization algorithm from [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl) to minimize the cost function based on the prediction error, and then use a Gauss-Newton optimizer.
+
+!!! note "Prediction-Error Method"
+    Minimizing the one-step ahead prediction errors made by a state estimator is often referred to as the "Prediction-Error Method" (PEM) in the system identification literature.
 
 ## Setup
 

@@ -88,8 +88,8 @@ function filter_from_parameters(θ, pf = nothing)
     # element type as the parameters. DynamicHMC will use Dual numbers for differentiation,
     # hence, we make sure that d0 has `eltype(d0) = eltype(θ)`
     T = eltype(θ)
-    d0 = MvNormal(T.(d0.μ), T.(d0.Σ))
-    KalmanFilter(A, B, C, 0, exp(θ[1])^2*eye(nx), exp(θ[2])^2*eye(ny), d0)
+    d0i = MvNormal(T.(d0.μ), T.(d0.Σ))
+    KalmanFilter(A, B, C, 0, exp(θ[1])^2*eye(nx), exp(θ[2])^2*eye(ny), d0i)
 end
 ll = log_likelihood_fun(filter_from_parameters, priors, u, y, p)
 

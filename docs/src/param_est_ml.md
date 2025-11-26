@@ -1,6 +1,10 @@
 # Maximum-likelihood and MAP estimation
 
-Filters calculate the likelihood and prediction errors while performing filtering, this can be used to perform maximum likelihood estimation or prediction-error minimization. One can estimate all kinds of parameters using this method, in the example below, we will estimate the noise covariance. We may for example plot likelihood as function of the variance of the dynamics noise like this:
+Filters calculate the likelihood and prediction errors while performing filtering, this can be used to perform maximum likelihood estimation or prediction-error minimization. One can estimate all kinds of parameters using this method, in the example below, we will estimate the noise covariance. The tutorial on this page focuses on problems where the number of parameters is so small that we can visualize the likelihood function, for higher-dimensional problems, see [Using an optimizer](@ref).
+
+
+
+We start by generating some data by simulating a two-dimensional linear system with known dynamics parameters, where we will attempt to optimize the dynamics noise covariance using maximum likelihood and MAP estimation.
 
 
 ## Generate data by simulation
@@ -26,6 +30,7 @@ vecvec_to_mat(x) = copy(reduce(hcat, x)') # Helper function
 pf = ParticleFilter(N, dynamics, measurement, df, dg, d0)
 xs,u,y = simulate(pf,300,df)
 ```
+
 
 ## Compute likelihood for various values of the parameters
 Since this example looks for a single parameter only, we can plot the likelihood as a function of this parameter. If we had been looking for more than 2 parameters, we typically use an optimizer instead (see [Using an optimizer](@ref)).
@@ -58,13 +63,7 @@ We can do the same with a Kalman filter, shown below. When using Kalman-type fil
 eye(n) = SMatrix{n,n}(1.0I(n))
 llskf = map(svec) do s
     kfs = KalmanFilter(A, B, C, 0, s^2*eye(nx), eye(ny), d0)
-    # loglik(kfs, u, y, p)
-
-
-    res3 = zeros((length(y[1])+1)*length(y))
-    LowLevelParticleFilters.prediction_errors!(res3, kfs, u, y, loglik=true)
-    -res3'res3
-
+    loglik(kfs, u, y, p)
 end
 llskfx = map(svec) do s # Kalman filter with known state sequence, possible when data is simulated
     kfs = KalmanFilter(A, B, C, 0, s^2*eye(nx), eye(ny), d0)
@@ -120,5 +119,8 @@ heatmap(
     xlabel = "sigma v",
     ylabel = "sigma w",
 ) # Yes, labels are reversed
+# Mark the maximum with a red dot
+max_idx = argmax(VGz)
+scatter!([max_idx[1]], [max_idx[2]], c=:red, marker=:x, markersize=10, lab="Maximum")
 ```
 For higher-dimensional problems, we may estimate the parameters using an optimizer, e.g., Optim.jl. See [Using an optimizer](@ref) for examples, including how to maximize the log-likelihood using Gauss-Newton optimization.

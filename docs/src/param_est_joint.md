@@ -1,6 +1,10 @@
 # Joint state and parameter estimation
 
-In this example, we'll show how to perform parameter estimation by treating a parameter as a state variable. This method can not only estimate constant parameters, but also time-varying parameters. The system we will consider is a quadruple tank, where two upper tanks feed into two lower tanks. The outlet for tank 1 can vary in size, simulating, e.g., that something partially blocks the outlet. We start by defining the dynamics on a form that changes the outlet area ``a_1`` at time ``t=500``:
+In this example, we'll show how to perform parameter estimation by treating a parameter as a state variable. This method can not only estimate constant parameters, but also time-varying parameters.
+
+Whether we want to estimate constant or time-varying parameters is controlled by the process noise covariance associated with the parameter state, a zero covariance means that the parameter is constant, while a non-zero covariance allows the parameter to vary over time. In either case, the initial variance associated with the parameter state controls how certain we are about the initial value of the parameter.
+
+The system we will consider is a quadruple tank, where two upper tanks feed into two lower tanks. The outlet for tank 1 can vary in size, simulating, e.g., that something partially blocks the outlet. We start by defining the dynamics on a form that changes the outlet area ``a_1`` at time ``t=500``:
 ```@example paramest
 using LowLevelParticleFilters
 using SeeToDee
@@ -105,5 +109,8 @@ If adaptive parameter estimation is coupled with a model-based controller, we ge
 We may ask ourselves, what's the difference between a parameter and a state variable if we can add parameters as state variables? Typically, parameters do not vary with time, and if they do, they vary significantly slower than the state variables. State variables also have dynamics associate with them, whereas we often have no idea about how the parameters vary other than that they vary slowly.
 
 Abrupt changes to the dynamics like in the example above can happen in practice, for instance, due to equipment failure or change of operating mode. This can be treated as a scenario with time-varying parameters that are continuously estimated.
+
+
+## More advanced example
 
 For systems with conditionally linear structure, the [`MUKF`](@ref) (Marginalized Unscented Kalman Filter) can provide more efficient joint state and parameter estimation. See [Joint state and parameter estimation using MUKF](@ref) for an example.
