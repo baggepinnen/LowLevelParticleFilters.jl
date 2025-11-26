@@ -63,15 +63,15 @@ function ExtendedKalmanFilter(dynamics, measurement_model::AbstractMeasurementMo
     return ExtendedKalmanFilter(kf, dynamics, measurement_model; Ajac, kwargs...)
 end
 
-function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(R1); nu::Int, ny=size(R2,1), nx::Int=size(R1,1), Cjac = nothing, kwargs...)
+function ExtendedKalmanFilter(dynamics, measurement, R1,R2,d0=SimpleMvNormal(R1); nu::Int, ny=size(R2,1), nx::Int=size(R1,1), Cjac = nothing, R12 = nothing, kwargs...)
     IPM = !has_oop(measurement)
     T = promote_type(eltype(R1), eltype(R2), eltype(d0))
-    measurement_model = EKFMeasurementModel{T, IPM}(measurement, R2; nx, ny, Cjac)
+    measurement_model = EKFMeasurementModel{T, IPM}(measurement, R2; nx, ny, Cjac, R12)
     return ExtendedKalmanFilter(dynamics, measurement_model, R1, d0; nu, nx, ny, kwargs...)
 end
 
 
-function ExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing, Cjac = nothing, names=default_names(kf.nx, kf.nu, kf.ny, "EKF"))
+function ExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing, Cjac = nothing, R12 = nothing, names=default_names(kf.nx, kf.nu, kf.ny, "EKF"))
     IPD = !has_oop(dynamics)
     if measurement isa AbstractMeasurementModel
         measurement_model = measurement
@@ -79,7 +79,7 @@ function ExtendedKalmanFilter(kf, dynamics, measurement; Ajac = nothing, Cjac = 
     else
         IPM = has_ip(measurement)
         T = promote_type(eltype(kf.R1), eltype(kf.R2), eltype(kf.d0))
-        measurement_model = EKFMeasurementModel{T, IPM}(measurement, kf.R2; kf.nx, kf.ny, Cjac)
+        measurement_model = EKFMeasurementModel{T, IPM}(measurement, kf.R2; kf.nx, kf.ny, Cjac, R12)
     end
     if Ajac === nothing
         # if IPD
@@ -151,12 +151,12 @@ function predict!(kf::AbstractExtendedKalmanFilter{IPD}, u, p = parameters(kf), 
     kf.t += 1
 end
 
-function correct!(ukf::AbstractExtendedKalmanFilter, u, y, p, t::Real; kwargs...)
-    measurement_model = ukf.measurement_model
-    correct!(ukf, measurement_model, u, y, p, t::Real; kwargs...)    
+function correct!(ekf::AbstractExtendedKalmanFilter, u, y, p, t::Real; kwargs...)
+    measurement_model = ekf.measurement_model
+    correct!(ekf, measurement_model, u, y, p, t::Real; kwargs...)
 end
 
-function correct!(kf::AbstractKalmanFilter,  measurement_model::EKFMeasurementModel{IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(measurement_model.R2, kf.x, u, p, t)) where IPM
+function correct!(kf::AbstractKalmanFilter, measurement_model::EKFMeasurementModel{IPM}, u, y, p = parameters(kf), t::Real = index(kf); R2 = get_mat(measurement_model.R2, kf.x, u, p, t), R12 = measurement_model.R12 === nothing ? nothing : get_mat(measurement_model.R12, kf.x, u, p, t)) where IPM
     (; x,R) = kf
     (; measurement, Cjac) = measurement_model
     C = Cjac(x, u, p, t)
@@ -167,12 +167,24 @@ function correct!(kf::AbstractKalmanFilter,  measurement_model::EKFMeasurementMo
     else
         e = y .- measurement(x, u, p, t)
     end
-    S   = symmetrize(C*R*C') + R2
-    Sᵪ  = cholesky(Symmetric(S); check=false)
-    issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed at time step $t, got S = $(printarray(S))")
-    K   = (R*C')/Sᵪ
-    kf.x += vec(K*e)
-    kf.R  = symmetrize((I - K*C)*R) # WARNING against I .- A
+    if R12 !== nothing
+        # Simon's "Optimal State Estimation" Section 7.1 (Eq. 7.14)
+        # For correlated noise where E[w_k v_j^T] = M_k δ_{k-j+1}
+        CR12 = C*R12
+        S   = symmetrize(C*R*C' + CR12 + CR12') + R2
+        Sᵪ  = cholesky(Symmetric(S); check=false)
+        issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed at time step $t, got S = $(printarray(S))")
+        K   = (R*C' + R12)/Sᵪ
+        kf.x += vec(K*e)
+        kf.R  = symmetrize((I - K*C)*R - K*R12')
+    else
+        S   = symmetrize(C*R*C') + R2
+        Sᵪ  = cholesky(Symmetric(S); check=false)
+        issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed at time step $t, got S = $(printarray(S))")
+        K   = (R*C')/Sᵪ
+        kf.x += vec(K*e)
+        kf.R  = symmetrize((I - K*C)*R) # WARNING against I .- A
+    end
     ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), e)[]# - 1/2*logdet(S) # logdet is included in logpdf
     (; ll, e, S, Sᵪ, K)
 end
@@ -218,3 +230,43 @@ sample_measurement(kf::AbstractExtendedKalmanFilter, x, u, p, t; noise=true) = k
 measurement(kf::AbstractExtendedKalmanFilter) = kf.measurement
 dynamics(kf::AbstractExtendedKalmanFilter) = kf.dynamics
 
+function simulate(f::ExtendedKalmanFilter, u::AbstractArray, p=parameters(f); dynamics_noise=true, measurement_noise=true, sample_initial=false)
+    mm = f.measurement_model
+    if !hasproperty(mm, :R12) || mm.R12 === nothing
+        # Fall back to generic simulate when no cross-covariance
+        return invoke(simulate, Tuple{AbstractFilter, typeof(u), typeof(p)}, f, u, p; dynamics_noise, measurement_noise, sample_initial)
+    end
+
+    T = length(u)
+    x1 = sample_state(f, p; noise=sample_initial)
+    y1 = f.measurement(x1, u[1], p, 0)
+    y = Vector{typeof(y1)}(undef, T)
+    x = Vector{typeof(x1)}(undef, T)
+    x[1] = x1
+    y[1] = y1
+
+    for t = 2:T
+        ti = (t-2)*f.Ts  # Time for previous state
+        R1 = get_mat(f.R1, x[t-1], u[t-1], p, ti)
+        R2 = get_mat(f.R2, x[t-1], u[t-1], p, ti)
+        R12 = get_mat(mm.R12, x[t-1], u[t-1], p, ti)
+
+        # Sample from joint distribution [w; v] ~ N(0, [R1 R12; R12' R2])
+        nw = size(R1, 1)
+        nv = size(R2, 1)
+        if dynamics_noise || measurement_noise
+            Rjoint = [R1 R12; R12' R2]
+            wv = rand(SimpleMvNormal(Rjoint))
+            w = dynamics_noise ? wv[1:nw] : zeros(eltype(wv), nw)
+            v = measurement_noise ? wv[nw+1:end] : zeros(eltype(wv), nv)
+        else
+            w = zeros(eltype(x1), nw)
+            v = zeros(eltype(y1), nv)
+        end
+
+        x[t] = f.dynamics(x[t-1], u[t-1], p, ti) .+ w
+        y[t] = f.measurement(x[t], u[t], p, ti+f.Ts) .+ v
+    end
+
+    x, u, y
+end

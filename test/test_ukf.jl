@@ -559,3 +559,4 @@ end
 ## Conclusion
 # If the noise input is discretized, such as when using rk4 with augmented dynamics, or if the noise inputs are explicitly added to c2d, then we should scale R1 by 1/Ts
 # If the noise input is not discretized, i.e., when using `Ax + Bu + w, or dynamics(x,u,p,t), we should instead scale R1 by Ts
+
