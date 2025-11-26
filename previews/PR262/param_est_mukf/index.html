@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>MUKF for parameter estimation · LowLevelParticleFilters Documentation</title><meta name="title" content="MUKF for parameter estimation · LowLevelParticleFilters Documentation"/><meta property="og:title" content="MUKF for parameter estimation · LowLevelParticleFilters Documentation"/><meta property="twitter:title" content="MUKF for parameter estimation · LowLevelParticleFilters Documentation"/><meta name="description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="og:description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="twitter:description" content="Documentation for LowLevelParticleFilters Documentation."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">LowLevelParticleFilters Documentation</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../discretization/">Discretization</a></li><li><a class="tocitem" href="../measurement_models/">Multiple measurement models</a></li><li><span class="tocitem">Parameter estimation</span><ul><li><a class="tocitem" href="../parameter_estimation/">Overview</a></li><li><a class="tocitem" href="../param_est_ml/">Maximum-likelihood and MAP</a></li><li><a class="tocitem" href="../param_est_bayesian/">Bayesian inference</a></li><li><a class="tocitem" href="../param_est_joint/">Joint state and parameter estimation</a></li><li class="is-active"><a class="tocitem" href>MUKF for parameter estimation</a><ul class="internal"><li><a class="tocitem" href="#Problem:-Quadrotor-with-Unknown-Mass-and-Drag"><span>Problem: Quadrotor with Unknown Mass and Drag</span></a></li><li><a class="tocitem" href="#MUKF-Formulation-with-Conditionally-Linear-Structure"><span>MUKF Formulation with Conditionally Linear Structure</span></a></li><li><a class="tocitem" href="#Simulation"><span>Simulation</span></a></li><li><a class="tocitem" href="#MUKF-Setup-and-Estimation"><span>MUKF Setup and Estimation</span></a></li><li><a class="tocitem" href="#Results-and-Comparison"><span>Results and Comparison</span></a></li><li><a class="tocitem" href="#Comparison-with-UKF-Approach"><span>Comparison with UKF Approach</span></a></li><li><a class="tocitem" href="#Performance-Analysis"><span>Performance Analysis</span></a></li></ul></li><li><a class="tocitem" href="../param_est_optimizer/">Using an optimizer</a></li><li><a class="tocitem" href="../param_est_identifiability/">Identifiability</a></li></ul></li><li><a class="tocitem" href="../benchmark/">Benchmark</a></li><li><a class="tocitem" href="../distributions/">Performance tips</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../adaptive_kalmanfilter/">Kalman-filter tutorial with LowLevelParticleFilters</a></li><li><a class="tocitem" href="../noisetuning/">Noise tuning and disturbance modeling for Kalman filtering</a></li><li><a class="tocitem" href="../beetle_example/">Particle-filter tutorial</a></li><li><a class="tocitem" href="../beetle_example_imm/">IMM-filter tutorial</a></li><li><a class="tocitem" href="../rbpf_example/">Rao-Blackwellized filter tutorial</a></li><li><a class="tocitem" href="../dae/">State estimation for DAE systems</a></li><li><a class="tocitem" href="../adaptive_control/">Adaptive estimation and control</a></li><li><a class="tocitem" href="../neural_network/">Adaptive Neural-Network training</a></li><li><a class="tocitem" href="../friction_nn_example/">SciML: Adaptive Universal Differential Equation</a></li><li><a class="tocitem" href="../thermal_nn_example/">SciML: Learning a sunshine disturbance model</a></li><li><a class="tocitem" href="../fault_detection/">Fault detection</a></li><li><a class="tocitem" href="../ut/">Unscented transform</a></li><li><a class="tocitem" href="../disturbance_gallery/">Disturbance gallery</a></li><li><a class="tocitem" href="../sample_rate/">Influence of sample rate on performance</a></li></ul></li><li><a class="tocitem" href="../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Parameter estimation</a></li><li class="is-active"><a href>MUKF for parameter estimation</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>MUKF for parameter estimation</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/docs/src/param_est_mukf.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Joint-state-and-parameter-estimation-using-MUKF"><a class="docs-heading-anchor" href="#Joint-state-and-parameter-estimation-using-MUKF">Joint state and parameter estimation using MUKF</a><a id="Joint-state-and-parameter-estimation-using-MUKF-1"></a><a class="docs-heading-anchor-permalink" href="#Joint-state-and-parameter-estimation-using-MUKF" title="Permalink"></a></h1><p>The <a href="../api/#LowLevelParticleFilters.MUKF"><code>MUKF</code></a> (Marginalized Unscented Kalman Filter) is an estimator particularily well suited to joint state and parameter estimation.  When parameters have linear time evolution and enter multiplicatively into the system dynamics, MUKF explicitly separates the nonlinear state variables from linearly-evolving variables, leading to:</p><ul><li>Deterministic estimation: No particle randomness like for particle filters, making it suitable for gradient-based optimization of hyperparameters</li><li>Computational efficiency: Uses fewer sigma points than UKF for the same state dimension</li></ul><h2 id="Problem:-Quadrotor-with-Unknown-Mass-and-Drag"><a class="docs-heading-anchor" href="#Problem:-Quadrotor-with-Unknown-Mass-and-Drag">Problem: Quadrotor with Unknown Mass and Drag</a><a id="Problem:-Quadrotor-with-Unknown-Mass-and-Drag-1"></a><a class="docs-heading-anchor-permalink" href="#Problem:-Quadrotor-with-Unknown-Mass-and-Drag" title="Permalink"></a></h2><p>We consider a simplified quadrotor model where the mass and drag coefficient are unknown and time-varying. By cleverly partitioning the state using reparameterizations <span>$\theta = 1/m$</span> and <span>$\varphi = \theta C_d$</span>, we exploit a conditionally linear structure to achieve significant computational savings.</p><p>The system has 8 state dimensions total with the following partitioning:</p><ul><li>Nonlinear substate (3D): velocities <span>$[v_x, v_y, v_z]$</span></li><li>Linear substate (5D): positions <span>$[x, y, z]$</span>, inverse mass <span>$\theta = 1/m$</span>, and mass-scaled drag <span>$\varphi = \theta C_d$</span></li></ul><p>The key insight is that positions evolve linearly given the velocities (<span>$\dot{x} = v_x$</span>), and velocity dynamics depend linearly on both <span>$\theta$</span> and <span>$\varphi$</span>. This clever parameterization reduces sigma points from 17 (for full 8D UKF) to only 7 (for 3D nonlinear MUKF).</p><p>The physical dynamics are:</p><p class="math-container">\[\begin{aligned}
+\dot{x} &amp;= v_x, \quad \dot{y} = v_y, \quad \dot{z} = v_z \\
+\dot{v}_x &amp;= \frac{F_x - C_d \cdot v_x |v_x|}{m}, \quad
+\dot{v}_y = \frac{F_y - C_d \cdot v_y |v_y|}{m}, \quad
+\dot{v}_z = \frac{F_z - C_d \cdot v_z |v_z|}{m} - g
+\end{aligned}\]</p><p>Using the inverse mass parameterization <span>$\theta = 1/m$</span> and defining <span>$\varphi = \theta C_d$</span>, we can rewrite the velocity dynamics as:</p><p class="math-container">\[\begin{aligned}
+\dot{v}_x &amp;= \theta F_x - \varphi v_x |v_x|, \quad
+\dot{v}_y = \theta F_y - \varphi v_y |v_y|, \quad
+\dot{v}_z = \theta F_z - \varphi v_z |v_z| - g
+\end{aligned}\]</p><p>This reveals the conditionally linear structure: the velocity derivatives depend linearly on both <span>$\theta$</span> and <span>$\varphi$</span>, while positions evolve as <span>$\dot{x} = v_x$</span> (linear dependence on velocities). The drag coefficient can be recovered as <span>$C_d = \varphi / \theta$</span> when needed. Since <span>$\theta = 1/m &gt; 0$</span>, this division is well defined as long as the estimate of <span>$\theta$</span> is reasonable.</p><pre><code class="language-julia hljs">using LowLevelParticleFilters
+using SeeToDee
+using Distributions
+using StaticArrays
+using Plots, LinearAlgebra, Random
+Random.seed!(0) # For reproducibility
+
+# System dimensions
+nxn = 3  # Nonlinear state: [vx, vy, vz] (velocities only)
+nxl = 5  # Linear state: [x, y, z, θ, φ] where θ = 1/m, φ = θ*Cd
+nx = nxn + nxl
+nu = 3   # Control inputs: [Fx, Fy, Fz] (thrust forces)
+ny = 6   # Measurements: [x, y, z, vx, vy, vz] (GPS + velocity)
+
+# Physical constants
+g = 9.81    # Gravity (m/s²)
+Ts = 0.02   # Sample time</code></pre><p>We&#39;ll simulate a scenario where:</p><ul><li>Mass decreases linearly from 1.0 to 0.85 kg (fuel drain)</li><li>Drag increases abruptly at t=50s from 0.01 to 0.015 (damage/configuration change)</li></ul><h2 id="MUKF-Formulation-with-Conditionally-Linear-Structure"><a class="docs-heading-anchor" href="#MUKF-Formulation-with-Conditionally-Linear-Structure">MUKF Formulation with Conditionally Linear Structure</a><a id="MUKF-Formulation-with-Conditionally-Linear-Structure-1"></a><a class="docs-heading-anchor-permalink" href="#MUKF-Formulation-with-Conditionally-Linear-Structure" title="Permalink"></a></h2><p>By using the parameterization <span>$\theta = 1/m$</span> and <span>$\varphi = \theta C_d$</span>, we exploit the conditionally linear structure from Morelande &amp; Moran (2007), which has the form:</p><p>$</p><p>\dot{x} = d(x^n) + A(x^n)x^l = \begin{aligned} \dot{x}^n &amp;= d<em>n(x^n) + A</em>n(x^n) x^l \
+\dot{x}^l &amp;= d<em>l(x^n) + A</em>l(x^n) x^l \end{aligned} $</p><p>where <span>$x^n = [v_x, v_y, v_z]$</span> and <span>$x^l = [x, y, z, \theta, \varphi]$</span>. The coupling matrix <span>$A_n(x^n)$</span> is <span>$3 \times 5$</span> and captures how <span>$\theta$</span> scales the thrust forces and <span>$\varphi$</span> scales the drag forces. The term <span>$d_l(x^n) = [v_x, v_y, v_z, 0, 0]$</span> captures how positions depend on velocities.</p><p>This clever parameterization reduces the number of sigma points from 17 (for a full 8D UKF with 2nx+1 = 2×8+1) to only 7 (for a 3D nonlinear MUKF with 2×3+1), a 59% reduction. Unscented Kalman filters internally perform a Cholesky factorization of the covariance matrix (to compute sigma points), which scales roughly cubically with state dimension, but the MUKF gets away with factorizing only the part of the covariance corresponding to the nonlinear substate, leading to further computational savings.</p><pre><code class="language-julia hljs"># Nonlinear dynamics function returns [dn; dl] where:
+# - dn: uncoupled part of nonlinear state dynamics
+# - dl: part of linear state dynamics that depends on nonlinear state
+function quadrotor_nonlinear_dynamics(xn, u, p, t)
+    vx, vy, vz = xn
+    Fx, Fy, Fz = u
+
+    # Nonlinear state dynamics (uncoupled part)
+    # v̇ = dn + An*xl where xl = [x,y,z,θ,φ]
+    dn = SA[
+        0.0,     # v̇x base (thrust/drag coupling through An)
+        0.0,     # v̇y base
+        -g       # v̇z base (gravity is independent of θ and φ)
+    ]
+
+    # Linear state dynamics (part depending on xn)
+    # ẋ, ẏ, ż = velocities, θ̇ = 0, φ̇ = 0
+    dl = SA[vx, vy, vz, 0.0, 0.0]
+
+    return [dn; dl]  # Return 8D vector
+end
+
+# Coupling matrix An: how linear state [x,y,z,θ,φ] affects nonlinear state [vx,vy,vz]
+# θ scales thrust forces, φ scales drag forces: v̇ = θ*F - φ*v|v|
+function An_matrix(xn, u, p, t)
+    vx, vy, vz = xn
+    Fx, Fy, Fz = u
+
+    # 3×5 matrix: positions don&#39;t couple, θ and φ do
+    SA[
+        0.0  0.0  0.0  Fx        -vx*abs(vx)    # v̇x = θ*Fx - φ*vx|vx|
+        0.0  0.0  0.0  Fy        -vy*abs(vy)    # v̇y = θ*Fy - φ*vy|vy|
+        0.0  0.0  0.0  Fz        -vz*abs(vz)    # v̇z = θ*Fz - φ*vz|vz| - g
+    ]
+end
+
+# Discrete coupling matrix (scaled by sampling time)
+An_matrix_discrete(xn, u, p, t) = An_matrix(xn, u, p, t) * Ts
+
+# Linear state evolution for discrete-time filter
+# Al = I to carry over state from previous time step: xl[k+1] = xl[k] + Ts*dl(xn[k])
+Al_discrete = SMatrix{nxl, nxl}(I(nxl))
+
+# Combined A matrix for MUKF: A = [An; Al] (nx × nxl)
+A_matrix_discrete(xn, u, p, t) = [An_matrix_discrete(xn, u, p, t); Al_discrete]
+
+# Measurement: we measure [x,y,z,vx,vy,vz]
+# This comes from d(xn) + Cl*xl where xl = [x,y,z,θ,φ]
+measurement(xn, u, p, t) = SA[0.0, 0.0, 0.0, xn[1], xn[2], xn[3]]  # [0,0,0,vx,vy,vz]
+Cl = SA[
+    1.0  0.0  0.0  0.0  0.0    # x measurement
+    0.0  1.0  0.0  0.0  0.0    # y measurement
+    0.0  0.0  1.0  0.0  0.0    # z measurement
+    0.0  0.0  0.0  0.0  0.0    # vx measurement (from xn)
+    0.0  0.0  0.0  0.0  0.0    # vy measurement (from xn)
+    0.0  0.0  0.0  0.0  0.0    # vz measurement (from xn)
+]
+
+# Discretize the nonlinear dynamics for the MUKF
+discrete_nonlinear_dynamics(x,u,p,t) = [x; @SVector(zeros(5))] + Ts .* quadrotor_nonlinear_dynamics(x,u,p,t)</code></pre><h2 id="Simulation"><a class="docs-heading-anchor" href="#Simulation">Simulation</a><a id="Simulation-1"></a><a class="docs-heading-anchor-permalink" href="#Simulation" title="Permalink"></a></h2><p>We&#39;ll simulate a hovering scenario with small perturbations, where the mass decreases (fuel drain) and drag increases abruptly (damage).</p><pre><code class="language-julia hljs">Tf = 50  # 50 seconds at 0.01s sampling
+t_vec = range(0, stop=Tf, step=Ts)
+T = length(t_vec)
+
+# Control: hovering thrust with small variations
+m_nominal = 1.0
+F_hover = m_nominal * g
+u = [SA[F_hover + 0.1*randn(), F_hover + 0.1*randn(), F_hover + 0.1*randn()] for _ in eachindex(t_vec)]
+
+# True parameters (time-varying)
+m_true = [t &lt; 25 ? 1.0 - 0.006*t : 0.85 for t in t_vec]  # Linear decrease
+θ_true = 1.0 ./ m_true                                    # Inverse mass
+Cd_true = [t &lt; 25 ? 0.01 : 0.015 for t in t_vec]         # Abrupt increase
+φ_true = θ_true .* Cd_true                                 # Scaled drag φ = θ*Cd
+
+# Simulate true trajectory using known true parameters
+function simulate_quadrotor(u, θ_true, Cd_true)
+    # Define continuous dynamics with true parameters
+    function dynamics_true(x_state, u_inner, p_inner, t_inner)
+        θ_i, Cd_i = p_inner
+        vx_s, vy_s, vz_s, px_s, py_s, pz_s = x_state
+        Fx, Fy, Fz = u_inner
+        SA[
+            # Velocity derivatives: v̇ = θ*(F - Cd*v|v|) - g_z
+            θ_i * (Fx - Cd_i * vx_s * abs(vx_s)),
+            θ_i * (Fy - Cd_i * vy_s * abs(vy_s)),
+            θ_i * (Fz - Cd_i * vz_s * abs(vz_s)) - g,
+            # Position derivatives: ẋ = v
+            vx_s,
+            vy_s,
+            vz_s
+        ]
+    end
+    discrete_step = SeeToDee.Rk4(dynamics_true, Ts)
+
+    x = zeros(T, nx)  # Full state: [vx,vy,vz,x,y,z,θ,φ]
+    φ_0 = θ_true[1] * Cd_true[1]
+    x[1, :] = [0, 0, 0, 0, 0, 10, θ_true[1], φ_0]  # Start at 10m altitude, zero velocity
+
+    for i in 1:T-1
+        vx, vy, vz = x[i, 1], x[i, 2], x[i, 3]
+        pos_x, pos_y, pos_z = x[i, 4], x[i, 5], x[i, 6]
+
+        # Use true parameter values at this time step
+        θ_i = θ_true[i]
+        Cd_i = Cd_true[i]
+
+        p = [θ_i, Cd_i]
+        # Integrate 6D state [vx,vy,vz,x,y,z] with true parameters
+        state_6d = SA[vx, vy, vz, pos_x, pos_y, pos_z]
+        state_next = discrete_step(state_6d, u[i], p, 0)
+
+        # Store next state including parameters
+        φ_next = θ_true[i+1] * Cd_true[i+1]
+        x[i+1, :] = [state_next[1], state_next[2], state_next[3],  # vx,vy,vz
+                     state_next[4], state_next[5], state_next[6],  # x,y,z
+                     θ_true[i+1], φ_next]                           # θ,φ
+    end
+    return x
+end
+
+x_true = simulate_quadrotor(u, θ_true, Cd_true)
+
+# Extract measurement components: [x,y,z,vx,vy,vz] from state [vx,vy,vz,x,y,z,θ,φ]
+y_true = [SA[x_true[i, 4], x_true[i, 5], x_true[i, 6],  # x,y,z
+              x_true[i, 1], x_true[i, 2], x_true[i, 3]]  # vx,vy,vz
+          for i in eachindex(t_vec)]
+
+# Add measurement noise
+y = [y_true[i] .+ 0.01 .* @SVector(randn(ny)) for i in eachindex(t_vec)]
+
+# Plot true trajectory and parameters
+p1 = plot(t_vec, x_true[:, 6], label=&quot;Altitude (z)&quot;, xlabel=&quot;Time (s)&quot;, ylabel=&quot;m&quot;, legend=:topright)
+p2 = plot(t_vec, m_true, label=&quot;Mass&quot;, xlabel=&quot;Time (s)&quot;, ylabel=&quot;kg&quot;, legend=:topright, c=:blue)
+p3 = plot(t_vec, Cd_true, label=&quot;Drag&quot;, ylabel=&quot;kg·s/m&quot;, c=:red)
+plot(p1, p2, p3)</code></pre><img src="d866ff9c.svg" alt="Example block output"/><h2 id="MUKF-Setup-and-Estimation"><a class="docs-heading-anchor" href="#MUKF-Setup-and-Estimation">MUKF Setup and Estimation</a><a id="MUKF-Setup-and-Estimation-1"></a><a class="docs-heading-anchor-permalink" href="#MUKF-Setup-and-Estimation" title="Permalink"></a></h2><p>Now we set up the MUKF, which takes mostly the same configutation options as an <a href="../api/#LowLevelParticleFilters.UnscentedKalmanFilter-Union{Tuple{AUGM}, Tuple{AUGD}, Tuple{IPM}, Tuple{IPD}, Tuple{Any, LowLevelParticleFilters.AbstractMeasurementModel, Any}, Tuple{Any, LowLevelParticleFilters.AbstractMeasurementModel, Any, Any}} where {IPD, IPM, AUGD, AUGM}"><code>UnscentedKalmanFilter</code></a></p><pre><code class="language-julia hljs"># Noise covariances
+R1n = SMatrix{nxn,nxn}(Diagonal([0.01, 0.01, 0.01]))  # Process noise for [vx,vy,vz]
+R1l = SMatrix{nxl,nxl}(Diagonal([0.01, 0.01, 0.01, 0.0001, 0.000001]))   # Process noise for [x,y,z,θ,φ]
+R1 = [[R1n zeros(SMatrix{nxn,nxl})]; [zeros(SMatrix{nxl,nxn}) R1l]]
+
+R2 = SMatrix{ny,ny}(Diagonal([0.1, 0.1, 0.1, 0.05, 0.05, 0.05]))  # Measurement noise
+
+# Initial state estimate (slightly wrong)
+m_guess = 0.9  # Wrong mass guess
+θ_guess = 1.0 / m_guess
+Cd_guess = 0.008  # Wrong Cd guess
+φ_guess = θ_guess * Cd_guess  # φ = θ*Cd
+x0n = SA[0.0, 0.0, 0.0]  # [vx,vy,vz]
+x0l = SA[0.0, 0.0, 10.0, θ_guess, φ_guess]  # [x,y,z,θ,φ]
+x0_full = [x0n; x0l]
+
+R0n = SMatrix{nxn,nxn}(Diagonal([0.5, 0.5, 0.5]))  # Uncertainty in velocities
+R0l = SMatrix{nxl,nxl}(Diagonal([1.0, 1.0, 1.0, 0.01, 0.0001]))    # Uncertainty in positions, θ, and φ
+R0_full = [[R0n zeros(SMatrix{nxn,nxl})]; [zeros(SMatrix{nxl,nxn}) R0l]]
+
+d0 = LowLevelParticleFilters.SimpleMvNormal(x0_full, R0_full)
+
+# Create measurement model
+mm = RBMeasurementModel(measurement, R2, ny)
+
+# Create MUKF
+mukf = MUKF(;
+    dynamics = discrete_nonlinear_dynamics,  # Returns [dn; dl]
+    nl_measurement_model = mm,
+    A = A_matrix_discrete,    # Combined coupling and dynamics matrix [An; Al]
+    Cl,
+    R1,
+    d0,
+    nxn,
+    nu,
+    ny,
+    Ts,
+)
+
+# Run estimation
+sol_mukf = forward_trajectory(mukf, u, y)
+
+# Extract estimates
+x_est_mukf = reduce(hcat, sol_mukf.xt)&#39;
+θ_est_mukf = x_est_mukf[:, 7]  # θ is the 7th state
+φ_est_mukf = x_est_mukf[:, 8]  # φ is the 8th state
+m_est_mukf = 1.0 ./ θ_est_mukf  # Convert back to mass
+Cd_est_mukf = φ_est_mukf ./ θ_est_mukf  # Recover Cd = φ/θ</code></pre><h2 id="Results-and-Comparison"><a class="docs-heading-anchor" href="#Results-and-Comparison">Results and Comparison</a><a id="Results-and-Comparison-1"></a><a class="docs-heading-anchor-permalink" href="#Results-and-Comparison" title="Permalink"></a></h2><p>Let&#39;s visualize the parameter estimation performance:</p><pre><code class="language-julia hljs"># Plot parameter estimates
+p1 = plot(t_vec, m_true, label=&quot;True mass&quot;, lw=2, xlabel=&quot;Time (s)&quot;, ylabel=&quot;Mass (kg)&quot;,
+          legend=:topright, c=:black, ls=:dash)
+plot!(p1, t_vec, m_est_mukf, label=&quot;MUKF estimate&quot;, lw=2, c=:blue)
+
+p2 = plot(t_vec, Cd_true, label=&quot;True drag&quot;, lw=2, xlabel=&quot;Time (s)&quot;, ylabel=&quot;Drag coeff (kg·s/m)&quot;,
+          legend=:topleft, c=:black, ls=:dash)
+plot!(p2, t_vec, Cd_est_mukf, label=&quot;MUKF estimate&quot;, lw=2, c=:blue)
+
+plot(p1, p2, layout=(2,1), size=(800,500))</code></pre><img src="27e03688.svg" alt="Example block output"/><p>The MUKF successfully tracks both parameters through the gradual mass decrease and the abrupt drag increase at t=50s. The estimation converges quickly from the initial guess.</p><h2 id="Comparison-with-UKF-Approach"><a class="docs-heading-anchor" href="#Comparison-with-UKF-Approach">Comparison with UKF Approach</a><a id="Comparison-with-UKF-Approach-1"></a><a class="docs-heading-anchor-permalink" href="#Comparison-with-UKF-Approach" title="Permalink"></a></h2><p>For comparison, let&#39;s solve the same problem using a standard UKF with the full 8D state (no exploitation of conditionally linear structure):</p><pre><code class="language-julia hljs"># For UKF, treat the entire 8D state uniformly (no structure exploitation)
+function quadrotor_dynamics_ukf(x_full, u, p, t)
+    xn = x_full[1:nxn]  # [vx,vy,vz]
+    xl = x_full[nxn+1:end]  # [x,y,z,θ,φ]
+
+    # Get dynamics and coupling
+    dyn = quadrotor_nonlinear_dynamics(xn, u, nothing, 0)
+    An = An_matrix(xn, u, nothing, 0)
+
+    # Full derivative
+    [dyn[1:nxn] + An * xl; dyn[nxn+1:end]]
+end
+
+discrete_dynamics_ukf = SeeToDee.Rk4(quadrotor_dynamics_ukf, Ts)
+measurement_ukf(x, u, p, t) = SA[x[4], x[5], x[6], x[1], x[2], x[3]]  # [x,y,z,vx,vy,vz]
+
+R1_ukf = Diagonal([0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.0001, 0.000001])
+R2_ukf = R2
+
+ukf = UnscentedKalmanFilter(
+    discrete_dynamics_ukf,
+    measurement_ukf,
+    R1_ukf,
+    R2_ukf,
+    MvNormal(x0_full, R0_full);
+    ny = ny,
+    nu = nu,
+    Ts = Ts
+)
+
+sol_ukf = forward_trajectory(ukf, u, y)
+
+# Extract UKF estimates
+x_est_ukf = reduce(hcat, sol_ukf.xt)&#39;
+θ_est_ukf = x_est_ukf[:, 7]  # θ is the 7th state
+φ_est_ukf = x_est_ukf[:, 8]  # φ is the 8th state
+m_est_ukf = 1.0 ./ θ_est_ukf  # Convert back to mass
+Cd_est_ukf = φ_est_ukf ./ θ_est_ukf  # Recover Cd = φ/θ
+
+# Compare the two approaches
+p1 = plot(t_vec, m_true, label=&quot;True&quot;, lw=2, xlabel=&quot;Time (s)&quot;, ylabel=&quot;Mass (kg)&quot;,
+          legend=:topright, c=:black, ls=:dash, title=&quot;Mass Estimation&quot;)
+plot!(p1, t_vec, m_est_mukf, label=&quot;MUKF&quot;, lw=2, c=:blue, alpha=0.7)
+plot!(p1, t_vec, m_est_ukf, label=&quot;UKF&quot;, lw=2, c=:green, alpha=0.7, ls=:dot)
+
+p2 = plot(t_vec, Cd_true, label=&quot;True&quot;, lw=2, xlabel=&quot;Time (s)&quot;, ylabel=&quot;Drag coeff&quot;,
+          legend=:topleft, c=:black, ls=:dash, title=&quot;Drag Estimation&quot;)
+plot!(p2, t_vec, Cd_est_mukf, label=&quot;MUKF&quot;, lw=2, c=:blue, alpha=0.7)
+plot!(p2, t_vec, Cd_est_ukf, label=&quot;UKF&quot;, lw=2, c=:green, alpha=0.7, ls=:dot)
+
+plot(p1, p2, layout=(2,1), size=(800,500))</code></pre><img src="b23b238e.svg" alt="Example block output"/><h2 id="Performance-Analysis"><a class="docs-heading-anchor" href="#Performance-Analysis">Performance Analysis</a><a id="Performance-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Analysis" title="Permalink"></a></h2><p>Let&#39;s quantify the estimation accuracy:</p><pre><code class="language-julia hljs">using Statistics
+
+# Compute RMSE for parameters (excluding initial transient)
+transient = 500  # Exclude first 5 seconds
+rmse_m_mukf = sqrt(mean((m_true[transient:end] - m_est_mukf[transient:end]).^2))
+rmse_Cd_mukf = sqrt(mean((Cd_true[transient:end] - Cd_est_mukf[transient:end]).^2))
+
+rmse_m_ukf = sqrt(mean((m_true[transient:end] - m_est_ukf[transient:end]).^2))
+rmse_Cd_ukf = sqrt(mean((Cd_true[transient:end] - Cd_est_ukf[transient:end]).^2))
+
+println(&quot;MUKF - Mass RMSE: $(round(rmse_m_mukf, digits=4)) kg&quot;)
+println(&quot;MUKF - Drag RMSE: $(round(rmse_Cd_mukf, digits=6)) kg·s/m&quot;)
+println()
+println(&quot;UKF  - Mass RMSE: $(round(rmse_m_ukf, digits=4)) kg&quot;)
+println(&quot;UKF  - Drag RMSE: $(round(rmse_Cd_ukf, digits=6)) kg·s/m&quot;)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">MUKF - Mass RMSE: 0.0044 kg
+MUKF - Drag RMSE: 0.000214 kg·s/m
+
+UKF  - Mass RMSE: 0.0043 kg
+UKF  - Drag RMSE: 0.000214 kg·s/m</code></pre><p>Both filters perform comparably in terms of accuracy. However, MUKF uses only 7 sigma points (2×3+1 for 3D nonlinear state) compared to UKF&#39;s 17 sigma points (2×8+1 for 8D full state), a 59% reduction illustrating the computational benefit of exploiting the conditionally linear structure with the φ = θ·Cd parameterization.</p><p>We should note here that we have performed slightly different discretizations of the dynamics for the UKF and the MUKF. With the standard UKF, we discretized the entire dynamics using an RK4 method, a very accurate integrator in this context. For the MUKF, we instead discretized the dynamics using a simple forward Euler discretization (by multiplying <span>$A_n$</span> and the output of <code>quadrotor_nonlinear_dynamics</code> by <span>$T_s$</span>). The reason for this discrepancy is that the conditional linearity that holds for this system in continuous time no longer holds after discretization, <em>unless</em> we use forward Euler discretization, which is the only scheme simple enough to not mess with the linearity. This primitive discretization is often sufficient for state estimation when sample intervals are short, which they tend to be when controlling quadrotors. See the note under <a href="../discretization/#Discretization">Discretization</a> for more comments regarding accuracy of integration for state estimation.</p><p>In special cases, more accurate integration is possible also for MUKF estimators. For example, when <span>$d_l(x^n) = 0$</span>, the linear state evolves purely linearly as <span>$x^l_{k+1} = A_l x^l_k$</span>, and we can use the matrix exponential to compute a discretized <span>$A_l$</span>. When <span>$A_n = 0$</span>, the nonlinear state evolves purely nonlinearly as <span>$x^n_{k+1} = f(x^n_k, u_k)$</span>, and we can use any accurate integrator for this part. Even when <span>$A_n \neq 0$</span>, we could treat the linear part of the nonlinear state evolution <span>$A_n x^l$</span> as an additional input to the nonlinear dynamics and use an accurate integrator for this part, this is not yet implemented due to the added complexity it would bring.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../param_est_joint/">« Joint state and parameter estimation</a><a class="docs-footer-nextpage" href="../param_est_optimizer/">Using an optimizer »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Wednesday 26 November 2025 09:11">Wednesday 26 November 2025</span>. Using Julia version 1.11.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

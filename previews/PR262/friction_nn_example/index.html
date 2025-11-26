@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>SciML: Adaptive Universal Differential Equation · LowLevelParticleFilters Documentation</title><meta name="title" content="SciML: Adaptive Universal Differential Equation · LowLevelParticleFilters Documentation"/><meta property="og:title" content="SciML: Adaptive Universal Differential Equation · LowLevelParticleFilters Documentation"/><meta property="twitter:title" content="SciML: Adaptive Universal Differential Equation · LowLevelParticleFilters Documentation"/><meta name="description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="og:description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="twitter:description" content="Documentation for LowLevelParticleFilters Documentation."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">LowLevelParticleFilters Documentation</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../discretization/">Discretization</a></li><li><a class="tocitem" href="../measurement_models/">Multiple measurement models</a></li><li><span class="tocitem">Parameter estimation</span><ul><li><a class="tocitem" href="../parameter_estimation/">Overview</a></li><li><a class="tocitem" href="../param_est_ml/">Maximum-likelihood and MAP</a></li><li><a class="tocitem" href="../param_est_bayesian/">Bayesian inference</a></li><li><a class="tocitem" href="../param_est_joint/">Joint state and parameter estimation</a></li><li><a class="tocitem" href="../param_est_mukf/">MUKF for parameter estimation</a></li><li><a class="tocitem" href="../param_est_optimizer/">Using an optimizer</a></li><li><a class="tocitem" href="../param_est_identifiability/">Identifiability</a></li></ul></li><li><a class="tocitem" href="../benchmark/">Benchmark</a></li><li><a class="tocitem" href="../distributions/">Performance tips</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../adaptive_kalmanfilter/">Kalman-filter tutorial with LowLevelParticleFilters</a></li><li><a class="tocitem" href="../noisetuning/">Noise tuning and disturbance modeling for Kalman filtering</a></li><li><a class="tocitem" href="../beetle_example/">Particle-filter tutorial</a></li><li><a class="tocitem" href="../beetle_example_imm/">IMM-filter tutorial</a></li><li><a class="tocitem" href="../rbpf_example/">Rao-Blackwellized filter tutorial</a></li><li><a class="tocitem" href="../dae/">State estimation for DAE systems</a></li><li><a class="tocitem" href="../adaptive_control/">Adaptive estimation and control</a></li><li><a class="tocitem" href="../neural_network/">Adaptive Neural-Network training</a></li><li class="is-active"><a class="tocitem" href>SciML: Adaptive Universal Differential Equation</a><ul class="internal"><li><a class="tocitem" href="#System-Description"><span>System Description</span></a></li><li><a class="tocitem" href="#Setup-and-Data-Generation"><span>Setup and Data Generation</span></a></li><li><a class="tocitem" href="#Neural-Network-Friction-Model"><span>Neural Network Friction Model</span></a></li><li><a class="tocitem" href="#Hybrid-Dynamics-Model"><span>Hybrid Dynamics Model</span></a></li><li><a class="tocitem" href="#Extended-Kalman-Filter-Setup"><span>Extended Kalman Filter Setup</span></a></li><li><a class="tocitem" href="#State-Estimation-and-Friction-Learning"><span>State Estimation and Friction Learning</span></a></li><li><a class="tocitem" href="#Learned-Friction-vs-True-Friction"><span>Learned Friction vs True Friction</span></a></li><li><a class="tocitem" href="#Evolution-of-Learned-Friction-Function"><span>Evolution of Learned Friction Function</span></a></li><li><a class="tocitem" href="#Closing-Remarks"><span>Closing Remarks</span></a></li></ul></li><li><a class="tocitem" href="../thermal_nn_example/">SciML: Learning a sunshine disturbance model</a></li><li><a class="tocitem" href="../fault_detection/">Fault detection</a></li><li><a class="tocitem" href="../ut/">Unscented transform</a></li><li><a class="tocitem" href="../disturbance_gallery/">Disturbance gallery</a></li><li><a class="tocitem" href="../sample_rate/">Influence of sample rate on performance</a></li></ul></li><li><a class="tocitem" href="../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>SciML: Adaptive Universal Differential Equation</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>SciML: Adaptive Universal Differential Equation</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/docs/src/friction_nn_example.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Learning-Friction-Dynamics-with-Neural-Networks"><a class="docs-heading-anchor" href="#Learning-Friction-Dynamics-with-Neural-Networks">Learning Friction Dynamics with Neural Networks</a><a id="Learning-Friction-Dynamics-with-Neural-Networks-1"></a><a class="docs-heading-anchor-permalink" href="#Learning-Friction-Dynamics-with-Neural-Networks" title="Permalink"></a></h1><p>In this example, we demonstrate how to learn an unknown friction model using a neural network within the Extended Kalman Filter framework. We consider an actuated mass subject to friction with Stribeck effect - a nonlinear phenomenon where friction decreases from static friction to Coulomb friction as velocity increases.</p><p>The key point is that while we know the basic physics (Newton&#39;s second law), we might not have an accurate friction model. We&#39;ll use a neural network to learn this friction component while leveraging our knowledge of the system structure.</p><p>Combining first-principles models and black-box neural networks, today popularized under the name &quot;Universal Differential Equations&quot; (UDEs), has been explored for a long time in the process-control community, early work includes <sup class="footnote-reference"><a id="citeref-UDE1" href="#footnote-UDE1" class="footnote-ref">[UDE1]</a><span class="footnote-preview" id="fn-UDE1"></span></sup> and <sup class="footnote-reference"><a id="citeref-UDE2" href="#footnote-UDE2" class="footnote-ref">[UDE2]</a><span class="footnote-preview" id="fn-UDE2"></span></sup>, where neural networks were used to augment continuous-time models of chemical processes. Contrary to those works, we will let the state estimator itself find the parameters of the neural network alongside the state, rather than relying on a separate training phase using gradient descent.</p><h2 id="System-Description"><a class="docs-heading-anchor" href="#System-Description">System Description</a><a id="System-Description-1"></a><a class="docs-heading-anchor-permalink" href="#System-Description" title="Permalink"></a></h2><p>We consider a simple mass moving in one dimension:</p><ul><li>State variables: position <code>x₁</code> and velocity <code>x₂</code>  </li><li>Control input: applied force <code>u</code></li><li>Unknown friction force: <code>f_friction(x₂)</code></li></ul><p>The continuous-time dynamics are:</p><pre><code class="nohighlight hljs">ẋ₁ = x₂
+ẋ₂ = (u - f_friction(x₂)) / m</code></pre><p>The true friction model includes Stribeck effect:</p><pre><code class="nohighlight hljs">f_friction(v) = (f_c + (f_s - f_c) * exp(-|v|/v_s)) * sign(v) + f_v * v</code></pre><p>where:</p><ul><li><code>f_s</code>: static friction coefficient</li><li><code>f_c</code>: Coulomb friction coefficient  </li><li><code>v_s</code>: Stribeck velocity</li><li><code>f_v</code>: viscous friction coefficient</li></ul><h2 id="Setup-and-Data-Generation"><a class="docs-heading-anchor" href="#Setup-and-Data-Generation">Setup and Data Generation</a><a id="Setup-and-Data-Generation-1"></a><a class="docs-heading-anchor-permalink" href="#Setup-and-Data-Generation" title="Permalink"></a></h2><p>We generate some data from the true system using the, assumed unknown, friction model. We let the friction increase linearly, simulating, e.g., increased friction due to increased temperature over time.</p><pre><code class="language-julia hljs">using LowLevelParticleFilters, Lux, Random, SeeToDee, StaticArrays, Plots, LinearAlgebra
+using ComponentArrays, DifferentiationInterface, SparseMatrixColorings
+using SparseConnectivityTracer: TracerSparsityDetector
+
+using LowLevelParticleFilters: SimpleMvNormal
+
+# True friction model with Stribeck effect
+function true_friction(v, t; f_s=2.0, f_c=1.0, v_s=0.1, f_v=0.5)
+    if abs(v) &lt; 1e-6
+        return 0.0f0  # Avoid numerical issues at zero velocity
+    else
+        # Friction increases linearly over time from 1.0 to 1.8
+        t_max = 400.0f0  # Maximum time in simulation
+        friction_multiplier = 1.0f0 + 0.3f0 * (t / t_max)
+        return Float32((f_c + (f_s - f_c) * exp(-abs(v)/v_s)) * sign(v) + f_v * v) * friction_multiplier
+    end
+end
+
+plot(v-&gt;true_friction(v, 0), -2, 2, lab=&quot;\$t = 0\$&quot;, xlabel=&quot;Velocity&quot;, ylabel=&quot;Friction Force&quot;, title=&quot;True friction model&quot;)
+plot!(v-&gt;true_friction(v, 400), -2, 2, lab=&quot;\$t = 400\$&quot;)</code></pre><img src="600f4ca0.svg" alt="Example block output"/><pre><code class="language-julia hljs"># True system dynamics
+function mass_dynamics(x, u, p, t)
+    m = 1.0f0  # Mass
+    x₁, x₂ = x
+    force = u[1]
+    friction = true_friction(x₂, t)
+
+    SA[
+        x₂,  # ẋ₁ = velocity
+        (force - friction) / m  # ẋ₂ = acceleration
+    ]
+end
+
+# Discretize the system
+Ts = 0.1f0  # Sample time
+discrete_dynamics = SeeToDee.Rk4(mass_dynamics, Ts)
+
+# System dimensions
+nx = 2  # State dimension [position, velocity]
+nu = 1  # Input dimension [force]
+ny = 2  # Output dimension [position, velocity]
+
+# Generate training data
+function generate_data(rng)
+    measurement(x, u, p, t) = x  # Measure full state
+
+    # Time vector
+    t = 0:Ts:200
+    N = length(t)
+
+    # Generate varied control inputs to excite different velocities
+    u = Float32[]
+    for i in 1:N
+        if i &lt; N÷4
+            push!(u, 3.0f0 * cos(0.1f0 * t[i]))  # Slow oscillation
+        elseif i &lt; N÷2
+            push!(u, 5.0f0 * sign(sin(0.5f0 * t[i])))  # Square wave
+        elseif i &lt; 3N÷4
+            push!(u, 2.0f0 * randn(rng))  # Random excitation
+        else
+            freq = 0.05f0 + 0.2f0 * (i - 3N÷4) / (N÷4)
+            push!(u, 4.0f0 * sin(2π * freq * t[i]))  # Chirp signal
+        end
+    end
+    u = [SA[u_i] for u_i in u]
+    u = [u; u]
+
+    # Initial state
+    x0 = Float32[0.0, 0.0]
+
+    # Simulate system
+    x = LowLevelParticleFilters.rollout(discrete_dynamics, x0, u)[1:end-1]
+
+    # Add measurement noise
+    y = [Float32.(x_i + 0.01f0 * randn(2)) for x_i in x]
+
+    (; x, u, y, nx, nu, ny, Ts)
+end
+
+# Generate data
+rng = Random.default_rng()
+Random.seed!(rng, 42)
+data = generate_data(rng)</code></pre><h2 id="Neural-Network-Friction-Model"><a class="docs-heading-anchor" href="#Neural-Network-Friction-Model">Neural Network Friction Model</a><a id="Neural-Network-Friction-Model-1"></a><a class="docs-heading-anchor-permalink" href="#Neural-Network-Friction-Model" title="Permalink"></a></h2><p>We&#39;ll use a small feedforward network to learn the friction as a function of velocity only:</p><pre><code class="language-julia hljs"># Neural network for friction model
+# Input: velocity (1D)
+# Output: friction force (1D)
+ni = 1  # Network input dimension (velocity only)
+no = 1  # Network output dimension (friction force)
+nhidden = 6  # Hidden layer size
+
+const friction_model2 = Chain(
+    Dense(ni, nhidden, tanh),
+    Dense(nhidden, nhidden, tanh),
+    Dense(nhidden, nhidden, tanh),
+    Dense(nhidden, no)
+)
+
+# Setup network parameters
+dev = cpu_device()
+ps, st = Lux.setup(rng, friction_model2) |&gt; dev
+parr = ComponentArray(ps)</code></pre><h2 id="Hybrid-Dynamics-Model"><a class="docs-heading-anchor" href="#Hybrid-Dynamics-Model">Hybrid Dynamics Model</a><a id="Hybrid-Dynamics-Model-1"></a><a class="docs-heading-anchor-permalink" href="#Hybrid-Dynamics-Model" title="Permalink"></a></h2><p>We combine our knowledge of the physics with the neural network friction model, the only part of the friction we assume known is that it is anti-symmetric around zero velocity:</p><pre><code class="language-julia hljs"># Initial state combining physical states and NN parameters
+x0 = Float32[0.0, 0.0]
+s0 = ComponentVector(; x=x0, p=parr)
+
+function friction_function(v, params, st)
+    # Neural network predicts friction based on velocity
+    # We assume that we know that friction is anti-symmetric around zero velocity
+    friction_nn, _ = Lux.apply(friction_model2, SA[abs(v)], params, st)
+    return friction_nn[1]*sign(v)
+end
+
+# Continuous-time hybrid dynamics: known physics + learned friction
+function hybrid_dynamics_continuous(xp, u, p, t)
+    xp_comp = ComponentArray(xp, getaxes(s0))
+
+    x₁, x₂ = xp_comp.x
+    params = xp_comp.p
+    m = 1.0f0
+
+    friction = friction_function(x₂, params, st)
+
+    # Known physics: Newton&#39;s second law
+    force = u[1]
+    acceleration = (force - friction) / m
+
+    # Combine state and parameter dynamics
+    ComponentVector(
+        x = SA[x₂, acceleration],  # State derivatives
+        p = -0.0001f0 * params  # Parameter dynamics (slow decay equivalent to 0.999 in discrete time)
+    )
+end
+
+# Discretize the hybrid dynamics
+discrete_hybrid_dynamics = SeeToDee.Rk4(hybrid_dynamics_continuous, Ts)
+
+# Wrapper for in-place version needed by EKF
+function hybrid_dynamics(out0, xp0, u, p, t)
+    xp_next = discrete_hybrid_dynamics(xp0, u, p, t)
+    out0 .= xp_next
+    nothing
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">hybrid_dynamics (generic function with 1 method)</code></pre><h2 id="Extended-Kalman-Filter-Setup"><a class="docs-heading-anchor" href="#Extended-Kalman-Filter-Setup">Extended Kalman Filter Setup</a><a id="Extended-Kalman-Filter-Setup-1"></a><a class="docs-heading-anchor-permalink" href="#Extended-Kalman-Filter-Setup" title="Permalink"></a></h2><pre><code class="language-julia hljs"># Process and measurement noise covariances
+R1 = Diagonal([
+    0.001f0 * ones(nx);             # Process noise for physical state
+    0.0001f0 * ones(length(parr))   # Noise for NN parameters (allows learning)
+])
+R2 = Diagonal(0.05f0^2 * ones(ny))  # Measurement noise
+
+# Jacobian computation with sparsity detection
+function Ajacfun(x, u, p, t)
+    backend = AutoSparse(
+        AutoForwardDiff(),
+        sparsity_detector=TracerSparsityDetector(),
+        coloring_algorithm=GreedyColoringAlgorithm(),
+    )
+    out = similar(getdata(x))
+    inner = (out, x) -&gt; hybrid_dynamics(out, x, u, p, t)
+    prep = prepare_jacobian(inner, out, backend, getdata(x))
+    jac = one(eltype(x)) .* sparsity_pattern(prep)
+
+    function (x, u, p, t)
+        inner2 = (out, x) -&gt; hybrid_dynamics(out, x, u, p, t)
+        DifferentiationInterface.jacobian!(inner2, out, jac, prep, backend, x)
+    end
+end
+
+Ajac = Ajacfun(s0, data.u[1], nothing, 0)
+
+# Measurement model (observe full state)
+measurement_model = LinearMeasurementModel(IndexingMatrix(SVector{nx}(1:nx), nx+length(parr)), 0, R2; ny)
+
+
+# Initialize Extended Kalman Filter
+ynames = [&quot;position&quot;, &quot;velocity&quot;]
+xnames = [ynames; [&quot;nn_$i&quot; for i in 1:length(parr)]]
+unames = [&quot;force&quot;]
+snames = SignalNames(x = xnames, y = ynames, u = unames, name=&quot;EKF&quot;)
+ekf = ExtendedKalmanFilter(
+    hybrid_dynamics,
+    measurement_model,
+    R1,
+    SimpleMvNormal(s0, 10000R1);
+    nu,
+    ny,
+    check=false,
+    Ajac,
+    Ts,
+    names = snames,
+)</code></pre><h2 id="State-Estimation-and-Friction-Learning"><a class="docs-heading-anchor" href="#State-Estimation-and-Friction-Learning">State Estimation and Friction Learning</a><a id="State-Estimation-and-Friction-Learning-1"></a><a class="docs-heading-anchor-permalink" href="#State-Estimation-and-Friction-Learning" title="Permalink"></a></h2><pre><code class="language-julia hljs"># Perform filtering
+@time sol = forward_trajectory(ekf, data.u, data.y)
+
+# Plot state estimation results
+kwargs = (plotx=false, plotxt=false, plotyh=true, plotyht=false, plotu=true, plote=true)
+p1 = plot(sol; name=&quot;EKF&quot;, layout=(nx+nu, 1), size=(900, 600), kwargs...)</code></pre><img src="3eca88a0.png" alt="Example block output"/><h2 id="Learned-Friction-vs-True-Friction"><a class="docs-heading-anchor" href="#Learned-Friction-vs-True-Friction">Learned Friction vs True Friction</a><a id="Learned-Friction-vs-True-Friction-1"></a><a class="docs-heading-anchor-permalink" href="#Learned-Friction-vs-True-Friction" title="Permalink"></a></h2><p>Let&#39;s compare the learned friction model with the true friction:</p><pre><code class="language-julia hljs"># Extract final parameters
+final_params = ComponentArray(sol.xt[end][nx+1:end], getaxes(parr))
+
+# Generate velocity range for comparison
+v_test = LinRange(-3.0f0, 3.0f0, 100)
+
+# Compute true friction
+friction_halfway = true_friction.(v_test, 200)
+
+# Compute learned friction (at t=200, before change)
+friction_learned_mid = Float32[]
+params_mid = ComponentArray(sol.xt[2000-1][nx+1:end], getaxes(parr))  # At t=200
+for v in v_test
+    friction = friction_function(Float32(v), params_mid, st)
+    push!(friction_learned_mid, friction)
+end
+
+# Compute learned friction (final, after adaptation)
+friction_learned_final = Float32[]
+for v in v_test
+    friction = friction_function(Float32(v), final_params, st)
+    push!(friction_learned_final, friction)
+end
+
+# Compute modified true friction (after t=200)
+friction_end = true_friction.(v_test, 400)
+
+# Plot comparison
+p2 = plot(v_test, friction_halfway, label=&quot;True friction (initial)&quot;, lw=2, ls=:dash, c=1)
+plot!(v_test, friction_end, label=&quot;True friction (after t=200)&quot;, lw=2, ls=:dash, c=2)
+plot!(v_test, friction_learned_mid, label=&quot;Learned (at t=200)&quot;, lw=2, alpha=0.7, c=1)
+plot!(v_test, friction_learned_final, label=&quot;Learned (final)&quot;, lw=2, c=2)
+plot!(xlabel=&quot;Velocity&quot;, ylabel=&quot;Friction Force&quot;, title=&quot;Friction Model Comparison&quot;)
+plot!(legend=:bottomright, size=(800, 500))</code></pre><img src="c100be76.png" alt="Example block output"/><h2 id="Evolution-of-Learned-Friction-Function"><a class="docs-heading-anchor" href="#Evolution-of-Learned-Friction-Function">Evolution of Learned Friction Function</a><a id="Evolution-of-Learned-Friction-Function-1"></a><a class="docs-heading-anchor-permalink" href="#Evolution-of-Learned-Friction-Function" title="Permalink"></a></h2><pre><code class="language-julia hljs"># Create animation showing evolution of learned friction
+anim = @animate for i in 1:10:length(sol.x)
+    t_current = (i-1) * Ts
+
+    # Extract parameters at current timestep
+    params_current = ComponentArray(sol.x[i][nx+1:end], getaxes(parr))
+
+    friction_learned_current = friction_function.(Float32.(v_test), Ref(params_current), Ref(st))
+
+    plot(v_test, true_friction.(v_test, t_current), label=&quot;True friction&quot;, lw=2, c=:red)
+    plot!(v_test, friction_learned_current, label=&quot;Learned friction&quot;, lw=2, c=:blue)
+
+    plot!(xlabel=&quot;Velocity&quot;, ylabel=&quot;Friction Force&quot;,
+          title=&quot;t = $(round(t_current, digits=1))&quot;,
+          legend=:bottomright, size=(800, 500), ylims=(-4,4))
+end
+
+gif(anim, fps=30)</code></pre><img src="af5c9d11.gif" alt="Example block output"/><h2 id="Closing-Remarks"><a class="docs-heading-anchor" href="#Closing-Remarks">Closing Remarks</a><a id="Closing-Remarks-1"></a><a class="docs-heading-anchor-permalink" href="#Closing-Remarks" title="Permalink"></a></h2><p>We combined first-principles knowledge (Newton&#39;s laws) with a neural network to learn only the unknown component (friction). This is more sample-efficient and interpretable than learning the entire dynamics.</p><p>The Extended Kalman Filter continuously updates the neural network parameters, allowing the model to adapt to changes in the system (e.g., the continuous friction increase).</p><section class="footnotes is-size-7"><ul><li class="footnote" id="footnote-UDE1"><a class="tag is-link" href="#citeref-UDE1">UDE1</a>Psichogios, Dimitris C., and Lyle H. Ungar. &quot;A hybrid neural network‐first principles approach to process modeling.&quot; AIChE Journal 38.10 (1992): 1499-1511.</li><li class="footnote" id="footnote-UDE2"><a class="tag is-link" href="#citeref-UDE2">UDE2</a>Psichogios, Dimitris C., and Lyle H. Ungar. &quot;Process modeling using structured neural networks.&quot; 1992 American Control Conference. IEEE, 1992.</li></ul></section></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../neural_network/">« Adaptive Neural-Network training</a><a class="docs-footer-nextpage" href="../thermal_nn_example/">SciML: Learning a sunshine disturbance model »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Wednesday 26 November 2025 09:11">Wednesday 26 November 2025</span>. Using Julia version 1.11.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

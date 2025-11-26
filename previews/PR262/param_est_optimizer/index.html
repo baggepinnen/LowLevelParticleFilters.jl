@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Using an optimizer · LowLevelParticleFilters Documentation</title><meta name="title" content="Using an optimizer · LowLevelParticleFilters Documentation"/><meta property="og:title" content="Using an optimizer · LowLevelParticleFilters Documentation"/><meta property="twitter:title" content="Using an optimizer · LowLevelParticleFilters Documentation"/><meta name="description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="og:description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="twitter:description" content="Documentation for LowLevelParticleFilters Documentation."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">LowLevelParticleFilters Documentation</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../discretization/">Discretization</a></li><li><a class="tocitem" href="../measurement_models/">Multiple measurement models</a></li><li><span class="tocitem">Parameter estimation</span><ul><li><a class="tocitem" href="../parameter_estimation/">Overview</a></li><li><a class="tocitem" href="../param_est_ml/">Maximum-likelihood and MAP</a></li><li><a class="tocitem" href="../param_est_bayesian/">Bayesian inference</a></li><li><a class="tocitem" href="../param_est_joint/">Joint state and parameter estimation</a></li><li><a class="tocitem" href="../param_est_mukf/">MUKF for parameter estimation</a></li><li class="is-active"><a class="tocitem" href>Using an optimizer</a><ul class="internal"><li><a class="tocitem" href="#Setup"><span>Setup</span></a></li><li><a class="tocitem" href="#Solving-using-Optim"><span>Solving using Optim</span></a></li><li><a class="tocitem" href="#Solving-using-Gauss-Newton-optimization"><span>Solving using Gauss-Newton optimization</span></a></li><li><a class="tocitem" href="#Optimizing-log-likelihood-using-Gauss-Newton-optimization"><span>Optimizing log-likelihood using Gauss-Newton optimization</span></a></li></ul></li><li><a class="tocitem" href="../param_est_identifiability/">Identifiability</a></li></ul></li><li><a class="tocitem" href="../benchmark/">Benchmark</a></li><li><a class="tocitem" href="../distributions/">Performance tips</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../adaptive_kalmanfilter/">Kalman-filter tutorial with LowLevelParticleFilters</a></li><li><a class="tocitem" href="../noisetuning/">Noise tuning and disturbance modeling for Kalman filtering</a></li><li><a class="tocitem" href="../beetle_example/">Particle-filter tutorial</a></li><li><a class="tocitem" href="../beetle_example_imm/">IMM-filter tutorial</a></li><li><a class="tocitem" href="../rbpf_example/">Rao-Blackwellized filter tutorial</a></li><li><a class="tocitem" href="../dae/">State estimation for DAE systems</a></li><li><a class="tocitem" href="../adaptive_control/">Adaptive estimation and control</a></li><li><a class="tocitem" href="../neural_network/">Adaptive Neural-Network training</a></li><li><a class="tocitem" href="../friction_nn_example/">SciML: Adaptive Universal Differential Equation</a></li><li><a class="tocitem" href="../thermal_nn_example/">SciML: Learning a sunshine disturbance model</a></li><li><a class="tocitem" href="../fault_detection/">Fault detection</a></li><li><a class="tocitem" href="../ut/">Unscented transform</a></li><li><a class="tocitem" href="../disturbance_gallery/">Disturbance gallery</a></li><li><a class="tocitem" href="../sample_rate/">Influence of sample rate on performance</a></li></ul></li><li><a class="tocitem" href="../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Parameter estimation</a></li><li class="is-active"><a href>Using an optimizer</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Using an optimizer</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/docs/src/param_est_optimizer.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Using-an-optimizer"><a class="docs-heading-anchor" href="#Using-an-optimizer">Using an optimizer</a><a id="Using-an-optimizer-1"></a><a class="docs-heading-anchor-permalink" href="#Using-an-optimizer" title="Permalink"></a></h1><p>The state estimators in this package are all statistically motivated and thus compute things like the likelihood of the data as a by-product of the estimation. Maximum-likelihood or prediction-error estimation is thus very straight-forward by simply calling a gradient-based optimizer with gradients provided by differentiating through the state estimator using automatic differentiation. In this example, we will use the quad-tank process and estimate all its parameters. We will first use a standard optimization algorithm from <a href="https://github.com/JuliaNLSolvers/Optim.jl">Optim.jl</a> to minimize the cost function based on the prediction error, and then use a Gauss-Newton optimizer.</p><h2 id="Setup"><a class="docs-heading-anchor" href="#Setup">Setup</a><a id="Setup-1"></a><a class="docs-heading-anchor-permalink" href="#Setup" title="Permalink"></a></h2><p>We define the quad-tank dynamics function such that it takes its parameters from the <code>p</code> input argument. We also define a variable <code>p_true</code> that contains the true values that we will use to simulate some estimation data. For an introduction to the quad-tank system, see <a href="../param_est_joint/#Joint-state-and-parameter-estimation">Joint state and parameter estimation</a>.</p><pre><code class="language-julia hljs">using LowLevelParticleFilters
+using SeeToDee
+using Distributions
+using StaticArrays
+using Plots, LinearAlgebra
+
+function quadtank(h, u, p, t)
+    k1, k2, g = p[1], p[2], 9.81
+    A1 = A3 = A2 = A4 = p[3]
+    a1 = a3 = a2 = a4 = p[4]
+    γ1 = γ2 = p[5]
+
+    ssqrt(x) = √(max(x, zero(x)) + 1e-3) # For numerical robustness at x = 0
+
+    SA[
+        -a1/A1 * ssqrt(2g*h[1]) + a3/A1*ssqrt(2g*h[3]) +     γ1*k1/A1 * u[1]
+        -a2/A2 * ssqrt(2g*h[2]) + a4/A2*ssqrt(2g*h[4]) +     γ2*k2/A2 * u[2]
+        -a3/A3*ssqrt(2g*h[3])                          + (1-γ2)*k2/A3 * u[2]
+        -a4/A4*ssqrt(2g*h[4])                          + (1-γ1)*k1/A4 * u[1]
+    ]
+end
+
+Ts = 1 # sample time
+nu = 2 # number of control inputs
+nx = 4 # number of state variables
+ny = 2 # number of measured outputs
+
+measurement(x,u,p,t) = SA[x[1], x[2]]
+discrete_dynamics = SeeToDee.Rk4(quadtank, Ts) # Discretize the dynamics using a 4:th order Runge-Kutta integrator
+p_true = [1.6, 1.6, 4.9, 0.03, 0.2]</code></pre><p>We simulate the system, this time using a more exciting input in order to be able to identify several parameters:</p><pre><code class="language-julia hljs">Tperiod = 200
+t = 0:Ts:1000
+u1 = vcat.(0.25 .* sign.(sin.(2pi/Tperiod .* (t ./ 40).^2)) .+ 0.25)
+u2 = vcat.(0.25 .* sign.(sin.(2pi/Tperiod .* (t ./ 40).^2 .+ pi/2)) .+ 0.25)
+u  = SVector{nu}.(vcat.(u1,u2))
+x0 = SA[2.0,2,3,3] # Initial condition, static array for performance
+x = LowLevelParticleFilters.rollout(discrete_dynamics, x0, u, p_true)[1:end-1]
+y = measurement.(x, u, 0, 0)
+y = [y .+ 0.01 .* randn.() for y in y]
+
+plot(
+    plot(reduce(hcat, x)&#39;, title=&quot;State&quot;),
+    plot(reduce(hcat, u)&#39;, title=&quot;Inputs&quot;)
+)</code></pre><img src="d589e226.svg" alt="Example block output"/><p>This time, we define a cost function for the optimizer to optimize, we&#39;ll use the sum of squared errors (<code>sse</code>). It&#39;s important to define the UKF with an initial state distribution with the same element type as the parameter vector so that automatic differentiation through the state estimator works, hence the explicit casting <code>T.(x0)</code> and <code>T.(R1)</code>. We also make sure to use StaticArrays for the covariance matrices and the initial condition for performance reasons (optional).</p><pre><code class="language-julia hljs">R1 = SMatrix{nx,nx}(Diagonal([0.1, 0.1, 0.1, 0.1])) # Use of StaticArrays is generally good for performance
+R2 = SMatrix{ny,ny}(Diagonal((1e-2)^2 * ones(ny)))
+x0 = SA[2.0, 2, 3, 3]
+
+function cost(p::Vector{T}) where T
+    kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), T.(R1)); ny, nu, Ts)
+    LowLevelParticleFilters.sse(kf, u, y, p) # Sum of squared prediction errors
+end</code></pre><p>We generate a random initial guess for the estimation problem</p><pre><code class="language-julia hljs">p_guess = p_true .+  0.1*p_true .* randn(length(p_true))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5-element Vector{Float64}:
+ 1.5524906519904813
+ 1.8775750226115546
+ 4.428448666554554
+ 0.02590304999150804
+ 0.1887687563066955</code></pre><h2 id="Solving-using-Optim"><a class="docs-heading-anchor" href="#Solving-using-Optim">Solving using Optim</a><a id="Solving-using-Optim-1"></a><a class="docs-heading-anchor-permalink" href="#Solving-using-Optim" title="Permalink"></a></h2><p>We first minimize the cost using the BFGS optimization algorithm from <a href="https://github.com/JuliaNLSolvers/Optim.jl">Optim.jl</a></p><pre><code class="language-julia hljs">using Optim
+res = Optim.optimize(
+    cost,
+    p_guess,
+    BFGS(),
+    Optim.Options(
+        show_trace = true,
+        show_every = 5,
+        iterations = 100,
+        time_limit = 30,
+    ),
+    autodiff = :forward, # Indicate that we want to use forward-mode AD to derive gradients
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"> * Status: success
+
+ * Candidate solution
+    Final objective value:     4.112172e-01
+
+ * Found with
+    Algorithm:     BFGS
+
+ * Convergence measures
+    |x - x&#39;|               = 3.19e-09 ≰ 0.0e+00
+    |x - x&#39;|/|x&#39;|          = 6.93e-10 ≰ 0.0e+00
+    |f(x) - f(x&#39;)|         = 7.44e-15 ≰ 0.0e+00
+    |f(x) - f(x&#39;)|/|f(x&#39;)| = 1.81e-14 ≰ 0.0e+00
+    |g(x)|                 = 1.31e-10 ≤ 1.0e-08
+
+ * Work counters
+    Seconds run:   0  (vs limit 30)
+    Iterations:    14
+    f(x) calls:    37
+    ∇f(x) calls:   37
+</code></pre><p>We started out with a normalized parameter error of</p><pre><code class="language-julia hljs">norm(p_true - p_guess) / norm(p_true)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.10171638186250584</code></pre><p>and ended with</p><pre><code class="language-julia hljs">p_opt = res.minimizer
+norm(p_true - p_opt) / norm(p_true)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.06043388874189955</code></pre><h2 id="Solving-using-Gauss-Newton-optimization"><a class="docs-heading-anchor" href="#Solving-using-Gauss-Newton-optimization">Solving using Gauss-Newton optimization</a><a id="Solving-using-Gauss-Newton-optimization-1"></a><a class="docs-heading-anchor-permalink" href="#Solving-using-Gauss-Newton-optimization" title="Permalink"></a></h2><p>Below, we optimize the sum of squared residuals again, but this time we do it using a Gauss-Newton style algorithm (Levenberg Marquardt). These algorithms want the entire residual vector rather than the sum of squares of the residuals, so we define an alternative &quot;cost function&quot; called <code>residuals</code> that calls the lower-level function <a href="../api/#LowLevelParticleFilters.prediction_errors!"><code>LowLevelParticleFilters.prediction_errors!</code></a></p><pre><code class="language-julia hljs">using LeastSquaresOptim
+
+function residuals!(res, p::Vector{T}) where T
+    kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), T.(R1)); ny, nu, Ts)
+    LowLevelParticleFilters.prediction_errors!(res, kf, u, y, p)
+end
+
+res_gn = optimize!(LeastSquaresProblem(x = copy(p_guess), f! = residuals!, output_length = length(y)*ny, autodiff = :forward), LevenbergMarquardt())
+
+p_opt_gn = res_gn.minimizer
+norm(p_true - p_opt_gn) / norm(p_true)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.05181296446739656</code></pre><p>When performing sum-of-squares minimization like here, we can, assuming that we converge to the global optimum, estimate the covariance of the estimated parameters. The <em>precision matrix</em> <span>$Λ$</span>, which is the inverse of the covariance matrix of the parameters, is given by a scaled Hessian of the cost function. The Gauss-Newton appoximation of the Hessian is given by <span>$J&#39;J$</span>, where <span>$J$</span> is the Jacobian of the residuals.</p><pre><code class="language-julia hljs">using ForwardDiff
+T = length(y)
+J = ForwardDiff.jacobian(residuals!, zeros(T * ny), res_gn.minimizer)
+Λ = (T - length(p_guess)) * Symmetric(J&#39; * J) # Precision matrix of the estimated parameters
+# Σ = inv(Λ) # Covariance matrix of the estimated parameters (only compute this if precision matrix is well conditioned)
+svdvals(Λ)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5-element Vector{Float64}:
+     1.0581525693369225e7
+ 14925.359179054769
+   862.8219878962076
+   386.58162555667235
+     3.4106051316475588e-12</code></pre><p>In this case, the precision matrix is singular, indicating that there is at least one diretion in parameter space that yields no increase in cost, and we can thus not determine where along a line in this direction the true parameter lies.</p><p>Gauss-Newton algorithms are often more efficient at sum-of-squares minimization than the more generic BFGS optimizer. This form of Gauss-Newton optimization of prediction errors is also available through <a href="https://baggepinnen.github.io/ControlSystemIdentification.jl/dev/nonlinear/#Identification-of-nonlinear-models">ControlSystemIdentification.jl</a>, which uses this package undernath the hood.</p><h2 id="Optimizing-log-likelihood-using-Gauss-Newton-optimization"><a class="docs-heading-anchor" href="#Optimizing-log-likelihood-using-Gauss-Newton-optimization">Optimizing log-likelihood using Gauss-Newton optimization</a><a id="Optimizing-log-likelihood-using-Gauss-Newton-optimization-1"></a><a class="docs-heading-anchor-permalink" href="#Optimizing-log-likelihood-using-Gauss-Newton-optimization" title="Permalink"></a></h2><p>We can use a Gauss-Newton optimizer to maximize the log-likelihood as well, the only thing we need to change is to pass <code>loglik = true</code> to the <code>prediction_errors!</code> function, adjust the residual output length accordingly (notice the <code>(ny+1)</code> below, we now have an additional residual per time step corresponding to a <code>logdet</code> term in the likelihood) as well as possibly providing an <code>offset</code> argument. The reason for the offset is that the <code>logdet</code> term may be negative and cannot be the result of squaring a real number. The addition of the offset does not affect the optimization process, but adds a constant offset to the computed log liklihood value (cost function). If the offset is needed, you will get an error message indicating that when calling <code>prediction_errors!</code>. The code looks like this:</p><pre><code class="language-julia hljs">using LeastSquaresOptim
+
+function residuals!(res, p::Vector{T}) where T
+    kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, MvNormal(T.(x0), T.(R1)); ny, nu, Ts)
+    LowLevelParticleFilters.prediction_errors!(res, kf, u, y, p, loglik=true, offset=12)
+end
+
+res_gn = optimize!(LeastSquaresProblem(x = copy(p_guess), f! = residuals!, output_length = length(y)*(ny+1), autodiff = :forward), LevenbergMarquardt())
+
+p_opt_gn = res_gn.minimizer
+norm(p_true - p_opt_gn) / norm(p_true)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.02784714727569744</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../param_est_mukf/">« MUKF for parameter estimation</a><a class="docs-footer-nextpage" href="../param_est_identifiability/">Identifiability »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Wednesday 26 November 2025 09:11">Wednesday 26 November 2025</span>. Using Julia version 1.11.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
