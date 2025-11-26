@@ -121,4 +121,4 @@ heatmap(
     ylabel = "sigma w",
 ) # Yes, labels are reversed
 ```
-For higher-dimensional problems, we may estimate the parameters using an optimizer, e.g., Optim.jl. See [Using an optimizer](@ref) for examples.
+For higher-dimensional problems, we may estimate the parameters using an optimizer, e.g., Optim.jl. See [Using an optimizer](@ref) for examples, including how to maximize the log-likelihood using Gauss-Newton optimization.

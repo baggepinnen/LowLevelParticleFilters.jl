@@ -105,3 +105,5 @@ If adaptive parameter estimation is coupled with a model-based controller, we ge
 We may ask ourselves, what's the difference between a parameter and a state variable if we can add parameters as state variables? Typically, parameters do not vary with time, and if they do, they vary significantly slower than the state variables. State variables also have dynamics associate with them, whereas we often have no idea about how the parameters vary other than that they vary slowly.
 
 Abrupt changes to the dynamics like in the example above can happen in practice, for instance, due to equipment failure or change of operating mode. This can be treated as a scenario with time-varying parameters that are continuously estimated.
+
+For systems with conditionally linear structure, the [`MUKF`](@ref) (Marginalized Unscented Kalman Filter) can provide more efficient joint state and parameter estimation. See [Joint state and parameter estimation using MUKF](@ref) for an example.

@@ -146,20 +146,3 @@ This link provides a principled way to analyze *parameter identifiability* and *
 
 This relationship is useful for understanding how well parameters can be estimated from data, and it explains why *insufficient excitation* or *poor observability* leads to *slow decay of $R_{pp,k}$* and unreliable parameter estimates in practice. The FIM is also equal to the Hessian of the negative log-likelihood function at the optimum found when performing maximum-likelihood parameter estimation.
 
-## Videos
-Examples of parameter estimation are available here
-
-By using an optimizer to optimize the likelihood of an [`UnscentedKalmanFilter`](@ref):
-```@raw html
-<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/0RxQwepVsoM" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-```
-
-Estimation of time-varying parameters:
-```@raw html
-<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/zJcOPPLqv4A?si=XCvpo3WD-4U3PJ2S" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-```
-
-Adaptive control by means of estimation of time-varying parameters:
-```@raw html
-<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/Ip_prmA7QTU?si=Fat_srMTQw5JtW2d" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-```

@@ -31,6 +31,25 @@ Maximum likelihood estimation tends to yield an estimator with better estimates 
 - [Using an optimizer](@ref): Use gradient-based optimization with automatic differentiation for parameter estimation.
 - [Identifiability](@ref): Analyze structural identifiability and Fisher information for parameter estimation problems.
 
+## Videos
+
+Examples of parameter estimation are available here.
+
+By using an optimizer to optimize the likelihood of an [`UnscentedKalmanFilter`](@ref):
+```@raw html
+<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/0RxQwepVsoM" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+```
+
+Estimation of time-varying parameters:
+```@raw html
+<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/zJcOPPLqv4A?si=XCvpo3WD-4U3PJ2S" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+```
+
+Adaptive control by means of estimation of time-varying parameters:
+```@raw html
+<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/Ip_prmA7QTU?si=Fat_srMTQw5JtW2d" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+```
+
 ```@raw html
 <script>
 (function() {
@@ -53,7 +72,6 @@ Maximum likelihood estimation tends to yield an estimator with better estimates 
         '#Polynomial-methods': '../param_est_identifiability/#Polynomial-methods',
         '#Linear-methods': '../param_est_identifiability/#Linear-methods',
         '#Fisher-Information-and-Augmented-State-Covariance': '../param_est_identifiability/#Fisher-Information-and-Augmented-State-Covariance',
-        '#Videos': '../param_est_identifiability/#Videos'
     };
 
     if (redirects[hash]) {
