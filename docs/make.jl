@@ -43,6 +43,7 @@ makedocs(
                   "Unscented transform" => "ut.md",
                   "Disturbance gallery" => "disturbance_gallery.md",
                   "Influence of sample rate on performance" => "sample_rate.md",
+                  "Cross-covariance between dynamics and measurement" => "cross_covariance.md",
             ],
             "API" => "api.md",
       ],
