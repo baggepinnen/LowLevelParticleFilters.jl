@@ -90,25 +90,38 @@ The measurement noise covariance matrix `R2` stored in the filter object can opt
 # Extended help
 To perform separate measurement updates for different sensors, see the ["Measurement models" in the documentation](@ref measurement_models).
 """
-function correct!(kf::AbstractKalmanFilter, mm::LinearMeasurementModel, u, y, p=parameters(kf), t::Real = index(kf)*kf.Ts; R2 = get_mat(mm.R2, kf.x, u, p, t), Ct = get_mat(mm.C, kf.x, u, p, t), Dt = get_mat(mm.D, kf.x, u, p, t))
+function correct!(kf::AbstractKalmanFilter, mm::LinearMeasurementModel, u, y, p=parameters(kf), t::Real = index(kf)*kf.Ts; R2 = get_mat(mm.R2, kf.x, u, p, t), Ct = get_mat(mm.C, kf.x, u, p, t), Dt = get_mat(mm.D, kf.x, u, p, t), R12 = mm.R12 === nothing ? nothing : get_mat(mm.R12, kf.x, u, p, t))
     (;x,R) = kf
     e   = y .- Ct*x
     if !iszero(Dt)
         e -= Dt*u
     end
-    S = symmetrize(Ct*R*Ct')
-    @bangbang S .+= R2
-    Sᵪ  = cholesky(Symmetric(S); check = false)
-    issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed at time step $(kf.t), got S = $(printarray(S))")
-    K   = (R*Ct')/Sᵪ
-    kf.x += K*e
-    kf.R  = symmetrize((I - K*Ct)*R) # WARNING against I .- A
+    if R12 !== nothing
+        # Simon's "Optimal State Estimation" Section 7.1 (Eq. 7.14)
+        # For correlated noise where E[w_k v_j^T] = M_k δ_{k-j+1}
+        CR12 = Ct*R12
+        S = symmetrize(Ct*R*Ct' + CR12 + CR12')
+        @bangbang S .+= R2
+        Sᵪ  = cholesky(Symmetric(S); check = false)
+        issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed at time step $(kf.t), got S = $(printarray(S))")
+        K   = (R*Ct' + R12)/Sᵪ
+        kf.x += K*e
+        kf.R  = symmetrize((I - K*Ct)*R - K*R12')
+    else
+        S = symmetrize(Ct*R*Ct')
+        @bangbang S .+= R2
+        Sᵪ  = cholesky(Symmetric(S); check = false)
+        issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed at time step $(kf.t), got S = $(printarray(S))")
+        K   = (R*Ct')/Sᵪ
+        kf.x += K*e
+        kf.R  = symmetrize((I - K*Ct)*R) # WARNING against I .- A
+    end
     ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), e)# - 1/2*logdet(S) # logdet is included in logpdf
     (; ll, e, S, Sᵪ, K)
 end
 
 function correct!(kf::AbstractKalmanFilter, u, y, p=parameters(kf), t::Real = index(kf)*kf.Ts; kwargs...)
-    measurement_model = LinearMeasurementModel(kf.C, kf.D, kf.R2, length(y), nothing)
+    measurement_model = LinearMeasurementModel(kf.C, kf.D, kf.R2, length(y), nothing, nothing)
     correct!(kf, measurement_model, u, y, p, t; kwargs...)
 end
 

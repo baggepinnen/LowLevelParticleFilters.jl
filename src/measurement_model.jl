@@ -342,25 +342,27 @@ end
 ## Linear measurement model ====================================================
 
 """
-    LinearMeasurementModel{CT, DT, RT, CAT}
+    LinearMeasurementModel{CT, DT, RT, R12T, CAT}
 
 A linear measurement model ``y = C*x + D*u + e``.
 
 # Fields:
-- `C` 
+- `C`
 - `D`
 - `R2`: The measurement noise covariance matrix
 - `ny`: The number of measurement variables
+- `R12`: Cross-covariance between dynamics noise at step `k` and measurement noise at step `k+1`. See Simon, D.: "Optimal state estimation: Kalman, H Infinity, and nonlinear approaches" sec. 7.1
 """
-struct LinearMeasurementModel{CT,DT,RT,CAT} <: AbstractMeasurementModel
+struct LinearMeasurementModel{CT,DT,RT,R12T,CAT} <: AbstractMeasurementModel
     C::CT
     D::DT
     R2::RT
     ny::Int
+    R12::R12T
     cache::CAT
 end
 
-LinearMeasurementModel(C, D, R2; ny = size(R2, 1), cache = nothing, nx=nothing) = LinearMeasurementModel(C, D, R2, ny, cache)
+LinearMeasurementModel(C, D, R2; ny = size(R2, 1), R12 = nothing, cache = nothing, nx=nothing) = LinearMeasurementModel(C, D, R2, ny, R12, cache)
 isinplace(::LinearMeasurementModel) = false
 
 function (model::LinearMeasurementModel)(x,u,p,t)
