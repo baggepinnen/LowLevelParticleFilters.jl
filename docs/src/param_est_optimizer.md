@@ -130,14 +130,16 @@ When performing sum-of-squares minimization like here, we can, assuming that we 
 ```@example paramest
 using ForwardDiff
 T = length(y)
-J = ForwardDiff.jacobian(residuals!, zeros(T * ny), res_gn.minimizer)
-Λ = (T - length(p_guess)) * Symmetric(J' * J) # Precision matrix of the estimated parameters
+out = zeros(T * ny)
+J = ForwardDiff.jacobian(residuals!, out, res_gn.minimizer)
+residuals!(out, res_gn.minimizer)
+Λ = (T - length(p_guess))/dot(out,out) * Symmetric(J' * J) # Precision matrix of the estimated parameters
 # Σ = inv(Λ) # Covariance matrix of the estimated parameters (only compute this if precision matrix is well conditioned)
 svdvals(Λ)
 ```
-In this case, the precision matrix is singular, indicating that there is at least one diretion in parameter space that yields no increase in cost, and we can thus not determine where along a line in this direction the true parameter lies.
+In this case, the precision matrix is singular, indicating that there is at least one direction in parameter space that yields no increase in cost, and we can thus not determine where along a line in this direction the true parameter lies.
 
-Gauss-Newton algorithms are often more efficient at sum-of-squares minimization than the more generic BFGS optimizer. This form of Gauss-Newton optimization of prediction errors is also available through [ControlSystemIdentification.jl](https://baggepinnen.github.io/ControlSystemIdentification.jl/dev/nonlinear/#Identification-of-nonlinear-models), which uses this package undernath the hood.
+Gauss-Newton algorithms are often more efficient at sum-of-squares minimization than the more generic BFGS optimizer. This form of Gauss-Newton optimization of prediction errors is also available through [ControlSystemIdentification.jl](https://baggepinnen.github.io/ControlSystemIdentification.jl/dev/nonlinear/#Identification-of-nonlinear-models), which uses this package underneath the hood.
 
 
 ## Optimizing log-likelihood using Gauss-Newton optimization
