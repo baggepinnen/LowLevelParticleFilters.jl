@@ -123,7 +123,7 @@ ukf_with_r12 = UnscentedKalmanFilter(dynamics, mm_ekf_r12, R1, d0; nu=1, ny=1)
 Similarly, you can use a [`LinearMeasurementModel`](@ref) with R12:
 
 ```@example R12
-mm_linear_r12 = LinearMeasurementModel{Float64}(C, R2; nx=1, ny=1, R12=R12)
+mm_linear_r12 = LinearMeasurementModel(C, 0, R2; nx=1, ny=1, R12=R12)
 ukf_linear_r12 = UnscentedKalmanFilter(dynamics, mm_linear_r12, R1, d0; nu=1, ny=1)
 ```
 
