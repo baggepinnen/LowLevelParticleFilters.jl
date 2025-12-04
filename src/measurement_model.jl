@@ -342,7 +342,7 @@ end
 ## Linear measurement model ====================================================
 
 """
-    LinearMeasurementModel{CT, DT, RT, R12T, CAT}
+    LinearMeasurementModel(C, D, R2; R12 = nothing)
 
 A linear measurement model ``y = C*x + D*u + e``.
 
