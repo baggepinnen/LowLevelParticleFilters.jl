@@ -21,8 +21,7 @@ where ``R_{12} = E[w_k v_k^T]`` is the cross-covariance matrix (following the no
 
 This correlation can arise in several scenarios:
 - When process and measurement noise share a common source
-- In systems where a sensor measures a quantity that is directly affected by the process disturbance
-- When discretizing continuous-time systems where process and measurement noise are correlated
+- Systems with feedback loops where measurement noise influences the process
 
 ## Measurement models with R12 support
 
@@ -39,7 +38,8 @@ We demonstrate the effect of R12 using a simple scalar system:
 ```math
 \begin{aligned}
 x_{k+1} &= 0.8 x_k + w_k \\
-y_k &= x_k + v_k
+y_k &= x_k + v_k \\
+\text{Cov}\begin{pmatrix} w_k \\ v_k \end{pmatrix} &= \begin{pmatrix} 1.0 & 0.25 \\ 0.25 & 0.1 \end{pmatrix}
 \end{aligned}
 ```
 
