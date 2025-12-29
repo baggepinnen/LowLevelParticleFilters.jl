@@ -26,9 +26,9 @@ This correlation can arise in several scenarios:
 ## Measurement models with R12 support
 
 The following measurement models support the `R12` cross-covariance parameter:
-- [`EKFMeasurementModel`](@ref): For use with [`ExtendedKalmanFilter`](@ref)
-- [`LinearMeasurementModel`](@ref): For linear measurement functions
-- [`IEKFMeasurementModel`](@ref): For use with [`IteratedExtendedKalmanFilter`](@ref)
+- [`EKFMeasurementModel`](@ref): Linearizing measurement model, used by default in [`ExtendedKalmanFilter`](@ref)
+- [`LinearMeasurementModel`](@ref): A linear measurement model
+- [`IEKFMeasurementModel`](@ref): Iteratively linearizing measurement model, used by default in [`IteratedExtendedKalmanFilter`](@ref)
 
 The [`UKFMeasurementModel`](@ref) does not support `R12` directly since the unscented transform uses sigma-point propagation rather than analytical covariance formulas. However, you can use an `EKFMeasurementModel` or `LinearMeasurementModel` with an [`UnscentedKalmanFilter`](@ref) to get R12 support while still using the unscented transform for the prediction step.
 
@@ -50,18 +50,18 @@ using LowLevelParticleFilters: SimpleMvNormal
 using StaticArrays
 
 # System parameters
-A = SA[0.8;;]
-B = SA[0.0;;]
-C = SA[1.0;;]
-R1 = SA[1.0;;]   # Process noise covariance
-R2 = SA[0.1;;]   # Measurement noise covariance
-R12 = SA[0.25;;] # Cross-covariance
+A   = SA[0.8;;]
+B   = SA[0.0;;]
+C   = SA[1.0;;]
+R1  = SA[1.0;;]   # Process noise covariance
+R2  = SA[0.1;;]   # Measurement noise covariance
+R12 = SA[0.25;;]  # Cross-covariance
 
 # Initial state distribution
 d0 = SimpleMvNormal(SA[0.0], SA[1.0;;])
 
 # Dynamics and measurement functions
-dynamics(x, u, p, t) = A * x
+dynamics(x, u, p, t)    = A * x
 measurement(x, u, p, t) = C * x
 nothing # hide
 ```
@@ -82,7 +82,7 @@ u = fill([], 100) # No control inputs
 x, u, y = simulate(ekf_with_r12, u) # Simulate data using the filter with R12
 
 # Run both filters
-sol_no_r12 = forward_trajectory(ekf_no_r12, u, y)
+sol_no_r12   = forward_trajectory(ekf_no_r12, u, y)
 sol_with_r12 = forward_trajectory(ekf_with_r12, u, y)
 nothing # hide
 ```
@@ -95,11 +95,11 @@ We can compare the actual estimation errors:
 
 ```@example R12
 # Estimation errors
-err_no_r12 = x .- sol_no_r12.xt |> stack
+err_no_r12   = x .- sol_no_r12.xt   |> stack
 err_with_r12 = x .- sol_with_r12.xt |> stack
 
 println("RMS error without R12: ", round(sqrt(mean(abs2, err_no_r12)), digits=4))
-println("RMS error with R12: ", round(sqrt(mean(abs2, err_with_r12)), digits=4))
+println("RMS error with R12: ",  round(sqrt(mean(abs2, err_with_r12)), digits=4))
 ```
 
 ```@example R12
@@ -135,9 +135,9 @@ When process and measurement noise are correlated:
 1. Ignoring the correlation (setting R12=0) leads to suboptimal estimation with higher estimation-error variance.
 
 2. The `R12` parameter can be specified in:
+   - [`LinearMeasurementModel`](@ref)
    - [`ExtendedKalmanFilter`](@ref)
    - [`EKFMeasurementModel`](@ref)
-   - [`LinearMeasurementModel`](@ref)
    - [`IEKFMeasurementModel`](@ref)
 
 3. To use R12 with [`UnscentedKalmanFilter`](@ref), provide an `EKFMeasurementModel`, `LinearMeasurementModel`, or `IEKFMeasurementModel` instead of the default `UKFMeasurementModel`.
