@@ -110,7 +110,7 @@ sse(x) = sum(sum.(abs2, x))
 
 # EnKF should perform reasonably well (within a factor of KF performance)
 sse_kf = sse(x_true .- reskf.xt)
-sse_enkf = sse(stack(x_true)' .- mean_trajectory(resenkf))
+sse_enkf = sse(x_true .- resenkf.xt)
 
 @test sse_enkf < 1.2 * sse_kf  # EnKF should not be drastically worse
 @test sse_enkf < 500  # Absolute bound on error
@@ -170,11 +170,12 @@ enkf_no_input = EnsembleKalmanFilter(dynamics_no_input, measurement, R1, R2, d0,
 u_empty = [SVector{0,Float64}() for _ in 1:20]
 @test_nowarn forward_trajectory(enkf_no_input, u_empty, y[1:20])
 
-## Test that output solution has correct format
+## Test that output solution has correct format (KalmanFilteringSolution)
 sol = forward_trajectory(enkf, u[1:20], y[1:20])
-@test sol isa LowLevelParticleFilters.ParticleFilteringSolution
-@test size(sol.x, 1) == N  # N particles
-@test size(sol.x, 2) == 20  # T time steps
-@test size(sol.we) == size(sol.x)
-@test all(sum(sol.we, dims=1) .≈ 1.0)  # Weights sum to 1 at each time step
+@test sol isa LowLevelParticleFilters.KalmanFilteringSolution
+@test length(sol.x) == 20   # T time steps (predictions)
+@test length(sol.xt) == 20  # T time steps (filtered)
+@test length(sol.R) == 20   # Prediction covariances
+@test length(sol.Rt) == 20  # Filtered covariances
+@test length(sol.e) == 20   # Innovations
 

@@ -72,13 +72,15 @@ P = covariance(enkf)  # Sample covariance
 
 See also [`UnscentedKalmanFilter`](@ref), [`ParticleFilter`](@ref)
 """
-mutable struct EnsembleKalmanFilter{DT,MT,R1T,R2T,D0T,ET,P,RNGT} <: AbstractKalmanFilter
+mutable struct EnsembleKalmanFilter{DT,MT,R1T,R2T,D0T,ET,XT,RT,P,RNGT} <: AbstractKalmanFilter
     dynamics::DT
     measurement::MT
     R1::R1T
     R2::R2T
     d0::D0T
     ensemble::ET
+    x::XT      # Cached ensemble mean
+    R::RT      # Cached sample covariance
     t::Int
     Ts::Float64
     ny::Int
@@ -111,6 +113,10 @@ function EnsembleKalmanFilter(
     # Initialize ensemble by sampling from initial distribution
     ensemble = [rand(rng, d0) for _ in 1:N]
 
+    # Compute initial cached mean and covariance
+    x0 = _ensemble_mean(ensemble)
+    R0 = _ensemble_cov(ensemble, x0)
+
     EnsembleKalmanFilter(
         dynamics,
         measurement,
@@ -118,6 +124,8 @@ function EnsembleKalmanFilter(
         R2 isa AbstractMatrix ? PDMats.PDMat(R2) : R2,
         d0,
         ensemble,
+        x0,
+        R0,
         0,
         Ts,
         ny,
@@ -128,6 +136,36 @@ function EnsembleKalmanFilter(
         inflation,
         names
     )
+end
+
+# Internal helper functions to compute ensemble statistics
+function _ensemble_mean(ensemble)
+    N = length(ensemble)
+    x̄ = copy(ensemble[1])
+    for i in 2:N
+        @bangbang x̄ .+= ensemble[i]
+    end
+    @bangbang x̄ ./= N
+    x̄
+end
+
+function _ensemble_cov(ensemble, x̄)
+    N = length(ensemble)
+    nx = length(x̄)
+    R = zeros(nx, nx)
+    for i in 1:N
+        δx = ensemble[i] .- x̄
+        @bangbang R .+= δx * δx'
+    end
+    @bangbang R ./= (N - 1)
+    R
+end
+
+# Update cached x and R from ensemble
+function _update_ensemble_stats!(enkf::EnsembleKalmanFilter)
+    enkf.x = _ensemble_mean(enkf.ensemble)
+    enkf.R = _ensemble_cov(enkf.ensemble, enkf.x)
+    nothing
 end
 
 # Accessor functions
@@ -141,37 +179,16 @@ measurement(enkf::EnsembleKalmanFilter) = enkf.measurement
 """
     state(enkf::EnsembleKalmanFilter)
 
-Return the ensemble mean (state estimate).
+Return the cached ensemble mean (state estimate).
 """
-function state(enkf::EnsembleKalmanFilter)
-    N = num_particles(enkf)
-    x̄ = copy(enkf.ensemble[1])
-    for i in 2:N
-        @bangbang x̄ .+= enkf.ensemble[i]
-    end
-    @bangbang x̄ ./= N
-    x̄
-end
+state(enkf::EnsembleKalmanFilter) = enkf.x
 
 """
     covariance(enkf::EnsembleKalmanFilter)
 
-Return the sample covariance computed from the ensemble.
+Return the cached sample covariance computed from the ensemble.
 """
-function covariance(enkf::EnsembleKalmanFilter)
-    N = num_particles(enkf)
-    x̄ = state(enkf)
-    nx = enkf.nx
-
-    # Compute sample covariance: (1/(N-1)) * Σ (x_i - x̄)(x_i - x̄)ᵀ
-    R = zeros(nx, nx)
-    for i in 1:N
-        δx = enkf.ensemble[i] .- x̄
-        @bangbang R .+= δx * δx'
-    end
-    @bangbang  R ./= (N - 1)
-    R
-end
+covariance(enkf::EnsembleKalmanFilter) = enkf.R
 
 """
     reset!(enkf::EnsembleKalmanFilter; x0 = nothing)
@@ -194,6 +211,7 @@ function reset!(enkf::EnsembleKalmanFilter; x0 = nothing, t = 0)
         end
     end
     enkf.t = t
+    _update_ensemble_stats!(enkf)
     nothing
 end
 
@@ -207,16 +225,14 @@ function predict!(
     u,
     p = parameters(enkf),
     t::Real = index(enkf) * enkf.Ts;
-    R1 = get_mat(enkf.R1, state(enkf), u, p, t),
+    R1 = get_mat(enkf.R1, enkf.x, u, p, t),
     inflation = enkf.inflation
 )
     f = dynamics(enkf)
     N = num_particles(enkf)
-    nx = enkf.nx
 
     # Create distribution for process noise
-    R1pd = PDMats.PDMat(R1)  # Ensure positive-definite matrix type
-    d_w = SimpleMvNormal(R1pd)
+    d_w = SimpleMvNormal(PDMats.PDMat(R1))
 
     # Propagate each ensemble member
     for i in 1:N
@@ -225,14 +241,16 @@ function predict!(
         enkf.ensemble[i] = f(xi, u, p, t) .+ wi
     end
 
+    # Apply covariance inflation if > 1.0
     if inflation > 1.0
-        x̄ = state(enkf)
+        x̄ = _ensemble_mean(enkf.ensemble)  # Compute fresh mean after propagation
         for i in 1:N
             enkf.ensemble[i] = x̄ .+ inflation .* (enkf.ensemble[i] .- x̄)
         end
     end
 
     enkf.t += 1
+    _update_ensemble_stats!(enkf)  # Update cached x and R
     nothing
 end
 
@@ -250,7 +268,7 @@ function correct!(
     y,
     p = parameters(enkf),
     t::Real = index(enkf) * enkf.Ts;
-    R2 = get_mat(enkf.R2, state(enkf), u, p, t)
+    R2 = get_mat(enkf.R2, enkf.x, u, p, t)
 )
     h = measurement(enkf)
     N = num_particles(enkf)
@@ -312,6 +330,8 @@ function correct!(
     # Compute log-likelihood
     ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), e)
 
+    _update_ensemble_stats!(enkf)  # Update cached x and R
+
     (; ll, e, S, Sᵪ, K)
 end
 
@@ -343,45 +363,6 @@ end
 # For compatibility with particle filter interface
 particletype(enkf::EnsembleKalmanFilter) = eltype(enkf.ensemble)
 covtype(enkf::EnsembleKalmanFilter) = Matrix{eltype(eltype(enkf.ensemble))}
-
-"""
-    forward_trajectory(enkf::EnsembleKalmanFilter, u::AbstractVector, y::AbstractVector, p = parameters(enkf))
-
-Run the EnKF for a sequence of inputs and measurements. Returns a `ParticleFilteringSolution`
-with ensemble members and uniform weights.
-"""
-function forward_trajectory(
-    enkf::EnsembleKalmanFilter,
-    u::AbstractVector,
-    y::AbstractVector,
-    p = parameters(enkf);
-    t = range(0, step=enkf.Ts, length=length(y))
-)
-    reset!(enkf)
-    T = length(y)
-    N = num_particles(enkf)
-
-    # Storage (same format as ParticleFilteringSolution)
-    x = Array{particletype(enkf)}(undef, N, T)
-    w = zeros(N, T)  # Log weights (uniform = 0)
-    we = fill(1.0/N, N, T)  # Exp weights (uniform = 1/N)
-    ll = 0.0
-
-    @inbounds for k in 1:T
-        ti = t[k]
-        ret = correct!(enkf, u[k], y[k], p, ti)
-        ll += ret.ll
-
-        # Store current ensemble
-        for i in 1:N
-            x[i, k] = copy(enkf.ensemble[i])
-        end
-
-        predict!(enkf, u[k], p, ti)
-    end
-
-    ParticleFilteringSolution(enkf, u, y, x, w, we, ll, t)
-end
 
 # Display
 function Base.show(io::IO, enkf::EnsembleKalmanFilter)
