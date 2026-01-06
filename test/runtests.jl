@@ -576,6 +576,11 @@ end
     include("test_uikf.jl")
 end
 
+@testset "enkf" begin
+    @info "Testing EnKF"
+    include("test_enkf.jl")
+end
+
 @testset "function_versions" begin
     @info "Testing function_versions"
     include("test_function_versions.jl")
