@@ -1,8 +1,6 @@
 using LowLevelParticleFilters
-using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions
-using JET
+using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions, Plots
 Random.seed!(0)
-
 
 ## KF
 
@@ -29,60 +27,46 @@ kf   = KalmanFilter(_A, _B, _C, 0, eye(nx), eye(ny), d0)
 x,u,y = LowLevelParticleFilters.simulate(kf,T,du) # Simuate trajectory using the model in the filter
 tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
 x,u,y = tosvec.((x,u,y))
-@test_opt predict!(kf, u[1])
-@report_call predict!(kf, u[1])
-
-@test_opt correct!(kf, u[1], y[1])
-@report_call correct!(kf, u[1], y[1])
-
 ukf  = UnscentedKalmanFilter(dynamics_jet, measurement_jet, eye(nx), eye(ny), d0; ny, nu)
 @test ukf.R1 isa SMatrix{2, 2, Float64, 4}
-@test_opt predict!(ukf, u[1])
-@report_call predict!(ukf, u[1])
-
-@test_opt correct!(ukf, u[1], y[1])
-@report_call correct!(ukf, u[1], y[1])
-
 
 skf  = SqKalmanFilter(_A, _B, _C, 0, eye(nx), eye(ny), d0)
 @test skf.R1.data isa SMatrix{2, 2, Float64, 4}
-@test_opt predict!(skf, u[1])
-@report_call predict!(skf, u[1])
-
-@test_opt correct!(skf, u[1], y[1])
-@report_call correct!(skf, u[1], y[1])
-
 
 ekf = ExtendedKalmanFilter(dynamics_jet, measurement_jet, eye(nx), eye(ny), d0; nu)
 @test ekf.kf.R1 isa SMatrix{2, 2, Float64, 4}
-@test_opt predict!(ekf, u[1])
-@report_call predict!(ekf, u[1])
-
-@test_opt correct!(ekf, u[1], y[1])
-@report_call correct!(ekf, u[1], y[1])
 
 cu(x) = cholesky(x).U |> UpperTriangular
 sqekf = SqExtendedKalmanFilter(dynamics_jet, measurement_jet, cu(eye(nx)), cu(eye(ny)), d0; nu)
 @test sqekf.kf.R1.data isa SMatrix{2, 2, Float64, 4}
-@test_opt predict!(sqekf, u[1])
-@report_call predict!(sqekf, u[1])
-
-@test_opt correct!(sqekf, u[1], y[1])
-@report_call correct!(sqekf, u[1], y[1])
-
 
 
 ## Test allocations ============================================================
-forward_trajectory(kf, u, y) 
-a = @allocations forward_trajectory(kf, u, y) 
+forward_trajectory(kf, u, y) # warm up
+forward_trajectory(ukf, u, y) # warm up
+forward_trajectory(skf, u, y) # warm up
+forward_trajectory(ekf, u, y) # warm up
+forward_trajectory(sqekf, u, y) # warm up
+
+bench = function (kf, u, y)
+    r = forward_trajectory(kf, u, y) # warm up
+    a = @allocations forward_trajectory(kf, u, y) 
+end
+a = bench(kf, u, y)
 @test a <= 22*1.1 # Allocations occur when the arrays are allocated for saving the data, the important thing is that the number of allocations do not grow with the length of the trajectory (T = 200)
 
-forward_trajectory(ukf, u, y) 
-a = @allocations forward_trajectory(ukf, u, y) 
+bench = function (ukf, u, y)
+    r = forward_trajectory(ukf, u, y) # warm up
+    a = @allocations forward_trajectory(ukf, u, y) 
+end
+a = bench(ukf, u, y)
 @test a <= 22*1.1
 
-forward_trajectory(skf, u, y)
-a = @allocations forward_trajectory(skf, u, y)
+bench = function (skf, u, y)
+    r = forward_trajectory(skf, u, y) # warm up
+    a = @allocations forward_trajectory(skf, u, y)
+end
+a = bench(skf, u, y)
 
 if get(ENV, "CI", nothing) == "true"
     @test a <= 300 # Mysteriously higher on CI despite identical package environments
@@ -90,15 +74,46 @@ else
     @test a <= 50 # was 7 on julia v1.10.6
 end
 
-forward_trajectory(ekf, u, y)
-a = @allocations forward_trajectory(ekf, u, y)
+bench = function (ekf, u, y)
+    r = forward_trajectory(ekf, u, y) # warm up
+    a = @allocations forward_trajectory(ekf, u, y)
+end
+a = bench(ekf, u, y)
 @test a <= 22*1.1
 
-forward_trajectory(sqekf, u, y)
-a = @allocations forward_trajectory(sqekf, u, y)
+bench = function (sqekf, u, y)
+    r = forward_trajectory(sqekf, u, y) # warm up
+    a = @allocations forward_trajectory(sqekf, u, y)
+end
+a = bench(sqekf, u, y)
 
 if get(ENV, "CI", nothing) == "true"
     @test a <= 300 # Mysteriously higher on CI despite identical package environments
 else
     @test a <= 44*1.1
 end
+
+
+## Loading JET must be done last to avoid ghost allocations interfering with previous tests
+using JET
+
+@test_opt predict!(kf, u[1])
+@report_call predict!(kf, u[1])
+@test_opt correct!(kf, u[1], y[1])
+@report_call correct!(kf, u[1], y[1])
+@test_opt predict!(ukf, u[1])
+@report_call predict!(ukf, u[1])
+@test_opt correct!(ukf, u[1], y[1])
+@report_call correct!(ukf, u[1], y[1])
+@test_opt predict!(skf, u[1])
+@report_call predict!(skf, u[1])
+@test_opt correct!(skf, u[1], y[1])
+@report_call correct!(skf, u[1], y[1])
+@test_opt predict!(ekf, u[1])
+@report_call predict!(ekf, u[1])
+@test_opt correct!(ekf, u[1], y[1])
+@report_call correct!(ekf, u[1], y[1])
+@test_opt predict!(sqekf, u[1])
+@report_call predict!(sqekf, u[1])
+@test_opt correct!(sqekf, u[1], y[1])
+@report_call correct!(sqekf, u[1], y[1])

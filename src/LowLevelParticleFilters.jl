@@ -1,6 +1,6 @@
 module LowLevelParticleFilters
 
-export KalmanFilter, SqKalmanFilter, UnscentedKalmanFilter, DAEUnscentedKalmanFilter, ExtendedKalmanFilter, SqExtendedKalmanFilter, IteratedExtendedKalmanFilter, ParticleFilter, AuxiliaryParticleFilter, AdvancedParticleFilter, SignalNames, PFstate, index, state, covariance, num_particles, effective_particles, weights, expweights, particles, particletype, smooth, sample_measurement, simulate, loglik, loglik_x, log_likelihood_fun, forward_trajectory, mean_trajectory, mode_trajectory, weighted_mean, weighted_cov, weighted_quantile, update!, predict!, correct!, reset!, metropolis, shouldresample, TupleProduct, autotune_covariances
+export KalmanFilter, SqKalmanFilter, UnscentedKalmanFilter, DAEUnscentedKalmanFilter, ExtendedKalmanFilter, SqExtendedKalmanFilter, IteratedExtendedKalmanFilter, EnsembleKalmanFilter, ParticleFilter, AuxiliaryParticleFilter, AdvancedParticleFilter, SignalNames, PFstate, index, state, covariance, num_particles, effective_particles, weights, expweights, particles, particletype, smooth, sample_measurement, simulate, loglik, loglik_x, log_likelihood_fun, forward_trajectory, mean_trajectory, mode_trajectory, weighted_mean, weighted_cov, weighted_quantile, update!, predict!, correct!, reset!, metropolis, shouldresample, TupleProduct, autotune_covariances
 export double_integrator_covariance, double_integrator_covariance_smooth, n_integrator_covariance, n_integrator_covariance_smooth
 export UKFWeights, TrivialParams, MerweParams, WikiParams
 export IMM, interact!, combine!
@@ -98,6 +98,7 @@ include("imm.jl")
 include("rbpf.jl")
 include("mukf.jl")
 include("uikf.jl")
+include("enkf.jl")
 include("paramest.jl")
 
 index(f::AbstractFilter) = f.t
