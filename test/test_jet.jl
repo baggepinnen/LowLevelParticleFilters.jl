@@ -1,8 +1,6 @@
 using LowLevelParticleFilters
 using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions, Plots
-using JET
 Random.seed!(0)
-
 
 ## KF
 
@@ -29,47 +27,18 @@ kf   = KalmanFilter(_A, _B, _C, 0, eye(nx), eye(ny), d0)
 x,u,y = LowLevelParticleFilters.simulate(kf,T,du) # Simuate trajectory using the model in the filter
 tosvec(y) = reinterpret(SVector{length(y[1]),Float64}, reduce(hcat,y))[:] |> copy
 x,u,y = tosvec.((x,u,y))
-@test_opt predict!(kf, u[1])
-@report_call predict!(kf, u[1])
-
-@test_opt correct!(kf, u[1], y[1])
-@report_call correct!(kf, u[1], y[1])
-
 ukf  = UnscentedKalmanFilter(dynamics_jet, measurement_jet, eye(nx), eye(ny), d0; ny, nu)
 @test ukf.R1 isa SMatrix{2, 2, Float64, 4}
-@test_opt predict!(ukf, u[1])
-@report_call predict!(ukf, u[1])
-
-@test_opt correct!(ukf, u[1], y[1])
-@report_call correct!(ukf, u[1], y[1])
-
 
 skf  = SqKalmanFilter(_A, _B, _C, 0, eye(nx), eye(ny), d0)
 @test skf.R1.data isa SMatrix{2, 2, Float64, 4}
-@test_opt predict!(skf, u[1])
-@report_call predict!(skf, u[1])
-
-@test_opt correct!(skf, u[1], y[1])
-@report_call correct!(skf, u[1], y[1])
-
 
 ekf = ExtendedKalmanFilter(dynamics_jet, measurement_jet, eye(nx), eye(ny), d0; nu)
 @test ekf.kf.R1 isa SMatrix{2, 2, Float64, 4}
-@test_opt predict!(ekf, u[1])
-@report_call predict!(ekf, u[1])
-
-@test_opt correct!(ekf, u[1], y[1])
-@report_call correct!(ekf, u[1], y[1])
 
 cu(x) = cholesky(x).U |> UpperTriangular
 sqekf = SqExtendedKalmanFilter(dynamics_jet, measurement_jet, cu(eye(nx)), cu(eye(ny)), d0; nu)
 @test sqekf.kf.R1.data isa SMatrix{2, 2, Float64, 4}
-@test_opt predict!(sqekf, u[1])
-@report_call predict!(sqekf, u[1])
-
-@test_opt correct!(sqekf, u[1], y[1])
-@report_call correct!(sqekf, u[1], y[1])
-
 
 
 ## Test allocations ============================================================
@@ -81,8 +50,6 @@ forward_trajectory(sqekf, u, y) # warm up
 
 bench = function (kf, u, y)
     r = forward_trajectory(kf, u, y) # warm up
-    plot(r) # These displays are required on julia v1.12, otherwise there is a random number of allocations for unknown reason
-    plot(r) # These displays are required on julia v1.12, otherwise there is a random number of allocations for unknown reason
     a = @allocations forward_trajectory(kf, u, y) 
 end
 a = bench(kf, u, y)
@@ -90,8 +57,6 @@ a = bench(kf, u, y)
 
 bench = function (ukf, u, y)
     r = forward_trajectory(ukf, u, y) # warm up
-    plot(r)
-    plot(r)
     a = @allocations forward_trajectory(ukf, u, y) 
 end
 a = bench(ukf, u, y)
@@ -99,8 +64,6 @@ a = bench(ukf, u, y)
 
 bench = function (skf, u, y)
     r = forward_trajectory(skf, u, y) # warm up
-    plot(r)
-    plot(r)
     a = @allocations forward_trajectory(skf, u, y)
 end
 a = bench(skf, u, y)
@@ -113,8 +76,6 @@ end
 
 bench = function (ekf, u, y)
     r = forward_trajectory(ekf, u, y) # warm up
-    plot(r)
-    plot(r)
     a = @allocations forward_trajectory(ekf, u, y)
 end
 a = bench(ekf, u, y)
@@ -122,8 +83,6 @@ a = bench(ekf, u, y)
 
 bench = function (sqekf, u, y)
     r = forward_trajectory(sqekf, u, y) # warm up
-    plot(r)
-    plot(r)
     a = @allocations forward_trajectory(sqekf, u, y)
 end
 a = bench(sqekf, u, y)
@@ -133,3 +92,28 @@ if get(ENV, "CI", nothing) == "true"
 else
     @test a <= 44*1.1
 end
+
+
+## Loading JET must be done last to avoid ghost allocations interfering with previous tests
+using JET
+
+@test_opt predict!(kf, u[1])
+@report_call predict!(kf, u[1])
+@test_opt correct!(kf, u[1], y[1])
+@report_call correct!(kf, u[1], y[1])
+@test_opt predict!(ukf, u[1])
+@report_call predict!(ukf, u[1])
+@test_opt correct!(ukf, u[1], y[1])
+@report_call correct!(ukf, u[1], y[1])
+@test_opt predict!(skf, u[1])
+@report_call predict!(skf, u[1])
+@test_opt correct!(skf, u[1], y[1])
+@report_call correct!(skf, u[1], y[1])
+@test_opt predict!(ekf, u[1])
+@report_call predict!(ekf, u[1])
+@test_opt correct!(ekf, u[1], y[1])
+@report_call correct!(ekf, u[1], y[1])
+@test_opt predict!(sqekf, u[1])
+@report_call predict!(sqekf, u[1])
+@test_opt correct!(sqekf, u[1], y[1])
+@report_call correct!(sqekf, u[1], y[1])

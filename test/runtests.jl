@@ -471,12 +471,6 @@ out = zeros(2, 10000)
     include("test_ukf.jl")
 end
 
-
-@testset "jet" begin
-    @info "Testing jet"
-    include("test_jet.jl")
-end
-
 @testset "large" begin
     @info "Testing large"
     include("test_large.jl")
@@ -627,4 +621,11 @@ end
 @testset "IEKF benchmarks" begin
     @info "testing example_beetle"
     include("../examples/example_nonlinear_kf.jl")
+end
+
+
+# This JET test must come last since loading JET creates random ghost allocations that are hard to eliminate or track down
+@testset "jet" begin
+    @info "Testing jet"
+    include("test_jet.jl")
 end
