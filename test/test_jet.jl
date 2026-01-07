@@ -1,5 +1,5 @@
 using LowLevelParticleFilters
-using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions
+using Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions, Plots
 using JET
 Random.seed!(0)
 
@@ -81,7 +81,8 @@ forward_trajectory(sqekf, u, y) # warm up
 
 bench = function (kf, u, y)
     r = forward_trajectory(kf, u, y) # warm up
-    display(r) # These displays are required on julia v1.12, otherwise there is a random number of allocations for unknown reason
+    plot(r) # These displays are required on julia v1.12, otherwise there is a random number of allocations for unknown reason
+    plot(r) # These displays are required on julia v1.12, otherwise there is a random number of allocations for unknown reason
     a = @allocations forward_trajectory(kf, u, y) 
 end
 a = bench(kf, u, y)
@@ -89,7 +90,8 @@ a = bench(kf, u, y)
 
 bench = function (ukf, u, y)
     r = forward_trajectory(ukf, u, y) # warm up
-    display(r)
+    plot(r)
+    plot(r)
     a = @allocations forward_trajectory(ukf, u, y) 
 end
 a = bench(ukf, u, y)
@@ -97,7 +99,8 @@ a = bench(ukf, u, y)
 
 bench = function (skf, u, y)
     r = forward_trajectory(skf, u, y) # warm up
-    display(r)
+    plot(r)
+    plot(r)
     a = @allocations forward_trajectory(skf, u, y)
 end
 a = bench(skf, u, y)
@@ -110,7 +113,8 @@ end
 
 bench = function (ekf, u, y)
     r = forward_trajectory(ekf, u, y) # warm up
-    display(r)
+    plot(r)
+    plot(r)
     a = @allocations forward_trajectory(ekf, u, y)
 end
 a = bench(ekf, u, y)
@@ -118,7 +122,8 @@ a = bench(ekf, u, y)
 
 bench = function (sqekf, u, y)
     r = forward_trajectory(sqekf, u, y) # warm up
-    display(r)
+    plot(r)
+    plot(r)
     a = @allocations forward_trajectory(sqekf, u, y)
 end
 a = bench(sqekf, u, y)

@@ -1,5 +1,5 @@
 using LowLevelParticleFilters
-using Test, Random, LinearAlgebra, Statistics, Test
+using Test, Random, LinearAlgebra, Statistics, Test, Plots
 Random.seed!(0)
 
 
@@ -37,6 +37,7 @@ x,u,y = LowLevelParticleFilters.simulate(kf, U) # Simuate trajectory using the m
 
 ## Test allocations ============================================================
 sol_kf = forward_trajectory(kf, u, y) 
+plot(sol_kf); plot(sol_kf)
 a = @allocations forward_trajectory(kf, u, y) 
 @test a <= 6810*2*1.1  # the x2 is for julia v1.11 vs. 1.10, the .1 is for 10% tolerance
 
@@ -44,6 +45,7 @@ a = @allocated forward_trajectory(kf, u, y)
 @test a <= 167477104*1.1 
 
 sol_ukf = forward_trajectory(ukf, u, y) 
+plot(sol_ukf); plot(sol_ukf)
 a = @allocations forward_trajectory(ukf, u, y) 
 @test a <= 498418*1.1 # the .1 is for 10% tolerance
 
@@ -51,6 +53,7 @@ a = @allocated forward_trajectory(ukf, u, y)
 @test a <=  520_032_736*1.1
 
 sol_ekf = forward_trajectory(ekf, u, y)
+plot(sol_ekf); plot(sol_ekf)
 a = @allocations forward_trajectory(ekf, u, y)
 @test a <=  20811*2*1.1 # the x2 is for julia v1.11 vs. 1.10, the .1 is for 10% tolerance
 
@@ -58,6 +61,7 @@ a = @allocated forward_trajectory(ekf, u, y)
 @test a <=  304_488_320*1.1
 
 sol_sqkf = forward_trajectory(skf, u, y)
+plot(sol_sqkf); plot(sol_sqkf)
 a = @allocations forward_trajectory(skf, u, y)
 @test a <=  14810*2*1.1 # the x2 is for julia v1.11 vs. 1.10, the .1 is for 10% tolerance
 
@@ -65,6 +69,7 @@ a = @allocated forward_trajectory(skf, u, y)
 @test a <=  425_413_104*1.1
 
 sol_sqekf = forward_trajectory(sqekf, u, y)
+plot(sol_sqekf); plot(sol_sqekf)
 a = @allocations forward_trajectory(sqekf, u, y)
 @test a <=  52224*1.1 
 
@@ -92,6 +97,7 @@ ekf = ExtendedKalmanFilter(dynamics_large_ip, measurement_large_ip, R1, R2; nu)
 sqekf = SqExtendedKalmanFilter(dynamics_large_ip, measurement_large_ip, cu(R1), cu(R2); nu)
 
 sol_ukf = forward_trajectory(ukf, u, y)
+plot(sol_ukf); plot(sol_ukf)
 a = @allocations forward_trajectory(ukf, u, y)
 @test a <=  259416*1.1 # measured on julia v1.11, the .1 is for 10% tolerance
 
@@ -99,6 +105,7 @@ a = @allocated forward_trajectory(ukf, u, y)
 @test a <=  390_719_072*1.1
 
 sol_ekf = forward_trajectory(ekf, u, y)
+plot(sol_ekf); plot(sol_ekf)
 a = @allocations forward_trajectory(ekf, u, y)
 @test a <=  15616*1.1
 
@@ -106,6 +113,7 @@ a = @allocated forward_trajectory(ekf, u, y)
 @test a <=  220_814_208*1.1
 
 sol_sqekf = forward_trajectory(sqekf, u, y)
+plot(sol_sqekf); plot(sol_sqekf)
 a = @allocations forward_trajectory(sqekf, u, y)
 @test a <=  23823*1.1
 
