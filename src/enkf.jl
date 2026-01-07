@@ -152,10 +152,10 @@ end
 function _ensemble_cov(ensemble, x̄)
     N = length(ensemble)
     nx = length(x̄)
-    R = zeros(nx, nx)
+    R = zeros(eltype(x̄), nx, nx)
     for i in 1:N
         δx = ensemble[i] .- x̄
-        @bangbang R .+= δx * δx'
+        mul!(R, δx, δx', 1, 1)
     end
     @bangbang R ./= (N - 1)
     R

@@ -73,16 +73,34 @@ sqekf = SqExtendedKalmanFilter(dynamics_jet, measurement_jet, cu(eye(nx)), cu(ey
 
 
 ## Test allocations ============================================================
-forward_trajectory(kf, u, y) 
-a = @allocations forward_trajectory(kf, u, y) 
+forward_trajectory(kf, u, y) # warm up
+forward_trajectory(ukf, u, y) # warm up
+forward_trajectory(skf, u, y) # warm up
+forward_trajectory(ekf, u, y) # warm up
+forward_trajectory(sqekf, u, y) # warm up
+
+bench = function (kf, u, y)
+    r = forward_trajectory(kf, u, y) # warm up
+    display(r) # These displays are required on julia v1.12, otherwise there is a random number of allocations for unknown reason
+    a = @allocations forward_trajectory(kf, u, y) 
+end
+a = bench(kf, u, y)
 @test a <= 22*1.1 # Allocations occur when the arrays are allocated for saving the data, the important thing is that the number of allocations do not grow with the length of the trajectory (T = 200)
 
-forward_trajectory(ukf, u, y) 
-a = @allocations forward_trajectory(ukf, u, y) 
+bench = function (ukf, u, y)
+    r = forward_trajectory(ukf, u, y) # warm up
+    display(r)
+    a = @allocations forward_trajectory(ukf, u, y) 
+end
+a = bench(ukf, u, y)
 @test a <= 22*1.1
 
-forward_trajectory(skf, u, y)
-a = @allocations forward_trajectory(skf, u, y)
+bench = function (skf, u, y)
+    r = forward_trajectory(skf, u, y) # warm up
+    display(r)
+    a = @allocations forward_trajectory(skf, u, y)
+end
+a = bench(skf, u, y)
 
 if get(ENV, "CI", nothing) == "true"
     @test a <= 300 # Mysteriously higher on CI despite identical package environments
@@ -90,12 +108,20 @@ else
     @test a <= 50 # was 7 on julia v1.10.6
 end
 
-forward_trajectory(ekf, u, y)
-a = @allocations forward_trajectory(ekf, u, y)
+bench = function (ekf, u, y)
+    r = forward_trajectory(ekf, u, y) # warm up
+    display(r)
+    a = @allocations forward_trajectory(ekf, u, y)
+end
+a = bench(ekf, u, y)
 @test a <= 22*1.1
 
-forward_trajectory(sqekf, u, y)
-a = @allocations forward_trajectory(sqekf, u, y)
+bench = function (sqekf, u, y)
+    r = forward_trajectory(sqekf, u, y) # warm up
+    display(r)
+    a = @allocations forward_trajectory(sqekf, u, y)
+end
+a = bench(sqekf, u, y)
 
 if get(ENV, "CI", nothing) == "true"
     @test a <= 300 # Mysteriously higher on CI despite identical package environments
