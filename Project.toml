@@ -59,6 +59,7 @@ StatsBase = "0.29,0.30,0.32, 0.33, 0.34"
 julia = "1.7"
 
 [extras]
+ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
 ControlSystemsBase = "aaaaaaaa-a6ca-5380-bf3e-84a91bcd477e"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
@@ -71,4 +72,4 @@ SeeToDee = "1c904df7-48cd-41e7-921b-d889ed9a470c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["ControlSystemsBase", "Distributions", "JET", "LeastSquaresOptim", "MonteCarloMeasurements", "Optim", "Test", "PositiveFactorizations", "Plots", "SeeToDee"]
+test = ["ADTypes", "ControlSystemsBase", "Distributions", "JET", "LeastSquaresOptim", "MonteCarloMeasurements", "Optim", "Test", "PositiveFactorizations", "Plots", "SeeToDee"]

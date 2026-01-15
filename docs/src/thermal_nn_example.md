@@ -38,6 +38,7 @@ First, let's generate realistic thermal data with time-varying external conditio
 using LowLevelParticleFilters, Random, SeeToDee, StaticArrays, Plots, LinearAlgebra, Statistics
 using LowLevelParticleFilters: SimpleMvNormal
 using Optim
+using ADTypes: AutoForwardDiff
 using DisplayAs # hide
 
 # System parameters
@@ -292,7 +293,7 @@ result = Optim.optimize(
     θ_init,
     BFGS(),
     opt_options;
-    autodiff = :forward,  # Use forward-mode AD for gradients
+    autodiff = AutoForwardDiff(),  # Use forward-mode AD for gradients
 )
 
 params_opt = result.minimizer
@@ -510,7 +511,7 @@ result_sigmoid = Optim.optimize(
     θ_init,
     BFGS(),
     opt_options;
-    autodiff = :forward,
+    autodiff = AutoForwardDiff(),
 )
 
 params_sigmoid = result_sigmoid.minimizer
@@ -579,7 +580,7 @@ result_projection = Optim.optimize(
     θ_init,
     BFGS(),
     opt_options;
-    autodiff = :forward,
+    autodiff = AutoForwardDiff(),
 )
 
 params_projection = result_projection.minimizer
@@ -638,7 +639,7 @@ result_rejection = Optim.optimize(
     θ_init,
     BFGS(),
     opt_options;
-    autodiff = :forward,
+    autodiff = AutoForwardDiff(),
 )
 
 params_rejection = result_rejection.minimizer
@@ -700,7 +701,7 @@ result_tmm = Optim.optimize(
     θ_init,
     BFGS(),
     opt_options;
-    autodiff = :forward,
+    autodiff = AutoForwardDiff(),
 )
 
 params_tmm = result_tmm.minimizer

@@ -18,6 +18,7 @@ using DelimitedFiles, Plots, Dates
 using LowLevelParticleFilters, LinearAlgebra, StaticArrays
 using LowLevelParticleFilters: AbstractKalmanFilter, particletype, covtype,state,  covariance, parameters, KalmanFilteringSolution
 using Optim
+using ADTypes: AutoForwardDiff
 using DisplayAs # hide
 ```
 
@@ -325,7 +326,7 @@ res = Optim.optimize(
         iterations        = 1000,
 		x_tol 			  = 1e-7,
     ),
-	autodiff = :forward,
+	autodiff = AutoForwardDiff(),
 )
 get_opt_kf(res.minimizer).R1
 ```

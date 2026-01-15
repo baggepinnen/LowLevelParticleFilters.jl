@@ -85,6 +85,7 @@ p_guess = p_true .+  0.1*p_true .* randn(length(p_true))
 We first minimize the cost using the BFGS optimization algorithm from [Optim.jl](https://github.com/JuliaNLSolvers/Optim.jl)
 ```@example paramest
 using Optim
+using ADTypes: AutoForwardDiff
 res = Optim.optimize(
     cost,
     p_guess,
@@ -94,8 +95,8 @@ res = Optim.optimize(
         show_every = 5,
         iterations = 100,
         time_limit = 30,
-    ),
-    autodiff = :forward, # Indicate that we want to use forward-mode AD to derive gradients
+    );
+    autodiff = AutoForwardDiff(), # Indicate that we want to use forward-mode AD to derive gradients
 )
 ```
 
