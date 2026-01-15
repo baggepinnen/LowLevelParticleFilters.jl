@@ -43,6 +43,7 @@ First, let's generate realistic thermal data with time-varying external conditio
 using LowLevelParticleFilters, Random, SeeToDee, StaticArrays, Plots, LinearAlgebra, Statistics
 using LowLevelParticleFilters: SimpleMvNormal
 using Optim
+using ADTypes: AutoForwardDiff
 using DisplayAs # hide
 
 # System parameters
@@ -347,7 +348,7 @@ result = Optim.optimize(
     Newton(), # NOTE: Newton makes it converge to save solution as tutorial in docs, but BFGS gets stuck in slightly suboptimal minimum.
     # ParticleSwarm(),
     opt_options;
-    autodiff = :forward,  # Use forward-mode AD for gradients
+    autodiff = AutoForwardDiff(),  # Use forward-mode AD for gradients
 )
 
 params_opt = result.minimizer

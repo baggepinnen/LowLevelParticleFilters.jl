@@ -137,6 +137,7 @@ end
 p_guess = p_true .+  0.1*p_true .* randn(length(p_true))
 
 using Optim, Optim.LineSearches
+using ADTypes: AutoForwardDiff
 res = Optim.optimize(
     cost,
     p_guess,
@@ -154,6 +155,6 @@ res = Optim.optimize(
         f_calls_limit     = 0,
         g_calls_limit     = 0,
     ),
-    autodiff = :forward,
+    autodiff = AutoForwardDiff(),
 )
 
