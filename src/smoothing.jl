@@ -181,7 +181,8 @@ function prediction_errors!(res, f::AbstractFilter, u, y, p=parameters(f), λ=1;
     else
         length(res) == N*ny ||
         error("Residual vector length must be N*ny")
-        W = sqrt(λ)  # only used in non-loglik branch
+        λ_diag = (ndims(λ) == 2) ? λ.diag : λ
+        W = sqrt.(λ_diag)  # only used in non-loglik branch
     end
     # index ranges
     idx = 0
