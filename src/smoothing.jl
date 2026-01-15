@@ -207,7 +207,7 @@ function prediction_errors!(res, f::AbstractFilter, u, y, p=parameters(f), λ=1;
         else
             # plain weighted prediction errors for LS fitting
             # r'r = λ * e'e
-            @views res[inds] .= W .* e
+            @views mul!(res[inds], W, e)
             idx += ny
         end
     end
