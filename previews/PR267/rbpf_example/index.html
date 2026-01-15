@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Rao-Blackwellized filter tutorial · LowLevelParticleFilters Documentation</title><meta name="title" content="Rao-Blackwellized filter tutorial · LowLevelParticleFilters Documentation"/><meta property="og:title" content="Rao-Blackwellized filter tutorial · LowLevelParticleFilters Documentation"/><meta property="twitter:title" content="Rao-Blackwellized filter tutorial · LowLevelParticleFilters Documentation"/><meta name="description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="og:description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="twitter:description" content="Documentation for LowLevelParticleFilters Documentation."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">LowLevelParticleFilters Documentation</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../discretization/">Discretization</a></li><li><a class="tocitem" href="../measurement_models/">Multiple measurement models</a></li><li><span class="tocitem">Parameter estimation</span><ul><li><a class="tocitem" href="../parameter_estimation/">Overview</a></li><li><a class="tocitem" href="../param_est_ml/">Maximum-likelihood and MAP</a></li><li><a class="tocitem" href="../param_est_bayesian/">Bayesian inference</a></li><li><a class="tocitem" href="../param_est_joint/">Joint state and parameter estimation</a></li><li><a class="tocitem" href="../param_est_mukf/">MUKF for parameter estimation</a></li><li><a class="tocitem" href="../param_est_optimizer/">Using an optimizer</a></li><li><a class="tocitem" href="../param_est_identifiability/">Identifiability</a></li></ul></li><li><a class="tocitem" href="../benchmark/">Benchmark</a></li><li><a class="tocitem" href="../distributions/">Performance tips</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../adaptive_kalmanfilter/">Kalman-filter tutorial with LowLevelParticleFilters</a></li><li><a class="tocitem" href="../noisetuning/">Noise tuning and disturbance modeling for Kalman filtering</a></li><li><a class="tocitem" href="../beetle_example/">Particle-filter tutorial</a></li><li><a class="tocitem" href="../beetle_example_imm/">IMM-filter tutorial</a></li><li class="is-active"><a class="tocitem" href>Rao-Blackwellized filter tutorial</a><ul class="internal"><li><a class="tocitem" href="#RBPF"><span>RBPF</span></a></li><li><a class="tocitem" href="#Marginalized-UKF"><span>Marginalized UKF</span></a></li><li><a class="tocitem" href="#Details-of-the-marginal-distribution-over-the-linear-sub-state"><span>Details of the marginal distribution over the linear sub state</span></a></li></ul></li><li><a class="tocitem" href="../dae/">State estimation for DAE systems</a></li><li><a class="tocitem" href="../adaptive_control/">Adaptive estimation and control</a></li><li><a class="tocitem" href="../neural_network/">Adaptive Neural-Network training</a></li><li><a class="tocitem" href="../friction_nn_example/">SciML: Adaptive Universal Differential Equation</a></li><li><a class="tocitem" href="../thermal_nn_example/">SciML: Learning a sunshine disturbance model</a></li><li><a class="tocitem" href="../fault_detection/">Fault detection</a></li><li><a class="tocitem" href="../ut/">Unscented transform</a></li><li><a class="tocitem" href="../disturbance_gallery/">Disturbance gallery</a></li><li><a class="tocitem" href="../sample_rate/">Influence of sample rate on performance</a></li><li><a class="tocitem" href="../cross_covariance/">Cross-covariance between dynamics and measurement</a></li></ul></li><li><a class="tocitem" href="../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Rao-Blackwellized filter tutorial</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Rao-Blackwellized filter tutorial</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/docs/src/rbpf_example.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Rao-Blackwellized-particle-filter"><a class="docs-heading-anchor" href="#Rao-Blackwellized-particle-filter">Rao-Blackwellized particle filter</a><a id="Rao-Blackwellized-particle-filter-1"></a><a class="docs-heading-anchor-permalink" href="#Rao-Blackwellized-particle-filter" title="Permalink"></a></h1><p>This example will demonstrate use of the Rao-Blackwellized particle filter and UKF (<a href="#RBPF"><code>RBPF</code></a> and <a href="../api/#LowLevelParticleFilters.MUKF"><code>MUKF</code></a> respectively), also called &quot;Marginalized particle filter&quot; and &quot;Marginalized Unscented Kalman Filter&quot;.</p><h2 id="RBPF"><a class="docs-heading-anchor" href="#RBPF">RBPF</a><a id="RBPF-1"></a><a class="docs-heading-anchor-permalink" href="#RBPF" title="Permalink"></a></h2><p>The <a href="#RBPF"><code>RBPF</code></a> filter is effectively a particle filter where each particle is a Kalman filter that is responsible for the estimation of a linear sub structure.</p><p>The filter assumes that the dynamics follow &quot;model 2&quot; in the article <a href="https://people.isy.liu.se/rt/schon/Publications/SchonGN2004.pdf">&quot;Marginalized Particle Filters for Mixed Linear/Nonlinear State-space Models&quot; by Thomas Schön, Fredrik Gustafsson, and Per-Johan Nordlund</a>, i.e., the dynamics is described by</p><p class="math-container">\[\begin{align}
+    x_{t+1}^n &amp;= f_n(x_t^n, u, p, t) + A_n(x_t^n, u, p, t) x_t^l + w_t^n, \quad &amp;w_t^n \sim \mathcal{N}(0, R_1^n) \\
+    x_{t+1}^l &amp;= A(...) x_t^l + Bu + w_t^l, \quad &amp;w_t^l \sim \mathcal{N}(0, R_1^l) \\
+    y_t &amp;= g(x_t^n, u, p, t) + C(...) x_t^l + e_t, \quad &amp;e_t \sim \mathcal{N}(0, R_2)
+\end{align}\]</p><p>where <span>$x^n$</span> is a subset of the state that has nonlinear dynamics or measurement function, and <span>$x^l$</span> is a subset of the state where both dynamics and measurement function are linear and Gaussian. The entire state vector is represented by a special type <a href="../api/#LowLevelParticleFilters.RBParticle-Tuple{Any, Any, Any}"><code>RBParticle</code></a> that behaves like the vector <code>[xn; xl]</code>, but stores <code>xn, xl</code> and the covariance <code>R</code> of <code>xl</code> separately.</p><div class="admonition is-warning" id="Experimental-44bb1c34e6f15648"><header class="admonition-header">Experimental<a class="admonition-anchor" href="#Experimental-44bb1c34e6f15648" title="Permalink"></a></header><div class="admonition-body"><p>This filter is currently considered experimental and the user interface may change in the future without respecting semantic versioning.</p></div></div><p>Below, we define all functions and matrices that are needed to perform marginalized particle filtering for the dynamical system</p><p class="math-container">\[\begin{align}
+x_{t+1}^n &amp;= \arctan x_t^n + \begin{pmatrix} 1 &amp; 0 &amp; 0 \end{pmatrix} x_t^1 + w_t^n, \tag{1a} \\
+x_{t+1}^1 &amp;= \begin{pmatrix}
+1 &amp; 0.3 &amp; 0 \\
+0 &amp; 0.92 &amp; -0.3 \\
+0 &amp; 0.3 &amp; 0.92
+\end{pmatrix} x_t^1 + w_t^1, \tag{1b} \\
+y_t &amp;= \begin{pmatrix}
+0.1(x_t^n)^2 \operatorname{sgn}(x_t^n) \\
+0
+\end{pmatrix} + \begin{pmatrix}
+0 &amp; 0 &amp; 0 \\
+1 &amp; -1 &amp; 1
+\end{pmatrix} x_t^1 + e_t, \tag{1c} \\
+\text{where}\\
+w_t &amp;= \begin{pmatrix}
+w_t^n \\
+w_t^1
+\end{pmatrix} \sim \mathcal{N}(0, 0.01I_{4\times 4}), \tag{1d} \\
+e_t &amp;\sim \mathcal{N}(0, 0.1I_{2\times 2}), \tag{1e} \\
+x_0^n &amp;\sim \mathcal{N}(0, 1), \tag{1f} \\
+x_0^1 &amp;\sim \mathcal{N}(0_{3\times 1}, 0_{3\times 3}). \tag{1g}
+\end{align}\]</p><p>Since this is a tracking problem without control inputs, and there are no parameters and time dependence, we define functions with the signature <code>fn(xn, args...)</code> to handle the fact that the filter will pass empty arguments for inputs, parameters and time.</p><p>Below, we define functions that return the matrix <span>$A_n$</span> despite that it is constant, we do this to illustrate that this matrix may in general be a function of the nonlinear state, parameter and time. If the matrix is constant, it&#39;s okay to let <code>An</code> be a <code>Matrix</code> or <code>SMatrix</code> instead of a function.</p><pre><code class="language-julia hljs">using LowLevelParticleFilters, LinearAlgebra
+using LowLevelParticleFilters: SimpleMvNormal
+using StaticArrays
+using Random
+nxn = 1         # Dimension of nonlinear state
+nxl = 3         # Dimension of linear state
+nx  = nxn + nxl # Total dimension of state
+nu  = 0         # Dimension of control input
+ny  = 2         # Dimension of measurement
+N   = 200       # Number of particles
+fn(xn, args...) = SA[atan(xn[])]         # Nonlinear part of nonlinear state dynamics
+An  = SA[1.0 0.0 0.0]     # Linear part of nonlinear state dynamics
+Al  = SA[1.0  0.3   0.0;  # Linear part of linear state dynamics (the standard Kalman-filter A matrix). It&#39;s defined as a matrix here, but it can also be a function of (x, u, p, t)
+                   0.0  0.92 -0.3;
+                   0.0  0.3   0.92] # 3x3 matrix
+Cl = SA[0.0  0.0 0.0;
+      1.0 -1.0 1.0]    # 2x3 measurement matrix
+g(xn, args...) = SA[0.1 * xn[]^2 * sign(xn[]), 0.0] # 2x1 vector
+
+Bl = zeros(nxl, nu)
+
+# Noise parameters
+R1n = SA[0.01;;]          # Scalar variance for w^n
+R1l = 0.01 * I(3)       # 3x3 covariance for w^l
+R2  = 0.1 * I(2)         # 2x2 measurement noise (shared between linear and nonlinear parts)
+
+# Initial states (xn ~ N(0,1), xl ~ N(0, 0.01I))
+x0n = @SVector zeros(nxn)
+R0n = SA[1.0;;]
+x0l = @SVector zeros(nxl)
+R0l = 0.01 * I(nxl)
+
+d0l = SimpleMvNormal(x0l, R0l)
+d0n = SimpleMvNormal(x0n, R0n)
+
+kf    = KalmanFilter(Al, Bl, Cl, 0, R1l, R2, d0l; ny, nu) # Since we are providing a function instead of a matrix for C, we also provide the number of outputs ny
+mm    = RBMeasurementModel(g, R2, ny)
+names = SignalNames(x=[&quot;\$x^n_1\$&quot;, &quot;\$x^l_2\$&quot;, &quot;\$x^l_3\$&quot;, &quot;\$x^l_4\$&quot;], u=[], y=[&quot;\$y_1\$&quot;, &quot;\$y_2\$&quot;], name=&quot;RBPF&quot;) # For nicer labels in the plot
+pf    = RBPF(N, kf, fn, mm, R1n, d0n; nu, An, Ts=1.0, names)
+Random.seed!(pf.rng, 1234)
+
+# Simulate some data from the filter dynamics
+u     = [zeros(nu) for _ in 1:100]
+x,u,y = simulate(pf, u)
+
+# Perform the filtering
+sol = forward_trajectory(pf, u, y)
+
+using Plots
+fig_rbpf = plot(sol, size=(800,600), xreal=x, markersize=1, nbinsy=50, colorbar=false)
+for i = 1:nx
+    plot!(ylims = extrema(getindex.(x, i)) .+ (-1, 1), sp=i)
+end
+current()</code></pre><img src="0b12a24e.png" alt="Example block output"/><p>The cyan markers represent the true state in the state plots, and the measurements in the measurement plots. The heatmap represents the particle distribution. Note, since each particle has an additional covariance estimate for the linear sub state, the heatmaps for the linear sub state are constructed by drawing a small number of samples from this marginal distribution. Formally, the marginal distribution over the linear sub state is a gaussian-mixture model where the weight of each gaussian is the weight of the particle. This fact is not taken into account when the heat map for the predicted measurement is constructed, so interpret this heatmap with caution.</p><p>In this example, we made use of standard julia arrays for the dynamics and covariances etc., for optimum performance (the difference may be dramatic), make use of static arrays from <a href="https://github.com/JuliaArrays/StaticArrays.jl">StaticArrays.jl</a>. </p><p>The paper referenced above mention a lot of special cases in which the filter can be simplified, it&#39;s worth a read if you are considering using this filter.</p><h2 id="Marginalized-UKF"><a class="docs-heading-anchor" href="#Marginalized-UKF">Marginalized UKF</a><a id="Marginalized-UKF-1"></a><a class="docs-heading-anchor-permalink" href="#Marginalized-UKF" title="Permalink"></a></h2><p>The <a href="../api/#LowLevelParticleFilters.MUKF"><code>MUKF</code></a> (Marginalized Unscented Kalman Filter) is an alternative to RBPF that uses the Unscented Transform instead of random particles. While RBPF uses <span>$N$</span> random particles (each with a Kalman filter), MUKF uses deterministic sigma points (typically <span>$2n+1$</span> for an <span>$n$</span>-dimensional nonlinear state). This makes MUKF:</p><ul><li><strong>Deterministic</strong></li><li><strong>Efficient for low-dimensional nonlinear states</strong>: Uses fewer &quot;hypotheses&quot; than typical RBPF and fewer sigma points than the corresponding UKF</li><li><strong>Gaussian assumption</strong>: Like UKF, assumes posterior remains Gaussian (cannot handle multimodal distributions)</li></ul><p>The MUKF filter in this package accepts a slightly more general form of the dynamics than RBPF, notably, we allow the <span>$d_l(x_t^n, u, p, t)$</span> term in the linear sub state dynamics.</p><p class="math-container">\[\begin{aligned}
+x_{t+1}^n &amp;= d_n(x_t^n, u, p, t) + A_n(x_t^n, u, p, t)\, x_t^l + w_t^n \\
+x_{t+1}^l &amp;= d_l(x_t^n, u, p, t) + A_l(x_t^n, u, p, t)\, x_t^l + w_t^l \\
+w_t &amp;= \begin{bmatrix} w_t^n \\ w_t^l \end{bmatrix} &amp;\sim \mathcal{N}(0, R_1) \\
+y_t &amp;= g(x_t^n, u, p, t) + C_l(x_t^n)\, x_t^l + e_t, \quad &amp;e_t \sim \mathcal{N}(0, R_2)
+\end{aligned}\]</p><p>The MUKF filter takes the nonlinear dynamics term <span>$[d_n; d_l]$</span> as a single function <code>fn(xn, u, p, t)</code> and the linear coupling matrix <span>$A = [A_n; A_l]$</span> as a single matrix or function, so we need to define a new function for these. Control input dependence can be encoded directly in both <span>$d_n$</span> and <span>$d_l$</span>. We also need to combine the process noise covariances into a single matrix <span>$R_1$</span> and the initial distributions into a single distribution. Let&#39;s compare MUKF with RBPF on the same system:</p><pre><code class="language-julia hljs">using Statistics
+fn_mukf(xn, args...) = SA[atan(xn[]); 0.0; 0.0; 0.0] # d_n and d_l combined
+# Create MUKF using the same model components
+# Combine process noise covariances into full R1 matrix
+R1 = [R1n zeros(nxn, nxl); zeros(nxl, nxn) R1l]
+# Unified initial distribution for MUKF
+x0 = [x0n; x0l]
+R0_full = [R0n zeros(nxn, nxl); zeros(nxl, nxn) R0l]
+d0 = SimpleMvNormal(x0, R0_full)
+# Combine An and Al into single A matrix for MUKF
+A = [An; Al]  # A is nx × nxl, formed by stacking An (nxn × nxl) and Al (nxl × nxl)
+weight_params = MerweParams(α = 0.5) # MUKF does much better at this example if this is set to 0.5 instead of the default 1.0
+mukf = MUKF(; dynamics=fn_mukf, nl_measurement_model=mm, A, Cl, R1, d0, nxn, nu, ny, weight_params, names=SignalNames(names, &quot;MUKF&quot;))
+
+# Run filtering on the same data
+sol_mukf = forward_trajectory(mukf, u, y)
+
+# Extract nonlinear state estimates for comparison
+xn_true = first.(x)
+xn_rbpf = [mean(sol.x[:, t])[1] for t in 1:length(y)]  # Mean of RBPF particles
+xn_mukf = first.(sol_mukf.xt)                          # MUKF filtered estimate
+
+# Compute RMSE
+using Statistics
+rmse_rbpf = sqrt(mean((xn_true .- xn_rbpf).^2))
+rmse_mukf = sqrt(mean((xn_true .- xn_mukf).^2))
+
+println(&quot;RBPF RMSE: $(round(rmse_rbpf, digits=4))&quot;)
+println(&quot;MUKF RMSE: $(round(rmse_mukf, digits=4))&quot;)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">RBPF RMSE: 0.8856
+MUKF RMSE: 0.536</code></pre><p>Let&#39;s add the MUKF result to the previous plot for comparison:</p><pre><code class="language-julia hljs">plot!(fig_rbpf, sol_mukf, ploty=false, plotx=false, plotRt=true, fillalpha=0.3, linewidth=2)</code></pre><img src="70a4971d.png" alt="Example block output"/><p>Both filters successfully track the nonlinear state. The MUKF uses only 3 sigma points (for the 1D nonlinear state) compared to 200 particles in the RBPF, yet achieves comparable performance. For this problem with a low-dimensional nonlinear state and unimodal posterior, MUKF is more efficient.</p><p><strong>When to use each filter:</strong></p><ul><li><strong>Use MUKF</strong> when: posterior is unimodal, you want deterministic results. The MUKF estimator is often suitable for disturbance and parameter estimation, since it is deterministic, differentiable and disturbances and parameters are often modeled with linear time evolution.</li><li><strong>Use RBPF</strong> when: posterior may be multimodal, you need maximum flexibility</li></ul><h2 id="Details-of-the-marginal-distribution-over-the-linear-sub-state"><a class="docs-heading-anchor" href="#Details-of-the-marginal-distribution-over-the-linear-sub-state">Details of the marginal distribution over the linear sub state</a><a id="Details-of-the-marginal-distribution-over-the-linear-sub-state-1"></a><a class="docs-heading-anchor-permalink" href="#Details-of-the-marginal-distribution-over-the-linear-sub-state" title="Permalink"></a></h2><p>We can create a distribution object that represents the Gaussian mixture model that represents the marginal distribution over the linear sub state. This may be useful to compute confidence intervals or quantiles etc.</p><pre><code class="language-julia hljs">using Distributions
+time_step = 100 # The time step at which to access the solution object from above
+we = sol.we[:, time_step] # Extract the weights of the particles at the desired time step
+linear_state_inds = nxn+1:nx
+xl = getindex.(sol.x[:, time_step], Ref(linear_state_inds)) # Extract the linear sub state from the particles at the desired time step
+Rv = [sol.x[i, time_step].R for i = 1:num_particles(pf)] # Extract the covariance of each mixture component
+
+components = [MvNormal(xl[i], Rv[i]) for i = 1:num_particles(pf)] # The component distribution in the mixture model
+
+D = Distributions.MixtureModel(components, we)
+
+cov(D)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3×3 Matrix{Float64}:
+  0.080244    0.0434888   -0.00399208
+  0.0434888   0.0448485    0.00441159
+ -0.00399208  0.00441159   0.0314105</code></pre><p>Above, we showed how to compute the covariance of the mixture distribution. If we consider the marginal distribution of a single dimension of the linear sub state, we can compute, e.g., quantiles as well by calling <code>quantile(D, q)</code>.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../beetle_example_imm/">« IMM-filter tutorial</a><a class="docs-footer-nextpage" href="../dae/">State estimation for DAE systems »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Thursday 15 January 2026 15:15">Thursday 15 January 2026</span>. Using Julia version 1.11.8.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
