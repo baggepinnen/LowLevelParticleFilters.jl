@@ -14,6 +14,7 @@ using RecipesBase
 @inline Base.:(-)(::Distributions.Zeros, x::StaticArray) = -x
 @inline Distributions.logpdf(d::Distribution,x,xp,t) = logpdf(d,x-xp)
 @inline Distributions.sqmahal(d::MvNormal, x::StaticArray) = Distributions.invquad(d.Σ, x - d.μ)
+LowLevelParticleFilters.convert_x0_type(μ::Distributions.FillArrays.AbstractFill) = Vector(μ) 
 
 """
 Mixed value support indicates that the distribution is a mix of continuous and discrete dimensions.
