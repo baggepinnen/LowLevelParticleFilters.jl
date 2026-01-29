@@ -10,7 +10,7 @@ using LinearAlgebra
 using StatsBase
 using RecipesBase
 
-@inline Base.:(-)(x::StaticArray, ::Distributions.Zeros) = x
+# @inline Base.:(-)(x::StaticArray, ::Distributions.Zeros) = x
 @inline Base.:(-)(::Distributions.Zeros, x::StaticArray) = -x
 @inline Distributions.logpdf(d::Distribution,x,xp,t) = logpdf(d,x-xp)
 @inline Distributions.sqmahal(d::MvNormal, x::StaticArray) = Distributions.invquad(d.Σ, x - d.μ)
