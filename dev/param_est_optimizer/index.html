@@ -41,7 +41,7 @@ y = [y .+ 0.01 .* randn.() for y in y]
 plot(
     plot(reduce(hcat, x)&#39;, title=&quot;State&quot;),
     plot(reduce(hcat, u)&#39;, title=&quot;Inputs&quot;)
-)</code></pre><img src="8ac51f08.svg" alt="Example block output"/><p>This time, we define a cost function for the optimizer to optimize, we&#39;ll use the sum of squared errors (<code>sse</code>). It&#39;s important to define the UKF with an initial state distribution with the same element type as the parameter vector so that automatic differentiation through the state estimator works, hence the explicit casting <code>T.(x0)</code> and <code>T.(R1)</code>. We also make sure to use StaticArrays for the covariance matrices and the initial condition for performance reasons (optional).</p><pre><code class="language-julia hljs">R1 = SMatrix{nx,nx}(Diagonal([0.1, 0.1, 0.1, 0.1])) # Use of StaticArrays is generally good for performance
+)</code></pre><img src="b9c3b009.svg" alt="Example block output"/><p>This time, we define a cost function for the optimizer to optimize, we&#39;ll use the sum of squared errors (<code>sse</code>). It&#39;s important to define the UKF with an initial state distribution with the same element type as the parameter vector so that automatic differentiation through the state estimator works, hence the explicit casting <code>T.(x0)</code> and <code>T.(R1)</code>. We also make sure to use StaticArrays for the covariance matrices and the initial condition for performance reasons (optional).</p><pre><code class="language-julia hljs">R1 = SMatrix{nx,nx}(Diagonal([0.1, 0.1, 0.1, 0.1])) # Use of StaticArrays is generally good for performance
 R2 = SMatrix{ny,ny}(Diagonal((1e-2)^2 * ones(ny)))
 x0 = SA[2.0, 2, 3, 3]
 

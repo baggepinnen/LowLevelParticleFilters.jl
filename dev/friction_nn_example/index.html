@@ -19,7 +19,7 @@ function true_friction(v, t; f_s=2.0, f_c=1.0, v_s=0.1, f_v=0.5)
 end
 
 plot(v-&gt;true_friction(v, 0), -2, 2, lab=&quot;\$t = 0\$&quot;, xlabel=&quot;Velocity&quot;, ylabel=&quot;Friction Force&quot;, title=&quot;True friction model&quot;)
-plot!(v-&gt;true_friction(v, 400), -2, 2, lab=&quot;\$t = 400\$&quot;)</code></pre><img src="6b119b95.svg" alt="Example block output"/><pre><code class="language-julia hljs"># True system dynamics
+plot!(v-&gt;true_friction(v, 400), -2, 2, lab=&quot;\$t = 400\$&quot;)</code></pre><img src="2001021f.svg" alt="Example block output"/><pre><code class="language-julia hljs"># True system dynamics
 function mass_dynamics(x, u, p, t)
     m = 1.0f0  # Mass
     x₁, x₂ = x
