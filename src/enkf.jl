@@ -23,6 +23,8 @@ This implementation uses the **Stochastic EnKF** formulation with perturbed obse
 - `inflation = 1.0`: Covariance inflation factor (≥1.0). Values > 1.0 inflate the ensemble
   spread after each prediction step to prevent filter divergence.
 - `rng = Random.Xoshiro()`: Random number generator
+- `threads = false`: Use threads to propagate ensemble members in parallel. Only activate this
+  if your dynamics and measurement functions are thread-safe.
 - `names = default_names(...)`: Signal names for plotting
 
 # Algorithm
@@ -89,6 +91,7 @@ mutable struct EnsembleKalmanFilter{DT,MT,R1T,R2T,D0T,ET,XT,RT,P,RNGT} <: Abstra
     p::P
     rng::RNGT
     inflation::Float64
+    threads::Bool
     names::SignalNames
 end
 
@@ -105,6 +108,7 @@ function EnsembleKalmanFilter(
     Ts = 1.0,
     inflation = 1.0,
     rng = Random.Xoshiro(),
+    threads = false,
     names = default_names(length(d0), nu, ny, "EnKF")
 )
     nx = length(d0)
@@ -134,6 +138,7 @@ function EnsembleKalmanFilter(
         p,
         rng,
         inflation,
+        threads,
         names
     )
 end
@@ -234,11 +239,20 @@ function predict!(
     # Create distribution for process noise
     d_w = SimpleMvNormal(PDMats.PDMat(R1))
 
+    # Pre-generate noise samples
+    noise_samples = [rand(enkf.rng, d_w) for _ in 1:N]
+
     # Propagate each ensemble member
-    for i in 1:N
-        xi = enkf.ensemble[i]
-        wi = rand(enkf.rng, d_w)
-        enkf.ensemble[i] = f(xi, u, p, t) .+ wi
+    if enkf.threads
+        Threads.@threads :static for i in 1:N
+            xi = enkf.ensemble[i]
+            @inbounds enkf.ensemble[i] = f(xi, u, p, t) .+ noise_samples[i]
+        end
+    else
+        for i in 1:N
+            xi = enkf.ensemble[i]
+            @inbounds enkf.ensemble[i] = f(xi, u, p, t) .+ noise_samples[i]
+        end
     end
 
     # Apply covariance inflation if > 1.0
@@ -279,8 +293,14 @@ function correct!(
     X = enkf.ensemble
     Y = Matrix{eltype(y)}(undef, ny, N)
     Xa = Matrix{eltype(X[1])}(undef, nx, N) # nx × N (anomaly matrix)
-    for i in 1:N
-        Y[:, i] = h(X[i], u, p, t)
+    if enkf.threads
+        Threads.@threads :static for i in 1:N
+            @inbounds Y[:, i] = h(X[i], u, p, t)
+        end
+    else
+        for i in 1:N
+            Y[:, i] = h(X[i], u, p, t)
+        end
     end
 
     # Compute means
@@ -376,5 +396,6 @@ function Base.show(io::IO, ::MIME"text/plain", enkf::EnsembleKalmanFilter)
     println(io, "  Output dimension: $(enkf.ny)")
     println(io, "  Ensemble size: $(num_particles(enkf))")
     println(io, "  Inflation factor: $(enkf.inflation)")
+    println(io, "  Threaded: $(enkf.threads)")
     println(io, "  Current time index: $(enkf.t)")
 end
