@@ -244,7 +244,7 @@ function predict!(
 
     # Propagate each ensemble member
     if enkf.threads
-        Threads.@threads :static for i in 1:N
+        Threads.@threads for i in 1:N
             xi = enkf.ensemble[i]
             @inbounds enkf.ensemble[i] = f(xi, u, p, t) .+ noise_samples[i]
         end
@@ -294,7 +294,7 @@ function correct!(
     Y = Matrix{eltype(y)}(undef, ny, N)
     Xa = Matrix{eltype(X[1])}(undef, nx, N) # nx × N (anomaly matrix)
     if enkf.threads
-        Threads.@threads :static for i in 1:N
+        Threads.@threads for i in 1:N
             @inbounds Y[:, i] = h(X[i], u, p, t)
         end
     else
