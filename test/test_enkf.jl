@@ -179,3 +179,33 @@ sol = forward_trajectory(enkf, u[1:20], y[1:20])
 @test length(sol.Rt) == 20  # Filtered covariances
 @test length(sol.e) == 20   # Innovations
 
+## Test threads option
+enkf_threaded = EnsembleKalmanFilter(dynamics, measurement, R1, R2, d0, N; nu, ny, threads=true)
+@test enkf_threaded.threads == true
+
+# Test that threaded version produces valid results
+res_threaded = forward_trajectory(enkf_threaded, u[1:20], y[1:20])
+@test isfinite(res_threaded.ll)
+@test length(res_threaded.xt) == 20
+
+# Test that threaded and non-threaded produce similar results (same RNG seed)
+rng_seed = 12345
+enkf_serial = EnsembleKalmanFilter(dynamics, measurement, R1, R2, d0, N; nu, ny, threads=false, rng=Random.Xoshiro(rng_seed))
+enkf_parallel = EnsembleKalmanFilter(dynamics, measurement, R1, R2, d0, N; nu, ny, threads=true, rng=Random.Xoshiro(rng_seed))
+res_serial = forward_trajectory(enkf_serial, u[1:20], y[1:20])
+res_parallel = forward_trajectory(enkf_parallel, u[1:20], y[1:20])
+@test res_serial.ll ≈ res_parallel.ll
+@test all(res_serial.xt .≈ res_parallel.xt)
+@test all(res_serial.x .≈ res_parallel.x)
+
+# Test with inflation and threads combined
+enkf_threaded_inflated = EnsembleKalmanFilter(dynamics, measurement, R1, R2, d0, N; nu, ny, threads=true, inflation=1.05)
+@test enkf_threaded_inflated.threads == true
+@test enkf_threaded_inflated.inflation == 1.05
+res_threaded_inflated = forward_trajectory(enkf_threaded_inflated, u[1:20], y[1:20])
+@test isfinite(res_threaded_inflated.ll)
+
+# Test threaded version with Vector arrays
+enkf_vec_threaded = EnsembleKalmanFilter(dynamics_vec, measurement_vec, Matrix(R1), Matrix(R2), d0_vec, N; nu, ny, threads=true)
+@test_nowarn forward_trajectory(enkf_vec_threaded, u_vec, y_vec)
+
