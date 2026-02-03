@@ -324,7 +324,7 @@ res = Optim.optimize(
         show_trace        = true,
         show_every        = 5,
         iterations        = 1000,
-		x_tol 			  = 1e-7,
+		x_abstol 	      = 1e-7,
     ),
 	autodiff = AutoForwardDiff(),
 )
