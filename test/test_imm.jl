@@ -122,4 +122,19 @@ x,u,y = simulate(imm, T, du) # Simulate the IMM
 
 sol = forward_trajectory(imm, u, y) # Forward trajectory
 
+## update! return value =======================================================
+# Regression test: update!(::IMM, ...) must return (ll, lls, rest) matching
+# correct!(::IMM, ...), not the 2-tuple it used to silently produce.
+kf1 = KalmanFilter(_A, _B, _C, 0, eye(nx), R2, d0)
+kf2 = KalmanFilter(_A, _B, _C, 0, eye(nx), R2, d0)
+imm_ret = IMM([kf1,kf2], [0.5 0.5; 0.5 0.5], [0.5,0.5])
+reset!(imm_ret)
+ret = update!(imm_ret, u[1], y[1])
+@test length(ret) == 3
+ll_u, lls_u, rest_u = ret
+@test ll_u isa Real
+@test lls_u isa AbstractVector && length(lls_u) == 2
+@test rest_u isa AbstractVector && length(rest_u) == 2
+@test ll_u ≈ log(sum(exp, lls_u .+ log.([0.5, 0.5])))
+
 plot(sol, plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=true, plote=true, plotR=true, plotRt=true)
