@@ -545,6 +545,11 @@ end
     include("test_imm.jl")
 end
 
+@testset "SqKF kwdef defaults" begin
+    @info "Testing SqKalmanFilter kwdef defaults"
+    include("test_sqkalman_kwdef.jl")
+end
+
 @testset "parameters" begin
     @info "Testing parameters"
     include("test_parameters.jl")
