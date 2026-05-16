@@ -12,7 +12,7 @@
     Ts::TS = 1
     p::P = NullParameters()
     α::αT = 1.0
-    names::SignalNames = names=default_names(length(d0), size(B,2), size(C,1), name="SqKF")
+    names::SignalNames = default_names(length(d0), size(B,2), size(C,1), "SqKF")
 end
 
 
