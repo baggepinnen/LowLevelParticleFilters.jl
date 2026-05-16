@@ -15,7 +15,14 @@ end
 
 @inline get_mat(A::Nothing,x,u,p,t) = 0
 @inline get_mat(A::Union{AbstractMatrix, Number},x,u,p,t) = A
-@inline get_mat(A::AbstractArray{<:Any, 3},x,u,p,t) = @view A[:,:,t+1]
+@inline get_mat(A::AbstractArray{<:Any, 3},x,u,p,t::Integer) = @view A[:,:,t+1]
+@inline function get_mat(A::AbstractArray{<:Any, 3}, x, u, p, t::Real)
+    isinteger(t) || throw(ArgumentError(
+        "get_mat: a 3-D time-varying matrix is indexed by integer step but got t = $t. " *
+        "Pass `A` as a function `A(x, u, p, t)` if the time-varying matrix must be " *
+        "evaluated at non-integer time points (e.g. for `Ts != 1`)."))
+    @view A[:,:, Int(t)+1]
+end
 @inline get_mat(A::Function,x,u,p,t) = A(x,u,p,t)
 
 """
@@ -25,7 +32,7 @@ end
 
 This is a helper function that makes it possible to supply any of
 - A matrix
-- A "time varying" matrix where time is in the last dimension (the array will be indexed at `t+1` since `t` starts at 0)
+- A "time varying" matrix where time is in the last dimension (the array will be indexed at `t+1` since `t` starts at 0). This form requires the sampling time `Ts == 1`; for non-unit `Ts`, use the function form below since the integer step index is otherwise ambiguous.
 - A function of `x,u,p,t` that returns the matrix
 
 This is useful to implement things like
