@@ -545,6 +545,11 @@ end
     include("test_imm.jl")
 end
 
+@testset "smoother time-varying" begin
+    @info "Testing smoother with time-varying A"
+    include("test_smoother_timevarying.jl")
+end
+                                                        
 @testset "get_mat 3D time" begin
     @info "Testing get_mat 3-D array time handling"
     include("test_getmat_3d_time.jl")

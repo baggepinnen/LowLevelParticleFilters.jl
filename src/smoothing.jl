@@ -15,7 +15,9 @@ function smooth(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractVecto
     xT[end]      = xt[end]      |> copy
     RT[end]      = Rt[end]      |> copy
     for t = T-1:-1:1
-        C     = Rt[t]*get_mat(kf.A, xT[t+1], u[t+1], p, (t+1-1)*kf.Ts)'/cholesky(Symmetric(R[t+1]))
+        # A_t propagates step t -> t+1, matching the forward pass which
+        # evaluates it at time (t-1)*Ts (so the 3-D array form returns A[:,:,t]).
+        C     = Rt[t]*get_mat(kf.A, xt[t], u[t], p, (t-1)*kf.Ts)'/cholesky(Symmetric(R[t+1]))
         xT[t] = xt[t] .+ C*(xT[t+1] .- x[t+1])
         RT[t] = Rt[t] .+ symmetrize(C*(RT[t+1] .- R[t+1])*C')
     end
@@ -51,14 +53,10 @@ function smooth_mbf(sol::KalmanFilteringSolution, kf::AbstractKalmanFilter=sol.f
     λ̂[end] = zero(xt[end])
     r = similar(λ̂)
     for t = T:-1:1
-        ti = ((t+1)-1)*kf.Ts
-        # if t < T
-        #     F = get_A(kf, xT[t+1], u[t+1], p, ti) 
-        #     H = get_C(kf, xT[t+1], u[t+1], p, ti)
-        # else
-            F = get_A(kf, xt[t], u[t], p, ti) # NOTE: may be wrong state here, xT[t+1]?
-            H = get_C(kf, xt[t], u[t], p, ti)
-        # end
+        # The measurement matrix used at step t is evaluated at the same
+        # time as the forward pass uses for the correction at step t.
+        ti_H = (t-1)*kf.Ts
+        H = get_C(kf, xt[t], u[t], p, ti_H)
         if !isassigned(sol.K, t)
             xT[t] = xt[t]
             RT[t] = Rt[t]
@@ -77,6 +75,10 @@ function smooth_mbf(sol::KalmanFilteringSolution, kf::AbstractKalmanFilter=sol.f
         λ̃[t] = -HTS*sol.e[t] + C'λ̂[t] # Wikipedia wrong here, it should be residual instead of measurement
         Λ̃[t] = HTS*H + C'Λ̂[t]*C
         if t > 1
+            # The backward propagation λ̂[t-1] = F'*λ̃[t] uses the transition
+            # from step t-1 to step t. The forward pass evaluated A there
+            # at time (t-2)*Ts (so the 3-D array form returns A[:,:,t-1]).
+            F = get_A(kf, xt[t-1], u[t-1], p, (t-2)*kf.Ts)
             λ̂[t-1] = F'*λ̃[t]
             Λ̂[t-1] = F'Λ̃[t]*F
         end
@@ -96,8 +98,8 @@ function smooth_mbf(sol::KalmanFilteringSolution, kf::AbstractKalmanFilter=sol.f
     KalmanSmoothingSolution(sol, xT, RT),ll,λ̃,λ̂,r
 end
 
-get_A(kf::KalmanFilter, x, u, p, t) = kf.A
-get_C(kf::KalmanFilter, x, u, p, t) = kf.C
+get_A(kf::KalmanFilter, x, u, p, t) = get_mat(kf.A, x, u, p, t)
+get_C(kf::KalmanFilter, x, u, p, t) = get_mat(kf.C, x, u, p, t)
 
 function smooth(pf::AbstractParticleFilter, M, u, y, p=parameters(pf))
     sol = forward_trajectory(pf, u, y, p)
