@@ -1029,10 +1029,13 @@ function DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(
         state_cov = (xs, m, w) -> user_cov(xs)
     end
 
-    # `measurement` takes the full descriptor xz, so the measurement model's
-    # "state dimension" is length(xz0), not nx.
+    # The measurement model's sigma cache must hold 2·nx+1 entries (matching
+    # the differential-state sigma count used by predict!). The cache.x0
+    # buffer goes unused for DAE-UKF — we route xz-sized sigma points through
+    # the filter's own `xz_sigma_points` field — so its dimension is moot;
+    # only the cache.x1 (length-ny, count 2·nx+1) matters for correct!.
     measurement_model = UKFMeasurementModel{T, IPM, AUGM}(
-        measurement, R2; nx = length(xz0), ny, kwargs...)
+        measurement, R2; nx, ny, kwargs...)
 
     R  = convert_cov_type(R1, d0.Σ)
     x0 = eltype(predict_sigma_point_cache.x1)(convert_x0_type(d0.μ))
@@ -1069,6 +1072,177 @@ function DAEUnscentedKalmanFilter(dynamics, measurement, args...; kwargs...)
     AUGD = false
     AUGM = false
     DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement, args...; kwargs...)
+end
+
+
+# ==============================================================================
+# DAE-UKF: constraint reprojection, reset!, predict!, correct!
+# Mandela 2010, "Nonlinear State Estimation of Differential Algebraic Systems"
+# Additive process noise (AUGD=false) + regenerate. AUGM is a free parameter.
+# ==============================================================================
+
+"""
+    calc_xz(kf::DAEUnscentedKalmanFilter, xz, u, p, t, xi=get_x_z(xz)[1])
+    calc_xz(get_x_z, build_xz, residual, alg, alg_kwargs, xz, u, p, t, xi)
+
+Given a differential state `xi`, solve `residual(xi, z, u, p, t) = 0` for the
+algebraic state `z`, and return the full descriptor `build_xz(xi, z)`. The z
+slice of the input `xz` is the warm-start guess for the nonlinear solve.
+"""
+function calc_xz(get_x_z::Function, build_xz, residual, alg, alg_kwargs,
+                 xz::AbstractArray, u, p, t, xi)
+    _, z0 = get_x_z(xz)
+    sol = solve(NonlinearProblem{false}((z,_)->residual(xi, z, u, p, t), z0), alg; alg_kwargs...)
+    nr = norm(sol.resid)
+    nr < 1e-3 || @warn "DAE-UKF constraint solve residual was large: $nr" maxlog=10
+    build_xz(xi, sol.u)
+end
+
+calc_xz(kf::DAEUnscentedKalmanFilter, xz, u, p, t, xi = kf.get_x_z(xz)[1]) =
+    calc_xz(kf.get_x_z, kf.build_xz, kf.residual,
+            kf.constraint_solve_alg, kf.constraint_solve_kwargs,
+            xz, u, p, t, xi)
+
+
+function reset!(kf::DAEUnscentedKalmanFilter;
+                x0 = kf.d0.μ, t = 0, xz0 = kf.xz,
+                u = zeros(kf.nu), p = parameters(kf))
+    kf.x = convert_x0_type(x0)
+    kf.R = convert_cov_type(kf.R1, kf.d0.Σ)
+    kf.xz = calc_xz(kf, xz0, u, p, Float64(t), kf.x)
+    for i in eachindex(kf.xz_sigma_points)
+        kf.xz_sigma_points[i] = kf.xz
+    end
+    kf.t = t
+    nothing
+end
+
+
+"""
+    predict!(kf::DAEUnscentedKalmanFilter, u, p = parameters(kf), t = index(kf)*kf.Ts; R1)
+
+DAE-UKF prediction step (Mandela 2010, §3, additive form).
+"""
+function predict!(kf::DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u,
+                  p = parameters(kf), t::Real = index(kf)*kf.Ts;
+                  R1 = get_mat(kf.R1, kf.x, u, p, t)) where {IPD,IPM,AUGD,AUGM}
+    cache    = kf.predict_sigma_point_cache
+    xs_diff  = cache.x0     # differential-state sigma points (nx-sized)
+    xs_prop  = cache.x1     # propagated differential-state sigma points
+    xzs      = kf.xz_sigma_points
+
+    # Step 1: sigma points on the differential state x.
+    sigmapoints!(xs_diff, kf.x, kf.R, kf.weight_params, kf.cholesky!)
+
+    # Step 2: reproject each sigma point onto the constraint manifold.
+    for i in eachindex(xs_diff)
+        xzs[i] = calc_xz(kf, xzs[i], u, p, t, xs_diff[i])
+    end
+
+    # Step 3: propagate the full descriptor through the DAE dynamics.
+    if IPD
+        for i in eachindex(xzs)
+            buf = similar(xzs[i])
+            kf.dynamics(buf, xzs[i], u, p, t)
+            xzs[i] = buf
+        end
+    else
+        for i in eachindex(xzs)
+            xzs[i] = kf.dynamics(xzs[i], u, p, t)
+        end
+    end
+
+    # Step 4: extract differential parts into the propagated cache.
+    for i in eachindex(xzs)
+        xs_prop[i] = kf.get_x_z(xzs[i])[1]
+    end
+
+    # Step 5: weighted mean / covariance, then add R1 (additive form).
+    kf.x = mean_with_weights(kf.state_mean, xs_prop, kf.weight_params)
+    @bangbang kf.R .= symmetrize(cov_with_weights(kf.state_cov, xs_prop, kf.x, kf.weight_params)) .+ R1
+
+    # Step 5.5: regenerate sigma points from the inflated covariance R = R̃ + R1
+    # and re-reproject z for each. Without this, `correct!` would compute a
+    # cross-cov against xz_sigma_points that are inconsistent with the inflated
+    # kf.R (Mandela 2010, §3.2).
+    if kf.regenerate
+        sigmapoints!(xs_diff, kf.x, kf.R, kf.weight_params, kf.cholesky!)
+        for i in eachindex(xs_diff)
+            xzs[i] = calc_xz(kf, xzs[i], u, p, t, xs_diff[i])
+        end
+    end
+
+    # Step 6: update the stored descriptor to be on-manifold at x̂⁺.
+    kf.xz = calc_xz(kf, kf.xz, u, p, t, kf.x)
+
+    # Step 7: advance time index.
+    kf.t += 1
+    nothing
+end
+
+
+"""
+    (; ll, e, S, Sᵪ, K) = correct!(kf::DAEUnscentedKalmanFilter, u, y, p, t; R2)
+
+DAE-UKF correction step. The augmented cross-covariance over the full
+descriptor xz is what lets algebraic-state measurements inform the
+differential-state estimate (Mandela 2010, §4).
+"""
+function correct!(kf::DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y,
+                  p = parameters(kf), t::Real = index(kf)*kf.Ts;
+                  R2 = get_mat(kf.measurement_model.R2, kf.xz, u, p, t)) where {IPD,IPM,AUGD,AUGM}
+    AUGM && error("AUGM=true is not yet supported for DAEUnscentedKalmanFilter")
+
+    mm  = kf.measurement_model
+    ys  = mm.cache.x1               # reuse the measurement cache as the y_i buffer
+    xzs = kf.xz_sigma_points        # already populated by predict!
+
+    # Step 1: measurement sigma points y_i = h(xz_i, u, p, t).
+    if IPM
+        for i in eachindex(xzs, ys)
+            mm.measurement(ys[i], xzs[i], u, p, t)
+        end
+    else
+        for i in eachindex(xzs, ys)
+            ys[i] = mm.measurement(xzs[i], u, p, t)
+        end
+    end
+
+    # Step 2: predicted measurement mean.
+    ym = mean_with_weights(mm.mean, ys, mm.weight_params)
+
+    # Step 3: innovation.
+    e = mm.innovation(y, ym)
+
+    # Step 4: innovation covariance S = cov({y_i}) + R2 (AUGM=false branch).
+    S = compute_S(mm, R2, ym)
+
+    # Step 5: Cholesky factor of S.
+    Sᵪ = cholesky(Symmetric(S); check = false)
+    issuccess(Sᵪ) ||
+        error("Cholesky factorization of innovation covariance failed at DAE-UKF time step $(kf.t). Got S = $(printarray(S))")
+
+    # Step 6: augmented cross-cov over the full descriptor xz. xz mean and
+    # xz_sigma_points are length (nx+nz); add_to_C! handles the equal-length
+    # case at src/ukf.jl:843, so C ends up shape (nx+nz, ny) automatically.
+    C = cross_cov_with_weights(mm.cross_cov, xzs, kf.xz, ys, ym, mm.weight_params)
+
+    # Step 7: slice gain to differential rows.
+    nx = length(kf.x)
+    Kx = C[1:nx, :] / Sᵪ
+
+    # Step 8: state and covariance update.
+    kf.x = kf.x + Kx * e
+    kf.R = symmetrize(kf.R - Kx * S * Kx')
+
+    # Step 9: reproject kf.xz from the updated differential state.
+    kf.xz = calc_xz(kf, kf.xz, u, p, t, kf.x)
+
+    # Step 10: log-likelihood (mirrors UKF correct! at src/ukf.jl:669).
+    ll = extended_logpdf(SimpleMvNormal(PDMat(S, Sᵪ)), e)
+
+    # Step 11: return the AbstractKalmanFilter correct! contract.
+    (; ll, e, S, Sᵪ, K = Kx)
 end
 
 
