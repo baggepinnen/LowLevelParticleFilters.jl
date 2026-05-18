@@ -953,7 +953,7 @@ y = h(x, z)
 10. Compute consistent z for estimated diff vars
 11. Update covariance matrix for differential states
 """
-mutable struct DAEUnscentedKalmanFilter{DT,MT,R1T,D0T,SPC,XT,RT,P,SMT,SCT,CH,WP,XZT,RF,GXZ,BXZ,SOLV,SOLK} <: AbstractUnscentedKalmanFilter
+mutable struct DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,RT,P,SMT,SCT,CH,WP,XZT,RF,GXZ,BXZ,SOLV,SOLK} <: AbstractUnscentedKalmanFilter
     dynamics::DT
     measurement_model::MT
     R1::R1T
@@ -988,7 +988,8 @@ New implementation
 """
 Assumes dynamics tolerances are at least as tight as the constraint NL solve tolerances
 """
-function DAEUnscentedKalmanFilter(dynamics, # (xz, u, p, t) -> xz_next via DAE solve
+function DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(
+                                  dynamics, # (xz, u, p, t) -> xz_next via DAE solve
                                   measurement, # (xz, u, p, t) -> y
                                   residual, # (x, z, u, p, t) -> constraint residual
                                   get_x_z, # xz -> (x, z)
@@ -1009,7 +1010,7 @@ function DAEUnscentedKalmanFilter(dynamics, # (xz, u, p, t) -> xz_next via DAE s
                                   constraint_solve_alg = SimpleNewtonRaphson(),
                                   constraint_solve_kwargs = (; reltol = 1e-10),
                                   regenerate = true,
-                                  kwargs...)
+                                  kwargs...) where {IPD,IPM,AUGD,AUGM}
     nx = length(d0)
     T  = eltype(d0)
     static = nx ≤ 50
@@ -1030,7 +1031,7 @@ function DAEUnscentedKalmanFilter(dynamics, # (xz, u, p, t) -> xz_next via DAE s
 
     # `measurement` takes the full descriptor xz, so the measurement model's
     # "state dimension" is length(xz0), not nx.
-    measurement_model = UKFMeasurementModel{T, false, false}(
+    measurement_model = UKFMeasurementModel{T, IPM, AUGM}(
         measurement, R2; nx = length(xz0), ny, kwargs...)
 
     R  = convert_cov_type(R1, d0.Σ)
@@ -1040,7 +1041,17 @@ function DAEUnscentedKalmanFilter(dynamics, # (xz, u, p, t) -> xz_next via DAE s
     XZT     = typeof(xz_init)
     xz_sigma_points = XZT[copy(xz_init) for _ in 1:(2nx + 1)]
 
-    DAEUnscentedKalmanFilter(
+    # Specify *every* type parameter so this dispatches to the default
+    # field-by-field inner constructor, not back to this outer method.
+    DAEUnscentedKalmanFilter{
+        IPD,IPM,AUGD,AUGM,
+        typeof(dynamics), typeof(measurement_model), typeof(R1), typeof(d0),
+        typeof(predict_sigma_point_cache), typeof(x0), typeof(R), typeof(p),
+        typeof(state_mean), typeof(state_cov), typeof(cholesky!),
+        typeof(weight_params), typeof(xz_init),
+        typeof(residual), typeof(get_x_z), typeof(build_xz),
+        typeof(constraint_solve_alg), typeof(constraint_solve_kwargs),
+    }(
         dynamics, measurement_model, R1, d0,
         predict_sigma_point_cache, x0, R,
         0, Float64(Ts), ny, nu, p,
@@ -1049,6 +1060,15 @@ function DAEUnscentedKalmanFilter(dynamics, # (xz, u, p, t) -> xz_next via DAE s
         residual, get_x_z, build_xz,
         constraint_solve_alg, constraint_solve_kwargs, regenerate,
     )
+end
+
+# Auto-detect IPD/IPM via has_oop; default AUGD=AUGM=false (Mandela path).
+function DAEUnscentedKalmanFilter(dynamics, measurement, args...; kwargs...)
+    IPD  = !has_oop(dynamics)
+    IPM  = !has_oop(measurement)
+    AUGD = false
+    AUGM = false
+    DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement, args...; kwargs...)
 end
 
 
