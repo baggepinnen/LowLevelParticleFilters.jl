@@ -1104,6 +1104,27 @@ calc_xz(kf::DAEUnscentedKalmanFilter, xz, u, p, t, xi = kf.get_x_z(xz)[1]) =
             xz, u, p, t, xi)
 
 
+# Forward unknown properties to the measurement model so that calls like
+# `kf.R2` work in generic AbstractKalmanFilter code (e.g., forward_trajectory).
+# Mirrors the UKF method at the top of this file (~line 254).
+function Base.getproperty(ukf::DAEUnscentedKalmanFilter{<:Any,<:Any,AUGD}, s::Symbol) where AUGD
+    s ∈ fieldnames(typeof(ukf)) && return getfield(ukf, s)
+    mm = getfield(ukf, :measurement_model)
+    if s ∈ fieldnames(typeof(mm))
+        return getfield(mm, s)
+    elseif s === :nx
+        return length(getfield(ukf, :x))
+    elseif s === :nw
+        nx = length(getfield(ukf, :x))
+        return AUGD ? length(getfield(ukf, :predict_sigma_point_cache).x0[1])-nx : nx
+    elseif s === :measurement
+        return measurement(mm)
+    else
+        throw(ArgumentError("$(typeof(ukf)) has no property named $s"))
+    end
+end
+
+
 function reset!(kf::DAEUnscentedKalmanFilter;
                 x0 = kf.d0.μ, t = 0, xz0 = kf.xz,
                 u = zeros(kf.nu), p = parameters(kf))
@@ -1243,6 +1264,41 @@ function correct!(kf::DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y,
 
     # Step 11: return the AbstractKalmanFilter correct! contract.
     (; ll, e, S, Sᵪ, K = Kx)
+end
+
+
+# ------------------------------------------------------------------------------
+# `simulate` support: sample_state / sample_measurement for DAE-UKF.
+# The generic UKF versions at src/ukf.jl:435–446 assume the filter's "state" is
+# the plain ODE state; here it's the full descriptor xz. We override both, and
+# in the propagation case route noise through the constraint reprojection to
+# preserve g(x,z)=0 on every realized step.
+# ------------------------------------------------------------------------------
+
+function sample_state(kf::DAEUnscentedKalmanFilter, p = parameters(kf); noise = true)
+    x = noise ? rand(kf.d0) : mean(kf.d0)
+    # `simulate` doesn't supply a u at the initial step; use a zero placeholder.
+    # The z-slice of kf.xz is the warm-start guess for the constraint solve.
+    calc_xz(kf, kf.xz, zero(SVector{kf.nu, eltype(x)}), p, 0.0, x)
+end
+
+function sample_state(kf::DAEUnscentedKalmanFilter, xz, u, p = parameters(kf),
+                      t = index(kf)*kf.Ts; noise = true)
+    xz_next = kf.dynamics(xz, u, p, t)
+    x_next  = kf.get_x_z(xz_next)[1]
+    if noise
+        w = rand(SimpleMvNormal(get_mat(kf.R1, x_next, u, p, t)))
+        x_next = x_next + w
+    end
+    calc_xz(kf, xz_next, u, p, t, x_next)
+end
+
+function sample_measurement(kf::DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, xz, u,
+                            p = parameters(kf), t = index(kf)*kf.Ts;
+                            noise = true) where {IPD,IPM,AUGD,AUGM}
+    AUGM && error("AUGM=true is not yet supported for DAEUnscentedKalmanFilter")
+    R2 = get_mat(kf.measurement_model.R2, xz, u, p, t)
+    kf.measurement_model.measurement(xz, u, p, t) .+ noise .* rand(SimpleMvNormal(R2))
 end
 
 

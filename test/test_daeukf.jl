@@ -33,12 +33,6 @@ function lag1_autocorr(e)
 end
 
 
-# TODO: once these tests pass, remove the outer `@testset "DAE UKF"` wrapper
-# and instead include this file from `runtests.jl` inside an analogous testset
-# (matching the pattern used for `test_ukf.jl`). The wrapper exists only so
-# that failures during TDD don't abort the file mid-run.
-@testset "DAE UKF" begin
-
 # ============================================================================
 # Constructor test (re-uses Test 1's system definitions below)
 # ============================================================================
@@ -625,4 +619,90 @@ end
     @test lo < mean(nees_samples) < hi
 end
 
-end # @testset "DAE UKF" — TODO: hoist to runtests.jl when tests pass
+@testset "simulate + forward_trajectory roundtrip (Test 1 system)" begin
+    Q  = 0.05
+    R  = 0.02
+    P0 = 0.5
+    x0_val = 0.3
+    x0 = SA[x0_val]
+    z0 = SA[C1] - x0
+    xz0 = build_xz_scalar(x0, z0)
+    d0  = SimpleMvNormal(x0, SA[P0;;])
+    daeukf = DAEUnscentedKalmanFilter(t1_dynamics, t1_measurement,
+                                      t1_residual, get_x_z_scalar, build_xz_scalar,
+                                      SA[Q;;], SA[R;;], d0;
+                                      xz0, nu=1, ny=1, Ts=DT1,
+                                      constraint_solve_alg = NewtonRaphson(),
+                                      constraint_solve_kwargs = (; reltol = 1e-12))
+    T  = 200
+    du = SimpleMvNormal(SA[0.0], SA[1e-10;;])
+    xz_true, u, y = simulate(daeukf, T, du)
+    @test length(xz_true) == T
+    @test length(y)       == T
+    @test all(z -> abs((z[1] + z[2]) - C1) < 1e-8, xz_true)
+
+    sol = forward_trajectory(daeukf, u, y)
+    err = sum(abs2(sol.xt[k][1] - xz_true[k][1]) for k in 1:T) / T
+    @test err < 5 * R
+end
+
+@testset "in-place dynamics and measurement (Test 1 system)" begin
+    # In-place versions of Test 1's dynamics and measurement. The constructor
+    # auto-detects IPD/IPM via `has_oop`, so passing 5-arg signatures forces
+    # IPD=IPM=true and exercises the `if IPD ...` / `if IPM ...` branches
+    # inside predict!/correct!.
+    function t1_dynamics_ip!(xz_next, xz, u, p, t)
+        x, z = get_x_z_scalar(xz)
+        new_x = x .+ DT1 .* t1_diff_dynamics(x, z, u, p, t)
+        prob  = NonlinearProblem((zv, _) -> t1_residual(new_x, zv, u, p, t), z)
+        new_z = solve(prob, NewtonRaphson(), reltol=1e-12).u
+        xz_next .= build_xz_scalar(new_x, new_z)
+        return nothing
+    end
+    function t1_measurement_ip!(y, xz, u, p, t)
+        y[1] = xz[2]
+        return nothing
+    end
+
+    Q  = 0.05; R = 0.02; P0 = 0.5
+    x0 = SA[0.3]; z0 = SA[C1] - x0
+    # Vector-typed xz0 so the in-place buffers and assignments work without
+    # SVector→MVector→SVector conversions on every sigma point.
+    xz0_v = Vector(build_xz_scalar(x0, z0))
+    d0    = SimpleMvNormal(x0, SA[P0;;])
+
+    ukf_oop = DAEUnscentedKalmanFilter(t1_dynamics, t1_measurement,
+                                       t1_residual, get_x_z_scalar, build_xz_scalar,
+                                       SA[Q;;], SA[R;;], d0;
+                                       xz0 = xz0_v, nu=1, ny=1, Ts=DT1,
+                                       constraint_solve_alg = NewtonRaphson(),
+                                       constraint_solve_kwargs = (; reltol = 1e-12))
+    ukf_ip  = DAEUnscentedKalmanFilter(t1_dynamics_ip!, t1_measurement_ip!,
+                                       t1_residual, get_x_z_scalar, build_xz_scalar,
+                                       SA[Q;;], SA[R;;], d0;
+                                       xz0 = xz0_v, nu=1, ny=1, Ts=DT1,
+                                       constraint_solve_alg = NewtonRaphson(),
+                                       constraint_solve_kwargs = (; reltol = 1e-12))
+
+    # Constructor auto-detection of {IPD,IPM}.
+    @test ukf_oop isa DAEUnscentedKalmanFilter{false, false}
+    @test ukf_ip  isa DAEUnscentedKalmanFilter{true,  true}
+
+    # Drive both with the same input/measurement sequence; the differential
+    # state estimate, covariance, and on-manifold descriptor must agree.
+    T = 100
+    α, β = 1 - 2*DT1, DT1
+    x_truth = 0.4
+    u = SA[0.0]
+    for k in 1:T
+        x_truth = α*x_truth + β*C1 + sqrt(Q)*randn()
+        y_k     = SA[(C1 - x_truth) + sqrt(R)*randn()]
+        predict!(ukf_oop, u); predict!(ukf_ip, u)
+        @test ukf_oop.x ≈ ukf_ip.x
+        @test ukf_oop.R ≈ ukf_ip.R
+        correct!(ukf_oop, u, y_k); correct!(ukf_ip, u, y_k)
+        @test ukf_oop.x  ≈ ukf_ip.x
+        @test ukf_oop.R  ≈ ukf_ip.R
+        @test ukf_oop.xz ≈ ukf_ip.xz
+    end
+end
