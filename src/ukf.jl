@@ -925,10 +925,11 @@ function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter{IPD,IPM,
 end
 
 
-## DAE UKF
-#= 
+"""
+DAE UKF
+ 
+Following:
 Nonlinear State Estimation of Differential Algebraic Systems
-
 Ravi K. Mandela, Raghunathan Rengaswamy, Shankar Narasimhan
 
 First, unscented samples are chosen for the differential
@@ -944,22 +945,111 @@ y = h(x, z)
 2. calculate z for each x using g(x, z) = 0
 3. propagate each [x; z] through integrator
 4. calc new covariance matrix
+5. use new covariance to sample sigma points
+6. repeat steps 2-4
+7. Compute estimated measurement from sigma points
+8. Compute Kalman gain
+9. Use gain to create posteriori estimate of differential variables
+10. Compute consistent z for estimated diff vars
+11. Update covariance matrix for differential states
+"""
+mutable struct DAEUnscentedKalmanFilter{DT,MT,R1T,D0T,SPC,XT,RT,P,SMT,SCT,CH,WP,XZT,RF,GXZ,BXZ,SOLV,SOLK} <: AbstractUnscentedKalmanFilter
+    dynamics::DT
+    measurement_model::MT
+    R1::R1T
+    d0::D0T
+    predict_sigma_point_cache::SPC
+    x::XT
+    R::RT
+    t::Int
+    Ts::Float64
+    ny::Int
+    nu::Int
+    p::P
+    state_mean::SMT
+    state_cov::SCT
+    cholesky!::CH
+    names::SignalNames
+    weight_params::WP
+    # DAE-specific
+    xz::XZT
+    xz_sigma_points::Vector{XZT}
+    residual::RF
+    get_x_z::GXZ
+    build_xz::BXZ
+    constraint_solve_alg::SOLV
+    constraint_solve_kwargs::SOLK
+    regenerate::Bool
+end
+
+#=
+New implementation
 =#
+"""
+Assumes dynamics tolerances are at least as tight as the constraint NL solve tolerances
+"""
+function DAEUnscentedKalmanFilter(dynamics, # (xz, u, p, t) -> xz_next via DAE solve
+                                  measurement, # (xz, u, p, t) -> y
+                                  residual, # (x, z, u, p, t) -> constraint residual
+                                  get_x_z, # xz -> (x, z)
+                                  build_xz, # (x, z) -> xz
+                                  R1, # process noise covariance (over x)
+                                  R2, # measurement noise covariance (over y)
+                                  d0; # initial distribution of differential state x
+                                  xz0, # initial full descriptor; must satisfy residual(x̂₀, ẑ₀) ≈ 0
+                                  nu::Int, # control dimension
+                                  ny::Int, # measurement dimension
+                                  Ts::Real = 1.0, # timestep
+                                  p = NullParameters(),
+                                  state_mean = weighted_mean,
+                                  state_cov  = weighted_cov,
+                                  cholesky!  = cholesky!,
+                                  weight_params = TrivialParams(),
+                                  names = default_names(length(d0), nu, ny, "DAEUKF"),
+                                  constraint_solve_alg = SimpleNewtonRaphson(),
+                                  constraint_solve_kwargs = (; reltol = 1e-10),
+                                  regenerate = true,
+                                  kwargs...)
+    nx = length(d0)
+    T  = eltype(d0)
+    static = nx ≤ 50
+    predict_sigma_point_cache = SigmaPointCache{T}(nx, 0, nx, nx, static)
 
-# abstract type AbstractUnscentedKalmanFilter <: AbstractKalmanFilter end
+    # Mirror UKF's unweighted-fallback shim so users can pass mean/cov functions
+    # that only take the sigma points; see UnscentedKalmanFilter constructor.
+    if !hasmethod(state_mean, Tuple{AbstractVector, UKFWeights})
+        weight_params isa TrivialParams || error("Unweighted state mean may not be used with custom weights")
+        user_mean = state_mean
+        state_mean = (xs, w) -> user_mean(xs)
+    end
+    if !hasmethod(state_cov, Tuple{AbstractVector, AbstractVector, UKFWeights})
+        weight_params isa TrivialParams || error("Unweighted state covariance may not be used with custom weights")
+        user_cov = state_cov
+        state_cov = (xs, m, w) -> user_cov(xs)
+    end
 
-# @with_kw struct DAEUnscentedKalmanFilter{DT,MT,R1T,R2T,D0T,VT,XT,RT,P,G,GXZ,BXZ,XZT,VZT} <: AbstractUnscentedKalmanFilter
-#     ukf::UnscentedKalmanFilter{DT,MT,R1T,R2T,D0T,VT,XT,RT,P}
-#     g::G
-#     get_x_z::GXZ
-#     build_xz::BXZ
-#     xz::XZT
-#     xzs::Vector{VZT}
-#     nu::Int
-#     threads::Bool
-#     # TODO: root solver options
-# end
+    # `measurement` takes the full descriptor xz, so the measurement model's
+    # "state dimension" is length(xz0), not nx.
+    measurement_model = UKFMeasurementModel{T, false, false}(
+        measurement, R2; nx = length(xz0), ny, kwargs...)
 
+    R  = convert_cov_type(R1, d0.Σ)
+    x0 = eltype(predict_sigma_point_cache.x1)(convert_x0_type(d0.μ))
+
+    xz_init = copy(xz0)
+    XZT     = typeof(xz_init)
+    xz_sigma_points = XZT[copy(xz_init) for _ in 1:(2nx + 1)]
+
+    DAEUnscentedKalmanFilter(
+        dynamics, measurement_model, R1, d0,
+        predict_sigma_point_cache, x0, R,
+        0, Float64(Ts), ny, nu, p,
+        state_mean, state_cov, cholesky!, names, weight_params,
+        xz_init, xz_sigma_points,
+        residual, get_x_z, build_xz,
+        constraint_solve_alg, constraint_solve_kwargs, regenerate,
+    )
+end
 
 
 # """
