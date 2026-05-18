@@ -25,6 +25,7 @@ using Statistics
 using RecipesBase
 using ForwardDiff
 using MaybeInplace
+using NonlinearSolve # for DAE UKF
 import SpecialFunctions # Normpdf and friends
 
 # using SciMLBase
