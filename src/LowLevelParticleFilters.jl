@@ -25,7 +25,7 @@ using Statistics
 using RecipesBase
 using ForwardDiff
 using MaybeInplace
-using SimpleNonlinearSolve # for DAE UKF
+using SciMLBase: NonlinearProblem, solve # DAE-UKF constraint reprojection. Algorithms are user-supplied (e.g. SimpleNonlinearSolve, NonlinearSolve).
 import SpecialFunctions # Normpdf and friends
 
 # using SciMLBase

@@ -275,7 +275,8 @@ end
                                           t1_residual, get_x_z_scalar, build_xz_scalar,
                                           SA[Q;;], SA[R;;], d0;
                                           xz0=build_xz_scalar(SA[x0_val], SA[C1]-SA[x0_val]),
-                                          nu=1, ny=1, Ts=DT1)
+                                          nu=1, ny=1, Ts=DT1,
+                                          constraint_solve_alg = SimpleNewtonRaphson())
         x_true = x0[1]
         u = SA[0.0]
         for k in 1:T

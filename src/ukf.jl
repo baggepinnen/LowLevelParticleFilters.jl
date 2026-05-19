@@ -1019,8 +1019,8 @@ end
     DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(
         dynamics, measurement, residual, get_x_z, build_xz,
         R1, R2, d0;
-        xz0, nu, ny, Ts = 1.0,
-        constraint_solve_alg    = SimpleNewtonRaphson(),
+        xz0, nu, ny, constraint_solve_alg,
+        Ts = 1.0,
         constraint_solve_kwargs = (; reltol = 1e-10),
         regenerate = true,
         kwargs...,
@@ -1044,11 +1044,17 @@ sees the decomposed `(x, z)`.
 # Required keyword arguments
 - `xz0`: initial descriptor, must satisfy `residual(x̂₀, ẑ₀) ≈ 0`.
 - `nu`, `ny`: control and measurement dimensions.
+- `constraint_solve_alg`: any SciML-compatible nonlinear algorithm used to
+  reproject `z` from `x` (e.g. `SimpleNewtonRaphson()` from
+  `SimpleNonlinearSolve`, or `NewtonRaphson()` / `TrustRegion()` from
+  `NonlinearSolve`). The package does *not* take a nonlinear-solver
+  package as a runtime dependency — the algorithm and any solver-side
+  imports are the caller's responsibility.
 
 # Selected keyword arguments
-- `constraint_solve_alg`, `constraint_solve_kwargs`: any SciML-compatible
-  nonlinear algorithm + kwargs (e.g. `reltol`). The reltol should be
-  tighter than the truncation error of your `dynamics`.
+- `constraint_solve_kwargs`: NamedTuple forwarded to `solve`, e.g.
+  `(; reltol = 1e-10)`. The reltol should be tighter than the truncation
+  error of your `dynamics`.
 - `regenerate`: see `DAEUnscentedKalmanFilter` (struct docstring).
 
 See [`DAEUnscentedKalmanFilter`](@ref) for the algorithm, type-parameter
@@ -1073,7 +1079,7 @@ function DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(
                                   cholesky!  = cholesky!,
                                   weight_params = TrivialParams(),
                                   names = default_names(length(d0), nu, ny, "DAEUKF"),
-                                  constraint_solve_alg = SimpleNewtonRaphson(),
+                                  constraint_solve_alg,
                                   constraint_solve_kwargs = (; reltol = 1e-10),
                                   regenerate = true,
                                   kwargs...) where {IPD,IPM,AUGD,AUGM}
