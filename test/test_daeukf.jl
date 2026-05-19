@@ -2,7 +2,7 @@ using LowLevelParticleFilters
 using LowLevelParticleFilters: SimpleMvNormal, UKFWeights,
                                mean_with_weights, cov_with_weights,
                                weighted_mean, weighted_cov
-using NonlinearSolve, StaticArrays
+using SimpleNonlinearSolve, StaticArrays
 using Test, Random, LinearAlgebra, Statistics, Distributions
 
 Random.seed!(0)
@@ -50,7 +50,7 @@ function t1_dynamics(xz, u, p, t)
     x, z = get_x_z_scalar(xz)
     new_x = x .+ DT1 .* t1_diff_dynamics(x, z, u, p, t)
     prob  = NonlinearProblem((zv, _) -> t1_residual(new_x, zv, u, p, t), z)
-    new_z = solve(prob, NewtonRaphson(), reltol=1e-12).u
+    new_z = solve(prob, SimpleNewtonRaphson(), reltol=1e-12).u
     build_xz_scalar(new_x, new_z)
 end
 
@@ -64,7 +64,7 @@ end
     d0  = SimpleMvNormal(x0, P0)
     nu, ny, Ts = 1, 1, DT1
 
-    alg = NewtonRaphson()
+    alg = SimpleNewtonRaphson()
     daeukf = DAEUnscentedKalmanFilter(t1_dynamics, t1_measurement,
                                       t1_residual, get_x_z_scalar, build_xz_scalar,
                                       Q, R, d0;
@@ -113,7 +113,7 @@ end
     @test daeukf.names isa SignalNames
 
     # overrides take effect
-    alg2 = TrustRegion()
+    alg2 = SimpleTrustRegion()
     daeukf2 = DAEUnscentedKalmanFilter(t1_dynamics, t1_measurement,
                                        t1_residual, get_x_z_scalar, build_xz_scalar,
                                        Q, R, d0;
@@ -174,7 +174,7 @@ end
                                       t1_residual, get_x_z_scalar, build_xz_scalar,
                                       SA[Q;;], SA[R;;], d0;
                                       xz0, nu=1, ny=1, Ts=DT1,
-                                      constraint_solve_alg = NewtonRaphson(),
+                                      constraint_solve_alg = SimpleNewtonRaphson(),
                                       constraint_solve_kwargs = (; reltol = 1e-12))
 
     T = 1000
@@ -232,7 +232,7 @@ end
                                       t1_residual, get_x_z_scalar, build_xz_scalar,
                                       SA[Q;;], SA[R;;], d0;
                                       xz0, nu=1, ny=1, Ts=DT1,
-                                      constraint_solve_alg = NewtonRaphson(),
+                                      constraint_solve_alg = SimpleNewtonRaphson(),
                                       constraint_solve_kwargs = (; reltol = 1e-12))
 
     T = 200
@@ -314,7 +314,7 @@ function t2_dynamics(xz, u, p, t)
     x, z = get_x_z_scalar(xz)
     new_x = x .+ DT2 .* t2_diff_dynamics(x, z, u, p, t)
     prob  = NonlinearProblem((zv, _) -> t2_residual(new_x, zv, u, p, t), z)
-    new_z = solve(prob, NewtonRaphson(), reltol=1e-12).u
+    new_z = solve(prob, SimpleNewtonRaphson(), reltol=1e-12).u
     build_xz_scalar(new_x, new_z)
 end
 
@@ -335,7 +335,7 @@ t2_z_exact(t, x0) = 1 / (t + exp(-x0))
                                       t2_residual, get_x_z_scalar, build_xz_scalar,
                                       SA[Q;;], SA[R;;], d0;
                                       xz0, nu=1, ny=1, Ts=DT2,
-                                      constraint_solve_alg = NewtonRaphson(),
+                                      constraint_solve_alg = SimpleNewtonRaphson(),
                                       constraint_solve_kwargs = (; reltol = 1e-12))
 
     T = 1000
@@ -373,7 +373,7 @@ end
                                       t2_residual, get_x_z_scalar, build_xz_scalar,
                                       SA[Q;;], SA[R;;], d0;
                                       xz0, nu=1, ny=1, Ts=DT2,
-                                      constraint_solve_alg = NewtonRaphson(),
+                                      constraint_solve_alg = SimpleNewtonRaphson(),
                                       constraint_solve_kwargs = (; reltol = 1e-12))
 
     T = 500
@@ -424,7 +424,7 @@ end
         SA[Q;;], SA[R;;], d0;
         xz0, nu=1, ny=1, Ts=DT2,
         regenerate = regen,
-        constraint_solve_alg = NewtonRaphson(),
+        constraint_solve_alg = SimpleNewtonRaphson(),
         constraint_solve_kwargs = (; reltol = 1e-12),
     )
 
@@ -491,7 +491,7 @@ function t3_dynamics(xz, u, p, t)
     x, z = get_x_z_3(xz)
     new_x = x .+ DT3 .* t3_diff_dynamics(x, z, u, p, t)
     prob  = NonlinearProblem((zv, _) -> t3_residual(new_x, zv, u, p, t), z)
-    new_z = solve(prob, NewtonRaphson(), reltol=1e-12).u
+    new_z = solve(prob, SimpleNewtonRaphson(), reltol=1e-12).u
     build_xz_3(new_x, new_z)
 end
 
@@ -520,7 +520,7 @@ end
                                       t3_residual, get_x_z_3, build_xz_3,
                                       Q, R, d0;
                                       xz0, nu=1, ny=2, Ts=DT3,
-                                      constraint_solve_alg = NewtonRaphson(),
+                                      constraint_solve_alg = SimpleNewtonRaphson(),
                                       constraint_solve_kwargs = (; reltol = 1e-12))
 
     T = 500
@@ -557,7 +557,7 @@ end
                                       t3_residual, get_x_z_3, build_xz_3,
                                       Q, R, d0;
                                       xz0, nu=1, ny=2, Ts=DT3,
-                                      constraint_solve_alg = NewtonRaphson(),
+                                      constraint_solve_alg = SimpleNewtonRaphson(),
                                       constraint_solve_kwargs = (; reltol = 1e-12))
 
     T = 300
@@ -599,7 +599,7 @@ end
                                           xz0 = build_xz_3(SA[a0_mean, b0_mean],
                                                            SA[MASS - a0_mean - b0_mean]),
                                           nu=1, ny=2, Ts=DT3,
-                                          constraint_solve_alg = NewtonRaphson(),
+                                          constraint_solve_alg = SimpleNewtonRaphson(),
                                           constraint_solve_kwargs = (; reltol = 1e-12))
         a_t, b_t = a0, b0
         u = SA[0.0]
@@ -632,7 +632,7 @@ end
                                       t1_residual, get_x_z_scalar, build_xz_scalar,
                                       SA[Q;;], SA[R;;], d0;
                                       xz0, nu=1, ny=1, Ts=DT1,
-                                      constraint_solve_alg = NewtonRaphson(),
+                                      constraint_solve_alg = SimpleNewtonRaphson(),
                                       constraint_solve_kwargs = (; reltol = 1e-12))
     T  = 200
     du = SimpleMvNormal(SA[0.0], SA[1e-10;;])
@@ -655,7 +655,7 @@ end
         x, z = get_x_z_scalar(xz)
         new_x = x .+ DT1 .* t1_diff_dynamics(x, z, u, p, t)
         prob  = NonlinearProblem((zv, _) -> t1_residual(new_x, zv, u, p, t), z)
-        new_z = solve(prob, NewtonRaphson(), reltol=1e-12).u
+        new_z = solve(prob, SimpleNewtonRaphson(), reltol=1e-12).u
         xz_next .= build_xz_scalar(new_x, new_z)
         return nothing
     end
@@ -675,13 +675,13 @@ end
                                        t1_residual, get_x_z_scalar, build_xz_scalar,
                                        SA[Q;;], SA[R;;], d0;
                                        xz0 = xz0_v, nu=1, ny=1, Ts=DT1,
-                                       constraint_solve_alg = NewtonRaphson(),
+                                       constraint_solve_alg = SimpleNewtonRaphson(),
                                        constraint_solve_kwargs = (; reltol = 1e-12))
     ukf_ip  = DAEUnscentedKalmanFilter(t1_dynamics_ip!, t1_measurement_ip!,
                                        t1_residual, get_x_z_scalar, build_xz_scalar,
                                        SA[Q;;], SA[R;;], d0;
                                        xz0 = xz0_v, nu=1, ny=1, Ts=DT1,
-                                       constraint_solve_alg = NewtonRaphson(),
+                                       constraint_solve_alg = SimpleNewtonRaphson(),
                                        constraint_solve_kwargs = (; reltol = 1e-12))
 
     # Constructor auto-detection of {IPD,IPM}.
