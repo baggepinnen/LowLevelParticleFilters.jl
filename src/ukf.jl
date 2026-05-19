@@ -926,32 +926,65 @@ end
 
 
 """
-DAE UKF
- 
-Following:
-Nonlinear State Estimation of Differential Algebraic Systems
-Ravi K. Mandela, Raghunathan Rengaswamy, Shankar Narasimhan
+    DAEUnscentedKalmanFilter
 
-First, unscented samples are chosen for the differential
-state variables. The unscented samples for the algebraic variables
-are generated from the algebraic equations. This makes
-all the sigma points consistent.
+A nonlinear state estimator for index-1 differential-algebraic (DAE)
+systems of the form
+```math
+ẋ = f(x, z, u, p, t) + w,   w ~ N(0, R₁)
+0 = g(x, z, u, p, t)
+y = h(x, z, u, p, t) + e,   e ~ N(0, R₂)
+```
+where `x` is the differential state, `z` is the algebraic state, and `g`
+is an index-1 constraint that determines `z` from `x`.
 
-ẋ = f(x, z)
-g(x, z) = 0
-y = h(x, z)
+Sigma points are drawn only on the differential state `x`; for each sigma
+point, `z` is reconstructed by solving `g(x, z) = 0`, so all sigma points
+lie on the constraint manifold. The propagated descriptor is then run
+through the user-supplied `dynamics` function. Filter uncertainty
+(`R`) is carried over the differential state alone; the full descriptor
+`xz` is stored on-manifold at `kf.xz`.
 
-1. sample sigma points for x
-2. calculate z for each x using g(x, z) = 0
-3. propagate each [x; z] through integrator
-4. calc new covariance matrix
-5. use new covariance to sample sigma points
-6. repeat steps 2-4
-7. Compute estimated measurement from sigma points
-8. Compute Kalman gain
-9. Use gain to create posteriori estimate of differential variables
-10. Compute consistent z for estimated diff vars
-11. Update covariance matrix for differential states
+Implementation follows Mandela, Rengaswamy, Narasimhan (2010),
+"Nonlinear State Estimation of Differential Algebraic Systems",
+*Industrial & Engineering Chemistry Research* 49(11). Process noise is
+additive on the differential equation (AUGD=false), and after each
+prediction step the sigma points are regenerated from the inflated
+covariance `P^{xx} + R₁` before the measurement update (the
+`regenerate` field).
+
+# Algorithm
+**Predict** (`predict!`)
+1. Sample sigma points for `x` from `N(x̂, P^{xx})`.
+2. For each, solve `g(xᵢ, z) = 0` to get `zᵢ`; assemble the descriptor.
+3. Propagate each descriptor through `dynamics`.
+4. Compute the predicted mean and covariance on `x`; add `R₁`.
+5. If `regenerate`, redraw sigma points from the inflated covariance and
+   re-solve `g` for each.
+
+**Correct** (`correct!`)
+6. Apply `h` to each descriptor sigma point to get measurement sigmas.
+7. Assemble the innovation covariance `S` and the *augmented*
+   cross-covariance `P^{xz,y}` over the full descriptor.
+8. Take the differential rows of the gain, update `x` and `P^{xx}`.
+9. Reproject `kf.xz` from the updated `x` via the constraint.
+
+# Type parameters
+- `IPD`, `IPM`: whether the user-supplied `dynamics` and `measurement`
+  functions are in-place (`true`) or out-of-place (`false`); auto-detected
+  by the untyped constructor.
+- `AUGD`: locked to `false` in the current implementation. AUGD=true (the
+  augmented-dynamics variant) is a strictly more general formulation that
+  is not Mandela's algorithm; reserved for a future extension.
+- `AUGM`: accepted as a type parameter but currently unsupported in
+  `correct!` / `sample_measurement` (will error). Plumbing exists for a
+  future implementation.
+
+See the `DAEUnscentedKalmanFilter` constructor for keyword arguments and
+field semantics.
+
+See also [`UnscentedKalmanFilter`](@ref), [`predict!`](@ref),
+[`correct!`](@ref), [`simulate`](@ref).
 """
 mutable struct DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,RT,P,SMT,SCT,CH,WP,XZT,RF,GXZ,BXZ,SOLV,SOLK} <: AbstractUnscentedKalmanFilter
     dynamics::DT
@@ -982,11 +1015,44 @@ mutable struct DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,R
     regenerate::Bool
 end
 
-#=
-New implementation
-=#
 """
-Assumes dynamics tolerances are at least as tight as the constraint NL solve tolerances
+    DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(
+        dynamics, measurement, residual, get_x_z, build_xz,
+        R1, R2, d0;
+        xz0, nu, ny, Ts = 1.0,
+        constraint_solve_alg    = SimpleNewtonRaphson(),
+        constraint_solve_kwargs = (; reltol = 1e-10),
+        regenerate = true,
+        kwargs...,
+    )
+
+Construct a `DAEUnscentedKalmanFilter` with explicit type-parameter flags.
+Most users should reach for the untyped form
+`DAEUnscentedKalmanFilter(dynamics, measurement, …)`, which auto-detects
+`IPD` / `IPM` from the function signatures.
+
+# Callbacks
+All operate on the full descriptor `xz = [x; z]` except `residual`, which
+sees the decomposed `(x, z)`.
+
+- `dynamics(xz, u, p, t) -> xz_next` (or `(buf, xz, u, p, t)` if `IPD`).
+  Advances the descriptor one timestep with the constraint enforced.
+- `measurement(xz, u, p, t) -> y` (or in-place if `IPM`).
+- `residual(x, z, u, p, t) -> g`. Used to reproject `z` from `x`.
+- `get_x_z(xz) -> (x, z)` and `build_xz(x, z) -> xz`.
+
+# Required keyword arguments
+- `xz0`: initial descriptor, must satisfy `residual(x̂₀, ẑ₀) ≈ 0`.
+- `nu`, `ny`: control and measurement dimensions.
+
+# Selected keyword arguments
+- `constraint_solve_alg`, `constraint_solve_kwargs`: any SciML-compatible
+  nonlinear algorithm + kwargs (e.g. `reltol`). The reltol should be
+  tighter than the truncation error of your `dynamics`.
+- `regenerate`: see `DAEUnscentedKalmanFilter` (struct docstring).
+
+See [`DAEUnscentedKalmanFilter`](@ref) for the algorithm, type-parameter
+semantics, and field meanings.
 """
 function DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(
                                   dynamics, # (xz, u, p, t) -> xz_next via DAE solve
@@ -1065,7 +1131,13 @@ function DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(
     )
 end
 
-# Auto-detect IPD/IPM via has_oop; default AUGD=AUGM=false (Mandela path).
+"""
+    DAEUnscentedKalmanFilter(dynamics, measurement, residual, get_x_z, build_xz, R1, R2, d0; xz0, nu, ny, kwargs...)
+
+Untyped entry point. Auto-detects `IPD` / `IPM` from the function signatures
+and sets `AUGD = AUGM = false`, then forwards to the typed constructor for
+the full contract.
+"""
 function DAEUnscentedKalmanFilter(dynamics, measurement, args...; kwargs...)
     IPD  = !has_oop(dynamics)
     IPM  = !has_oop(measurement)
@@ -1073,7 +1145,6 @@ function DAEUnscentedKalmanFilter(dynamics, measurement, args...; kwargs...)
     AUGM = false
     DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(dynamics, measurement, args...; kwargs...)
 end
-
 
 # ==============================================================================
 # DAE-UKF: constraint reprojection, reset!, predict!, correct!
@@ -1125,6 +1196,19 @@ function Base.getproperty(ukf::DAEUnscentedKalmanFilter{<:Any,<:Any,AUGD}, s::Sy
 end
 
 
+"""
+    reset!(kf::DAEUnscentedKalmanFilter; x0 = kf.d0.μ, t = 0, xz0 = kf.xz, u = zeros(kf.nu), p = parameters(kf))
+
+Restore the filter to an initial state. The differential mean is reset to
+`x0`, the differential covariance to `kf.d0.Σ`, and the time index to `t`.
+The algebraic state is then solved for via [`calc_xz`](@ref) using `xz0`
+as the warm-start guess, and every entry of `kf.xz_sigma_points` is set
+to the resulting on-manifold descriptor.
+
+`u` and `p` are forwarded to the constraint solve and only matter if
+`residual` depends on them at the initial step (uncommon for index-1
+DAEs).
+"""
 function reset!(kf::DAEUnscentedKalmanFilter;
                 x0 = kf.d0.μ, t = 0, xz0 = kf.xz,
                 u = zeros(kf.nu), p = parameters(kf))
@@ -1142,7 +1226,16 @@ end
 """
     predict!(kf::DAEUnscentedKalmanFilter, u, p = parameters(kf), t = index(kf)*kf.Ts; R1)
 
-DAE-UKF prediction step (Mandela 2010, §3, additive form).
+Advance the filter one prediction step under control `u` at time `t`.
+Mutates `kf` in place: updates `kf.x`, `kf.R`, `kf.xz`, `kf.xz_sigma_points`,
+and increments `kf.t`. Returns `nothing`.
+
+# Keyword arguments
+- `R1`: process-noise covariance for this step. Defaults to
+  `get_mat(kf.R1, kf.x, u, p, t)` so that filters stored with a
+  time-varying `R1` work transparently.
+
+See [`DAEUnscentedKalmanFilter`](@ref) for the prediction-step algorithm.
 """
 function predict!(kf::DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u,
                   p = parameters(kf), t::Real = index(kf)*kf.Ts;
@@ -1203,11 +1296,31 @@ end
 
 
 """
-    (; ll, e, S, Sᵪ, K) = correct!(kf::DAEUnscentedKalmanFilter, u, y, p, t; R2)
+    (; ll, e, S, Sᵪ, K) = correct!(kf::DAEUnscentedKalmanFilter, u, y, p = parameters(kf), t = index(kf)*kf.Ts; R2)
 
-DAE-UKF correction step. The augmented cross-covariance over the full
-descriptor xz is what lets algebraic-state measurements inform the
-differential-state estimate (Mandela 2010, §4).
+Run a measurement update against observation `y` and control `u`. Expects
+the descriptor sigma points (`kf.xz_sigma_points`) to be populated by a
+prior [`predict!`](@ref) call. Mutates `kf.x`, `kf.R`, and `kf.xz` in
+place.
+
+# Keyword arguments
+- `R2`: measurement-noise covariance for this step. Defaults to
+  `get_mat(kf.measurement_model.R2, kf.xz, u, p, t)` to honor time-varying
+  `R2`.
+
+# Returns
+A NamedTuple `(; ll, e, S, Sᵪ, K)` with:
+- `ll`: per-step log-likelihood of `y` under the predicted measurement
+  distribution.
+- `e`: innovation `y - ŷ`.
+- `S`, `Sᵪ`: innovation covariance and its Cholesky factorization.
+- `K`: differential-row slice of the augmented Kalman gain (size
+  `nx × ny`), suitable for downstream smoothers.
+
+Calling with a filter whose `AUGM` type parameter is `true` errors —
+augmented measurements are not yet supported.
+
+See [`DAEUnscentedKalmanFilter`](@ref) for the correction-step algorithm.
 """
 function correct!(kf::DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y,
                   p = parameters(kf), t::Real = index(kf)*kf.Ts;
@@ -1275,6 +1388,18 @@ end
 # preserve g(x,z)=0 on every realized step.
 # ------------------------------------------------------------------------------
 
+"""
+    sample_state(kf::DAEUnscentedKalmanFilter, p = parameters(kf); noise = true)
+
+Draw an initial full-descriptor state for use by [`simulate`](@ref).
+Samples (or takes the mean of) the differential prior `kf.d0`, then
+projects onto the constraint manifold via [`calc_xz`](@ref). Returns the
+full state `xz`.
+
+`u = 0` and `t = 0` are passed to the constraint solve; if your
+`residual` depends meaningfully on either at the initial step, sample
+manually rather than through `simulate`.
+"""
 function sample_state(kf::DAEUnscentedKalmanFilter, p = parameters(kf); noise = true)
     x = noise ? rand(kf.d0) : mean(kf.d0)
     # `simulate` doesn't supply a u at the initial step; use a zero placeholder.
@@ -1282,6 +1407,19 @@ function sample_state(kf::DAEUnscentedKalmanFilter, p = parameters(kf); noise = 
     calc_xz(kf, kf.xz, zero(SVector{kf.nu, eltype(x)}), p, 0.0, x)
 end
 
+"""
+    sample_state(kf::DAEUnscentedKalmanFilter, xz, u, p = parameters(kf), t = index(kf)*kf.Ts; noise = true)
+
+Sample the next full-descriptor state given the current `xz`, control
+`u`, and time `t`. Runs `kf.dynamics`, decomposes the result, adds
+Gaussian noise `w ∼ N(0, R₁)` to the differential slice when `noise=true`,
+then projects back onto the constraint manifold via [`calc_xz`](@ref) so
+the returned `xz_next` satisfies `g(x, z) = 0` exactly.
+
+This matches the additive-noise model the filter itself assumes
+(Mandela's path): noise lives on the differential equation, never on the
+constraint.
+"""
 function sample_state(kf::DAEUnscentedKalmanFilter, xz, u, p = parameters(kf),
                       t = index(kf)*kf.Ts; noise = true)
     xz_next = kf.dynamics(xz, u, p, t)
@@ -1293,6 +1431,16 @@ function sample_state(kf::DAEUnscentedKalmanFilter, xz, u, p = parameters(kf),
     calc_xz(kf, xz_next, u, p, t, x_next)
 end
 
+"""
+    sample_measurement(kf::DAEUnscentedKalmanFilter, xz, u, p = parameters(kf), t = index(kf)*kf.Ts; noise = true)
+
+Apply `kf.measurement_model.measurement` to the full descriptor `xz` and
+add Gaussian noise `v ∼ N(0, R₂)` when `noise=true`. Used by
+[`simulate`](@ref) to synthesize measurements along a trajectory.
+
+Errors if `kf` was constructed with `AUGM = true` — augmented measurements
+are not yet supported.
+"""
 function sample_measurement(kf::DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, xz, u,
                             p = parameters(kf), t = index(kf)*kf.Ts;
                             noise = true) where {IPD,IPM,AUGD,AUGM}
