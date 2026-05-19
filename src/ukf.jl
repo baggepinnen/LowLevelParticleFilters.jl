@@ -1372,18 +1372,24 @@ function correct!(kf::DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y,
     issuccess(Sᵪ) ||
         error("Cholesky factorization of innovation covariance failed at DAE-UKF time step $(kf.t). Got S = $(printarray(S))")
 
-    # Step 6: augmented cross-cov over the full descriptor xz. xz mean and
-    # xz_sigma_points are length (nx+nz); add_to_C! handles the equal-length
-    # case at src/ukf.jl:843, so C ends up shape (nx+nz, ny) automatically.
-    C = cross_cov_with_weights(mm.cross_cov, xzs, kf.xz, ys, ym, mm.weight_params)
+    # Step 6: cross-cov between the differential state and the measurement.
+    # Extract the differential part of each descriptor sigma point via
+    # `get_x_z` so Cx (nx × ny) is built directly, regardless of where
+    # the differential vs. algebraic rows are in xz.
+    # Reuses the predict cache as scratch — predict! overwrites it before
+    # use on its next call.
+    xs_diff = kf.predict_sigma_point_cache.x0
+    for i in eachindex(xzs, xs_diff)
+        xs_diff[i] = kf.get_x_z(xzs[i])[1]
+    end
+    Cx = cross_cov_with_weights(mm.cross_cov, xs_diff, kf.x, ys, ym, mm.weight_params)
+    Kx = Cx / Sᵪ
 
-    # Step 7: slice gain to differential rows.
-    nx = length(kf.x)
-    Kx = C[1:nx, :] / Sᵪ
-
-    # Step 8: state and covariance update.
+    # Step 8: state update + Joseph-form covariance update.
     kf.x = kf.x + Kx * e
-    kf.R = symmetrize(kf.R - Kx * S * Kx')
+    Heff_T = kf.R \ Cx # nx × ny, equals H' in the linear limit
+    A      = I - Kx * Heff_T'
+    kf.R   = symmetrize(A * kf.R * A' + Kx * R2 * Kx')
 
     # Step 9: reproject kf.xz from the updated differential state.
     kf.xz = calc_xz(kf, kf.xz, u, p, t, kf.x)
