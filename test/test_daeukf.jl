@@ -1,7 +1,8 @@
 using LowLevelParticleFilters
 using LowLevelParticleFilters: SimpleMvNormal, UKFWeights,
                                mean_with_weights, cov_with_weights,
-                               weighted_mean, weighted_cov
+                               weighted_mean, weighted_cov,
+                               calc_xz
 using SimpleNonlinearSolve, StaticArrays
 using Test, Random, LinearAlgebra, Statistics, Distributions
 
@@ -705,4 +706,124 @@ end
         @test ukf_oop.R  ≈ ukf_ip.R
         @test ukf_oop.xz ≈ ukf_ip.xz
     end
+end
+
+
+# ============================================================================
+# Pendulum DAE: 4 differential states (x, y, ẋ, ẏ) + 1 algebraic Lagrange
+# multiplier λ. Index-1 reduction of the position constraint x² + y² = 1 via
+# two differentiations and substitution. Ported (sans threading) from the
+# commented block in test_ukf.jl.
+#
+# Dynamics:
+#   ẋ = u
+#   ẏ = v
+#   u̇ = -λ x + f₁
+#   v̇ = -λ y - g + f₂
+#   0  = u² + v² - λ(x² + y²) - g·y + x·f₁ + y·f₂      (centripetal acceleration)
+#
+# Measurement: position x[1] and the Lagrange multiplier λ.
+# ============================================================================
+
+const G_PEND = 9.82
+
+function pend_full(xz, f, p, t)
+    x, y, u, v, λ = xz
+    SA[u,
+       v,
+       -λ*x + f[1],
+       -λ*y - G_PEND + f[2],
+       u^2 + v^2 - λ*(x^2 + y^2) - G_PEND*y + x*f[1] + y*f[2]]
+end
+
+pend_get_x_z(xz)  = (SA[xz[1], xz[2], xz[3], xz[4]], SA[xz[5]])
+pend_build_xz(x, z) = vcat(x, z)
+
+function pend_residual(x, z, f, p, t)
+    xp, yp, up, vp = x
+    λ = z[1]
+    SA[up^2 + vp^2 - λ*(xp^2 + yp^2) - G_PEND*yp + xp*f[1] + yp*f[2]]
+end
+
+pend_measurement(xz, f, p, t) = SA[xz[1], xz[5]]
+
+# Forward-Euler discretization with internal supersampling and a constraint
+# reprojection at every sub-step.
+function pend_dynamics(xz, f, p, t)
+    PEND_TS = 0.01
+    supersample = 10
+    dt = PEND_TS / supersample
+    for _ in 1:supersample
+        der = pend_full(xz, f, p, t)
+        x_part = SA[xz[1] + dt*der[1],
+                    xz[2] + dt*der[2],
+                    xz[3] + dt*der[3],
+                    xz[4] + dt*der[4]]
+        prob = NonlinearProblem((z, _) -> pend_residual(x_part, z, f, p, t), SA[xz[5]])
+        z_new = solve(prob, SimpleNewtonRaphson(), reltol=1e-12).u
+        xz = pend_build_xz(x_part, z_new)
+    end
+    xz
+end
+
+@testset "Pendulum DAE (constrained mechanical system)" begin
+    PEND_TS = 0.01
+    nx, nu, ny = 4, 2, 2
+
+    d0 = SimpleMvNormal(SA[1.0, 0.0, 0.0, 0.0], SMatrix{4,4}(0.1*I))
+    xz0 = SA[1.0, 0.0, 0.0, 0.0, 0.0]   # at rest at (1, 0), zero λ satisfies the constraint
+    u0  = SA[0.0, 0.0]
+
+    daeukf = DAEUnscentedKalmanFilter(
+        pend_dynamics, pend_measurement, pend_residual,
+        pend_get_x_z, pend_build_xz,
+        SMatrix{4,4}(1e-4*I), SMatrix{2,2}(1e-2*I), d0;
+        xz0, nu, ny, Ts = PEND_TS,
+        constraint_solve_alg = SimpleNewtonRaphson(),
+        constraint_solve_kwargs = (; reltol = 1e-12),
+    )
+
+    # ---- one-step dynamics keeps the descriptor on the constraint manifold ----
+    xz_one = pend_dynamics(xz0, u0, daeukf.p, 0.0)
+    x_one, z_one = pend_get_x_z(xz_one)
+    @test pend_residual(x_one, z_one, u0, daeukf.p, 0.0)[1] ≈ 0 atol = 1e-10
+
+    # ---- calc_xz from rest at (1, 0): λ should be ≈ 0 ----
+    xz_rest = calc_xz(daeukf, xz0, u0, daeukf.p, 0.0)
+    @test xz_rest[5] ≈ 0 atol = 1e-10
+    x_r, z_r = pend_get_x_z(xz_rest)
+    @test pend_residual(x_r, z_r, u0, daeukf.p, 0.0)[1] ≈ 0 atol = 1e-10
+
+    # ---- calc_xz on a random off-manifold input still lands on the manifold ----
+    Random.seed!(7)
+    rand_xz = SVector{5}(randn(5))
+    xz_proj = calc_xz(daeukf, rand_xz, u0, daeukf.p, 0.0)
+    x_p, z_p = pend_get_x_z(xz_proj)
+    @test pend_residual(x_p, z_p, u0, daeukf.p, 0.0)[1] ≈ 0 atol = 1e-10
+    # `xi` defaults to the differential slice of the input; the differential
+    # part should pass through, only `z` should change.
+    @test x_p == SVector{4}(rand_xz[1], rand_xz[2], rand_xz[3], rand_xz[4])
+
+    # ---- forward_trajectory: posterior covariance decreases on every correct! ----
+    Random.seed!(123)
+    T = 60
+    t_vec = (0:T-1) .* PEND_TS
+    u_drive = [SA[sin(tt^2), sin(tt^2 + 1.0)] for tt in t_vec]
+    xz_true, u, y = simulate(daeukf, u_drive)
+
+    sol = forward_trajectory(daeukf, u, y)
+
+    @test all(zip(sol.R, sol.Rt)) do (R, Rt)
+        det(Rt) < det(R)
+    end
+
+    # ---- tracking error after burn-in (relative RMSE on differential state) ----
+    x_true_diff = [pend_get_x_z(xz)[1] for xz in xz_true]
+    burn = 5
+    err_pred = norm(reduce(hcat, x_true_diff[burn:end] .- sol.x[burn:end])) /
+               norm(reduce(hcat, x_true_diff))
+    err_filt = norm(reduce(hcat, x_true_diff[burn:end] .- sol.xt[burn:end])) /
+               norm(reduce(hcat, x_true_diff))
+    @test err_pred < 0.2
+    @test err_filt < 0.2
 end

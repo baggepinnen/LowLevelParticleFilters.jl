@@ -1215,8 +1215,13 @@ function reset!(kf::DAEUnscentedKalmanFilter;
     kf.x = convert_x0_type(x0)
     kf.R = convert_cov_type(kf.R1, kf.d0.Σ)
     kf.xz = calc_xz(kf, xz0, u, p, Float64(t), kf.x)
-    for i in eachindex(kf.xz_sigma_points)
-        kf.xz_sigma_points[i] = kf.xz
+    # Populate sigma points reflecting kf.R so that a `correct!` issued
+    # immediately after reset (e.g., the first step of `forward_trajectory`,
+    # which calls correct! before predict!) sees a non-degenerate ensemble.
+    xs_diff = kf.predict_sigma_point_cache.x0
+    sigmapoints!(xs_diff, kf.x, kf.R, kf.weight_params, kf.cholesky!)
+    for i in eachindex(xs_diff)
+        kf.xz_sigma_points[i] = calc_xz(kf, kf.xz, u, p, Float64(t), xs_diff[i])
     end
     kf.t = t
     nothing
