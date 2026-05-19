@@ -65,12 +65,12 @@ end
     d0  = SimpleMvNormal(x0, P0)
     nu, ny, Ts = 1, 1, DT1
 
-    alg = SimpleNewtonRaphson()
+    solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-10)
     daeukf = DAEUnscentedKalmanFilter(t1_dynamics, t1_measurement,
                                       t1_residual, get_x_z_scalar, build_xz_scalar,
                                       Q, R, d0;
                                       xz0, nu, ny, Ts,
-                                      constraint_solve_alg = alg)
+                                      constraint_solver = solver)
 
     @test daeukf isa DAEUnscentedKalmanFilter
     @test daeukf isa LowLevelParticleFilters.AbstractUnscentedKalmanFilter
@@ -107,24 +107,21 @@ end
 
     # defaults
     @test daeukf.regenerate === true
-    @test daeukf.constraint_solve_alg === alg
-    @test daeukf.constraint_solve_kwargs.reltol == 1e-10
+    @test daeukf.constraint_solver === solver
     @test daeukf.weight_params isa LowLevelParticleFilters.TrivialParams
     @test daeukf.p isa LowLevelParticleFilters.NullParameters
     @test daeukf.names isa SignalNames
 
     # overrides take effect
-    alg2 = SimpleTrustRegion()
+    solver2 = LowLevelParticleFilters.scimlbase_solver(SimpleTrustRegion(); reltol = 1e-8)
     daeukf2 = DAEUnscentedKalmanFilter(t1_dynamics, t1_measurement,
                                        t1_residual, get_x_z_scalar, build_xz_scalar,
                                        Q, R, d0;
                                        xz0, nu, ny, Ts,
                                        regenerate = false,
-                                       constraint_solve_alg = alg2,
-                                       constraint_solve_kwargs = (; reltol = 1e-8))
+                                       constraint_solver = solver2)
     @test daeukf2.regenerate === false
-    @test daeukf2.constraint_solve_alg === alg2
-    @test daeukf2.constraint_solve_kwargs.reltol == 1e-8
+    @test daeukf2.constraint_solver === solver2
 
     # required keyword arguments are actually required
     @test_throws UndefKeywordError DAEUnscentedKalmanFilter(
@@ -136,6 +133,10 @@ end
     @test_throws UndefKeywordError DAEUnscentedKalmanFilter(
         t1_dynamics, t1_measurement, t1_residual, get_x_z_scalar, build_xz_scalar,
         Q, R, d0; xz0, nu)                           # missing ny
+    # missing constraint_solver triggers our helpful error (via default expression)
+    @test_throws ErrorException DAEUnscentedKalmanFilter(
+        t1_dynamics, t1_measurement, t1_residual, get_x_z_scalar, build_xz_scalar,
+        Q, R, d0; xz0, nu, ny)                       # missing constraint_solver
 end
 
 
@@ -175,8 +176,7 @@ end
                                       t1_residual, get_x_z_scalar, build_xz_scalar,
                                       SA[Q;;], SA[R;;], d0;
                                       xz0, nu=1, ny=1, Ts=DT1,
-                                      constraint_solve_alg = SimpleNewtonRaphson(),
-                                      constraint_solve_kwargs = (; reltol = 1e-12))
+                                      constraint_solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-12))
 
     T = 1000
     # Simulate a truth trajectory under the discretized reduced system.
@@ -233,8 +233,7 @@ end
                                       t1_residual, get_x_z_scalar, build_xz_scalar,
                                       SA[Q;;], SA[R;;], d0;
                                       xz0, nu=1, ny=1, Ts=DT1,
-                                      constraint_solve_alg = SimpleNewtonRaphson(),
-                                      constraint_solve_kwargs = (; reltol = 1e-12))
+                                      constraint_solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-12))
 
     T = 200
     α, β = 1 - 2*DT1, DT1
@@ -276,7 +275,7 @@ end
                                           SA[Q;;], SA[R;;], d0;
                                           xz0=build_xz_scalar(SA[x0_val], SA[C1]-SA[x0_val]),
                                           nu=1, ny=1, Ts=DT1,
-                                          constraint_solve_alg = SimpleNewtonRaphson())
+                                          constraint_solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-10))
         x_true = x0[1]
         u = SA[0.0]
         for k in 1:T
@@ -337,8 +336,7 @@ t2_z_exact(t, x0) = 1 / (t + exp(-x0))
                                       t2_residual, get_x_z_scalar, build_xz_scalar,
                                       SA[Q;;], SA[R;;], d0;
                                       xz0, nu=1, ny=1, Ts=DT2,
-                                      constraint_solve_alg = SimpleNewtonRaphson(),
-                                      constraint_solve_kwargs = (; reltol = 1e-12))
+                                      constraint_solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-12))
 
     T = 1000
     u = SA[0.0]
@@ -375,8 +373,7 @@ end
                                       t2_residual, get_x_z_scalar, build_xz_scalar,
                                       SA[Q;;], SA[R;;], d0;
                                       xz0, nu=1, ny=1, Ts=DT2,
-                                      constraint_solve_alg = SimpleNewtonRaphson(),
-                                      constraint_solve_kwargs = (; reltol = 1e-12))
+                                      constraint_solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-12))
 
     T = 500
     u = SA[0.0]
@@ -426,8 +423,7 @@ end
         SA[Q;;], SA[R;;], d0;
         xz0, nu=1, ny=1, Ts=DT2,
         regenerate = regen,
-        constraint_solve_alg = SimpleNewtonRaphson(),
-        constraint_solve_kwargs = (; reltol = 1e-12),
+        constraint_solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-12),
     )
 
     ukf_on  = make_ukf(true)
@@ -522,8 +518,7 @@ end
                                       t3_residual, get_x_z_3, build_xz_3,
                                       Q, R, d0;
                                       xz0, nu=1, ny=2, Ts=DT3,
-                                      constraint_solve_alg = SimpleNewtonRaphson(),
-                                      constraint_solve_kwargs = (; reltol = 1e-12))
+                                      constraint_solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-12))
 
     T = 500
     u = SA[0.0]
@@ -559,8 +554,7 @@ end
                                       t3_residual, get_x_z_3, build_xz_3,
                                       Q, R, d0;
                                       xz0, nu=1, ny=2, Ts=DT3,
-                                      constraint_solve_alg = SimpleNewtonRaphson(),
-                                      constraint_solve_kwargs = (; reltol = 1e-12))
+                                      constraint_solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-12))
 
     T = 300
     u = SA[0.0]
@@ -601,8 +595,7 @@ end
                                           xz0 = build_xz_3(SA[a0_mean, b0_mean],
                                                            SA[MASS - a0_mean - b0_mean]),
                                           nu=1, ny=2, Ts=DT3,
-                                          constraint_solve_alg = SimpleNewtonRaphson(),
-                                          constraint_solve_kwargs = (; reltol = 1e-12))
+                                          constraint_solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-12))
         a_t, b_t = a0, b0
         u = SA[0.0]
         for k in 1:T
@@ -634,8 +627,7 @@ end
                                       t1_residual, get_x_z_scalar, build_xz_scalar,
                                       SA[Q;;], SA[R;;], d0;
                                       xz0, nu=1, ny=1, Ts=DT1,
-                                      constraint_solve_alg = SimpleNewtonRaphson(),
-                                      constraint_solve_kwargs = (; reltol = 1e-12))
+                                      constraint_solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-12))
     T  = 200
     du = SimpleMvNormal(SA[0.0], SA[1e-10;;])
     xz_true, u, y = simulate(daeukf, T, du)
@@ -677,14 +669,12 @@ end
                                        t1_residual, get_x_z_scalar, build_xz_scalar,
                                        SA[Q;;], SA[R;;], d0;
                                        xz0 = xz0_v, nu=1, ny=1, Ts=DT1,
-                                       constraint_solve_alg = SimpleNewtonRaphson(),
-                                       constraint_solve_kwargs = (; reltol = 1e-12))
+                                       constraint_solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-12))
     ukf_ip  = DAEUnscentedKalmanFilter(t1_dynamics_ip!, t1_measurement_ip!,
                                        t1_residual, get_x_z_scalar, build_xz_scalar,
                                        SA[Q;;], SA[R;;], d0;
                                        xz0 = xz0_v, nu=1, ny=1, Ts=DT1,
-                                       constraint_solve_alg = SimpleNewtonRaphson(),
-                                       constraint_solve_kwargs = (; reltol = 1e-12))
+                                       constraint_solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-12))
 
     # Constructor auto-detection of {IPD,IPM}.
     @test ukf_oop isa DAEUnscentedKalmanFilter{false, false}
@@ -780,8 +770,7 @@ end
         pend_get_x_z, pend_build_xz,
         SMatrix{4,4}(1e-4*I), SMatrix{2,2}(1e-2*I), d0;
         xz0, nu, ny, Ts = PEND_TS,
-        constraint_solve_alg = SimpleNewtonRaphson(),
-        constraint_solve_kwargs = (; reltol = 1e-12),
+        constraint_solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-12),
     )
 
     # ---- one-step dynamics keeps the descriptor on the constraint manifold ----

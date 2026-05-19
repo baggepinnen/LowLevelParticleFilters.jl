@@ -25,10 +25,19 @@ using Statistics
 using RecipesBase
 using ForwardDiff
 using MaybeInplace
-using SciMLBase: NonlinearProblem, solve # DAE-UKF constraint reprojection. Algorithms are user-supplied (e.g. SimpleNonlinearSolve, NonlinearSolve).
 import SpecialFunctions # Normpdf and friends
 
-# using SciMLBase
+"""
+    LowLevelParticleFilters.scimlbase_solver(alg; kwargs...) -> (f, z0) -> z
+
+Convenience adapter that turns a SciML-style nonlinear-solve algorithm into the
+callable `constraint_solver` contract expected by [`DAEUnscentedKalmanFilter`](@ref).
+Only available when SciMLBase is loaded in the user's session (typically via
+`using SimpleNonlinearSolve` or `using NonlinearSolve`); calling it without
+SciMLBase will throw `MethodError`.
+"""
+function scimlbase_solver end
+
 struct NullParameters end
 
 abstract type ResamplingStrategy end

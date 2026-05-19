@@ -986,7 +986,7 @@ field semantics.
 See also [`UnscentedKalmanFilter`](@ref), [`predict!`](@ref),
 [`correct!`](@ref), [`simulate`](@ref).
 """
-mutable struct DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,RT,P,SMT,SCT,CH,WP,XZT,RF,GXZ,BXZ,SOLV,SOLK} <: AbstractUnscentedKalmanFilter
+mutable struct DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,RT,P,SMT,SCT,CH,WP,XZT,RF,GXZ,BXZ,CS} <: AbstractUnscentedKalmanFilter
     dynamics::DT
     measurement_model::MT
     R1::R1T
@@ -1010,8 +1010,7 @@ mutable struct DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,R
     residual::RF
     get_x_z::GXZ
     build_xz::BXZ
-    constraint_solve_alg::SOLV
-    constraint_solve_kwargs::SOLK
+    constraint_solver::CS
     regenerate::Bool
 end
 
@@ -1019,9 +1018,8 @@ end
     DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(
         dynamics, measurement, residual, get_x_z, build_xz,
         R1, R2, d0;
-        xz0, nu, ny, constraint_solve_alg,
+        xz0, nu, ny, constraint_solver,
         Ts = 1.0,
-        constraint_solve_kwargs = (; reltol = 1e-10),
         regenerate = true,
         kwargs...,
     )
@@ -1044,17 +1042,14 @@ sees the decomposed `(x, z)`.
 # Required keyword arguments
 - `xz0`: initial descriptor, must satisfy `residual(x̂₀, ẑ₀) ≈ 0`.
 - `nu`, `ny`: control and measurement dimensions.
-- `constraint_solve_alg`: any SciML-compatible nonlinear algorithm used to
-  reproject `z` from `x` (e.g. `SimpleNewtonRaphson()` from
-  `SimpleNonlinearSolve`, or `NewtonRaphson()` / `TrustRegion()` from
-  `NonlinearSolve`). The package does *not* take a nonlinear-solver
-  package as a runtime dependency — the algorithm and any solver-side
-  imports are the caller's responsibility.
+- `constraint_solver`: callable `(f, z0) -> z` that finds a zero of `f` from
+  initial guess `z0`. The package does *not* take a nonlinear-solver package
+  as a runtime dependency; if you have one loaded the simplest path is
+  `constraint_solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-10)`,
+  available once `SciMLBase` (or e.g. `SimpleNonlinearSolve`) is loaded.
+  Otherwise write your own — the contract is just `(f, z0) -> z`.
 
 # Selected keyword arguments
-- `constraint_solve_kwargs`: NamedTuple forwarded to `solve`, e.g.
-  `(; reltol = 1e-10)`. The reltol should be tighter than the truncation
-  error of your `dynamics`.
 - `regenerate`: see `DAEUnscentedKalmanFilter` (struct docstring).
 
 See [`DAEUnscentedKalmanFilter`](@ref) for the algorithm, type-parameter
@@ -1079,8 +1074,7 @@ function DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(
                                   cholesky!  = cholesky!,
                                   weight_params = TrivialParams(),
                                   names = default_names(length(d0), nu, ny, "DAEUKF"),
-                                  constraint_solve_alg,
-                                  constraint_solve_kwargs = (; reltol = 1e-10),
+                                  constraint_solver = _constraint_solver_missing(),
                                   regenerate = true,
                                   kwargs...) where {IPD,IPM,AUGD,AUGM}
     nx = length(d0)
@@ -1125,7 +1119,7 @@ function DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(
         typeof(state_mean), typeof(state_cov), typeof(cholesky!),
         typeof(weight_params), typeof(xz_init),
         typeof(residual), typeof(get_x_z), typeof(build_xz),
-        typeof(constraint_solve_alg), typeof(constraint_solve_kwargs),
+        typeof(constraint_solver),
     }(
         dynamics, measurement_model, R1, d0,
         predict_sigma_point_cache, x0, R,
@@ -1133,7 +1127,7 @@ function DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(
         state_mean, state_cov, cholesky!, names, weight_params,
         xz_init, xz_sigma_points,
         residual, get_x_z, build_xz,
-        constraint_solve_alg, constraint_solve_kwargs, regenerate,
+        constraint_solver, regenerate,
     )
 end
 
@@ -1158,27 +1152,38 @@ end
 # Additive process noise (AUGD=false) + regenerate. AUGM is a free parameter.
 # ==============================================================================
 
+_constraint_solver_missing() = error("""
+`constraint_solver` is required for `DAEUnscentedKalmanFilter`.
+
+Provide a callable with the contract `(f, z0) -> z` that finds `z` such that
+`f(z) ≈ 0`. For SciML-style algorithms, load `SciMLBase` (e.g. via
+`using SimpleNonlinearSolve`) and pass
+
+    constraint_solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-10)
+
+Or write your own callable; see `?DAEUnscentedKalmanFilter` for details.
+""")
+
 """
     calc_xz(kf::DAEUnscentedKalmanFilter, xz, u, p, t, xi=get_x_z(xz)[1])
-    calc_xz(get_x_z, build_xz, residual, alg, alg_kwargs, xz, u, p, t, xi)
+    calc_xz(get_x_z, build_xz, residual, solver, xz, u, p, t, xi)
 
 Given a differential state `xi`, solve `residual(xi, z, u, p, t) = 0` for the
 algebraic state `z`, and return the full descriptor `build_xz(xi, z)`. The z
 slice of the input `xz` is the warm-start guess for the nonlinear solve.
 """
-function calc_xz(get_x_z::Function, build_xz, residual, alg, alg_kwargs,
+function calc_xz(get_x_z::Function, build_xz, residual, solver,
                  xz::AbstractArray, u, p, t, xi)
     _, z0 = get_x_z(xz)
-    sol = solve(NonlinearProblem{false}((z,_)->residual(xi, z, u, p, t), z0), alg; alg_kwargs...)
-    nr = norm(sol.resid)
+    z = solver(z -> residual(xi, z, u, p, t), z0)
+    nr = norm(residual(xi, z, u, p, t))
     nr < 1e-3 || @warn "DAE-UKF constraint solve residual was large: $nr" maxlog=10
-    build_xz(xi, sol.u)
+    build_xz(xi, z)
 end
 
 calc_xz(kf::DAEUnscentedKalmanFilter, xz, u, p, t, xi = kf.get_x_z(xz)[1]) =
     calc_xz(kf.get_x_z, kf.build_xz, kf.residual,
-            kf.constraint_solve_alg, kf.constraint_solve_kwargs,
-            xz, u, p, t, xi)
+            kf.constraint_solver, xz, u, p, t, xi)
 
 
 # Forward unknown properties to the measurement model so that calls like
