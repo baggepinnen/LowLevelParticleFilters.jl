@@ -334,6 +334,21 @@ out = zeros(2, 10000)
 
         @test_nowarn simulate(sqkf, T, du)
 
+        # Regression: the @kwdef-generated keyword constructor's default
+        # for `names` used to error because it called default_names with
+        # `name="SqKF"` as a keyword while default_names takes it
+        # positionally.
+        sqkf_kw = @test_nowarn SqKalmanFilter(;
+            A = A_test, B = B_test, C = C_test, D = 0,
+            R1 = UpperTriangular(cholesky(0.01eye(n)).U),
+            R2 = UpperTriangular(cholesky(eye(p)).U),
+            d0 = d0,
+            x = zeros(n),
+            R = UpperTriangular(cholesky(eye(n)).U),
+        )
+        @test sqkf_kw.names.name == "SqKF"
+        @test length(sqkf_kw.names.x) == n
+
         @testset "Diagonal static covariance" begin
             R1_diag = Diagonal(SVector(0.01, 0.01))
             kf_diag = KalmanFilter(A_test, B_test, C_test, 0, R1_diag, eye(p), d0)
@@ -548,6 +563,16 @@ end
 @testset "imm" begin
     @info "Testing imm"
     include("test_imm.jl")
+end
+
+@testset "smoother time-varying" begin
+    @info "Testing smoother with time-varying A"
+    include("test_smoother_timevarying.jl")
+end
+                                                        
+@testset "get_mat 3D time" begin
+    @info "Testing get_mat 3-D array time handling"
+    include("test_getmat_3d_time.jl")
 end
 
 @testset "parameters" begin

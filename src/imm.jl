@@ -191,7 +191,7 @@ end
 
 
 """
-    update!(imm::IMM, u, y, p, t; correct_kwargs = (;), predict_kwargs = (;), interact = true)
+    ll, lls, rest = update!(imm::IMM, u, y, p, t; correct_kwargs = (;), predict_kwargs = (;), interact = true)
 
 The combined udpate for an [`IMM`](@ref) filter performs the following steps:
 1. Correct each model with the measurements `y` and control input `u`.
@@ -205,13 +205,18 @@ This differs slightly from the udpate step of other filters, where at the end of
 - `correct_kwargs`: An optional named tuple of keyword arguments that are sent to [`correct!`](@ref).
 - `predict_kwargs`: An optional named tuple of keyword arguments that are sent to [`predict!`](@ref).
 - `interact`: Whether or not to run the interaction step.
+
+# Returns
+The same three-tuple as [`correct!(imm::IMM, ...)`](@ref): the sum of model
+log-likelihoods, the vector of individual model log-likelihoods, and an
+array of the remaining return values from each model's `correct!`.
 """
 function update!(imm::IMM, u, y, args...; correct_kwargs = (;), predict_kwargs = (;), interact = imm.interact)
-    ll, rest = correct!(imm, u, y, args...; correct_kwargs...)
+    ll, lls, rest = correct!(imm, u, y, args...; correct_kwargs...)
     combine!(imm)
     interact && interact!(imm)
     predict!(imm, u, args...; predict_kwargs...)
-    ll, rest
+    ll, lls, rest
 end
 
 (imm::IMM)(args...; kwargs...) = update!(imm::IMM, args...; kwargs...)
