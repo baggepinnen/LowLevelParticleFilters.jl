@@ -35,6 +35,86 @@ function resample(::Type{ResampleSystematic}, we, j, bins, M = length(we))
     return j
 end
 
+function resample(::Type{ResampleStratified}, we, j, bins, M = length(we))
+    N = length(we)
+    bins[1] = we[1]
+    for i = 2:N
+        bins[i] = bins[i-1] + we[i]
+    end
+
+    # u_i = (i - 1 + rand()) / M
+    bo = 1
+
+    for i = 1:M
+        u = (i - 1 + rand()) / M * bins[N]  # scale to sum(weights)
+
+        @inbounds for b = bo:N
+            if u < bins[b]
+                j[i] = b
+                bo = b
+                break
+            end
+        end
+    end
+
+    return j
+end
+
+function resample(::Type{ResampleResidual}, we, j, bins, M = length(we))
+    N = length(we)
+
+    wsum = zero(eltype(we))
+    @inbounds for i = 1:N
+        wsum += we[i]
+    end
+
+    inv_wsum = 1 / wsum
+
+    num = 0
+
+    @inbounds for i = 1:N
+        nw = we[i] * inv_wsum * M
+        cnt = floor(Int, nw)
+        bins[i] = nw - cnt   # store residual weight
+
+        for k = 1:cnt
+            num += 1
+            j[num] = i
+        end
+    end
+
+    if num == M
+        return j
+    end
+
+    rsum = zero(eltype(we))
+    @inbounds for i = 1:N
+        rsum += bins[i]
+    end
+
+    inv_rsum = 1 / rsum
+    @inbounds for i = 1:N
+        bins[i] *= inv_rsum
+    end
+
+    bins[1] = bins[1]
+    @inbounds for i = 2:N
+        bins[i] += bins[i-1]
+    end
+
+    @inbounds for m = (num + 1):M
+        u = rand()
+
+        for i = 1:N
+            if u < bins[i]
+                j[m] = i
+                break
+            end
+        end
+    end
+
+    return j
+end
 
 # """
 # There is probably lots of room for improvement here. All bins need not be formed in the beginning.
