@@ -85,8 +85,8 @@ out = zeros(2, 10000)
         @test result ≈ x[1]
     end
 
-    @testset "resample" begin
-        @info "testing resample"
+    @testset "resample systematic" begin
+        @info "testing resample systematic"
         s = PFstate(10)
         @test effective_particles(s.we) ≈ 10
         logsumexp!(s.w, s.we)
@@ -103,6 +103,54 @@ out = zeros(2, 10000)
             @test maximum(j) <= 100
             @test minimum(j) >= 1
         end
+    end
+
+    @testset "resample correct proportions" begin
+        @info "testing resample correct proportions"
+
+        we = [0.1, 0.5, 0.1, 0.15, 0.15]
+        K = length(we)
+        R = 10000
+
+        function empirical_proportions(results, K)
+            counts = zeros(Int, K)
+            for draw in results
+                for i in draw
+                    counts[i] += 1
+                end
+            end
+            return counts ./ sum(counts)
+        end
+
+        results_systematic =
+            [resample(LowLevelParticleFilters.ResampleSystematic, we) for _ in 1:R]
+
+        results_stratified =
+            [resample(LowLevelParticleFilters.ResampleStratified, we) for _ in 1:R]
+
+        results_residual =
+            [resample(LowLevelParticleFilters.ResampleResidual, we) for _ in 1:R]
+
+        p_sys = empirical_proportions(results_systematic, K)
+        p_str = empirical_proportions(results_stratified, K)
+        p_res = empirical_proportions(results_residual, K)
+
+        tol = 0.02
+
+        @test isapprox(p_sys, we; atol=tol)
+        @test isapprox(p_str, we; atol=tol)
+        @test isapprox(p_res, we; atol=tol)
+    end
+
+    @testset "resample stratified" begin
+        @info "testing resample stratified"
+        # With these weights the 2nd and 3rd entry should always be idx 2
+        we = [0.1, 0.5, 0.1, 0.15, 0.15]
+        
+        results = [resample(LowLevelParticleFilters.ResampleStratified, we) for _ in 1:100]
+
+        @test all(r -> r[2] == 2, results)
+        @test all(r -> r[3] == 2, results)
     end
 
     @testset "static distributions" begin
