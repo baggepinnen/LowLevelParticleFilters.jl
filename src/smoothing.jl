@@ -120,7 +120,7 @@ function smooth(pf::AbstractParticleFilter, xf, wf, wef, ll, M, u, y, p=paramete
     df = dynamics_density(pf)
     @assert M <= N "Must extend cache size of bins and j to allow this"
     xb = Array{particletype(pf)}(undef,M,T)
-    j = resample(ResampleSystematic, wef[:,T], M)
+    j = resample(pf.resampling_strategy, wef[:,T], M)
     # @show Set(j)
     for i = 1:M
         xb[i,T] = xf[j[i], T]
