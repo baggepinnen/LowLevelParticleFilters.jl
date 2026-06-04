@@ -47,7 +47,7 @@ makedocs(
             ],
             "API" => "api.md",
       ],
-      format = Documenter.HTML(prettyurls = haskey(ENV, "CI")),
+      format = Documenter.HTML(prettyurls = haskey(ENV, "CI"), size_threshold = 500 * 2^10),
       warnonly = [:docs_block, :missing_docs, :cross_references],
 ) # Due to lots of plots, this will just have to be run on my local machine
 
