@@ -1029,6 +1029,9 @@ Most users should reach for the untyped form
 `DAEUnscentedKalmanFilter(dynamics, measurement, …)`, which auto-detects
 `IPD` / `IPM` from the function signatures.
 
+!!! warning "Experimental"
+    This filter and all of its utility functions are currently considered experimental and the user interface may change in the future without respecting semantic versioning.
+
 # Callbacks
 All operate on the full descriptor `xz = [x; z]` except `residual`, which
 sees the decomposed `(x, z)`.
