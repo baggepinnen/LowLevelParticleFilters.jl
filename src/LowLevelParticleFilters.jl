@@ -42,6 +42,8 @@ struct NullParameters end
 
 abstract type ResamplingStrategy end
 struct ResampleSystematic <: ResamplingStrategy end
+struct ResampleStratified <: ResamplingStrategy end
+struct ResampleResidual <: ResamplingStrategy end
 
 abstract type AbstractFilter end
 abstract type AbstractKalmanFilter <: AbstractFilter end

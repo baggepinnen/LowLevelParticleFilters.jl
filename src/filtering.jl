@@ -202,7 +202,7 @@ function predict!(pf::AuxiliaryParticleFilter, u, y1, p = parameters(pf), t = in
     measurement_equation!(pf.pf, u, y1, p, t, λ)
     s.w .+= λ # old w + new w, equivalent to old_we*new_we
     expnormalize!(s.w) # w used as buffer
-    j = resample(ResampleSystematic, s.w , s.j, s.bins)
+    j = resample(pf.resampling_strategy, s.w , s.j, s.bins)
     # reset_weights!(s) # We don't do this to keep λ and instead assign into w directly
     permute_with_buffer!(s.x, s.xprev, j)
     add_noise!(pf.pf)
@@ -224,7 +224,7 @@ function predict!(pf::AuxiliaryParticleFilter{<:AdvancedParticleFilter},u, y, p=
     measurement_equation!(pf.pf, u, y, p, t, λ)
     s.w .+= λ
     expnormalize!(s.w) # w used as buffer
-    j = resample(ResampleSystematic, s.w , s.j, s.bins)
+    j = resample(pf.resampling_strategy, s.w , s.j, s.bins)
     reset_weights!(s)
     # NOTE: this can be sped by letting the user implement `add_noise` and call that here, rather than propagating again
     propagate_particles!(pf.pf, u, j, p, t)# Propagate with noise and permutation

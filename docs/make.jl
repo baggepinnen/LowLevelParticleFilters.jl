@@ -47,12 +47,7 @@ makedocs(
             ],
             "API" => "api.md",
       ],
-      # The auto-generated API page (`@autodocs`) grows with every exported
-      # symbol and now exceeds Documenter's default 200 KiB page limit, so the
-      # threshold is raised to keep `makedocs` from erroring on it.
-      format = Documenter.HTML(prettyurls = haskey(ENV, "CI"),
-                               size_threshold = 300 * 1024,
-                               size_threshold_warn = 250 * 1024),
+      format = Documenter.HTML(prettyurls = haskey(ENV, "CI"), size_threshold = 500 * 2^10),
       warnonly = [:docs_block, :missing_docs, :cross_references],
 ) # Due to lots of plots, this will just have to be run on my local machine
 

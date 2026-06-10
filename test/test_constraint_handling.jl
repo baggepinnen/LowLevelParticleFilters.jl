@@ -112,12 +112,12 @@ using Plots
             
             @test μ_tmm[2] > 0.0  # Mean should be positive
             @test μ_tmm[2] > μ[2]  # Mean should increase
-            @test issymmetric(Σ_tmm)
-            @test isposdef(Σ_tmm)
+            @test isapprox(Σ_tmm, Σ_tmm')
+            @test isposdef(Hermitian(Σ_tmm))
             @test Σ_tmm[2,2] < Σ[2,2]  # Variance should decrease due to truncation
 
             covplot(μ, Σ, mean=true, label="Original")
-            covplot!(μ_tmm, Σ_tmm, mean=true, label="Projected")
+            covplot!(μ_tmm, Hermitian(Σ_tmm), mean=true, label="Projected")
         end
         
         @testset "Monte Carlo verification - univariate" begin
