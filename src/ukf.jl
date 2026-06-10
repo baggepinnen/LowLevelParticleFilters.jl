@@ -1199,8 +1199,6 @@ function Base.getproperty(ukf::DAEUnscentedKalmanFilter{<:Any,<:Any,AUGD}, s::Sy
     elseif s === :nw
         nx = length(getfield(ukf, :x))
         return AUGD ? length(getfield(ukf, :predict_sigma_point_cache).x0[1])-nx : nx
-    elseif s === :measurement
-        return measurement(mm)
     else
         throw(ArgumentError("$(typeof(ukf)) has no property named $s"))
     end

@@ -817,3 +817,155 @@ end
     @test err_pred < 0.2
     @test err_filt < 0.2
 end
+
+
+# ============================================================================
+# Off-nominal / defensive-branch coverage
+# ----------------------------------------------------------------------------
+# The tests above exercise the happy paths. The ones below close the remaining
+# coverage on the guards in the new DAE-UKF code and verify each guard fires
+# for the reason it exists, not merely that the line executes. All reuse the
+# Test-1 scalar system (t1_dynamics / t1_measurement / t1_residual /
+# get_x_z_scalar / build_xz_scalar, C1, DT1) defined above.
+# ============================================================================
+
+# Capture a thrown exception (robust across Julia versions; mirrors the style
+# in test_getmat_3d_time.jl).
+function _catch_err(f)
+    try
+        f()
+        nothing
+    catch e
+        e
+    end
+end
+
+# Build a Test-1 DAE-UKF, allowing per-test keyword overrides.
+function _mk_t1(; Q = 0.05, R = 0.02, P0 = 0.5, x0 = SA[0.3],
+                measurement = t1_measurement,
+                solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-12),
+                kw...)
+    z0  = SA[C1] - x0
+    xz0 = build_xz_scalar(x0, z0)
+    d0  = SimpleMvNormal(x0, SA[P0;;])
+    DAEUnscentedKalmanFilter(t1_dynamics, measurement, t1_residual,
+                             get_x_z_scalar, build_xz_scalar,
+                             SA[Q;;], SA[R;;], d0;
+                             xz0, nu = 1, ny = 1, Ts = DT1,
+                             constraint_solver = solver, kw...)
+end
+
+
+@testset "custom unweighted state_mean/state_cov reproduce the defaults" begin
+    # A user may supply mean/cov functions that take only the sigma points.
+    # The constructor's `if !hasmethod(state_mean, (AbstractVector, UKFWeights))`
+    # shims (src/ukf.jl:1087-1095) wrap them as (xs, w) -> f(xs). Under
+    # TrivialParams the equal-weight UKF mean/cov ARE the sample mean and the
+    # (n-1)-normalized sample covariance, so a filter using these 1-arg
+    # functions must reproduce the default-function filter step-for-step.
+    custom_mean = xs -> mean(xs)
+    custom_cov  = xs -> (m = mean(xs); sum((x .- m) * (x .- m)' for x in xs) ./ (length(xs) - 1))
+
+    kf_def = _mk_t1()
+    kf_cus = _mk_t1(state_mean = custom_mean, state_cov = custom_cov)
+
+    T = 100
+    α, β = 1 - 2*DT1, DT1
+    x_true = 0.35
+    u = SA[0.0]
+    Random.seed!(20)
+    for k in 1:T
+        x_true = α*x_true + β*C1 + sqrt(0.05)*randn()
+        y_k    = SA[(C1 - x_true) + sqrt(0.02)*randn()]
+        predict!(kf_def, u); predict!(kf_cus, u)
+        correct!(kf_def, u, y_k); correct!(kf_cus, u, y_k)
+    end
+    @test kf_cus.x ≈ kf_def.x rtol = 1e-10
+    @test kf_cus.R ≈ kf_def.R rtol = 1e-10
+end
+
+
+@testset "unweighted mean/cov combined with custom weights is rejected" begin
+    # The `weight_params isa TrivialParams || error(...)` guards (src/ukf.jl:1088,
+    # 1093) catch the unsupported combination of a sigma-points-only mean/cov
+    # with non-trivial sigma-point weights, where the user weights would be
+    # silently ignored.
+    custom_mean = xs -> mean(xs)
+    custom_cov  = xs -> (m = mean(xs); sum((x .- m) * (x .- m)' for x in xs) ./ (length(xs) - 1))
+
+    e_mean = _catch_err(() -> _mk_t1(state_mean = custom_mean, weight_params = MerweParams()))
+    @test e_mean isa ErrorException
+    @test occursin("Unweighted state mean may not be used with custom weights",
+                   sprint(showerror, e_mean))
+
+    e_cov = _catch_err(() -> _mk_t1(state_cov = custom_cov, weight_params = MerweParams()))
+    @test e_cov isa ErrorException
+    @test occursin("Unweighted state covariance may not be used with custom weights",
+                   sprint(showerror, e_cov))
+end
+
+
+@testset "getproperty: derived properties and invalid access" begin
+    # Property forwarding (src/ukf.jl:1192-1205): nx/nw are derived from the
+    # differential state, `measurement` is fetched from the measurement model,
+    # and anything else is a clear ArgumentError rather than a silent failure.
+    kf = _mk_t1()
+    @test kf.nx == 1                      # :nx branch
+    @test kf.nw == kf.nx                  # :nw branch (AUGD=false ⇒ nx)
+    @test kf.measurement === t1_measurement   # forwarded to the measurement model's field
+    @test kf.R2 === SA[0.02;;]                 # forwarded to the measurement model's field
+
+    e = _catch_err(() -> getproperty(kf, :definitely_not_a_field))
+    @test e isa ArgumentError
+    @test occursin("has no property named", sprint(showerror, e))
+end
+
+
+@testset "calc_xz warns on a large constraint-solve residual" begin
+    # calc_xz warns (src/ukf.jl:1180) when the algebraic solve leaves a large
+    # residual — a sign the constraint was not satisfied. Use a no-op solver
+    # that returns the initial guess unchanged so the residual stays large.
+    bad_solver = (f, z0) -> z0
+    kf = _mk_t1(solver = bad_solver)
+    xi = SA[5.0]   # far off the manifold x + z = C1, so the residual ≈ 4.7 ≫ 1e-3
+    @test_logs (:warn, r"constraint solve residual was large") match_mode = :any begin
+        calc_xz(kf, kf.xz, SA[0.0], kf.p, 0.0, xi)
+    end
+end
+
+
+@testset "AUGM=true is rejected by correct! and sample_measurement" begin
+    # AUGM=true (augmented measurement noise) is plumbed but not implemented;
+    # the guards (src/ukf.jl:1344, 1469) must reject it with a clear error.
+    Q, R, P0 = 0.05, 0.02, 0.5
+    x0  = SA[0.3]
+    xz0 = build_xz_scalar(x0, SA[C1] - x0)
+    d0  = SimpleMvNormal(x0, SA[P0;;])
+    solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-12)
+    kf_augm = DAEUnscentedKalmanFilter{false,false,false,true}(
+        t1_dynamics, t1_measurement, t1_residual, get_x_z_scalar, build_xz_scalar,
+        SA[Q;;], SA[R;;], d0; xz0, nu = 1, ny = 1, Ts = DT1, constraint_solver = solver)
+    @test kf_augm isa DAEUnscentedKalmanFilter{false,false,false,true}
+
+    e_c = _catch_err(() -> correct!(kf_augm, SA[0.0], SA[0.0]))
+    @test e_c isa ErrorException
+    @test occursin("AUGM=true is not yet supported", sprint(showerror, e_c))
+
+    e_s = _catch_err(() -> sample_measurement(kf_augm, xz0, SA[0.0]))
+    @test e_s isa ErrorException
+    @test occursin("AUGM=true is not yet supported", sprint(showerror, e_s))
+end
+
+
+@testset "non-positive-definite innovation covariance raises a clear error" begin
+    # The Cholesky guard in correct! (src/ukf.jl:1372-1373) catches a broken-down
+    # innovation covariance. A non-informative (constant) measurement makes
+    # cov(ys) = 0, so S = cov(ys) + R2 = R2; overriding R2 with an indefinite
+    # value drives S non-PD and the factorization must fail loudly.
+    const_meas = (xz, u, p, t) -> SA[0.0]
+    kf = _mk_t1(measurement = const_meas)
+    predict!(kf, SA[0.0])
+    e = _catch_err(() -> correct!(kf, SA[0.0], SA[0.0]; R2 = SA[-1.0;;]))
+    @test e isa ErrorException
+    @test occursin("innovation covariance failed", sprint(showerror, e))
+end
