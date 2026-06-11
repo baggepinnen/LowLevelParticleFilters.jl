@@ -1,0 +1,6 @@
+[deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+LowLevelParticleFilters = "d9d29d28-c116-5dba-9239-57a5fe23875b"
+RxInfer = "86711068-29c9-4ff7-b620-ae75d7495b3d"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
