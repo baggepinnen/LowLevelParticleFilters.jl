@@ -13,6 +13,14 @@ Pkg.activate(@__DIR__)
 using RxInfer, LowLevelParticleFilters, StaticArrays, LinearAlgebra, BenchmarkTools
 using Random: MersenneTwister
 
+# RxInfer is also benchmarked with static arrays below, but does not support them out
+# of the box: its cholesky path dispatches to StaticArrays' cholesky, which demands
+# exact symmetry, while the covariance propagated through A*Σ*A' + P is only Hermitian
+# up to machine epsilon (the dense-Matrix path is robust to this). Patch the static
+# path to be equally robust so the comparison is fair.
+import FastCholesky
+FastCholesky.fastcholesky(x::SMatrix) = cholesky(Hermitian((x + x') / 2))
+
 θ = π / 15
 A = [cos(θ) -sin(θ); sin(θ) cos(θ)] # state transition
 B = diagm([1.3, 0.7])               # measurement matrix (C in LLPF notation)
@@ -41,7 +49,7 @@ end
     y_t     ~ MvNormal(μ = B * x_t, Σ = Q)
 end
 
-function rxinfer_filtering(observations, A, B, P, Q)
+function rxinfer_filtering(observations, A, B, P, Q, x0_mean = x0_mean, x0_cov = x0_cov)
     autoupdates = @autoupdates begin
         x_min_t_mean, x_min_t_cov = mean_cov(q(x_t))
     end
@@ -81,26 +89,38 @@ function llpf_filtering(observations)
     xt, Rt
 end
 
-## Verify that both methods compute the same filtering distribution
+## Static-array inputs for RxInfer (same matrices as the LLPF version above)
+
+x0_mean_s = SVector{2}(x0_mean)
+x0_cov_s = SMatrix{2,2}(x0_cov)
+
+## Verify that all methods compute the same filtering distribution
 
 rng = MersenneTwister(123)
 states, observations = generate_data(rng, 1000, A, B, P, Q)
+obs_static = [SVector{2}(y) for y in observations]
 
 posts_rx = rxinfer_filtering(observations, A, B, P, Q)
+posts_rx_s = rxinfer_filtering(obs_static, A_s, C_s, R1_s, R2_s, x0_mean_s, x0_cov_s)
 xt_llpf, Rt_llpf = llpf_filtering(observations)
 
 err_mean = maximum(norm(mean(posts_rx[t]) - xt_llpf[t]) for t in eachindex(observations))
 err_cov  = maximum(norm(cov(posts_rx[t]) - Rt_llpf[t]) for t in eachindex(observations))
-println("Max deviation of filtered means:       $err_mean")
-println("Max deviation of filtered covariances: $err_cov")
+err_mean_s = maximum(norm(mean(posts_rx_s[t]) - xt_llpf[t]) for t in eachindex(observations))
+err_cov_s  = maximum(norm(cov(posts_rx_s[t]) - Rt_llpf[t]) for t in eachindex(observations))
+println("Max deviation of filtered means:       $err_mean (static RxInfer: $err_mean_s)")
+println("Max deviation of filtered covariances: $err_cov (static RxInfer: $err_cov_s)")
 @assert err_mean < 1e-8 && err_cov < 1e-8
+@assert err_mean_s < 1e-8 && err_cov_s < 1e-8
 
 ## Benchmark
 
 results = map([100, 1_000, 10_000]) do n
     states, observations = generate_data(rng, n, A, B, P, Q)
+    obs_s = [SVector{2}(y) for y in observations]
     t_rx   = @belapsed rxinfer_filtering($observations, $A, $B, $P, $Q)
+    t_rx_s = @belapsed rxinfer_filtering($obs_s, $A_s, $C_s, $R1_s, $R2_s, $x0_mean_s, $x0_cov_s)
     t_llpf = @belapsed llpf_filtering($observations)
-    println("n = $(lpad(n, 6)):  RxInfer $(round(1000t_rx, sigdigits=4)) ms,  LLPF $(round(1000t_llpf, sigdigits=4)) ms,  speedup $(round(t_rx / t_llpf, sigdigits=4))x")
-    (; n, t_rx, t_llpf)
+    println("n = $(lpad(n, 6)):  RxInfer $(round(1000t_rx, sigdigits=4)) ms,  RxInfer static $(round(1000t_rx_s, sigdigits=4)) ms,  LLPF $(round(1000t_llpf, sigdigits=4)) ms,  speedup $(round(t_rx / t_llpf, sigdigits=4))x / $(round(t_rx_s / t_llpf, sigdigits=4))x")
+    (; n, t_rx, t_rx_s, t_llpf)
 end
