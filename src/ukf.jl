@@ -973,9 +973,10 @@ covariance `P^{xx} + R₁` before the measurement update (the
 - `IPD`, `IPM`: whether the user-supplied `dynamics` and `measurement`
   functions are in-place (`true`) or out-of-place (`false`); auto-detected
   by the untyped constructor.
-- `AUGD`: locked to `false` in the current implementation. AUGD=true (the
-  augmented-dynamics variant) is a strictly more general formulation that
-  is not Mandela's algorithm; reserved for a future extension.
+- `AUGD`: locked to `false` in the current implementation (the constructor
+  errors on `true`). AUGD=true (the augmented-dynamics variant) is a
+  strictly more general formulation that is not Mandela's algorithm;
+  reserved for a future extension.
 - `AUGM`: accepted as a type parameter but currently unsupported in
   `correct!` / `sample_measurement` (will error). Plumbing exists for a
   future implementation.
@@ -1080,6 +1081,7 @@ function DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(
                                   constraint_solver = _constraint_solver_missing(),
                                   regenerate = true,
                                   kwargs...) where {IPD,IPM,AUGD,AUGM}
+    AUGD && error("AUGD=true is not yet supported for DAEUnscentedKalmanFilter, the implementation always uses additive process noise on the differential state.")
     nx = length(d0)
     T  = eltype(d0)
     static = nx ≤ 50
@@ -1272,10 +1274,12 @@ function predict!(kf::DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u,
 
     # Step 3: propagate the full descriptor through the DAE dynamics.
     if IPD
+        # Single scratch buffer: after writing the result we swap it with the
+        # stale xzs[i] storage, which then serves as the buffer for i+1.
+        buf = similar(xzs[1])
         for i in eachindex(xzs)
-            buf = similar(xzs[i])
             kf.dynamics(buf, xzs[i], u, p, t)
-            xzs[i] = buf
+            xzs[i], buf = buf, xzs[i]
         end
     else
         for i in eachindex(xzs)
@@ -1322,8 +1326,9 @@ place.
 
 # Keyword arguments
 - `R2`: measurement-noise covariance for this step. Defaults to
-  `get_mat(kf.measurement_model.R2, kf.xz, u, p, t)` to honor time-varying
-  `R2`.
+  `get_mat(kf.measurement_model.R2, kf.x, u, p, t)` to honor time-varying
+  `R2`. A callable `R2` receives the differential state, matching the
+  convention used by the other filters and by `forward_trajectory`.
 
 # Returns
 A NamedTuple `(; ll, e, S, Sᵪ, K)` with:
@@ -1341,7 +1346,7 @@ See [`DAEUnscentedKalmanFilter`](@ref) for the correction-step algorithm.
 """
 function correct!(kf::DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y,
                   p = parameters(kf), t::Real = index(kf)*kf.Ts;
-                  R2 = get_mat(kf.measurement_model.R2, kf.xz, u, p, t)) where {IPD,IPM,AUGD,AUGM}
+                  R2 = get_mat(kf.measurement_model.R2, kf.x, u, p, t)) where {IPD,IPM,AUGD,AUGM}
     AUGM && error("AUGM=true is not yet supported for DAEUnscentedKalmanFilter")
 
     mm  = kf.measurement_model
@@ -1443,9 +1448,14 @@ This matches the additive-noise model the filter itself assumes
 (Mandela's path): noise lives on the differential equation, never on the
 constraint.
 """
-function sample_state(kf::DAEUnscentedKalmanFilter, xz, u, p = parameters(kf),
-                      t = index(kf)*kf.Ts; noise = true)
-    xz_next = kf.dynamics(xz, u, p, t)
+function sample_state(kf::DAEUnscentedKalmanFilter{IPD}, xz, u, p = parameters(kf),
+                      t = index(kf)*kf.Ts; noise = true) where IPD
+    if IPD
+        xz_next = similar(xz)
+        kf.dynamics(xz_next, xz, u, p, t)
+    else
+        xz_next = kf.dynamics(xz, u, p, t)
+    end
     x_next  = kf.get_x_z(xz_next)[1]
     if noise
         w = rand(SimpleMvNormal(get_mat(kf.R1, x_next, u, p, t)))
@@ -1468,6 +1478,13 @@ function sample_measurement(kf::DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, xz,
                             p = parameters(kf), t = index(kf)*kf.Ts;
                             noise = true) where {IPD,IPM,AUGD,AUGM}
     AUGM && error("AUGM=true is not yet supported for DAEUnscentedKalmanFilter")
-    R2 = get_mat(kf.measurement_model.R2, xz, u, p, t)
-    kf.measurement_model.measurement(xz, u, p, t) .+ noise .* rand(SimpleMvNormal(R2))
+    x = kf.get_x_z(xz)[1]
+    R2 = get_mat(kf.measurement_model.R2, x, u, p, t)
+    if IPM
+        y = similar(xz, kf.ny)
+        kf.measurement_model.measurement(y, xz, u, p, t)
+    else
+        y = kf.measurement_model.measurement(xz, u, p, t)
+    end
+    y .+ noise .* rand(SimpleMvNormal(R2))
 end

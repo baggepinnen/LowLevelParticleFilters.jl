@@ -562,8 +562,9 @@ end
     max_cons = 0.0
     for k in 1:T
         predict!(daeukf, u)
-        a_t = a_t - DT3*K1*a_t                       + sqrt(Q[1,1])*randn()
-        b_t = b_t + DT3*(K1*a_t - K2*b_t + KM2*(MASS-a_t-b_t)) + sqrt(Q[2,2])*randn()
+        a_next = a_t - DT3*K1*a_t                                 + sqrt(Q[1,1])*randn()
+        b_next = b_t + DT3*(K1*a_t - K2*b_t + KM2*(MASS-a_t-b_t)) + sqrt(Q[2,2])*randn()
+        a_t, b_t = a_next, b_next
         c_t = MASS - a_t - b_t
         y_k = SA[a_t + sqrt(R[1,1])*randn(), c_t + sqrt(R[2,2])*randn()]
         correct!(daeukf, u, y_k)
@@ -697,6 +698,14 @@ end
         @test ukf_oop.R  ≈ ukf_ip.R
         @test ukf_oop.xz ≈ ukf_ip.xz
     end
+
+    # simulate must work with in-place dynamics/measurement as well; this
+    # exercises the IPD/IPM branches of sample_state and sample_measurement.
+    du = SimpleMvNormal(SA[0.0], SA[1e-10;;])
+    xz_sim, u_sim, y_sim = simulate(ukf_ip, 20, du)
+    @test length(xz_sim) == 20
+    @test length(y_sim)  == 20
+    @test all(z -> abs((z[1] + z[2]) - C1) < 1e-8, xz_sim)
 end
 
 
@@ -954,6 +963,23 @@ end
     e_s = _catch_err(() -> sample_measurement(kf_augm, xz0, SA[0.0]))
     @test e_s isa ErrorException
     @test occursin("AUGM=true is not yet supported", sprint(showerror, e_s))
+end
+
+
+@testset "AUGD=true is rejected by the constructor" begin
+    # AUGD=true (augmented process noise) is not implemented; predict! always
+    # runs the additive-noise path, so the constructor must refuse the flag
+    # rather than silently ignore it.
+    Q, R, P0 = 0.05, 0.02, 0.5
+    x0  = SA[0.3]
+    xz0 = build_xz_scalar(x0, SA[C1] - x0)
+    d0  = SimpleMvNormal(x0, SA[P0;;])
+    solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-12)
+    e = _catch_err(() -> DAEUnscentedKalmanFilter{false,false,true,false}(
+        t1_dynamics, t1_measurement, t1_residual, get_x_z_scalar, build_xz_scalar,
+        SA[Q;;], SA[R;;], d0; xz0, nu = 1, ny = 1, Ts = DT1, constraint_solver = solver))
+    @test e isa ErrorException
+    @test occursin("AUGD=true is not yet supported", sprint(showerror, e))
 end
 
 
