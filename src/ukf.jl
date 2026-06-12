@@ -1381,11 +1381,10 @@ function correct!(kf::DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y,
     Cx = cross_cov_with_weights(mm.cross_cov, xs_diff, kf.x, ys, ym, mm.weight_params)
     Kx = Cx / Sᵪ
 
-    # Step 8: state update + Joseph-form covariance update.
+    # Step 8: state update + covariance update R = R - Kx S Kxᵀ, matching
+    # the standard UKF (`RmKSKT!`) for consistency across the package.
     kf.x = kf.x + Kx * e
-    Heff_T = kf.R \ Cx # nx × ny, equals H' in the linear limit
-    A      = I - Kx * Heff_T'
-    kf.R   = symmetrize(A * kf.R * A' + Kx * R2 * Kx')
+    RmKSKT!(kf, Kx, S)
 
     # Step 9: reproject kf.xz from the updated differential state.
     kf.xz = calc_xz(kf, kf.xz, u, p, t, kf.x)
