@@ -950,8 +950,7 @@ Implementation follows Mandela, Rengaswamy, Narasimhan (2010),
 *Industrial & Engineering Chemistry Research* 49(11). Process noise is
 additive on the differential equation (AUGD=false), and after each
 prediction step the sigma points are regenerated from the inflated
-covariance `P^{xx} + R₁` before the measurement update (the
-`regenerate` field).
+covariance `P^{xx} + R₁` before the measurement update.
 
 # Algorithm
 **Predict** (`predict!`)
@@ -959,8 +958,7 @@ covariance `P^{xx} + R₁` before the measurement update (the
 2. For each, solve `g(xᵢ, z) = 0` to get `zᵢ`; assemble the descriptor.
 3. Propagate each descriptor through `dynamics`.
 4. Compute the predicted mean and covariance on `x`; add `R₁`.
-5. If `regenerate`, redraw sigma points from the inflated covariance and
-   re-solve `g` for each.
+5. Redraw sigma points from the inflated covariance and re-solve `g` for each.
 
 **Correct** (`correct!`)
 6. Apply `h` to each descriptor sigma point to get measurement sigmas.
@@ -1012,7 +1010,6 @@ mutable struct DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM,DT,MT,R1T,D0T,SPC,XT,R
     get_x_z::GXZ
     build_xz::BXZ
     constraint_solver::CS
-    regenerate::Bool
 end
 
 """
@@ -1021,7 +1018,6 @@ end
         R1, R2, d0;
         xz0, nu, ny, constraint_solver,
         Ts = 1.0,
-        regenerate = true,
         kwargs...,
     )
 
@@ -1053,9 +1049,6 @@ sees the decomposed `(x, z)`.
   available once `SciMLBase` (or e.g. `SimpleNonlinearSolve`) is loaded.
   Otherwise write your own — the contract is just `(f, z0) -> z`.
 
-# Selected keyword arguments
-- `regenerate`: see `DAEUnscentedKalmanFilter` (struct docstring).
-
 See [`DAEUnscentedKalmanFilter`](@ref) for the algorithm, type-parameter
 semantics, and field meanings.
 """
@@ -1079,7 +1072,6 @@ function DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(
                                   weight_params = TrivialParams(),
                                   names = default_names(length(d0), nu, ny, "DAEUKF"),
                                   constraint_solver = _constraint_solver_missing(),
-                                  regenerate = true,
                                   kwargs...) where {IPD,IPM,AUGD,AUGM}
     AUGD && error("AUGD=true is not yet supported for DAEUnscentedKalmanFilter, the implementation always uses additive process noise on the differential state.")
     nx = length(d0)
@@ -1132,7 +1124,7 @@ function DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}(
         state_mean, state_cov, cholesky!, names, weight_params,
         xz_init, xz_sigma_points,
         residual, get_x_z, build_xz,
-        constraint_solver, regenerate,
+        constraint_solver,
     )
 end
 
@@ -1154,7 +1146,7 @@ end
 # ==============================================================================
 # DAE-UKF: constraint reprojection, reset!, predict!, correct!
 # Mandela 2010, "Nonlinear State Estimation of Differential Algebraic Systems"
-# Additive process noise (AUGD=false) + regenerate. AUGM is a free parameter.
+# Additive process noise (AUGD=false). AUGM is a free parameter.
 # ==============================================================================
 
 _constraint_solver_missing() = error("""
@@ -1300,11 +1292,9 @@ function predict!(kf::DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u,
     # and re-reproject z for each. Without this, `correct!` would compute a
     # cross-cov against xz_sigma_points that are inconsistent with the inflated
     # kf.R (Mandela 2010, §3.2).
-    if kf.regenerate
-        sigmapoints!(xs_diff, kf.x, kf.R, kf.weight_params, kf.cholesky!)
-        for i in eachindex(xs_diff)
-            xzs[i] = calc_xz(kf, xzs[i], u, p, t, xs_diff[i])
-        end
+    sigmapoints!(xs_diff, kf.x, kf.R, kf.weight_params, kf.cholesky!)
+    for i in eachindex(xs_diff)
+        xzs[i] = calc_xz(kf, xzs[i], u, p, t, xs_diff[i])
     end
 
     # Step 6: update the stored descriptor to be on-manifold at x̂⁺.

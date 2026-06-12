@@ -106,7 +106,6 @@ end
     @test daeukf.measurement_model.R2 === R
 
     # defaults
-    @test daeukf.regenerate === true
     @test daeukf.constraint_solver === solver
     @test daeukf.weight_params isa LowLevelParticleFilters.TrivialParams
     @test daeukf.p isa LowLevelParticleFilters.NullParameters
@@ -118,9 +117,7 @@ end
                                        t1_residual, get_x_z_scalar, build_xz_scalar,
                                        Q, R, d0;
                                        xz0, nu, ny, Ts,
-                                       regenerate = false,
                                        constraint_solver = solver2)
-    @test daeukf2.regenerate === false
     @test daeukf2.constraint_solver === solver2
 
     # required keyword arguments are actually required
@@ -399,60 +396,6 @@ end
     # 95% two-sided bound for white-noise lag-1 autocorrelation.
     @test abs(r1) < 2/sqrt(length(e))
 end
-
-@testset "Test 2: regeneration negative control" begin
-    # Verify the regenerate code path is loaded by asserting that the two
-    # filters (regenerate on vs off) diverge meaningfully along the trajectory.
-    # SSE-based checks are unreliable here because the measurement (z = e^x)
-    # is highly informative — both variants end up tracking the truth closely
-    # regardless. The textbook symptom is that the posterior covariance and
-    # state estimates differ between the two; if regenerate were a no-op, the
-    # filters would be identical bit-for-bit.
-    Q  = 0.05
-    R  = 0.02
-    P0 = 0.05
-    x0_val = -0.5
-    x0 = SA[x0_val]
-    z0 = SA[exp(x0_val)]
-    xz0 = build_xz_scalar(x0, z0)
-    d0  = SimpleMvNormal(x0, SA[P0;;])
-
-    make_ukf(regen) = DAEUnscentedKalmanFilter(
-        t2_dynamics, t2_measurement, t2_residual,
-        get_x_z_scalar, build_xz_scalar,
-        SA[Q;;], SA[R;;], d0;
-        xz0, nu=1, ny=1, Ts=DT2,
-        regenerate = regen,
-        constraint_solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-12),
-    )
-
-    ukf_on  = make_ukf(true)
-    ukf_off = make_ukf(false)
-
-    T = 200
-    u = SA[0.0]
-    x_true = x0_val
-    state_gap = 0.0
-    cov_gap   = 0.0
-    for k in 1:T
-        z_true = exp(x_true)
-        x_true = x_true + DT2*(-z_true) + sqrt(Q)*randn()
-        z_true = exp(x_true)
-        y_k    = z_true + sqrt(R)*randn()
-        for f in (ukf_on, ukf_off)
-            predict!(f, u)
-            correct!(f, u, SA[y_k])
-        end
-        state_gap = max(state_gap, abs(ukf_on.x[1]  - ukf_off.x[1]))
-        cov_gap   = max(cov_gap,   abs(ukf_on.R[1,1] - ukf_off.R[1,1]))
-    end
-    # Both diagnostics: state estimates and posterior covariances must
-    # diverge by more than round-off. A bit-identical pair would prove the
-    # regenerate branch is dead code.
-    @test state_gap > 1e-4
-    @test cov_gap   > 1e-6
-end
-
 
 # ============================================================================
 # Test 3: 2D linear reactive cascade with mass conservation
