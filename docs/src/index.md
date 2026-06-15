@@ -45,6 +45,7 @@ Additionally, these filter types are currently considered experimental and may c
 - [`RBPF`](@ref): A Rao-Blackwellized (marginalized) particle filter that uses a Kalman filter for the linear part of the state and a particle filter for the nonlinear part.
 - [`MUKF`](@ref): A Rao-Blackwellized (marginalized) Unscented Kalman Filter that combines an Unscented Kalman Filter for the nonlinear substate with a bank of Kalman filters (one per sigma point) for the linear substate. Similar to RBPF but uses deterministic sigma points instead of random particles.
 - [`UIKalmanFilter`](@ref): An Unknown Input Kalman Filter that estimates both the state and unknown inputs to a linear system without augmenting the state vector. See Gillijns & De Moor (2007), "Unbiased minimum-variance input and state estimation for linear discrete-time systems".
+- [`DAEUnscentedKalmanFilter`](@ref): An Unscented Kalman filter for index-1 differential-algebraic (DAE) systems, where the state is composed of both differential and algebraic variables. Sigma points are drawn for the differential state variables only, and the corresponding algebraic variables are obtained by solving the algebraic equations, keeping all sigma points consistent with the algebraic constraint. See Mandela, Rengaswamy & Narasimhan (2010), "Nonlinear State Estimation of Differential Algebraic Systems".
 
 ## Functionality
 This package provides 

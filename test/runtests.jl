@@ -534,6 +534,11 @@ out = zeros(2, 10000)
     include("test_ukf.jl")
 end
 
+@testset "DAE UKF" begin
+    @info "testing DAE UKF"
+    include("test_daeukf.jl")
+end
+
 @testset "large" begin
     @info "Testing large"
     include("test_large.jl")
