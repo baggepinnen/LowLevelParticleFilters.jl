@@ -1,7 +1,7 @@
 name = "LowLevelParticleFilters"
 uuid = "d9d29d28-c116-5dba-9239-57a5fe23875b"
-authors = ["baggepinnen <baggepinnen@gmail.com>"]
 version = "3.31.0"
+authors = ["baggepinnen <baggepinnen@gmail.com>"]
 
 [deps]
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
@@ -53,7 +53,7 @@ Printf = "1.7"
 Random = "1.7"
 RecipesBase = "0.8, 1.0"
 SLEEFPirates = "0.6"
-SciMLBase = "2"
+SciMLBase = "2, 3"
 SpecialFunctions = "2.5.1"
 StaticArrays = "<0.13, 1"
 Statistics = "1.7"
