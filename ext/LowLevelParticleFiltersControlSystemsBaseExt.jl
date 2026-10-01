@@ -4,6 +4,7 @@ using LowLevelParticleFilters: AbstractFilter, AbstractKalmanFilter, AbstractExt
 using ControlSystemsBase: AbstractStateSpace, ssdata, ss, observability, controllability, linearize, obsv, kalman, covar, innovation_form
 import ControlSystemsBase
 using LinearAlgebra: I
+using ForwardDiff
 
 """
     KalmanFilter(sys::StateSpace{Discrete}, R1, R2, d0 = MvNormal(Matrix(R1)); kwargs...)
@@ -27,9 +28,16 @@ end
 Linearize a nonlinear Kalman filter at the given state `x`, input `u`, and parameter `p` at time `t`. Returns the linearized system matrices `A`, `B`, `C`, and `D`. Call `ss(A, B, C, D, kf.Ts)` to get a `StateSpace` object.
 """
 function ControlSystemsBase.linearize(kf::Union{AbstractParticleFilter,AbstractExtendedKalmanFilter, AbstractUnscentedKalmanFilter}, x::AbstractVector, u::AbstractVector, p=kf.p, t=0.0, args...)
-    A,B = linearize(kf.dynamics, x, u, p, t, args...)
-    C,D = linearize(kf.measurement, x, u, p, t)
+    A,B = jacobians(kf.dynamics, x, u, p, t, args...)
+    C,D = jacobians(kf.measurement, x, u, p, t)
     (; A, B, C, D)
+end
+
+# Jacobians of f(x, u, args...) with respect to x and u. The element type of the argument that is held constant is promoted to the element type of the differentiated argument, which supports static arrays of different lengths for x and u.
+function jacobians(f, x, u, args...)
+    A = ForwardDiff.jacobian(x -> f(x, promote_type(eltype(x), eltype(u)).(u), args...), x)
+    B = ForwardDiff.jacobian(u -> f(promote_type(eltype(x), eltype(u)).(x), u, args...), u)
+    A, B
 end
 
 function ControlSystemsBase.linearize(kf::AbstractKalmanFilter, x::AbstractVector, u::AbstractVector, p=kf.p, t=0.0)
@@ -75,7 +83,7 @@ function ControlSystemsBase.controllability(f::UnscentedKalmanFilter{<:Any, <:An
 end
 
 function linearize_noise_input(f, x, u, p=f.p, t=0)
-    linearize((x,w,p,t)->f.dynamics(x, u, p, t, w), x, zeros(f.nw), p, t)
+    jacobians((x,w,p,t)->f.dynamics(x, u, p, t, w), x, zeros(f.nw), p, t)
 end
 
 """

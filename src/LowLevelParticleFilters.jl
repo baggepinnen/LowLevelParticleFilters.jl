@@ -111,9 +111,16 @@ include("rbpf.jl")
 include("mukf.jl")
 include("uikf.jl")
 include("enkf.jl")
+include("multistep.jl")
 include("paramest.jl")
 
 index(f::AbstractFilter) = f.t
+
+# Public, but not exported, names. The public keyword is only available on Julia v1.11 and later
+@static if VERSION >= v"1.11.0-DEV.469"
+    eval(Expr(:public, :sse, :prediction_errors!, :multistep_sse, :multistep_prediction_errors!, :ismissing_measurement,
+        :triangular, :invtriangular, :factor_from_logchol, :cov_from_logchol, :logchol_from_cov, :reconstruct_filter, :SimpleMvNormal))
+end
 
 if !isdefined(Base, :get_extension) # Backwards compat
     include("../ext/LowLevelParticleFiltersControlSystemsBaseExt.jl")

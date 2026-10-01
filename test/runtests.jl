@@ -668,6 +668,21 @@ end
     include("test_indexing_matrix.jl")
 end
 
+@testset "missing_data" begin
+    @info "Testing missing_data"
+    include("test_missing_data.jl")
+end
+
+@testset "multistep" begin
+    @info "Testing multistep"
+    include("test_multistep.jl")
+end
+
+@testset "logchol" begin
+    @info "Testing logchol"
+    include("test_logchol.jl")
+end
+
 @testset "autotune_covariances" begin
     @info "Testing autotune_covariances"
     include("test_autotune_covariances.jl")

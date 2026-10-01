@@ -174,11 +174,56 @@ function correct!(pf::AuxiliaryParticleFilter, u, y, p = parameters(pf), t = ind
 end
 
 """
+    ismissing_measurement(y)
+
+Return `true` if the measurement `y` is missing, i.e., if `y === missing` or if `y` is an array of which all entries are `missing`. An `ArgumentError` is thrown if only some of the entries of `y` are missing.
+
+Kalman-type filters skip the correction step for missing measurements in [`update!`](@ref), [`forward_trajectory`](@ref), [`loglik`](@ref), [`LowLevelParticleFilters.sse`](@ref) and [`LowLevelParticleFilters.prediction_errors!`](@ref).
+"""
+ismissing_measurement(::Missing) = true
+ismissing_measurement(y::AbstractArray) = Missing <: eltype(y) ? _allmissing(y) : false
+ismissing_measurement(y) = false
+
+function _allmissing(y)
+    n = count(ismissing, y)
+    n == 0 && return false
+    n == length(y) && return true
+    throw(ArgumentError("The measurement $(y) is partially missing. Only measurements where all entries are missing are supported. To discard individual entries of a measurement vector, replace the missing entries by any finite value and inflate the corresponding diagonal entries of the measurement noise covariance R2 for this time step, e.g., by returning a modified R2 from `pre_correct_cb` in `forward_trajectory`, or by letting R2 be a function of time."))
+end
+
+"""
+    supports_missing_measurements(f)
+
+Return `true` if the filter `f` supports missing measurements, see [`LowLevelParticleFilters.ismissing_measurement`](@ref).
+"""
+supports_missing_measurements(f) = true
+
+function missing_measurement_error(f)
+    ArgumentError("The filter of type $(nameof(typeof(f))) does not support missing measurements.")
+end
+
+missing_correction(f) = (; ll = zero(float(eltype(state(f)))), e = missing, S = missing, Sᵪ = missing, K = missing)
+
+"""
     ll, e = update!(f::AbstractFilter, u, y, p = parameters(f), t = index(f))
 
-Perform one step of `predict!` and `correct!`, returns log-likelihood and prediction error
+Perform one step of `predict!` and `correct!`, returns log-likelihood and prediction error.
+
+For Kalman-type filters, the correction step is skipped if the measurement `y` is missing, see [`LowLevelParticleFilters.ismissing_measurement`](@ref). In this case, the returned log-likelihood is zero and the prediction error is `missing`.
 """
 function update!(f::AbstractFilter, u, y, p = parameters(f), t = index(f)*f.Ts)
+    ll_e = correct!(f, u, y, p, t)
+    predict!(f, u, p, t)
+    ll_e
+end
+
+function update!(f::AbstractKalmanFilter, u, y, p = parameters(f), t = index(f)*f.Ts)
+    if y === missing || ismissing_measurement(y)
+        supports_missing_measurements(f) || throw(missing_measurement_error(f))
+        ll_e = missing_correction(f)
+        predict!(f, u, p, t)
+        return ll_e
+    end
     ll_e = correct!(f, u, y, p, t)
     predict!(f, u, p, t)
     ll_e
@@ -259,12 +304,17 @@ plot(sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=
 See [`KalmanFilteringSolution`](@ref) for more details.
 
 # Extended help
+## Missing measurements
+Elements of `y` that are `missing`, or arrays of which all entries are `missing`, are treated as missing measurements, for which the correction step is skipped. For such a time step `k`, the filtered estimate equals the prediction, `xt[k] = x[k]` and `Rt[k] = R[k]`, the log-likelihood contribution is zero, `e[k] = y[k]`, and `S[k]` and `K[k]` are `missing`. The callbacks `pre_correct_cb` and `post_correct_cb` are not called for such time steps, and `pre_predict_cb` receives `missing` in place of the prediction error and innovation covariance. Measurements where only some of the entries are missing are not supported, see [`LowLevelParticleFilters.ismissing_measurement`](@ref).
+
 ## Very large systems
 If your system is very large, i.e., the dimension of the state is very large, and the arrays `u,y` are long, this function may use a lot of memory to store all covariance matrices `R, Rt`. If you do not need all the information retained by this function, you may opt to call one of the functions
 - [`loglik`](@ref)
 - [`LowLevelParticleFilters.sse`](@ref)
 - [`LowLevelParticleFilters.prediction_errors!`](@ref)
-That store significantly less information. The amount of computation performed by all of these functions is identical, the only difference lies in what is stored and returned.
+- [`LowLevelParticleFilters.multistep_sse`](@ref)
+- [`LowLevelParticleFilters.multistep_prediction_errors!`](@ref)
+That store significantly less information. The amount of computation performed by the first three of these functions is identical, the only difference lies in what is stored and returned.
 
 ## Callbacks
 For advanced usage, such as implementing conditional resetting and adaptive covariance, one may make use of the callback functions
@@ -280,6 +330,8 @@ The filter loop consists of the following steps, in this order:
 6. `post_predict_cb` # This happens after prediction, but before next iteration when the state and covariance is saved
 """
 function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf); t = range(0, step=kf.Ts, length=length(y)), debug=false, pre_correct_cb=(args...)->nothing, pre_predict_cb=(args...)->nothing, post_predict_cb=(args...)->nothing, post_correct_cb=(args...)->nothing)
+    has_missing = any(ismissing_measurement, y)
+    has_missing && !supports_missing_measurements(kf) && throw(missing_measurement_error(kf))
     reset!(kf)
     T    = length(y)
     x    = Array{particletype(kf)}(undef,T)
@@ -288,28 +340,43 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
     Rt   = Array{covtype(kf)}(undef,T)
     e    = similar(y)
     ll   = zero(eltype(particletype(kf)))
-    local k, S, K
+    S    = nothing
+    K    = nothing
+    local k
     try
         for outer k = 1:T
             ti = t[k]
+            yk = y[k]
             x[k]  = state(kf)      |> copy
             R[k]  = covariance(kf) |> copy
-            R2 = pre_correct_cb(kf, u[k], y[k], p, ti)
-            ret = correct!(kf, u[k], y[k], p, ti; R2 = something(R2, get_mat(kf.R2, kf.x, u[k], p, ti)))
-            lli, ei, Si, Sᵪi, Ki = ret
-            post_correct_cb(kf, p, ret)
-            ll += lli
-            e[k] = ei
-            xt[k] = state(kf)      |> copy
-            Rt[k] = covariance(kf) |> copy
+            if yk === missing || ismissing_measurement(yk)
+                e[k] = yk
+                xt[k] = state(kf)      |> copy
+                Rt[k] = covariance(kf) |> copy
+                R1 = pre_predict_cb(kf, u[k], yk, p, ti, zero(ll), missing, missing, missing)
+            else
+                R2 = pre_correct_cb(kf, u[k], yk, p, ti)
+                ret = correct!(kf, u[k], yk, p, ti; R2 = something(R2, get_mat(kf.R2, kf.x, u[k], p, ti)))
+                lli, ei, Si, Sᵪi, Ki = ret
+                post_correct_cb(kf, p, ret)
+                ll += lli
+                e[k] = ei
+                xt[k] = state(kf)      |> copy
+                Rt[k] = covariance(kf) |> copy
 
-            if k == 1
-                S = Vector{typeof(Sᵪi)}(undef, T)
-                K = Vector{typeof(Ki)}(undef, T)
+                if S === nothing
+                    if has_missing
+                        S = Vector{Union{Missing, typeof(Sᵪi)}}(missing, T)
+                        K = Vector{Union{Missing, typeof(Ki)}}(missing, T)
+                    else
+                        S = Vector{typeof(Sᵪi)}(undef, T)
+                        K = Vector{typeof(Ki)}(undef, T)
+                    end
+                end
+                S[k] = Sᵪi
+                K[k] = Ki
+                R1 = pre_predict_cb(kf, u[k], yk, p, ti, lli, ei, Si, Sᵪi)
             end
-            S[k] = Sᵪi
-            K[k] = Ki
-            R1 = pre_predict_cb(kf, u[k], y[k], p, ti, lli, ei, Si, Sᵪi)
             predict!(kf, u[k], p, ti; R1 = something(R1, get_mat(kf.R1, kf.x, u[k], p, ti)))
             post_predict_cb(kf, p)
         end
@@ -317,11 +384,16 @@ function forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::Abst
         if debug
             k -= 1
             x, xt, R, Rt, e, u, y = x[1:k], xt[1:k], R[1:k], Rt[1:k], e[1:k], u[1:k], y[1:k]
+            S === nothing || (S = S[1:k]; K = K[1:k])
             @error "State estimation failed, returning partial solution" err
         else
             @error "State estimation failed, pass `debug = true` to forward_trajectory to return a partial solution"
             rethrow()
         end
+    end
+    if S === nothing
+        S = fill(missing, length(x))
+        K = fill(missing, length(x))
     end
     KalmanFilteringSolution(kf,u,y,x,xt,R,Rt,ll,e,K,S,nothing,t)
 end

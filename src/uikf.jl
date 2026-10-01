@@ -75,6 +75,9 @@ function Base.propertynames(uikf::UIKalmanFilter, private::Bool=false)
     return (fieldnames(UIKalmanFilter)..., propertynames(uikf.kf, private)...)
 end
 
+# The unknown input is estimated from the measurement, a correction step can thus not be skipped
+supports_missing_measurements(::UIKalmanFilter) = false
+
 function predict!(uikf::UIKalmanFilter, u, p=parameters(uikf), t::Real=index(uikf)*uikf.Ts; kwargs...)
     predict!(uikf.kf, u, p, t; kwargs...)
 end

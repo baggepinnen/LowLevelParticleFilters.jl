@@ -106,7 +106,7 @@ end
 
 Base.@propagate_inbounds function measurement_equation!(pf::ParticleFilter, u, y, p, t, w = pf.state.w, d=measurement_density(pf); g = measurement(pf))
     x = particles(pf)
-    any(ismissing, y) && return w
+    (y === missing || any(ismissing, y)) && return w
     # if length(d) == 1 && length(y) == 1
     #     for i = 1:num_particles(pf)
     #         w[i] += extended_logpdf(d, (y-g(x[i],u,p,t))[1])
@@ -224,7 +224,7 @@ The main step of [`correct!`](@ref) for [`AdvancedParticleFilter`](@ref). This f
 - `g`: The likelihood function. Defaults to the one stored in the filter. Pass a custom function when updating with, e.g., a subset of sensors.
 """
 Base.@propagate_inbounds function measurement_equation!(pf::AbstractParticleFilter, u, y, p, t, w = weights(pf); g = measurement_likelihood(pf))
-    any(ismissing.(y)) && return w
+    (y === missing || any(ismissing, y)) && return w
     x = particles(pf)
     if pf.threads
         Threads.@threads :static for i = 1:num_particles(pf)

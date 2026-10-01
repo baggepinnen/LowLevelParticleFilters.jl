@@ -103,9 +103,9 @@ function SqExtendedKalmanFilter(kf::SqKalmanFilter, dynamics, measurement;
         if IPD
             outx = zeros(eltype(kf.d0), kf.nx)
             jacx = zeros(eltype(kf.d0), kf.nx, kf.nx)
-            Ajac = (x,u,p,t) -> ForwardDiff.jacobian!(jacx, (xd,x)->dynamics(xd,x,u,p,t), outx, x)
+            Ajac = DefaultJacobian((x,u,p,t) -> ForwardDiff.jacobian!(jacx, (xd,x)->dynamics(xd,x,u,p,t), outx, x))
         else
-            Ajac = (x,u,p,t) -> ForwardDiff.jacobian(x->dynamics(x,u,p,t), x)
+            Ajac = DefaultJacobian((x,u,p,t) -> ForwardDiff.jacobian(x->dynamics(x,u,p,t), x))
         end
     end
 

@@ -426,6 +426,11 @@ end
 Perform one filtering step: correct followed by predict.
 """
 function update!(enkf::EnsembleKalmanFilter, u, y, p = parameters(enkf), t::Real = index(enkf) * enkf.Ts)
+    if y === missing || ismissing_measurement(y)
+        ll_e = missing_correction(enkf)
+        predict!(enkf, u, p, t)
+        return ll_e
+    end
     ll_e = correct!(enkf, u, y, p, t)
     predict!(enkf, u, p, t)
     ll_e

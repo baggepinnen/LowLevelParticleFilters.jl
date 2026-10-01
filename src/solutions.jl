@@ -80,13 +80,35 @@ cov_diag(R::AbstractMatrix) = diag(R)
 cov_diag(U::UpperTriangular) = diag(U'U)
 cov_diag(Sᵪ::Cholesky) = diag(Sᵪ.U'Sᵪ.U)
 
+_isabsent(v) = v === missing || (v isa AbstractArray && all(ismissing, v))
+
+"Length of the first non-missing element of `v`, or 0 if all elements are missing."
+function _sample_length(v)
+    i = findfirst(!_isabsent, v)
+    i === nothing ? 0 : length(v[i])
+end
+
+_getindex_nan(v, d) = [vk === missing ? NaN : coalesce(vk[d], NaN) for vk in v]
+
+"Convert a vector of vectors into a `length(v) × n` matrix, missing elements and entries are represented by `NaN`."
+function _samples_matrix(v, n = _sample_length(v))
+    M = fill(NaN, length(v), n)
+    for (k, vk) in enumerate(v)
+        vk === missing && continue
+        for i in 1:n
+            M[k, i] = coalesce(vk[i], NaN)
+        end
+    end
+    M
+end
+
 @recipe function plot(timevec::AbstractVector{<:Real}, sol::KalmanFilteringSolution; plotx = true, plotxt=true, plotu=true, ploty=true, plotyh=true, plotyht=false, plote=false, plotR=false, plotRt=false, plotS=false, plotSt=false, names = sol.f.names, name = names.name, σ=1.96, always_include_x=false)
     isempty(name) || (name = name*" ")
     kf = sol.f
 
     kf isa UnscentedKalmanFilter && plotSt && error("Output covariance plotting (plotSt) is not yet supported for UnscentedKalmanFilter")
 
-    nx, nu, ny = length(sol.x[1]), length(sol.u[1]), length(sol.y[1])
+    nx, nu, ny = length(sol.x[1]), length(sol.u[1]), _sample_length(sol.y)
     lay = nx*(plotx || plotxt || always_include_x) + plotu*nu + (ploty || plotyh || plotyht || plote)*ny
     layout --> lay
     xnames = names.x
@@ -131,7 +153,7 @@ cov_diag(Sᵪ::Cholesky) = diag(Sᵪ.U'Sᵪ.U)
     end
     ynames = names.y
     if ploty
-        series = reduce(hcat, sol.y)'
+        series = _samples_matrix(sol.y, ny)
         for i = 1:ny
             @series begin
                 label --> "$(ynames[i])"
@@ -143,7 +165,7 @@ cov_diag(Sᵪ::Cholesky) = diag(Sᵪ.U'Sᵪ.U)
     if plotyh
         series = reduce(hcat, measurement_oop(kf).(sol.x, sol.u, Ref(kf.p), timevec))'
         if plotS && !isempty(sol.S) && !isnothing(sol.S[1])
-            twoσ = σ .* sqrt.(reduce(hcat, cov_diag.(sol.S))')
+            twoσ = σ .* sqrt.(_samples_matrix([S === missing ? missing : cov_diag(S) for S in sol.S], ny))
         end
         for i = 1:ny
             @series begin
@@ -182,7 +204,7 @@ cov_diag(Sᵪ::Cholesky) = diag(Sᵪ.U'Sᵪ.U)
         end
     end
     if plote
-        series = reduce(hcat, sol.e)'
+        series = _samples_matrix(sol.e, ny)
         for i = 1:ny
             @series begin
                 label --> "$(name)e$(i)(t|t-1)"
@@ -245,7 +267,7 @@ Base.iterate(r::KalmanSmoothingSolution, ::Val{:done}) = nothing
 
     kf isa UnscentedKalmanFilter && plotST && error("Output covariance plotting (plotST) is not supported for UnscentedKalmanFilter")
 
-    nx, nu, ny = length(sol.x[1]), length(sol.u[1]), length(sol.y[1])
+    nx, nu, ny = length(sol.x[1]), length(sol.u[1]), _sample_length(sol.y)
     xnames = names.x
 
     # The mess of replicating all plotx kwargs in this recipe is due to an obscure bug in Plots that causes the layout that is set in the lower KalmanFilteringSolution recipe to only take effect if anything is actually drawn in the recipe. When the user wants to plot only xT, the lower level recipe only sets the layout but plots nothing, and then we get an indexing error here due to there not being any layout > 1 subplot set.
@@ -356,7 +378,7 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
     timevec = sol.t
     timevecm05 = timevec .- 0.5f.Ts
     timevecp05 = timevec .+ 0.5f.Ts
-    names = hasproperty(f, :names) ? f.names : default_names(f.nx, length(sol.u[1]), length(sol.y[1]))
+    names = hasproperty(f, :names) ? f.names : default_names(f.nx, length(sol.u[1]), _sample_length(sol.y))
     name = names.name
     isempty(name) || (name = name*" ")
     if dim === nothing || dim === (:)
@@ -364,7 +386,7 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
         p = parameters(f)
         N,T = size(x)
         D = length(x[1])
-        P = length(y[1])
+        P = _sample_length(y)
         if sum(we) ≉ T
             we ./= sum(we, dims=1)
         end
@@ -439,7 +461,7 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
                 @series begin
                     label --> ""
                     seriestype := :scatter
-                    timevec, getindex.(y,d)
+                    timevec, _getindex_nan(y,d)
                 end
             end
         end
@@ -448,7 +470,7 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
         d = dim
         N,T = size(x)
         D = length(x[1])
-        P = length(y[1])
+        P = _sample_length(y)
     
         if sum(w) ≉ T
             w = exp.(w)
@@ -479,7 +501,7 @@ td_getargs(f,x,w,u,y,d::Int=1) = f,x,w,u,y,d
             end
             @series begin
                 seriestype := :scatter
-                timevec, getindex.(y,d)
+                timevec, _getindex_nan(y,d)
             end
     
         end
