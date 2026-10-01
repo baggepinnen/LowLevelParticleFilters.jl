@@ -127,14 +127,14 @@ p_opt_gn = res_gn.minimizer
 norm(p_true - p_opt_gn) / norm(p_true)
 ```
 
-When performing sum-of-squares minimization like here, we can, assuming that we converge to the global optimum, estimate the covariance of the estimated parameters. The _precision matrix_ ``Λ``, which is the inverse of the covariance matrix of the parameters, is given by a scaled Hessian of the cost function. The Gauss-Newton appoximation of the Hessian is given by ``J'J``, where ``J`` is the Jacobian of the residuals.
+When performing sum-of-squares minimization like here, we can, assuming that we converge to the global optimum, estimate the covariance of the estimated parameters. The _precision matrix_ ``Λ``, which is the inverse of the covariance matrix of the parameters, is given by a scaled Hessian of the cost function. The Gauss-Newton approximation of the Hessian is given by ``J^T J``, where ``J`` is the Jacobian of the residuals, and the scaling is the inverse of the estimated residual variance ``\hat σ^2 = \lVert r \rVert^2 / (N_r - n_p)``, where ``N_r`` is the number of residuals and ``n_p`` the number of estimated parameters.
 ```@example paramest
 using ForwardDiff
 T = length(y)
 out = zeros(T * ny)
 J = ForwardDiff.jacobian(residuals!, out, res_gn.minimizer)
 residuals!(out, res_gn.minimizer)
-Λ = (T - length(p_guess))/dot(out,out) * Symmetric(J' * J) # Precision matrix of the estimated parameters
+Λ = (length(out) - length(p_guess))/dot(out,out) * Symmetric(J' * J) # Precision matrix of the estimated parameters
 # Σ = inv(Λ) # Covariance matrix of the estimated parameters (only compute this if precision matrix is well conditioned)
 svdvals(Λ)
 ```
@@ -144,7 +144,7 @@ Gauss-Newton algorithms are often more efficient at sum-of-squares minimization 
 
 
 ## Optimizing log-likelihood using Gauss-Newton optimization
-We can use a Gauss-Newton optimizer to maximize the log-likelihood as well, the only thing we need to change is to pass `loglik = true` to the `prediction_errors!` function, adjust the residual output length accordingly (notice the `(ny+1)` below, we now have an additional residual per time step corresponding to a `logdet` term in the likelihood) as well as possibly providing an `offset` argument. The reason for the offset is that the `logdet` term may be negative and cannot be the result of squaring a real number. The addition of the offset does not affect the optimization process, but adds a constant offset to the computed log liklihood value (cost function). If the offset is needed, you will get an error message indicating that when calling `prediction_errors!`. The code looks like this:
+We can use a Gauss-Newton optimizer to maximize the log-likelihood as well, the only thing we need to change is to pass `loglik = true` to the `prediction_errors!` function, adjust the residual output length accordingly (notice the `(ny+1)` below, we now have an additional residual per time step corresponding to a `logdet` term in the likelihood) as well as possibly providing an `offset` argument. The reason for the offset is that the `logdet` term may be negative and cannot be the result of squaring a real number. The addition of the offset does not affect the optimization process, but adds a constant offset to the computed log-likelihood value (cost function). If the offset is needed, you will get an error message indicating that when calling `prediction_errors!`. The code looks like this:
 ```@example paramest
 using LeastSquaresOptim
 
@@ -158,3 +158,8 @@ res_gn = optimize!(LeastSquaresProblem(x = copy(p_guess), f! = residuals!, outpu
 p_opt_gn = res_gn.minimizer
 norm(p_true - p_opt_gn) / norm(p_true)
 ```
+
+## See also
+- [Joint estimation of plant parameters and noise covariances](@ref) for maximum-likelihood estimation of plant parameters together with the noise covariance matrices, estimation of the parameter uncertainty and estimation from multiple experiments.
+- [Multi-step prediction-error estimation](@ref) for models that are used for prediction over a horizon of several time steps.
+- [Missing data and outliers](@ref) for data sets with missing samples.

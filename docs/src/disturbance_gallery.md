@@ -88,7 +88,7 @@ plot(figsim, figspec, figimp, plot_title="Integrated white noise")
 
 Note, the samples from this process do not look random and step like, but a random step-like process can nevertheless be well modeled by such a process (this is hinted at by the transfer function ``1/s`` which is identical to the Laplace transform of the step function). This model is used in a number of examples that demonstrate this property:
 - [Joint state and parameter estimation](@ref)
-- [Fault detection](@ref)
+- [Fault detection](fault_detection.md)
 - [LQG control with integral action](https://juliacontrol.github.io/RobustAndOptimalControl.jl/dev/lqg_disturbance/)
 
 

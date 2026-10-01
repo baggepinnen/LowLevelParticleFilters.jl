@@ -1,6 +1,6 @@
 # Identifiability
 
-There is no guarantee that we will recover the true parameters by perfoming parameter estimation, especially not if the input excitation is poor. For the quad-tank system used in [Using an optimizer](@ref), we will generally find parameters that results in a good predictor for the system (this is after all what we're optimizing for), but these may not be the "correct" parameters.
+There is no guarantee that we will recover the true parameters by perfoming parameter estimation, especially not if the input excitation is poor. For the quad-tank system used in [Using an optimizer](@ref "Prediction-Error minimization using an optimizer"), we will generally find parameters that results in a good predictor for the system (this is after all what we're optimizing for), but these may not be the "correct" parameters.
 
 ## Polynomial methods
 A tool like [StructuralIdentifiability.jl](https://github.com/SciML/StructuralIdentifiability.jl) may be used to determine the identifiability of parameters and state variables (for rational systems), something that for the quad-tank system could look like
@@ -39,10 +39,22 @@ Dict{Nemo.fmpq_mpoly, Bool} with 15 entries:
   a2  => 0
 ```
 
-indicating that we can not hope to resolve all of the parameters. However, using appropriate regularization from prior information, we might still recover a lot of information about the system. Regularization could easily be added to the function `cost` in [Using an optimizer](@ref), e.g., using a penalty like `(p-p_guess)'Γ*(p-p_guess)` for some matrix ``\Gamma``, to indicate our confidence in the initial guess.
+indicating that we can not hope to resolve all of the parameters. However, using appropriate regularization from prior information, we might still recover a lot of information about the system. Regularization could easily be added to the function `cost` in [Using an optimizer](@ref "Prediction-Error minimization using an optimizer"), e.g., using a penalty like `(p-p_guess)'Γ*(p-p_guess)` for some matrix ``\Gamma``, to indicate our confidence in the initial guess.
 
 ## Linear methods
 This package also contains an interface to [ControlSystemsBase](https://juliacontrol.github.io/ControlSystems.jl/stable/), which allows you to call `ControlSystemsBase.observability(f, x, u, p, t)` on a filter `f` to linearize (if needed) it in the point `x,u,p,t` and assess observability using linear methods (the PHB test). Also `ControlSystemsBase.obsv(f, x, u, p, t)` for computing the observability matrix is available.
+
+### Observability as a prerequisite
+A necessary condition for estimation of parameters as augmented state variables, and for meaningful noise covariance estimation, is that the (augmented) state is observable from the measurements. In addition to the linear tests above, observability may be assessed in practice by inspecting the estimated state covariance along a trajectory: if the covariance of some state variables grows without bound, these are not observable. This is visualized by
+```julia
+sol = forward_trajectory(filter, u, y)
+plot(sol, plotx=false, plotxt=true, plotRt=true, plotu=false, ploty=false)
+```
+
+## Practical identifiability from the Hessian
+Structural identifiability, as analyzed above, determines whether the parameters can be determined from ideal, noise-free data. Practical identifiability determines whether the parameters can be determined with acceptable accuracy from the available data, which depends also on the excitation provided by the inputs and on the noise. A standard procedure is to compute the Hessian ``H`` of the negative log-likelihood (or of the sum of squared prediction errors), or its Gauss-Newton approximation ``J^T J``, at the estimated parameters, and to compute the eigendecomposition of ``H``. Eigenvalues that are small relative to the largest eigenvalue indicate directions in parameter space along which the cost function is nearly constant, and the components of the corresponding eigenvectors indicate which combination of parameters is poorly determined. Remedies include fixing one of the parameters in the combination to a known value, reparameterizing the model, adding a prior (regularization), and designing experiments, or combining several experiments, that excite the poorly determined directions. An executed example is provided in [Joint estimation of plant parameters and noise covariances](@ref).
+
+Since the inputs of the experiment determine the Hessian, inputs that are strongly correlated with each other, e.g., a heater input that is a function of the ambient temperature, make it difficult to distinguish the effects of the inputs from each other.
 
 ## Fisher Information and Augmented State Covariance
 
