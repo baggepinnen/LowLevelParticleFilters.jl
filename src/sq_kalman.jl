@@ -80,8 +80,8 @@ function Base.getproperty(kf::SqKalmanFilter, s::Symbol)
 end
 
 sample_state(kf::SqKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
-sample_state(kf::SqKalmanFilter, x, u, p=parameters(kf), t=0; noise=true) = kf.A*x .+ kf.B*u .+ noise*get_mat(kf.R1, x, u, p, t)*rand(kf.nx)
-sample_measurement(kf::SqKalmanFilter, x, u, p=parameters(kf), t=0; noise=true) = kf.C*x .+ kf.D*u .+ noise*get_mat(kf.R2, x, u, p, t)*rand(kf.ny)
+sample_state(kf::SqKalmanFilter, x, u, p=parameters(kf), t=0; noise=true) = get_mat(kf.A, x,u,p,t)*x .+ get_mat(kf.B, x,u,p,t)*u .+ noise*get_mat(kf.R1, x, u, p, t)'*randn(kf.nx)
+sample_measurement(kf::SqKalmanFilter, x, u, p=parameters(kf), t=0; noise=true) = get_mat(kf.C, x,u,p,t)*x .+ get_mat(kf.D, x,u,p,t)*u .+ noise*get_mat(kf.R2, x, u, p, t)'*randn(kf.ny)
 covariance(kf::SqKalmanFilter)   = kf.R'kf.R
 covtype(kf::SqKalmanFilter) = typeof(kf.R.data)
 

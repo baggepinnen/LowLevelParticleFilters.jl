@@ -206,7 +206,7 @@ function correct!(kf::SqExtendedKalmanFilter, measurement_model::EKFMeasurementM
 
     # Compute innovation
     if IPM
-        e = zeros(length(y))
+        e = zeros(promote_type(eltype(x), eltype(y), eltype(R)), length(y))
         measurement(e, x, u, p, t)
         e .= y .- e
     else
@@ -290,10 +290,10 @@ p=parameters(kf))
     KalmanSmoothingSolution(sol, xT, RT)
 end
 
-function smooth(kf::SqExtendedKalmanFilter, args...)
+function smooth(kf::SqExtendedKalmanFilter, u::AbstractVector, y::AbstractVector, args...)
     reset!(kf)
-    sol = forward_trajectory(kf, args...)
-    smooth(sol, kf, args...)
+    sol = forward_trajectory(kf, u, y, args...)
+    smooth(sol, kf, u, y, args...)
 end
 
 # Reuse sampling functions from ExtendedKalmanFilter

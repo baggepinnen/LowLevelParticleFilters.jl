@@ -161,7 +161,7 @@ function correct!(kf::AbstractKalmanFilter, measurement_model::EKFMeasurementMod
     (; measurement, Cjac) = measurement_model
     C = Cjac(x, u, p, t)
     if IPM
-        e = zeros(length(y))
+        e = zeros(promote_type(eltype(x), eltype(y), eltype(R)), length(y))
         measurement(e, x, u, p, t)
         e .= y .- e
     else
@@ -219,10 +219,10 @@ function smooth(sol, kf::AbstractExtendedKalmanFilter, u::AbstractVector=sol.u, 
 end
 
 
-function smooth(kf::AbstractExtendedKalmanFilter, args...)
+function smooth(kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::AbstractVector, args...)
     reset!(kf)
-    sol = forward_trajectory(kf, args...)
-    smooth(sol, kf, args...)
+    sol = forward_trajectory(kf, u, y, args...)
+    smooth(sol, kf, u, y, args...)
 end
 
 sample_state(kf::AbstractExtendedKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
