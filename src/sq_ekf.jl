@@ -263,7 +263,8 @@ p=parameters(kf))
     RT[end] = Rt[end]'*Rt[end]  # Convert to covariance for output compatibility
 
     for t = T-1:-1:1
-        A = kf.Ajac(xT[t+1], u[t+1], p, ((t+1)-1)*kf.Ts)
+        # A_t propagates step t -> t+1 and must be evaluated at the same point as in the forward pass
+        A = kf.Ajac(xt[t], u[t], p, (t-1)*kf.Ts)
 
         # Use Cholesky factors directly
         Rt_cov = Rt[t]'*Rt[t]
