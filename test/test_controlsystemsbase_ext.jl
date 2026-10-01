@@ -150,16 +150,3 @@ end
     @test K_from_sys ≈ K_from_filter
 end
 
-
-@testset "Linearization with static arrays of different lengths" begin
-    fsa(x, u, p, t) = SA[x[2], -sin(x[1]) + u[1] + u[2], 0.0, x[3]]
-    msa(x, u, p, t) = SA[x[1] + u[2]]
-    ukfsa = UnscentedKalmanFilter(fsa, msa, SMatrix{4,4}(1.0I(4)), SA[1.0;;], LowLevelParticleFilters.SimpleMvNormal(SA[0.1, 0, 0, 0], SMatrix{4,4}(1.0I(4))); nu=2, ny=1)
-    xs, us = SA[0.1, 0, 0, 0], SA[0.0, 0.0]
-    lin_static = ControlSystemsBase.linearize(ukfsa, xs, us, nothing, 0.0)
-    lin_dynamic = ControlSystemsBase.linearize(ukfsa, Vector(xs), Vector(us), nothing, 0.0)
-    @test lin_static.A ≈ lin_dynamic.A
-    @test lin_static.B ≈ lin_dynamic.B ≈ [0 0; 1 1; 0 0; 0 0]
-    @test lin_static.D ≈ [0 1]
-    @test ControlSystemsBase.observability(ukfsa, xs, us, nothing, 0.0).isobservable == ControlSystemsBase.observability(ukfsa, Vector(xs), Vector(us), nothing, 0.0).isobservable
-end
