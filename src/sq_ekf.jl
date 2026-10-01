@@ -290,10 +290,10 @@ p=parameters(kf))
     KalmanSmoothingSolution(sol, xT, RT)
 end
 
-function smooth(kf::SqExtendedKalmanFilter, args...)
+function smooth(kf::SqExtendedKalmanFilter, u::AbstractVector, y::AbstractVector, args...)
     reset!(kf)
-    sol = forward_trajectory(kf, args...)
-    smooth(sol, kf, args...)
+    sol = forward_trajectory(kf, u, y, args...)
+    smooth(sol, kf, u, y, args...)
 end
 
 # Reuse sampling functions from ExtendedKalmanFilter

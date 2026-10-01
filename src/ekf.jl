@@ -219,10 +219,10 @@ function smooth(sol, kf::AbstractExtendedKalmanFilter, u::AbstractVector=sol.u, 
 end
 
 
-function smooth(kf::AbstractExtendedKalmanFilter, args...)
+function smooth(kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::AbstractVector, args...)
     reset!(kf)
-    sol = forward_trajectory(kf, args...)
-    smooth(sol, kf, args...)
+    sol = forward_trajectory(kf, u, y, args...)
+    smooth(sol, kf, u, y, args...)
 end
 
 sample_state(kf::AbstractExtendedKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)

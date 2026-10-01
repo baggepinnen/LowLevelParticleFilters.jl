@@ -77,3 +77,12 @@ end
     @test length(x) == length(u) + 1
     @test reduce(vcat, x[2:end]) ≈ (0:length(u)-1) .* Ts
 end
+
+@testset "smooth dispatch requires vector data" begin
+    kf = KalmanFilter([0.9;;], [1.0;;], [1.0;;], 0, [0.1;;], [0.1;;])
+    u = [randn(1) for _ in 1:10]
+    y = [randn(1) for _ in 1:10]
+    @test smooth(kf, u, y) isa LLPF.KalmanSmoothingSolution
+    @test smooth(kf, u, y, LLPF.parameters(kf)) isa LLPF.KalmanSmoothingSolution
+    @test !hasmethod(smooth, Tuple{typeof(kf), Nothing})
+end
