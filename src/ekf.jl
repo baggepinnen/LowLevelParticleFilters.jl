@@ -189,7 +189,7 @@ function correct!(kf::AbstractKalmanFilter, measurement_model::EKFMeasurementMod
     (; ll, e, S, Sᵪ, K)
 end
 
-# If smoothing blows up / explodes / diverges towards the beginning of the trajectory, try increasing the measurement noise covariance. Also try the smooth_mbf in case the state dimension is large
+# Consider smooth_mbf in case the state dimension is large
 function smooth(sol, kf::AbstractExtendedKalmanFilter, u::AbstractVector=sol.u, y::AbstractVector=sol.y, p=parameters(kf))
     T            = length(y)
     (; x,xt,R,Rt,ll) = sol
@@ -198,7 +198,8 @@ function smooth(sol, kf::AbstractExtendedKalmanFilter, u::AbstractVector=sol.u, 
     xT[end]      = xt[end]      |> copy
     RT[end]      = Rt[end]      |> copy
     for t = T-1:-1:1
-        A = kf.Ajac(xT[t+1],u[t+1],p,((t+1)-1)*kf.Ts)
+        # A_t propagates step t -> t+1 and must be evaluated at the same point as in the forward pass
+        A = kf.Ajac(xt[t], u[t], p, (t-1)*kf.Ts)
         C     = Rt[t]*A'/cholesky(Symmetric(R[t+1]))
         Ce = C*(xT[t+1] .- x[t+1])
         @bangbang Ce .+= xt[t]
