@@ -693,6 +693,11 @@ end
     include("test_controlsystemsbase_ext.jl")
 end
 
+@testset "misc fixes" begin
+    @info "Testing misc fixes"
+    include("test_misc_fixes.jl")
+end
+
 
 end
 

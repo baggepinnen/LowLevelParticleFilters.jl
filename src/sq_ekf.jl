@@ -206,7 +206,7 @@ function correct!(kf::SqExtendedKalmanFilter, measurement_model::EKFMeasurementM
 
     # Compute innovation
     if IPM
-        e = zeros(length(y))
+        e = zeros(promote_type(eltype(x), eltype(y), eltype(R)), length(y))
         measurement(e, x, u, p, t)
         e .= y .- e
     else
@@ -263,7 +263,8 @@ p=parameters(kf))
     RT[end] = Rt[end]'*Rt[end]  # Convert to covariance for output compatibility
 
     for t = T-1:-1:1
-        A = kf.Ajac(xT[t+1], u[t+1], p, ((t+1)-1)*kf.Ts)
+        # A_t propagates step t -> t+1 and must be evaluated at the same point as in the forward pass
+        A = kf.Ajac(xt[t], u[t], p, (t-1)*kf.Ts)
 
         # Use Cholesky factors directly
         Rt_cov = Rt[t]'*Rt[t]
@@ -289,10 +290,10 @@ p=parameters(kf))
     KalmanSmoothingSolution(sol, xT, RT)
 end
 
-function smooth(kf::SqExtendedKalmanFilter, args...)
+function smooth(kf::SqExtendedKalmanFilter, u::AbstractVector, y::AbstractVector, args...)
     reset!(kf)
-    sol = forward_trajectory(kf, args...)
-    smooth(sol, kf, args...)
+    sol = forward_trajectory(kf, u, y, args...)
+    smooth(sol, kf, u, y, args...)
 end
 
 # Reuse sampling functions from ExtendedKalmanFilter
