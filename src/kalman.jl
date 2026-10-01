@@ -104,8 +104,8 @@ function Base.getproperty(kf::AbstractKalmanFilter, s::Symbol)
 end
 
 sample_state(kf::AbstractKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)
-sample_state(kf::AbstractKalmanFilter, x, u, p=parameters(kf), t=0; noise=true) = get_mat(kf.A, u,u,p,t)*x .+ get_mat(kf.B, u,u,p,t)*u .+ noise*rand(SimpleMvNormal(get_mat(kf.R1, x, u, p, t)))
-sample_measurement(kf::AbstractKalmanFilter, x, u, p=parameters(kf), t=0; noise=true) = get_mat(kf.C, u,u,p,t)*x .+ get_mat(kf.D, u,u,p,t)*u .+ noise*rand(SimpleMvNormal(get_mat(kf.R2, x, u, p, t)))
+sample_state(kf::AbstractKalmanFilter, x, u, p=parameters(kf), t=0; noise=true) = get_mat(kf.A, x,u,p,t)*x .+ get_mat(kf.B, x,u,p,t)*u .+ noise*rand(SimpleMvNormal(get_mat(kf.R1, x, u, p, t)))
+sample_measurement(kf::AbstractKalmanFilter, x, u, p=parameters(kf), t=0; noise=true) = get_mat(kf.C, x,u,p,t)*x .+ get_mat(kf.D, x,u,p,t)*u .+ noise*rand(SimpleMvNormal(get_mat(kf.R2, x, u, p, t)))
 particletype(kf::AbstractKalmanFilter) = typeof(kf.x)
 covtype(kf::AbstractKalmanFilter)      = typeof(kf.R)
 state(kf::AbstractKalmanFilter)        = kf.x
@@ -129,13 +129,13 @@ function (kfm::MeasurementOop)(x,u,p,t)
     kf = kfm.kf
     mfun = measurement(kf)
     if kf isa UnscentedKalmanFilter{<:Any,true, <:Any, true} # augmented inplace
-        y = zeros(kf.ny)
-        mfun(y,x,u,p,t,0)
+        y = zeros(eltype(x), kf.ny)
+        mfun(y,x,u,p,t,zeros(eltype(x), kf.measurement_model.ne))
         return y
     elseif kf isa UnscentedKalmanFilter{<:Any,false, <:Any, true} # augmented oop
-        return mfun(x,u,p,t,0)
+        return mfun(x,u,p,t,zeros(eltype(x), kf.measurement_model.ne))
     elseif kf isa UnscentedKalmanFilter{<:Any,true} || kf isa ExtendedKalmanFilter{<:Any,true} ||  kf isa SqExtendedKalmanFilter{<:Any,true}
-        y = zeros(kf.ny)
+        y = zeros(eltype(x), kf.ny)
         mfun(y,x,u,p,t)
         return y
     else

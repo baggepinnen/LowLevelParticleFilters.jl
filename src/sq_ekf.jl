@@ -206,7 +206,7 @@ function correct!(kf::SqExtendedKalmanFilter, measurement_model::EKFMeasurementM
 
     # Compute innovation
     if IPM
-        e = zeros(length(y))
+        e = zeros(promote_type(eltype(x), eltype(y), eltype(R)), length(y))
         measurement(e, x, u, p, t)
         e .= y .- e
     else

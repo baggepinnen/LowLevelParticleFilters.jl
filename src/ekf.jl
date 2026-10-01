@@ -161,7 +161,7 @@ function correct!(kf::AbstractKalmanFilter, measurement_model::EKFMeasurementMod
     (; measurement, Cjac) = measurement_model
     C = Cjac(x, u, p, t)
     if IPM
-        e = zeros(length(y))
+        e = zeros(promote_type(eltype(x), eltype(y), eltype(R)), length(y))
         measurement(e, x, u, p, t)
         e .= y .- e
     else

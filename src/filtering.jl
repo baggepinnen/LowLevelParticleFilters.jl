@@ -524,10 +524,15 @@ Plot ``N`` draws from the prior distribution encoded by filter `f` using input t
 """
 sampleplot
 
+"""
+    x = rollout(f, x0, u, p = nothing; Ts = f.Ts)
+
+Simulate the noise-free discrete-time dynamics `x(k+1) = f(x(k), u(k), p, t(k))` from the initial state `x0`, where `t(k) = (k-1)*Ts` is the time at which `u[k]` is applied, consistent with the filters. The returned vector has length `length(u) + 1` and starts with `x0`.
+"""
 function rollout(f, x0::AbstractVector, u, p=nothing; Ts=f.Ts)
     x = [x0]
     for (i,u) in enumerate(u)
-        push!(x, f(x[end], u, p, i*Ts))
+        push!(x, f(x[end], u, p, (i-1)*Ts))
     end
     x
 end

@@ -67,7 +67,7 @@ function correct!(kf::AbstractKalmanFilter,  measurement_model::IEKFMeasurementM
     xi = copy(x)
 
     if IPM
-        pred_err = zeros(length(y))
+        pred_err = zeros(promote_type(eltype(x), eltype(y), eltype(R)), length(y))
         measurement(pred_err, xi, u, p, t)
         pred_err .= y .- pred_err
     else

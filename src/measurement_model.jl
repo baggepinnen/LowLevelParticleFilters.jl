@@ -176,9 +176,10 @@ function UKFMeasurementModel{T,IPM,AUGM}(
     else
         if AUGM && R2 isa AbstractArray && size(R2, 1) != ne
             error(
-                "R2 must be square with size equal to the measurement vector length for non-augmented measurement",
+                "R2 must be square with size equal to the number of measurement noise variables ne for augmented measurement",
             )
         end
+        ne
     end
     if AUGM
         L = nx + ne
