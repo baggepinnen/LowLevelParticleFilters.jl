@@ -1,3 +1,13 @@
+"""
+    DefaultJacobian(f)
+
+Wrapper for Jacobian functions `f(x, u, p, t)` that are generated automatically by the filter constructors using ForwardDiff. When a filter is reconstructed, e.g., by [`autotune_covariances`](@ref), wrapped Jacobians are regenerated for the new numeric type, while user-provided Jacobians are kept.
+"""
+struct DefaultJacobian{F}
+    f::F
+end
+@inline (j::DefaultJacobian)(x, u, p, t) = j.f(x, u, p, t)
+
 abstract type AbstractMeasurementModel end
 
 measurement(model::AbstractMeasurementModel) = model.measurement
@@ -315,9 +325,9 @@ function EKFMeasurementModel{T,IPM}(
         if IPM
             outy = zeros(T, ny)
             jacy = zeros(T, ny, nx)
-            Cjac = (x,u,p,t) -> ForwardDiff.jacobian!(jacy, (y,x)->measurement(y,x,u,p,t), outy, x)
+            Cjac = DefaultJacobian((x,u,p,t) -> ForwardDiff.jacobian!(jacy, (y,x)->measurement(y,x,u,p,t), outy, x))
         else
-            Cjac = (x,u,p,t) -> ForwardDiff.jacobian(x->measurement(x,u,p,t), x)
+            Cjac = DefaultJacobian((x,u,p,t) -> ForwardDiff.jacobian(x->measurement(x,u,p,t), x))
         end
     end
 
@@ -478,9 +488,9 @@ function IEKFMeasurementModel{T,IPM}(
         if IPM
             outy = zeros(T, ny)
             jacy = zeros(T, ny, nx)
-            Cjac = (x,u,p,t) -> ForwardDiff.jacobian!(jacy, (y,x)->measurement(y,x,u,p,t), outy, x)
+            Cjac = DefaultJacobian((x,u,p,t) -> ForwardDiff.jacobian!(jacy, (y,x)->measurement(y,x,u,p,t), outy, x))
         else
-            Cjac = (x,u,p,t) -> ForwardDiff.jacobian(x->measurement(x,u,p,t), x)
+            Cjac = DefaultJacobian((x,u,p,t) -> ForwardDiff.jacobian(x->measurement(x,u,p,t), x))
         end
     end
 

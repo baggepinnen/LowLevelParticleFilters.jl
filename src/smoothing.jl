@@ -32,7 +32,7 @@ function smooth(kf::KalmanFilter, u::AbstractVector, y::AbstractVector, args...)
     smooth(sol, kf, u, y, args...)
 end
 
-# This smoother appears to have issues when there are missing measurements. It also requires more information to be stored from the forward pass, K and S. The benefit of this implementation is that it does not invert the state covariance matrix, instead, it inverts the residual covariance. Pick the smoother that inverts the smallest matrix.
+# This smoother requires more information to be stored from the forward pass, K and S. The benefit of this implementation is that it does not invert the state covariance matrix, instead, it inverts the residual covariance. Pick the smoother that inverts the smallest matrix.
 """
     ssol,ll,λ̃,λ̂,r = smooth_mbf(sol, kf)
 
@@ -55,25 +55,23 @@ function smooth_mbf(sol::KalmanFilteringSolution, kf::AbstractKalmanFilter=sol.f
     for t = T:-1:1
         # The measurement matrix used at step t is evaluated at the same
         # time as the forward pass uses for the correction at step t.
-        ti_H = (t-1)*kf.Ts
-        H = get_C(kf, xt[t], u[t], p, ti_H)
-        if !isassigned(sol.K, t)
-            xT[t] = xt[t]
-            RT[t] = Rt[t]
-            r[t] = zero(x[t])
-            λ̂[t-1] = zero(xt[t])
-            Λ̂[t-1] = zero(Rt[t])
-            continue
+        if !isassigned(sol.K, t) || sol.K[t] === missing
+            # Missing measurement, the recursion is evaluated with zero Kalman gain
+            r[t] = λ̂[t]
+            λ̃[t] = λ̂[t]
+            Λ̃[t] = Λ̂[t]
+        else
+            ti_H = (t-1)*kf.Ts
+            H = get_C(kf, xt[t], u[t], p, ti_H)
+            K = sol.K[t]
+            S = sol.S[t]
+            C = I-K*H
+
+            HTS = H'/S
+            r[t] = C'λ̂[t]
+            λ̃[t] = -HTS*sol.e[t] + C'λ̂[t] # Wikipedia wrong here, it should be residual instead of measurement
+            Λ̃[t] = HTS*H + C'Λ̂[t]*C
         end
-
-        K = sol.K[t]
-        S = sol.S[t]
-        C = I-K*H
-
-        HTS = H'/S
-        r[t] = C'λ̂[t]
-        λ̃[t] = -HTS*sol.e[t] + C'λ̂[t] # Wikipedia wrong here, it should be residual instead of measurement
-        Λ̃[t] = HTS*H + C'Λ̂[t]*C
         if t > 1
             # The backward propagation λ̂[t-1] = F'*λ̃[t] uses the transition
             # from step t-1 to step t. The forward pass evaluated A there
@@ -145,19 +143,26 @@ end
 """
     sse(f::AbstractFilter, u, y, p = parameters(pf), λ = 1; post_update_cb=(f, u, y, p, ll, e)->nothing)
 
-Calculate the sum of squared errors ``\\sum dot(e, λ, e)``.
+Calculate the sum of squared one-step prediction errors ``\\sum dot(e, λ, e)``.
+- `f`: Any Kalman-type filter, i.e., a subtype of `AbstractKalmanFilter`. Particle filters and [`IMM`](@ref) are not supported since they do not return prediction errors, use [`loglik`](@ref) for these.
 - `λ`: May be a weighting matrix. A commonly used metric is `λ = Diagonal(1 ./ (mag.^2))`, where `mag` is a vector of the "typical magnitude" of each output.
 
-See also [`LowLevelParticleFilters.prediction_errors!`](@ref) which returns the prediction errors themselves rather than their sum of squares (for use with Gauss-Newton style optimization).
+Missing measurements (see [`LowLevelParticleFilters.ismissing_measurement`](@ref)) do not contribute to the sum.
+
+See also [`LowLevelParticleFilters.prediction_errors!`](@ref) which returns the prediction errors themselves rather than their sum of squares (for use with Gauss-Newton style optimization), and [`LowLevelParticleFilters.multistep_sse`](@ref) for multi-step prediction errors.
 """
 function sse(f::AbstractFilter, u, y, p=parameters(f), λ=1; post_update_cb=(args...)->nothing)
+    check_prediction_error_support(f, "sse")
     reset!(f)
     sum(zip(u, y)) do (u,y)
         ll, e = f(u,y,p)
         post_update_cb(f, u, y, p, ll, e)
-        dot(e, λ, e)
+        e === missing ? zero(ll) : dot(e, λ, e)
     end
 end
+
+check_prediction_error_support(f::AbstractKalmanFilter, fname) = nothing
+check_prediction_error_support(f, fname) = throw(ArgumentError("$fname requires a Kalman-type filter (a subtype of AbstractKalmanFilter) that returns one-step prediction errors, got a filter of type $(nameof(typeof(f))). Use loglik for particle filters and IMM."))
 
 """
     prediction_errors!(res, f::AbstractFilter, u, y, p = parameters(f), λ = 1; loglik = false)
@@ -169,11 +174,14 @@ Calculate the prediction errors and store the result in `res`. Similar to [`sse`
 - `f`: Any Kalman type filter
 - `λ`: A weighting factor to minimize `dot(e, λ, e)`. A commonly used metric is `λ = Diagonal(1 ./ (mag.^2))`, where `mag` is a vector of the "typical magnitude" of each output. Internally, the square root of `W = sqrt(λ)` is calculated so that the residuals stored in `res` are `W*e`.
 - `loglik`: If `true`, the residuals are calculated as `Sᵪ\e`, where `Sᵪ` is the Cholesky factor of the innovation covariance. This turns least-squares optimization into maximum likelihood estimation. When this is true, the `λ` argument is ignored and the length of `res` must be `length(y)*(ny+1)`, where an extra residual per time step is added for the log-determinant term.
-- `offset`: When using `loglik = true`, an offset may be added to the log-determinant term to avoid negative values inside the square root. The result of adding this offset is that the log-liklihood is shifted by a constant value, which does not affect optimization.
+- `offset`: When using `loglik = true`, an offset may be added to the log-determinant term to avoid negative values inside the square root. The result of adding this offset is that the log-likelihood is shifted by a constant value, which does not affect optimization. With `loglik = true`, the residuals satisfy `res'res == -ll + length(y)*offset`, where `ll` is the log-likelihood.
 
-See example in [Solving using Gauss-Newton optimization](@ref).
+For missing measurements (see [`LowLevelParticleFilters.ismissing_measurement`](@ref)), the `ny` residuals of the time step are zero, and the additional residual of the log-determinant term (when `loglik = true`) equals `sqrt(offset)`. The layout of `res` is thus independent of which measurements are missing.
+
+See example in [Solving using Gauss-Newton optimization](@ref). See also [`LowLevelParticleFilters.multistep_prediction_errors!`](@ref) for multi-step prediction errors.
 """
 function prediction_errors!(res, f::AbstractFilter, u, y, p=parameters(f), λ=1; loglik=false, offset=0)
+    check_prediction_error_support(f, "prediction_errors!")
     reset!(f)
     ny = f.ny
     N = length(u)
@@ -192,7 +200,16 @@ function prediction_errors!(res, f::AbstractFilter, u, y, p=parameters(f), λ=1;
         # Place for the ny residuals for this timestep
         inds = (idx+1):(idx+ny)
 
-        if loglik
+        if e === missing
+            @views res[inds] .= 0
+            if loglik
+                offset < 0 && error("Negative value ($offset) inside square root when calculating log-likelihood residuals for a missing measurement. Increase the offset argument to prediction_errors! (currently set to offset=$offset)")
+                res[idx + ny + 1] = sqrt(offset)
+                idx += ny + 1
+            else
+                idx += ny
+            end
+        elseif loglik
             # whitened residual: r = (1/√2) * L\e, since S = L L', so r'r = ½ e' S⁻¹ e
             @views ldiv!(res[inds], Sᵪ.L, e)
             res[inds] .*= inv(sqrt(2))
@@ -250,7 +267,7 @@ function loglik_x(f::AbstractKalmanFilter,u,y,x::AbstractVector,p=parameters(f);
         # The paper https://liu.diva-portal.org/smash/get/diva2:1641373/FULLTEXT01.pdf suggests performing the correct step before calculating the logpdf, but the example https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Maximum-likelihood-estimation where the data is simulated with dynamics_noise=false
         # xs,u,y = simulate(pf,300,df, dynamics_noise=false)
         # suggests that one shall use the prediction errors rather than the filtering errors. With prediciton errors, ll increases as s gets smaller and decreases as s gets bigger. With filtering errors, ll plateaus for large s which is not what we want
-        correct!(f,ui,yi,p; kwargs...)
+        yi === missing || ismissing_measurement(yi) || correct!(f,ui,yi,p; kwargs...)
         predict!(f,ui,p; kwargs...)
         ll = extended_logpdf(SimpleMvNormal(f.R), xe)
         ll

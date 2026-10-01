@@ -7,6 +7,3 @@
 Modules = [LowLevelParticleFilters]
 Private = false
 ```
-```@docs
-LowLevelParticleFilters.prediction_errors!
-```

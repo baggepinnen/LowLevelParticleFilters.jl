@@ -135,20 +135,25 @@ end
 The correct step of the IMM filter corrects each model with the measurements `y` and control input `u`. The mixing probabilities `imm.μ` are updated based on the likelihood of each model given the measurements and the transition probability matrix `P`.
 
 The returned tuple consists of the sum of the log-likelihood of all models, the vector of individual log-likelihoods and an array of the rest of the return values from the correct step of each model.
+
+If the measurement `y` is missing (see [`LowLevelParticleFilters.ismissing_measurement`](@ref)), the correction of the individual models is skipped and the mode probabilities are propagated by the transition probability matrix only.
 """
 function correct!(imm::IMM, u, y, args...; expnormalize = true, kwargs...)
     (; μ, P, models) = imm
     lls = zeros(eltype(imm.x), length(models))
     rest = []
-    for (j, model) in enumerate(models)
-        # if iszero(μ[j]) # Filter has died
-        #     # QUESTION: we may want to keep updating the filter, maybe make it an option?
-        #     lls[j] = eltype(imm.x)(-Inf)
-        #     push!(rest, [])
-        #     continue
-        # end
-        lls[j], others... = correct!(model, u, y, args...; kwargs...)
-        push!(rest, others)
+    # For a missing measurement, the mode probabilities are propagated by the transition matrix only
+    if !(y === missing || ismissing_measurement(y))
+        for (j, model) in enumerate(models)
+            # if iszero(μ[j]) # Filter has died
+            #     # QUESTION: we may want to keep updating the filter, maybe make it an option?
+            #     lls[j] = eltype(imm.x)(-Inf)
+            #     push!(rest, [])
+            #     continue
+            # end
+            lls[j], others... = correct!(model, u, y, args...; kwargs...)
+            push!(rest, others)
+        end
     end
     μP = P'μ
 
@@ -286,8 +291,13 @@ function forward_trajectory(imm::IMM, u::AbstractVector, y::AbstractVector, p=pa
         ll += lli
         μ[:, k] .= imm.μ
         combine!(imm)
-        yh = measurement(imm)(state(imm), u[k], p, ti)
-        e[k] = y[k] .- yh
+        yk = y[k]
+        if yk === missing || ismissing_measurement(yk)
+            e[k] = yk
+        else
+            yh = measurement(imm)(state(imm), u[k], p, ti)
+            e[k] = yk .- yh
+        end
         interact && interact!(imm)
         xt[k] = state(imm)      |> copy
         Rt[k] = covariance(imm) |> copy

@@ -96,7 +96,7 @@ function compute_nis(sol)
     map(eachindex(sol.e, sol.S)) do i
         e = sol.e[i]
         S = sol.S[i]
-        if isnothing(S)
+        if isnothing(S) || S === missing || LowLevelParticleFilters._isabsent(e)
             return NaN
         end
         e'*(S \ e)
@@ -112,9 +112,8 @@ end
     S = sol.S  # Innovation covariances
     u = sol.u  # Inputs
     timevec = sol.t
-    ny = length(e[1])
+    ny = LowLevelParticleFilters._sample_length(e)
     nu = length(u[1])
-    T = length(e)
     names = sol.f.names
     name = names.name
     ynames = names.y
@@ -124,9 +123,15 @@ end
     layout --> (2, 2)
     size --> (1000, 800)
 
-    # Convert to matrices for easier manipulation
-    e_mat = reduce(hcat, e)'  # T×ny matrix
+    # Convert to matrices for easier manipulation, missing measurements are represented by NaN
+    e_mat = LowLevelParticleFilters._samples_matrix(e, ny)  # T×ny matrix
     u_mat = reduce(hcat, u)'  # T×nu matrix
+    available = .!isnan.(e_mat[:, 1])
+    T = count(available) # Number of available innovations
+    # For the correlation analysis, the innovations of missing measurements are set to zero after removing the mean
+    e_c = e_mat .- mean(e_mat[available, :], dims=1)
+    e_c[.!available, :] .= 0
+    u_c = u_mat .- mean(u_mat, dims=1)
 
     # Subplot 1: RMS of Innovation
     @series begin
@@ -138,12 +143,12 @@ end
         label --> ""
         legend --> false
         xticks --> (1:ny, ynames)
-        rms = [sqrt(mean(e_mat[:, i].^2)) for i in 1:ny]
+        rms = [sqrt(mean(e_mat[available, i].^2)) for i in 1:ny]
         1:ny, rms
     end
 
     # Subplot 2: NIS with chi-squared bounds
-    if !isempty(S) && !isnothing(S[1])
+    if !isnothing(S) && !isempty(S) && !isnothing(S[1])
         nis = compute_nis(sol)
         chi2_lower = quantile(Chisq(ny), (1-σ)/2)
         chi2_upper = quantile(Chisq(ny), 1-(1-σ)/2)
@@ -177,7 +182,7 @@ end
     white_noise_bound = 1.96 / sqrt(T)
 
     for i in 1:ny
-        acf = autocor(e_mat[:, i], 0:maxlag)
+        acf = autocor(e_c[:, i], 0:maxlag; demean=false)
         @series begin
             framestyle --> :zerolines
             subplot := 3
@@ -208,7 +213,7 @@ end
 
     for i in 1:ny
         for j in 1:nu
-            ccf = crosscor(e_mat[:, i], u_mat[:, j], 1:maxlag)
+            ccf = crosscor(e_c[:, i], u_c[:, j], 1:maxlag; demean=false)
             label_str = "e$(i)-u$(j)"
             @series begin
                 framestyle --> :zerolines
