@@ -134,6 +134,8 @@ A common case is that the sample rate is constant, but some measurements are los
 
 If a measurement `y` is lacking, one simply skips the corresponding call to `correct!` where `y` is missing. Repeated calls to `predict!` corresponds to simulating the system without any feedback from measurements, like if an ODE was solved. Internally, the filter will keep track of the covariance of the estimate, which is likely to grow if no measurements are used to inform the filter about the state of the system.
 
+For Kalman-type filters, the batch functions [`forward_trajectory`](@ref), [`loglik`](@ref), [`LowLevelParticleFilters.sse`](@ref) and [`LowLevelParticleFilters.prediction_errors!`](@ref) perform this skipping automatically for elements of the measurement sequence `y` that are `missing`, see [Missing data and outliers](@ref).
+
 ### Sensors with different sample rates
 For Kalman-type filters, it is possible to construct custom measurement models, and pass an instance of a measurement model as the second argument to [`correct!`](@ref). This allows for sensor fusion with sensors operating at different rates, or when parts of the measurement model are linear, and other parts are nonlinear. See examples in [Measurement models](@ref measurement_models) for how to construct explicit measurement models.
 

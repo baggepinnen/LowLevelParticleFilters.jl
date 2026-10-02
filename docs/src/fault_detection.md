@@ -16,7 +16,6 @@ This tutorial explores the use of a Kalman filter for fault detection in a therm
 ```@example FAULT_DETECTION
 using DelimitedFiles, Plots, Dates
 using LowLevelParticleFilters, LinearAlgebra, StaticArrays
-using LowLevelParticleFilters: AbstractKalmanFilter, particletype, covtype,state,  covariance, parameters, KalmanFilteringSolution
 using Optim
 using ADTypes: AutoForwardDiff
 using DisplayAs # hide
@@ -66,7 +65,7 @@ timev = Dates.value.(time)  ./ 1000 # A numerical time vector, time was in milli
 plot(diff(timev), yscale=:log10, title="Time interval between measurement points", legend=false)
 DisplayAs.PNG(Plots.current()) # hide
 ```
-Samples are not evenly spaced (lots of missing data), but the interval is always a multiple of $(Ts)
+Samples are not evenly spaced (lots of missing data), but the interval is always a multiple of the smallest interval, which we take as the sample interval `Ts`
 ```@example FAULT_DETECTION
 intervals = sort(unique(diff(timev)))
 intervals ./ intervals[1]
@@ -79,7 +78,7 @@ Tf = intervals[end] - intervals[1]
 nothing # hide
 ```
 
-We expand the data arrays such that we can treat them as having a constant sample interval, time points where there is no data available are indicated as `missing`
+We expand the data arrays such that we can treat them as having a constant sample interval, time points where there is no data available are indicated as `missing`. Each measurement is a vector of length one, and a vector of which all entries are `missing` is treated as a missing measurement by the filters in this package, see [Missing data and outliers](@ref).
 
 ```@example FAULT_DETECTION
 time_full = range(timev[1], timev[end], step=Ts)
@@ -146,48 +145,26 @@ kf = KalmanFilter(A,B,C,D,R1,R2,d0; Ts)
 ```
 
 ### Perform filtering
-When data is missing, we omit the call to `correct!`. We still perform the prediction step though.
+When data is missing, the call to `correct!` is omitted, while the prediction step is still performed. [`forward_trajectory`](@ref) does this automatically for the time steps where the measurement is missing.
 
 ```@example FAULT_DETECTION
-function special_forward_trajectory(kf::AbstractKalmanFilter, u::AbstractVector, y::AbstractVector, p=parameters(kf))
-    reset!(kf)
-    T    = length(y)
-    x    = Array{particletype(kf)}(undef,T)
-    xt   = Array{particletype(kf)}(undef,T)
-    R    = Array{covtype(kf)}(undef,T)
-    Rt   = Array{covtype(kf)}(undef,T)
-    e    = zeros(eltype(particletype(kf)), length(y))
-	σs   = zeros(eltype(particletype(kf)), length(y))
-    ll   = zero(eltype(particletype(kf)))
-    S    = Vector{Any}(undef, T)
-    K    = Vector{Any}(undef, T)
-    for t = 1:T
-        ti = (t-1)*kf.Ts
-        x[t]  = state(kf)      |> copy
-        R[t]  = covariance(kf) |> copy
-		if !any(ismissing, y[t])
-        	lli, ei, Si, Sᵪi, Ki = correct!(kf, u[t], y[t], p, ti)
-			σs[t] = √(ei'*(Sᵪi\ei)) # Compute the Z-score
-			e[t] = ei[]
-			ll += lli
-            S[t] = Sᵪi
-            K[t] = Ki
-		end
-        xt[t] = state(kf)      |> copy
-        Rt[t] = covariance(kf) |> copy
-        predict!(kf, u[t], p, ti)
-    end
-    KalmanFilteringSolution(kf,u,y,x,xt,R,Rt,ll,vcat.(e),K,S), σs
-end
-
 u_full = [@SVector(zeros(0)) for y in y_full];
 
 start = 1 # Change this value to display different parts of the data set
 N = 1000  # Number of data points to include (to limit plot size in the docs, plot with Plots.plotly() and N = length(y_full) to see the full data set with the ability to zoom interactively in the plot)
+inds = (1:N) .+ (start-1)
 
-sol, σs = special_forward_trajectory(kf, u_full[(1:N) .+ (start-1)], y_full[(1:N) .+ (start-1)])
+sol = forward_trajectory(kf, u_full[inds], y_full[inds])
 
 sol.ll
+```
+
+The Z-score of the prediction error, ``\sqrt{e^T S^{-1} e}``, where ``S`` is the covariance of the prediction error ``e``, can be computed from the quantities stored in the solution object. `sol.S` contains the Cholesky factorization of ``S``, and `sol.S[k]` is `missing` for time steps where the measurement is missing, for which we return `NaN`.
+
+```@example FAULT_DETECTION
+zscores(sol) = [S === missing ? NaN : sqrt(e'*(S\e)) for (e, S) in zip(sol.e, sol.S)]
+σs = zscores(sol)
+nothing # hide
 ```
 
 #### Smoothing
@@ -235,14 +212,14 @@ Since we have a single parameter only, we may plot the loss landscape.
 svec = exp10.(range(-5, -2, length=30)) # Covariance values to try
 
 # Compute the log-likelihood for all covariance values
-lls = map(svec) do s # 
+lls = map(svec) do s
 	R1 = s*LowLevelParticleFilters.double_integrator_covariance(1) |> SMatrix{2,2}
 	kf = KalmanFilter(A,B,C,D,R1,R2,d0; Ts)
-	sol, σs = special_forward_trajectory(kf, u_full, y_full)
-	sol.ll
+	loglik(kf, u_full, y_full)
 end
 
 plot(svec, lls, xscale=:log10, title="Log-likelihood estimation")
+DisplayAs.PNG(Plots.current()) # hide
 ```
 
 Get the covariance parameter associated with the maximum likelihood:
@@ -252,7 +229,7 @@ svec[argmax(lls)]
 ```
 
 ## Optimize "friction" and covariance jointly
-We can add some damping to the velocity state in the double-integrator model. When doing so, we should also estimate the full covariance matrix of the dynamics noise. This gives us an estimation problem with 1 + 3 parameters, 3 for the triangular part of the covariance matrix Cholesky factor. Estimating the Cholesky factor instead of the full covariance matrix yields fewer optimizaiton variables and ensures that the result is a valid, positive definite and symmetric covariance matrix. To ensure that the "friction parameter" is positive, we optimize the ``\log`` of the parameter.
+We can add some damping to the velocity state variable in the double-integrator model. When doing so, we should also estimate the full covariance matrix of the dynamics noise. This gives us an estimation problem with 1 + 3 parameters, 3 for the upper triangle of the Cholesky factor of the covariance matrix. We use the log-Cholesky parameterization [`LowLevelParticleFilters.cov_from_logchol`](@ref), in which the diagonal entries of the Cholesky factor are the exponentials of the corresponding parameters, while the off-diagonal entries are equal to the parameters. This parameterization maps every parameter vector to a valid, symmetric and positive-definite covariance matrix, and correlations of both signs are representable.
 
 A double integrator has the dynamics matrix
 ```math
@@ -268,50 +245,32 @@ By modifying this to
 0 & \alpha
 \end{bmatrix}
 ```
-where ``0 \leq \alpha \leq 1``, we can add some damping to the velocity, i.e., if no force is acting on it it will eventually slow down to velocity zero. It's not quite correct to call the parameter ``\alpha`` a "damping term", the formulation ``\beta = 1 - \alpha`` would be closer to an actual discrete-time damping factor.
+where ``0 < \alpha < 1``, we can add some damping to the velocity, i.e., if no force is acting on it it will eventually slow down to velocity zero. It's not quite correct to call the parameter ``\alpha`` a "damping term", the formulation ``\beta = 1 - \alpha`` would be closer to an actual discrete-time damping factor. To ensure that ``\alpha`` remains in the interval ``(0, 1)``, we optimize a parameter ``\theta_\alpha`` and let ``\alpha = 1/(1 + e^{-\theta_\alpha})``.
 
+The covariance matrix used above, `double_integrator_covariance`, has rank one and can thus not be represented by the log-Cholesky parameterization. As initial guess, we instead use the full-rank covariance matrix `double_integrator_covariance_smooth`, which corresponds to continuous-time white noise acting on the velocity, scaled by the maximum-likelihood estimate of the scale parameter found above.
 
 ```@example FAULT_DETECTION
-function triangular(x)
-    m = length(x)
-    n = round(Int, sqrt(2m-1))
-    T = zeros(eltype(x), n, n)
-    k = 1
-    for i = 1:n, j = i:n
-        T[i,j] = x[k]
-        k += 1
-    end
-    T
+R1_init = svec[argmax(lls)]*LowLevelParticleFilters.double_integrator_covariance_smooth(1) |> SMatrix{2,2}
+logistic(x) = 1/(1 + exp(-x))
+logit(α) = log(α/(1 - α))
+α_init = 0.99
+
+params = [LowLevelParticleFilters.logchol_from_cov(R1_init); logit(α_init)]
+
+function get_opt_kf(θ)
+	T = eltype(θ)
+	R1 = LowLevelParticleFilters.cov_from_logchol(θ[1:3], Val(2))
+	α = logistic(θ[4])
+	A = SA[1 1; 0 α]
+	d0T = LowLevelParticleFilters.SimpleMvNormal(T.(d0.μ), T.(d0.Σ))
+	KalmanFilter(A,B,C,D,R1,R2,d0T; Ts, check=false)
 end
 
-invtriangular(T) = [T[i,j] for i = 1:size(T,1) for j = i:size(T,1)]
-
-params = log.([invtriangular(cholesky(R1).U); 1])
-
-function get_opt_kf(logp)
-	T = eltype(logp)
-	p = exp.(logp)
-	R1c = triangular(p[1:3]) |> SMatrix{2,2}
-	R1 = R1c'R1c + 1e-8I
-	vel = p[4]
-	vel > 1 && (return T(Inf))
-	A = SA[1 1; 0 vel]
-	d0T = LowLevelParticleFilters.SimpleMvNormal(T.(d0.μ), T.(d0.Σ + 0.01I))
-	kf = KalmanFilter(A,B,C,D,R1,R2,d0T; Ts, check=false)
-end
-
-function cost(logp)
-	try
-		kf = get_opt_kf(logp)
-		soli, σs = special_forward_trajectory(kf, u_full, y_full)
-		return -soli.ll
-	catch e
-		return eltype(logp)(Inf)
-	end
-end
+cost(θ) = -loglik(get_opt_kf(θ), u_full, y_full)
 
 cost(params)
 ```
+The element type of the initial state distribution is converted to the element type of the parameter vector, which is required when the gradient is computed using ForwardDiff.
 
 ### Optimize
 
@@ -333,12 +292,12 @@ get_opt_kf(res.minimizer).R1
 
 The initial guess was 
 ```@example FAULT_DETECTION
-R1
+R1_init
 ```
 
-Compare optimized parameter vector with initial guess:
+The optimized parameter ``\alpha`` and the log-likelihood before and after the optimization are
 ```@example FAULT_DETECTION
-exp.([params res.minimizer])
+logistic(res.minimizer[4]), -cost(params), -res.minimum
 ```
 
 ### Visualize optimized filtering trajectory
@@ -347,23 +306,24 @@ exp.([params res.minimizer])
 
 ```@example FAULT_DETECTION
 kf2 = get_opt_kf(res.minimizer)
-sol2, σs2 = special_forward_trajectory(kf2, u_full[(1:N) .+ (start-1)], y_full[(1:N) .+ (start-1)])
+sol2 = forward_trajectory(kf2, u_full[inds], y_full[inds])
+σs2 = zscores(sol2)
 
-smoothsol2 = smooth(sol2, kf2, sol2.u, sol2.y)
+smoothsol2 = smooth(sol2)
 
 plot(smoothsol2, plotx=false, plotxt=true, plotRt=true, plotyh=false, plotyht=true, size=(650,600), seriestype=[:line :line :scatter :line], link=:x)
 plot!(timevec, reduce(hcat, smoothsol2.xT)[1,:], sp=3, label="Smoothed")
 
 outliers = findall(σs2 .> 5)
-vline!([timevec[outliers]], sp=3)
+vline!([timevec[outliers]], sp=3, label=false)
 DisplayAs.PNG(Plots.current()) # hide
 ```
 
 ## Fault detection
-We implement a simple fault detector using Z-scores. When the Z-score is higher than 4, we consider it a fault.
+We implement a simple fault detector using Z-scores. When the Z-score is higher than 4, we consider it a fault. The Z-score is `NaN` for time steps where the measurement is missing, these time steps are not drawn in the plot.
 
 ```@example FAULT_DETECTION
-plot(timevec, σs2); hline!([1 2 3 4], label=false)
+scatter(timevec, σs2, ms=2, label="Z-score"); hline!([1 2 3 4], label=false)
 DisplayAs.PNG(Plots.current()) # hide
 ```
 (change the value of the variable `start` to see different parts of the data set, e.g., set `start = 30_000`)
@@ -371,7 +331,8 @@ DisplayAs.PNG(Plots.current()) # hide
 Z-scores may not capture large outliers if they occur when the estimator is very uncertain
 Does Z-score correlate with "velocity", i.e., are faults correlated with large continuous slopes in the data?
 ```@example FAULT_DETECTION
-sol_full, σs_full = special_forward_trajectory(kf2, u_full, y_full)
+sol_full = forward_trajectory(kf2, u_full, y_full)
+σs_full = zscores(sol_full)
 scatter(abs.(getindex.(sol_full.xt, 2)), σs_full, ylabel="Z-score", xlabel="velocity")
 DisplayAs.PNG(Plots.current()) # hide
 ```

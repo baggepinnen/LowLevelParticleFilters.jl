@@ -51,7 +51,9 @@ Additionally, these filter types are currently considered experimental and may c
 This package provides 
 - Filtering, estimating ``x(t)`` given measurements up to and including time ``t``. We call the filtered estimate ``x(t|t)`` (read as ``x`` at ``t`` given ``t``).
 - Smoothing, estimating ``x(t)`` given data up to ``T > t``, i.e., ``x(t|T)``.
-- Parameter estimation.
+- Parameter estimation, including maximum-likelihood estimation of noise covariance matrices and multi-step prediction-error minimization, see [Parameter Estimation](parameter_estimation.md).
+
+Kalman-type filters accept measurement sequences that contain `missing` samples, for which the correction step is skipped, see [Missing data and outliers](@ref).
 
 All filters work in two distinct steps.
 1. The *prediction* step ([`predict!`](@ref)). During prediction, we use the dynamics model to form ``x(t|t-1) = f(x(t-1), ...)``
@@ -361,7 +363,7 @@ See [`sampleplot`](@ref) for help with sampling-based tuning and [`validationplo
 
 
 ## Tuning noise parameters through optimization
-See examples in [Parameter Estimation](@ref). See also [`autotune_covariances`](@ref) and [`validationplot`](@ref) for validation of tuning.
+See [Estimating noise covariances](@ref) for maximum-likelihood and MAP estimation of the noise covariance matrices using [`autotune_covariances`](@ref), and validation of the result using [`validationplot`](@ref). Further examples are available in [Parameter Estimation](parameter_estimation.md).
 
 ## Tuning through simulation
 It is possible to sample from the Bayesian model implied by a filter and its parameters by calling the function [`simulate`](@ref). A simple tuning strategy is to adjust the noise parameters such that a simulation looks "similar" to the data, i.e., the data must not be too unlikely under the model. See also [`sampleplot`](@ref) that facilitates this procedure.
