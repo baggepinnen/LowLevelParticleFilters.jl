@@ -208,8 +208,8 @@ The fraction of NIS values within the 95% bounds of the ``\chi^2`` distribution,
 lower, upper = quantile(Chisq(ny), 0.025), quantile(Chisq(ny), 0.975)
 nis_opt = nis(sol_opt)
 e_opt = reduce(vcat, sol_opt.e)
-using StatsBase: autocor
-acf = autocor(e_opt, 1:20)
+ec = e_opt .- mean(e_opt)
+acf = [dot(@view(ec[1:end-l]), @view(ec[1+l:end])) / dot(ec, ec) for l in 1:20] # Sample autocorrelation at lags 1 to 20
 (; nis_mean = mean(nis_opt), nis_within_bounds = mean(lower .<= nis_opt .<= upper), acf_within_bounds = mean(abs.(acf) .< 1.96/sqrt(T)))
 ```
 For the mistuned filter, the fraction of NIS values within the bounds is
