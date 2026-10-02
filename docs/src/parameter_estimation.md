@@ -28,11 +28,11 @@ The methods demonstrated in this section have the following properties:
 
 | Method | Plant parameters | Noise covariances | Time-varying parameters | Online estimation | Uncertainty estimate |
 |:-------|:-----------------|:------------------|:------------------------|:------------------|:---------------------|
-| Maximum likelihood and MAP | yes | yes | no | no | Hessian of the negative log-likelihood |
-| One-step prediction-error minimization | yes | no | no | no | Gauss-Newton approximation |
-| Multi-step prediction-error minimization | yes | no | no | no | not provided |
-| Joint state and parameter estimation | partially | no | yes | yes | Covariance of the augmented state |
-| Bayesian inference | yes | yes | no | no | Samples from the posterior |
+| Maximum likelihood and MAP | 🟢 | 🟢 | 🟥 | 🟥 | Hessian of the negative log-likelihood |
+| One-step prediction-error minimization | 🟢 | 🟥 | 🟥 | 🟥 | Gauss-Newton approximation |
+| Multi-step prediction-error minimization | 🟢 | 🟥 | 🟥 | 🟥 | not provided |
+| Joint state and parameter estimation | 🔶 | 🟥 | 🟢 | 🟢 | Covariance of the augmented state |
+| Bayesian inference | 🟢 | 🟢 | 🟥 | 🟥 | Samples from the posterior |
 
 When trying to optimize parameters of the noise distributions, most commonly the covariance matrices, maximum likelihood (or MAP) is the recommended method, since prediction-error criteria do not penalize overconfident or underconfident covariance estimates. When parameters are time varying or an online estimate is required, joint state and parameter estimation is the applicable method. When fitting time-invariant plant parameters, all methods are applicable. In this case joint state and parameter estimation tends to be inefficient and unnecessarily complex, and it is recommended to opt for maximum likelihood or prediction-error minimization. Prediction-error minimization (PEM) with a Gauss-Newton optimizer is often the most efficient method for this type of problem.
 
