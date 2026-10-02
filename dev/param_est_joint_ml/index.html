@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Parameters and noise covariances jointly · LowLevelParticleFilters Documentation</title><meta name="title" content="Parameters and noise covariances jointly · LowLevelParticleFilters Documentation"/><meta property="og:title" content="Parameters and noise covariances jointly · LowLevelParticleFilters Documentation"/><meta property="twitter:title" content="Parameters and noise covariances jointly · LowLevelParticleFilters Documentation"/><meta name="description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="og:description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="twitter:description" content="Documentation for LowLevelParticleFilters Documentation."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.63.2/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">LowLevelParticleFilters Documentation</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../discretization/">Discretization</a></li><li><a class="tocitem" href="../measurement_models/">Multiple measurement models</a></li><li><span class="tocitem">Parameter estimation</span><ul><li><a class="tocitem" href="../parameter_estimation/">Overview</a></li><li><a class="tocitem" href="../param_est_ml/">Maximum-likelihood and MAP</a></li><li><a class="tocitem" href="../param_est_covariances/">Estimating noise covariances</a></li><li><a class="tocitem" href="../param_est_bayesian/">Bayesian inference</a></li><li><a class="tocitem" href="../param_est_joint/">Joint state and parameter estimation</a></li><li><a class="tocitem" href="../param_est_mukf/">MUKF for parameter estimation</a></li><li><a class="tocitem" href="../param_est_optimizer/">Using an optimizer</a></li><li class="is-active"><a class="tocitem" href>Parameters and noise covariances jointly</a><ul class="internal"><li><a class="tocitem" href="#Setup"><span>Setup</span></a></li><li><a class="tocitem" href="#Parameterization"><span>Parameterization</span></a></li><li><a class="tocitem" href="#Maximum-likelihood-estimation-using-Gauss-Newton-optimization"><span>Maximum-likelihood estimation using Gauss-Newton optimization</span></a></li><li><a class="tocitem" href="#Practical-identifiability-from-the-Hessian"><span>Practical identifiability from the Hessian</span></a></li><li><a class="tocitem" href="#Parameter-uncertainty"><span>Parameter uncertainty</span></a></li><li><a class="tocitem" href="#Comparison-with-prediction-error-minimization-using-fixed-covariance-matrices"><span>Comparison with prediction-error minimization using fixed covariance matrices</span></a></li><li><a class="tocitem" href="#Data-from-several-experiments"><span>Data from several experiments</span></a></li><li><a class="tocitem" href="#Initialization-and-global-search"><span>Initialization and global search</span></a></li></ul></li><li><a class="tocitem" href="../param_est_multistep/">Multi-step prediction errors</a></li><li><a class="tocitem" href="../param_est_identifiability/">Identifiability</a></li></ul></li><li><a class="tocitem" href="../benchmark/">Benchmark</a></li><li><a class="tocitem" href="../distributions/">Performance tips</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../adaptive_kalmanfilter/">Kalman-filter tutorial with LowLevelParticleFilters</a></li><li><a class="tocitem" href="../noisetuning/">Noise tuning and disturbance modeling for Kalman filtering</a></li><li><a class="tocitem" href="../beetle_example/">Particle-filter tutorial</a></li><li><a class="tocitem" href="../beetle_example_imm/">IMM-filter tutorial</a></li><li><a class="tocitem" href="../rbpf_example/">Rao-Blackwellized filter tutorial</a></li><li><a class="tocitem" href="../dae/">State estimation for DAE systems</a></li><li><a class="tocitem" href="../adaptive_control/">Adaptive estimation and control</a></li><li><a class="tocitem" href="../neural_network/">Adaptive Neural-Network training</a></li><li><a class="tocitem" href="../friction_nn_example/">SciML: Adaptive Universal Differential Equation</a></li><li><a class="tocitem" href="../thermal_nn_example/">SciML: Learning a sunshine disturbance model</a></li><li><a class="tocitem" href="../fault_detection/">Fault detection</a></li><li><a class="tocitem" href="../missing_data/">Missing data and outliers</a></li><li><a class="tocitem" href="../ut/">Unscented transform</a></li><li><a class="tocitem" href="../disturbance_gallery/">Disturbance gallery</a></li><li><a class="tocitem" href="../sample_rate/">Influence of sample rate on performance</a></li><li><a class="tocitem" href="../cross_covariance/">Cross-covariance between dynamics and measurement</a></li></ul></li><li><a class="tocitem" href="../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Parameter estimation</a></li><li class="is-active"><a href>Parameters and noise covariances jointly</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Parameters and noise covariances jointly</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/docs/src/param_est_joint_ml.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Joint-estimation-of-plant-parameters-and-noise-covariances"><a class="docs-heading-anchor" href="#Joint-estimation-of-plant-parameters-and-noise-covariances">Joint estimation of plant parameters and noise covariances</a><a id="Joint-estimation-of-plant-parameters-and-noise-covariances-1"></a><a class="docs-heading-anchor-permalink" href="#Joint-estimation-of-plant-parameters-and-noise-covariances" title="Permalink"></a></h1><p>The tutorial <a href="../param_est_optimizer/#Prediction-Error-minimization-using-an-optimizer">Prediction-Error minimization using an optimizer</a> estimates the parameters of a model while the noise covariance matrices of the state estimator are held fixed, and the tutorial <a href="../param_est_covariances/#Estimating-noise-covariances">Estimating noise covariances</a> estimates the covariance matrices of a model with known parameters. In practice, both the plant parameters and the covariance matrices are often unknown. The covariance matrices determine the gain of the state estimator, and thereby the one-step predictions on which a prediction-error criterion is based. A prediction-error estimate of the plant parameters thus depends on the assumed covariance matrices. Maximizing the likelihood of the data with respect to the plant parameters and the covariance matrices simultaneously removes this dependence, and yields covariance matrices that are consistent with the estimated model. This tutorial demonstrates this joint maximum-likelihood estimation, together with</p><ul><li>an analysis of the uncertainty and the practical identifiability of the estimated parameters using the Hessian of the negative log-likelihood, and</li><li>estimation using data from several experiments.</li></ul><h2 id="Setup"><a class="docs-heading-anchor" href="#Setup">Setup</a><a id="Setup-1"></a><a class="docs-heading-anchor-permalink" href="#Setup" title="Permalink"></a></h2><p>We use the quadruple-tank process from the tutorial <a href="../param_est_optimizer/#Prediction-Error-minimization-using-an-optimizer">Prediction-Error minimization using an optimizer</a>, where all parameters of the dynamics are taken from the parameter vector <code>p</code>. The tank areas <code>A</code> and the outlet areas <code>a</code> of the four tanks are equal.</p><pre><code class="language-julia hljs">using LowLevelParticleFilters
+using LowLevelParticleFilters: SimpleMvNormal
+using SeeToDee
+using StaticArrays
+using Plots, LinearAlgebra, Random
+using LeastSquaresOptim, ForwardDiff
+const LLPF = LowLevelParticleFilters
+
+function quadtank(h, u, p, t)
+    k1, k2, g = p[1], p[2], 9.81
+    A1 = A3 = A2 = A4 = p[3]
+    a1 = a3 = a2 = a4 = p[4]
+    γ1 = γ2 = p[5]
+
+    ssqrt(x) = √(max(x, zero(x)) + 1e-3) # For numerical robustness at x = 0
+
+    SA[
+        -a1/A1 * ssqrt(2g*h[1]) + a3/A1*ssqrt(2g*h[3]) +     γ1*k1/A1 * u[1]
+        -a2/A2 * ssqrt(2g*h[2]) + a4/A2*ssqrt(2g*h[4]) +     γ2*k2/A2 * u[2]
+        -a3/A3*ssqrt(2g*h[3])                          + (1-γ2)*k2/A3 * u[2]
+        -a4/A4*ssqrt(2g*h[4])                          + (1-γ1)*k1/A4 * u[1]
+    ]
+end
+
+Ts = 1 # sample time
+nu = 2 # number of control inputs
+nx = 4 # number of state variables
+ny = 2 # number of measured outputs
+
+measurement(x,u,p,t) = SA[x[1], x[2]]
+discrete_dynamics = SeeToDee.Rk4(quadtank, Ts)
+p_true = [1.6, 1.6, 4.9, 0.03, 0.2] # k1, k2, A, a, γ</code></pre><p>The data is simulated with an <a href="../api/#LowLevelParticleFilters.UnscentedKalmanFilter-Union{Tuple{AUGM}, Tuple{AUGD}, Tuple{IPM}, Tuple{IPD}, Tuple{Any, LowLevelParticleFilters.AbstractMeasurementModel, Any}, Tuple{Any, LowLevelParticleFilters.AbstractMeasurementModel, Any, Any}} where {IPD, IPM, AUGD, AUGM}"><code>UnscentedKalmanFilter</code></a>, which adds dynamics noise to the levels of all four tanks, and measurement noise with correlated components to the measured levels of the two lower tanks.</p><pre><code class="language-julia hljs">Tperiod = 200
+t = 0:Ts:1000
+u1 = vcat.(0.25 .* sign.(sin.(2pi/Tperiod .* (t ./ 40).^2)) .+ 0.25)
+u2 = vcat.(0.25 .* sign.(sin.(2pi/Tperiod .* (t ./ 40).^2 .+ pi/2)) .+ 0.25)
+u  = SVector{nu}.(vcat.(u1,u2))
+x0 = SA[2.0, 2, 3, 3]                 # Initial state
+R0 = SMatrix{nx,nx}(0.01I(nx))        # Covariance of the initial state
+d0 = SimpleMvNormal(x0, R0)
+
+σw_true = 0.008
+R1_true = SMatrix{nx,nx}(σw_true^2*I(nx))
+R2_true = SA[1.0e-4 0.6e-4; 0.6e-4 2.5e-4]
+ukf_true = UnscentedKalmanFilter(discrete_dynamics, measurement, R1_true, R2_true, d0; ny, nu, Ts, p=p_true)
+x, u, y = simulate(ukf_true, u, p_true)
+
+plot(
+    plot(reduce(hcat, x)&#39;, title=&quot;State&quot;, label=[&quot;h1&quot; &quot;h2&quot; &quot;h3&quot; &quot;h4&quot;]),
+    plot(reduce(hcat, y)&#39;, title=&quot;Measurements&quot;, label=[&quot;y1&quot; &quot;y2&quot;]),
+    plot(reduce(hcat, u)&#39;, title=&quot;Inputs&quot;, label=[&quot;u1&quot; &quot;u2&quot;]),
+    layout = (3,1), size = (800, 700),
+)</code></pre><img src="f1a98709.png" alt="Example block output"/><h2 id="Parameterization"><a class="docs-heading-anchor" href="#Parameterization">Parameterization</a><a id="Parameterization-1"></a><a class="docs-heading-anchor-permalink" href="#Parameterization" title="Permalink"></a></h2><p>All quantities are collected in a single vector <span>$θ$</span> of unconstrained decision variables:</p><ul><li>The logarithms of the five plant parameters, which are all positive.</li><li>The logarithm of the standard deviation <span>$σ_w$</span> of the dynamics noise. Since the four tanks are identical, the same standard deviation is used for all tanks, i.e., <span>$R_1 = σ_w^2 I$</span>. When a separate standard deviation is estimated for each tank, the standard deviations of the noise acting on the unmeasured upper tanks are only weakly determined by the data, and the corresponding eigenvalues of the Hessian of the negative log-likelihood are close to zero. Using physical reasoning to reduce the number of covariance parameters is thus beneficial, see also <a href="../param_est_covariances/#Estimating-noise-covariances">Estimating noise covariances</a>.</li><li>A log-Cholesky parameterization of the full <span>$2×2$</span> measurement covariance matrix <span>$R_2$</span>, see <a href="../api/#LowLevelParticleFilters.cov_from_logchol-Tuple{AbstractVector}"><code>LowLevelParticleFilters.cov_from_logchol</code></a>. Any vector of three real numbers maps to a positive-definite matrix, and correlations of either sign can be represented.</li></ul><p>The function <code>filter_from_parameters</code> constructs a filter from the parameter vector. The element type of the initial state distribution is converted to the element type of <span>$θ$</span> such that the filter can propagate the dual numbers used by ForwardDiff to compute derivatives.</p><pre><code class="language-julia hljs">np = length(p_true)
+
+function unpack(θ)
+    p  = exp.(θ[1:np])
+    R1 = exp(2θ[np+1])*SMatrix{nx,nx}(I(nx))
+    R2 = LLPF.cov_from_logchol(θ[np+2:end], Val(ny))
+    p, R1, R2
+end
+
+function filter_from_parameters(θ::AbstractVector{T}, d0 = d0) where T
+    p, R1, R2 = unpack(θ)
+    UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, SimpleMvNormal(T.(d0.μ), T.(d0.Σ)); ny, nu, Ts, p)
+end
+
+θ_true = [log.(p_true); log(σw_true); LLPF.logchol_from_cov(R2_true)]
+p_guess = p_true .* exp.(0.1 .* randn(np))
+θ0 = [log.(p_guess); log(0.05); LLPF.logchol_from_cov(SMatrix{ny,ny}(1e-3I(ny)))]</code></pre><h2 id="Maximum-likelihood-estimation-using-Gauss-Newton-optimization"><a class="docs-heading-anchor" href="#Maximum-likelihood-estimation-using-Gauss-Newton-optimization">Maximum-likelihood estimation using Gauss-Newton optimization</a><a id="Maximum-likelihood-estimation-using-Gauss-Newton-optimization-1"></a><a class="docs-heading-anchor-permalink" href="#Maximum-likelihood-estimation-using-Gauss-Newton-optimization" title="Permalink"></a></h2><p>With the keyword argument <code>loglik = true</code>, the function <a href="../api/#LowLevelParticleFilters.prediction_errors!"><code>LowLevelParticleFilters.prediction_errors!</code></a> computes residuals <span>$r$</span> such that <span>$r^T r = -\log p(y | θ) + c$</span> for a constant <span>$c$</span>. For each time step, the residuals consist of the prediction errors whitened by the Cholesky factor of the innovation covariance <span>$S$</span>, and one additional residual <span>$\sqrt{\frac{1}{2}(\log\det S + n_y \log 2π) + \text{offset}}$</span> that represents the log-determinant term of the likelihood. The innovation covariance is small in this example, <span>$\log\det S$</span> is thus negative, and a positive <code>offset</code> is required for the expression inside the square root to be non-negative. The offset adds the constant <code>length(y)*offset</code> to the cost and does not affect the location of the optimum. If the offset is too small, <code>prediction_errors!</code> throws an error that states the required magnitude.</p><p>During the optimization, the optimizer may evaluate parameter values for which the covariance matrix of the state estimator is no longer positive definite. The residual function below handles this case by returning infinite residuals, which causes the optimizer to reject the step, while all other errors are rethrown.</p><pre><code class="language-julia hljs">offset = 10
+function residuals!(r, θ)
+    kf = filter_from_parameters(θ)
+    try
+        LLPF.prediction_errors!(r, kf, u, y; loglik=true, offset)
+    catch err
+        err isa PosDefException || rethrow()
+        r .= Inf
+    end
+    r
+end
+
+output_length = length(y)*(ny+1)
+res = optimize!(LeastSquaresProblem(; x = copy(θ0), f! = residuals!, output_length, autodiff = :forward), LevenbergMarquardt())
+θ̂ = res.minimizer
+p̂, R1̂, R2̂ = unpack(θ̂)
+p̂</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5-element Vector{Float64}:
+ 1.6082656998394622
+ 1.58369748797587
+ 4.888531655028495
+ 0.02980930732037266
+ 0.203582325181345</code></pre><p>The estimated standard deviation of the dynamics noise and the estimated measurement covariance matrix are close to the values used to simulate the data:</p><pre><code class="language-julia hljs">sqrt(R1̂[1]), σw_true</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(0.008226299858133548, 0.008)</code></pre><pre><code class="language-julia hljs">R2̂, R2_true</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">([0.0001041997823218092 5.86933463623558e-5; 5.86933463623558e-5 0.0002465078395892282], [0.0001 6.0e-5; 6.0e-5 0.00025])</code></pre><p>The estimated plant parameters, on the other hand, deviate from the true values. The next section shows that the data do not determine all plant parameters.</p><h2 id="Practical-identifiability-from-the-Hessian"><a class="docs-heading-anchor" href="#Practical-identifiability-from-the-Hessian">Practical identifiability from the Hessian</a><a id="Practical-identifiability-from-the-Hessian-1"></a><a class="docs-heading-anchor-permalink" href="#Practical-identifiability-from-the-Hessian" title="Permalink"></a></h2><p>The curvature of the negative log-likelihood at the estimate indicates how well each direction in the parameter space is determined by the data. Since <span>$r^T r = -\log p(y|θ) + c$</span>, the Hessian of the negative log-likelihood is approximated by the Gauss-Newton approximation <span>$H ≈ 2J^TJ$</span>, where <span>$J$</span> is the Jacobian of the residuals with respect to <span>$θ$</span>.</p><pre><code class="language-julia hljs">J = ForwardDiff.jacobian(residuals!, zeros(output_length), θ̂)
+H = 2Symmetric(J&#39;J)
+E = eigen(H)
+bar(abs.(E.values), yscale=:log10, xlabel=&quot;Eigenvalue index&quot;, ylabel=&quot;|λ|&quot;, title=&quot;Eigenvalues of the Hessian&quot;, legend=false)</code></pre><img src="4a489de8.png" alt="Example block output"/><p>The smallest eigenvalue is zero to numerical precision. The corresponding eigenvector reveals which combination of parameters is undetermined:</p><pre><code class="language-julia hljs">round.(E.vectors[:, 1], digits=3)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">9-element Vector{Float64}:
+  0.5
+  0.5
+  0.5
+  0.5
+  0.0
+ -0.0
+  0.0
+  0.0
+  0.0</code></pre><p>The eigenvector is <span>$[1, 1, 1, 1, 0]/2$</span> in the coordinates <span>$\log k_1, \log k_2, \log A, \log a, \log γ$</span>, with zero components for the noise parameters. The tank area <span>$A$</span> appears in the dynamics only in the ratios <span>$k_1/A$</span>, <span>$k_2/A$</span> and <span>$a/A$</span>, and the measurements are the levels of the tanks. Multiplying <span>$k_1, k_2, A$</span> and <span>$a$</span> by a common factor therefore leaves the model unchanged, and only the ratios can be estimated from input-output data. This is a structural non-identifiability, which can also be detected from the model equations alone, see <a href="../param_est_identifiability/#Identifiability">Identifiability</a>. Eigenvalues that are small but nonzero indicate directions that are determined by the model structure but only weakly by the available data, i.e., a lack of practical identifiability, which may be remedied by a different experiment or by more data. The ratios of the parameters are accurately estimated:</p><pre><code class="language-julia hljs">ratios(p) = [p[1]/p[3], p[2]/p[3], p[4]/p[3], p[5]]
+ratios(p̂) ./ ratios(p_true)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">4-element Vector{Float64}:
+ 1.0075241510796036
+ 0.9921329959962858
+ 0.9959746346300015
+ 1.017911625906725</code></pre><p>A structural non-identifiability is resolved by additional information. Here, we assume that the tank area <span>$A$</span> has been measured, fix it to its true value, and estimate the remaining parameters.</p><pre><code class="language-julia hljs">A_fixed = p_true[3]
+free = [1, 2, 4, 5] # Indices of the estimated plant parameters
+
+function unpack_fixed(θ)
+    q  = exp.(θ[1:4])
+    p  = [q[1], q[2], A_fixed, q[3], q[4]]
+    R1 = exp(2θ[5])*SMatrix{nx,nx}(I(nx))
+    R2 = LLPF.cov_from_logchol(θ[6:end], Val(ny))
+    p, R1, R2
+end
+
+function filter_fixed(θ::AbstractVector{T}, d0 = d0) where T
+    p, R1, R2 = unpack_fixed(θ)
+    UnscentedKalmanFilter(discrete_dynamics, measurement, R1, R2, SimpleMvNormal(T.(d0.μ), T.(d0.Σ)); ny, nu, Ts, p)
+end
+
+function residuals_fixed!(r, θ)
+    kf = filter_fixed(θ)
+    try
+        LLPF.prediction_errors!(r, kf, u, y; loglik=true, offset)
+    catch err
+        err isa PosDefException || rethrow()
+        r .= Inf
+    end
+    r
+end
+
+θ0f = θ0[[free; np+1:end]]
+θ_true_f = θ_true[[free; np+1:end]]
+resf = optimize!(LeastSquaresProblem(; x = copy(θ0f), f! = residuals_fixed!, output_length, autodiff = :forward), LevenbergMarquardt())
+θ̂f = resf.minimizer
+p̂f, R1̂f, R2̂f = unpack_fixed(θ̂f)
+p̂f</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5-element Vector{Float64}:
+ 1.612038856061264
+ 1.587412969342353
+ 4.9
+ 0.029879242407948023
+ 0.20358244768955458</code></pre><p>The condition number of the Hessian is reduced from</p><pre><code class="language-julia hljs">cond(H)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">9.6751204583128e16</code></pre><p>to</p><pre><code class="language-julia hljs">Jf = ForwardDiff.jacobian(residuals_fixed!, zeros(output_length), θ̂f)
+Hf = 2Symmetric(Jf&#39;Jf)
+cond(Hf)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5744.387333233637</code></pre><h2 id="Parameter-uncertainty"><a class="docs-heading-anchor" href="#Parameter-uncertainty">Parameter uncertainty</a><a id="Parameter-uncertainty-1"></a><a class="docs-heading-anchor-permalink" href="#Parameter-uncertainty" title="Permalink"></a></h2><p>At the maximum-likelihood estimate, the inverse of the Hessian of the negative log-likelihood approximates the covariance matrix of the estimate. Since the parameters are logarithms, the standard deviations of the plant parameters in <span>$θ$</span> approximate the relative standard deviations of the plant parameters. The Gauss-Newton approximation neglects the second derivatives of the residuals. We compare it with the exact Hessian, computed by differentiating the log-likelihood twice using ForwardDiff:</p><pre><code class="language-julia hljs">negloglik(θ) = -loglik(filter_fixed(θ), u, y)
+H_exact = ForwardDiff.hessian(negloglik, θ̂f)
+σ_gn    = sqrt.(diag(inv(Hf)))
+σ_exact = sqrt.(diag(inv(Symmetric(H_exact))))
+names_θ = [&quot;log k1&quot;, &quot;log k2&quot;, &quot;log a&quot;, &quot;log γ&quot;, &quot;log σw&quot;, &quot;R2 θ1&quot;, &quot;R2 θ2&quot;, &quot;R2 θ3&quot;]
+[names_θ σ_gn σ_exact]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">8×3 Matrix{Any}:
+ &quot;log k1&quot;  0.00653355   0.00652651
+ &quot;log k2&quot;  0.00951515   0.00954692
+ &quot;log a&quot;   0.0063179    0.00632864
+ &quot;log γ&quot;   0.0153428    0.015376
+ &quot;log σw&quot;  0.0440746    0.0424627
+ &quot;R2 θ1&quot;   0.0422777    0.036186
+ &quot;R2 θ2&quot;   0.000657997  0.000651815
+ &quot;R2 θ3&quot;   0.0384685    0.0314458</code></pre><p>The Gauss-Newton approximation is accurate for the plant parameters, and less accurate for some of the noise parameters, for which the residuals of the log-determinant term depend nonlinearly on the parameters. The estimation errors, normalized by the standard deviations, are of the magnitude expected from the estimated uncertainty:</p><pre><code class="language-julia hljs">(θ̂f .- θ_true_f) ./ σ_exact</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">8-element Vector{Float64}:
+  1.1485638252007797
+ -0.8272827129851941
+ -0.6373211808309964
+  1.154639856732127
+  0.6562578450897135
+  0.5632871875371481
+ -0.38385967654576947
+ -0.03497529470283698</code></pre><p>This uncertainty estimate relies on the model being correct and the estimate being close to the optimum. When the Hessian is singular or poorly conditioned, as in the previous section before fixing <span>$A$</span>, its inverse is not a meaningful covariance estimate.</p><h2 id="Comparison-with-prediction-error-minimization-using-fixed-covariance-matrices"><a class="docs-heading-anchor" href="#Comparison-with-prediction-error-minimization-using-fixed-covariance-matrices">Comparison with prediction-error minimization using fixed covariance matrices</a><a id="Comparison-with-prediction-error-minimization-using-fixed-covariance-matrices-1"></a><a class="docs-heading-anchor-permalink" href="#Comparison-with-prediction-error-minimization-using-fixed-covariance-matrices" title="Permalink"></a></h2><p>For comparison, we estimate the plant parameters by minimizing the sum of squared prediction errors with fixed, and incorrect, covariance matrices. Two choices of <span>$R_1$</span> are considered: a large <span>$R_1$</span>, for which the filter follows the measurements closely, and a very small <span>$R_1$</span>, for which the filter approaches a simulation of the model and the criterion approaches a simulation-error criterion.</p><pre><code class="language-julia hljs">function pem_estimate(R1_assumed, R2_assumed)
+    function residuals_pem!(r, θ::AbstractVector{T}) where T
+        q = exp.(θ)
+        p = [q[1], q[2], A_fixed, q[3], q[4]]
+        kf = UnscentedKalmanFilter(discrete_dynamics, measurement, R1_assumed, R2_assumed, SimpleMvNormal(T.(x0), T.(R0)); ny, nu, Ts, p)
+        LLPF.prediction_errors!(r, kf, u, y, p)
+    end
+    resp = optimize!(LeastSquaresProblem(; x = θ0f[1:4], f! = residuals_pem!, output_length = length(y)*ny, autodiff = :forward), LevenbergMarquardt())
+    exp.(resp.minimizer)
+end
+R2_assumed = SMatrix{ny,ny}(1e-4I(ny))
+q_large = pem_estimate(SMatrix{nx,nx}(0.1I(nx)), R2_assumed)
+q_small = pem_estimate(SMatrix{nx,nx}(1e-8I(nx)), R2_assumed)
+relative_error(q) = norm(log.(q) .- log.(p_true[free]))
+[relative_error(q_large), relative_error(q_small), relative_error(p̂f[free])]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{Float64}:
+ 0.0316988926542181
+ 0.041224393022920046
+ 0.021213966521037013</code></pre><p>The two prediction-error estimates differ from each other, since the predictor, and thereby the criterion, depends on the assumed covariance matrices. The prediction-error criterion is furthermore invariant to a common scaling of <span>$R_1$</span> and <span>$R_2$</span>, since the gain of the state estimator depends only on their relative magnitude, and the absolute magnitude of the covariance matrices can thus not be estimated by this criterion. The maximum-likelihood estimate, shown last, does not depend on such a choice, and in addition provides the covariance matrices and the uncertainty estimate above.</p><h2 id="Data-from-several-experiments"><a class="docs-heading-anchor" href="#Data-from-several-experiments">Data from several experiments</a><a id="Data-from-several-experiments-1"></a><a class="docs-heading-anchor-permalink" href="#Data-from-several-experiments" title="Permalink"></a></h2><p>A single experiment may not excite all aspects of the dynamics. In the experiments below, the first experiment excites only pump 1 and the second experiment excites only pump 2, and each experiment starts from a different initial state. The residuals of the experiments are stored in consecutive blocks of the residual vector, and each experiment uses its own initial state distribution.</p><pre><code class="language-julia hljs">function experiment(u1fun, u2fun, x0e, N)
+    ue = [SA[u1fun(k), u2fun(k)] for k in 1:N]
+    d0e = SimpleMvNormal(x0e, R0)
+    ukfe = UnscentedKalmanFilter(discrete_dynamics, measurement, R1_true, R2_true, d0e; ny, nu, Ts, p=p_true)
+    _, ue, ye = simulate(ukfe, ue, p_true)
+    (; u = ue, y = ye, d0 = d0e)
+end
+square(k) = 0.25*sign(sin(2pi*k/150)) + 0.25
+experiments = [
+    experiment(square, k-&gt;0.0, SA[1.0, 1.0, 1.5, 1.5], 500),
+    experiment(k-&gt;0.0, square, SA[2.0, 2.0, 1.0, 1.0], 500),
+]
+
+function residuals_multi!(r, θ, experiments)
+    i0 = 0
+    for e in experiments
+        n = length(e.y)*(ny+1)
+        kf = filter_fixed(θ, e.d0)
+        try
+            LLPF.prediction_errors!(@view(r[i0+1:i0+n]), kf, e.u, e.y; loglik=true, offset)
+        catch err
+            err isa PosDefException || rethrow()
+            r .= Inf
+        end
+        i0 += n
+    end
+    r
+end
+output_length_multi(experiments) = sum(length(e.y) for e in experiments)*(ny+1)
+
+resm = optimize!(LeastSquaresProblem(; x = copy(θ0f), f! = (r, θ)-&gt;residuals_multi!(r, θ, experiments), output_length = output_length_multi(experiments), autodiff = :forward), LevenbergMarquardt())
+θ̂m = resm.minimizer
+unpack_fixed(θ̂m)[1]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5-element Vector{Float64}:
+ 1.5934236962484032
+ 1.5959588732920844
+ 4.9
+ 0.03008571390472952
+ 0.19928573947801362</code></pre><p>The smallest eigenvalue of the Hessian is zero for each individual experiment, since the gain <span>$k_i$</span> of a pump that is not used does not influence the data, while the combined data determines all parameters:</p><pre><code class="language-julia hljs">map((experiments[1:1], experiments[2:2], experiments)) do exps
+    Jm = ForwardDiff.jacobian((r, θ)-&gt;residuals_multi!(r, θ, exps), zeros(output_length_multi(exps)), θ̂m)
+    minimum(eigvals(2Symmetric(Jm&#39;Jm)))
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(0.0, 0.0, 402.84396015563374)</code></pre><p>The likelihood of independent experiments is the product of the likelihoods of the individual experiments, which corresponds to the concatenation of the residual vectors above. Concatenating the data sequences of different experiments in time, and filtering them as one sequence, is not valid unless the state at the end of one experiment coincides with the initial state of the next.</p><h2 id="Initialization-and-global-search"><a class="docs-heading-anchor" href="#Initialization-and-global-search">Initialization and global search</a><a id="Initialization-and-global-search-1"></a><a class="docs-heading-anchor-permalink" href="#Initialization-and-global-search" title="Permalink"></a></h2><p>The optimization problem is in general not convex, and a local optimizer, such as the Gauss-Newton method used above, converges to a local optimum close to the initial guess. The following strategies reduce the risk of converging to a poor local optimum:</p><ul><li>Start the local optimizer from several initial guesses (multi-start), and select the solution with the largest likelihood.</li><li>Use a global optimizer, e.g., from <a href="https://github.com/robertfeldt/BlackBoxOptim.jl">BlackBoxOptim.jl</a> or <a href="https://github.com/SciML/Optimization.jl">Optimization.jl</a>, with narrow bounds on the decision variables derived from physical knowledge, and refine the result with the Gauss-Newton method.</li><li>Use continuation in the covariance parameters. With a large dynamics noise covariance relative to the measurement noise covariance, the state estimator follows the measurements closely, and the one-step predictions are reasonable also for a poor initial guess of the plant parameters. Starting with fixed covariance matrices of this kind, estimating the plant parameters, and then estimating all parameters jointly starting from this solution, is often more robust than estimating all parameters at once. The function <code>nonlinear_pem</code> in <a href="https://baggepinnen.github.io/ControlSystemIdentification.jl/dev/nonlinear/">ControlSystemIdentification.jl</a> supports such continuation by restarting from a previous result with new covariance matrices.</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../param_est_optimizer/">« Using an optimizer</a><a class="docs-footer-nextpage" href="../param_est_multistep/">Multi-step prediction errors »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Friday 2 October 2026 07:03">Friday 2 October 2026</span>. Using Julia version 1.13.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
