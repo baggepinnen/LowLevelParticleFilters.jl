@@ -159,4 +159,10 @@ g3 = ForwardDiff.gradient(costfun3, [1.0])
     @test LowLevelParticleFilters.innovation_type(YU, D) == Union{SVector{1, D}, SVector{1, Missing}}
     @test LowLevelParticleFilters.innovation_type(Vector{Union{Missing, Float64}}, Float64) == Vector{Union{Missing, Float64}}
     @test LowLevelParticleFilters.innovation_type(Vector{Union{Missing, Float64}}, D) == Vector{Union{Missing, D}}
+
+    # The type of the prediction errors is inferred at the call site in forward_trajectory
+    alloc_e(y, x) = similar(y, LowLevelParticleFilters.innovation_type(eltype(y), eltype(x)))
+    for Y in (SVector{2, Float64}, Vector{Float64}, Union{Missing, SVector{2, Float64}}, YU, YA, Vector{Union{Missing, Float64}}), Tx in (Float64, D)
+        @inferred alloc_e(Vector{Y}(undef, 0), zeros(SVector{2, Tx}))
+    end
 end

@@ -403,7 +403,8 @@ end
 
 Return the type of the prediction errors stored by [`forward_trajectory`](@ref) for measurements of type `Y` and a state with element type `T`. The number type of the measurements is promoted with `T`, such that the prediction errors can represent, e.g., dual numbers when the state does. Missing measurements are stored as they are, see [`LowLevelParticleFilters.ismissing_measurement`](@ref).
 """
-function innovation_type(Y::Type, T::Type)
+# The function is pure in its type arguments, the effect assertion allows the compiler to evaluate it during type inference
+Base.@assume_effects :foldable function innovation_type(Y::Type, T::Type)
     # Union types, e.g., Union{SVector{1, Float64}, SVector{1, Missing}}, are promoted member by member
     Y isa Union && return Union{map(Yi -> innovation_type(Yi, T), Base.uniontypes(Y))...}
     isconcretetype(Y) || return Y
