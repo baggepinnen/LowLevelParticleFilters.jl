@@ -128,7 +128,7 @@ function assemble_state(f, xn, xl)
 end
 
 """
-    MUKF(; dynamics, nl_measurement_model::RBMeasurementModel, A, Cl, R1, d0, nxn, nu, ny, Ts=1.0, p=NullParameters(), weight_params=MerweParams(), names=default_names(length(d0.μ), nu, ny, "MUKF"))
+    MUKF(; dynamics, nl_measurement_model::RBMeasurementModel, A, Cl, R1, d0, nxn, nu, ny, Ts=1.0, p=NullParameters(), weight_params=TrivialParams(), names=default_names(length(d0.μ), nu, ny, "MUKF"))
 
 Marginalized Unscented Kalman Filter for mixed linear/nonlinear state-space models.
 
@@ -165,7 +165,7 @@ where ``x^n`` is the nonlinear substate and ``x^l`` is the linear substate. This
 * `ny`: Number of measurements
 * `Ts`: Sampling time (default: 1.0)
 * `p`: Parameters (default: NullParameters())
-* `weight_params`: Unscented transform parameters (default: MerweParams())
+* `weight_params`: Unscented transform parameters (default: [`TrivialParams`](@ref), as for the [`UnscentedKalmanFilter`](@ref))
 * `names`: Signal names for plotting
 * `n_inds`: Optional index vector for nonlinear state elements in full state vector (default: `1:nxn`). Allows arbitrary state ordering.
 * `l_inds`: Optional index vector for linear state elements in full state vector (default: `nxn+1:nx`). Must be provided together with `n_inds`.
@@ -227,7 +227,7 @@ function MUKF{IPD,IPM}(;
     nxn::Int,
     Ts = 1.0,
     p = NullParameters(),
-    weight_params = MerweParams(),
+    weight_params = TrivialParams(),
     names = default_names(length(d0.μ), nu, ny, "MUKF"),
     n_inds = nothing,
     l_inds = nothing,
@@ -250,8 +250,9 @@ function MUKF{IPD,IPM}(;
     L = nxn
     ns = 2*L + 1
 
-    # Decide if we should use static arrays (like UKF does)
-    static = !(IPD || L > 50)
+    # Decide if we should use static arrays. The caches contain vectors of the full state and matrices of size nx × nxl,
+    # the decision is therefore based on the full state dimension rather than on the dimension of the sigma points
+    static = !(IPD || nx > 50)
 
     # Create sigma point cache for predict
     sigma_point_cache = SigmaPointCache{T}(nxn, 0, nxn, L, static)

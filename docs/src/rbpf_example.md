@@ -148,9 +148,7 @@ R0_full = [R0n zeros(nxn, nxl); zeros(nxl, nxn) R0l]
 d0 = SimpleMvNormal(x0, R0_full)
 # Combine An and Al into single A matrix for MUKF
 A = [An; Al]  # A is nx × nxl, formed by stacking An (nxn × nxl) and Al (nxl × nxl)
-# With the default α = 1e-3, the sigma points are located close to the mean, the unscented transform overestimates the variance of atan(xn), and the MUKF loses track of the nonlinear substate
-weight_params = MerweParams(α = 0.5)
-mukf = MUKF(; dynamics=fn_mukf, nl_measurement_model=mm, A, Cl, R1, d0, nxn, nu, ny, weight_params, names=SignalNames(names, "MUKF"))
+mukf = MUKF(; dynamics=fn_mukf, nl_measurement_model=mm, A, Cl, R1, d0, nxn, nu, ny, names=SignalNames(names, "MUKF"))
 
 # Run filtering on the same data
 sol_mukf = forward_trajectory(mukf, u, y)
