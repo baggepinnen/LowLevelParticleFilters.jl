@@ -404,16 +404,19 @@ end
 Return the type of the prediction errors stored by [`forward_trajectory`](@ref) for measurements of type `Y` and a state with element type `T`. The number type of the measurements is promoted with `T`, such that the prediction errors can represent, e.g., dual numbers when the state does. Missing measurements are stored as they are, see [`LowLevelParticleFilters.ismissing_measurement`](@ref).
 """
 function innovation_type(Y::Type, T::Type)
-    Yn = nonmissingtype(Y)
-    Yn === Union{} && return Y
-    E = promote_measurement_type(Yn, T)
-    Yn === Y ? E : Union{Missing, E}
+    # Union types, e.g., Union{SVector{1, Float64}, SVector{1, Missing}}, are promoted member by member
+    Y isa Union && return Union{map(Yi -> innovation_type(Yi, T), Base.uniontypes(Y))...}
+    isconcretetype(Y) || return Y
+    promote_measurement_type(Y, T)
 end
 
 promote_measurement_type(Y::Type{<:Number}, T::Type) = promote_type(Y, T)
-promote_measurement_type(Y::Type{<:StaticArray}, T::Type) = similar_type(Y, promote_type(eltype(Y), T))
-promote_measurement_type(Y::Type{<:Array}, T::Type) = Array{promote_type(eltype(Y), T), ndims(Y)}
+promote_measurement_type(Y::Type{<:StaticArray}, T::Type) = promoted_eltype(eltype(Y), T) === eltype(Y) ? Y : similar_type(Y, promoted_eltype(eltype(Y), T))
+promote_measurement_type(Y::Type{<:Array}, T::Type) = Array{promoted_eltype(eltype(Y), T), ndims(Y)}
 promote_measurement_type(Y::Type, T::Type) = Y
+
+# Arrays of which all entries are missing represent missing measurements and keep their element type
+promoted_eltype(E::Type, T::Type) = E === Missing ? E : promote_type(E, T)
 
 
 """

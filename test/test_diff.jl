@@ -150,4 +150,13 @@ g3 = ForwardDiff.gradient(costfun3, [1.0])
     @test LowLevelParticleFilters.innovation_type(Union{Missing, SVector{2, Float64}}, D) == Union{Missing, SVector{2, D}}
     @test LowLevelParticleFilters.innovation_type(Vector{Int}, Float64) == Vector{Float64}
     @test LowLevelParticleFilters.innovation_type(Missing, D) == Missing
+    # Measurements constructed as SVector{1}.(y), where y contains missing entries, have an abstract element type that is kept
+    YA = eltype(SVector{1}.(Union{Missing, Float64}[1.0, missing]))
+    @test LowLevelParticleFilters.innovation_type(YA, Float64) == YA
+    @test LowLevelParticleFilters.innovation_type(YA, D) == YA
+    YU = Union{SVector{1, Float64}, SVector{1, Missing}}
+    @test LowLevelParticleFilters.innovation_type(YU, Float64) == YU
+    @test LowLevelParticleFilters.innovation_type(YU, D) == Union{SVector{1, D}, SVector{1, Missing}}
+    @test LowLevelParticleFilters.innovation_type(Vector{Union{Missing, Float64}}, Float64) == Vector{Union{Missing, Float64}}
+    @test LowLevelParticleFilters.innovation_type(Vector{Union{Missing, Float64}}, D) == Vector{Union{Missing, D}}
 end
