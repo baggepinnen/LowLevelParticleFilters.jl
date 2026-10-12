@@ -451,43 +451,12 @@ is affine in ``x^l_k``. Since the term of order ``h`` in ``\Phi_h`` is affine in
 
 A suitable reference for the sigma point ``x^n_i`` is the conditional mean of ``x^l`` given ``x^n = x^n_i``, which the MUKF uses to propagate the sigma points. The propagated sigma points then coincide with the steps of the accurate integrator, and the linearization only affects the propagation of the conditional covariance of ``x^l``, similar to the linearization in an extended Kalman filter. The error thus decreases with the conditional covariance of ``x^l``, e.g., as the parameter estimates converge. A fixed reference, such as the initial guess of the parameters, does not require access to the estimate, but the error is then not guaranteed to be smaller than the error of the forward Euler method, since the quadratic term above is indefinite. For the quadrotor, this occurs close to the terminal velocity, where the true acceleration is close to zero while the reference parameters result in a nonzero acceleration.
 
-The MUKF does not pass the conditional mean to the dynamics, but the conditional mean can be computed from the current estimate, which is made available to the dynamics through the parameter argument `p`. A callback updates the parameter with the estimate before each prediction step:
+The MUKF performs this linearization when the dynamics are wrapped in [`LinearizedDynamics`](@ref). The wrapped function is the discrete-time dynamics of the full state, here the RK4 discretization used for the UKF above, and the argument `A` is omitted:
 
 ```@example mukfparam
-# Estimate before the prediction step, available to the dynamics through the parameter argument
-mutable struct CurrentEstimate{XT, RT}
-    x::XT
-    R::RT
-end
-
-function update_estimate!(kf, u, y, p, args...)
-    p.x = kf.x
-    p.R = kf.R
-    nothing
-end
-
-n_inds = SVector{nxn}(1:nxn)
-l_inds = SVector{nxl}(nxn+1:nx)
-
-# Conditional mean of xl given xn
-function conditional_mean(xn, p)
-    Pnn = p.R[n_inds, n_inds]
-    Pln = p.R[l_inds, n_inds]
-    p.x[l_inds] + Pln * (cholesky(Symmetric(Pnn)) \ (xn - p.x[n_inds]))
-end
-
-# RK4 step of the full state, linearized with respect to xl around the conditional mean
-function linearized_rk4(xn, u, p, t)
-    xl_ref = conditional_mean(xn, p)
-    step(xl) = discrete_dynamics_ukf([xn; xl], u, nothing, t)
-    J = ForwardDiff.jacobian(step, xl_ref)
-    step(xl_ref) - J*xl_ref, J # Discrete-time d and A
-end
-
 mukf_rk4 = MUKF(;
-    dynamics = (xn, u, p, t) -> linearized_rk4(xn, u, p, t)[1],
+    dynamics = LinearizedDynamics(discrete_dynamics_ukf),
     nl_measurement_model = mm,
-    A = (xn, u, p, t) -> linearized_rk4(xn, u, p, t)[2],
     Cl,
     R1,
     d0,
@@ -495,10 +464,9 @@ mukf_rk4 = MUKF(;
     nu,
     ny,
     Ts,
-    p = CurrentEstimate(x0_full, R0_full),
 )
 
-sol_rk4 = forward_trajectory(mukf_rk4, u, y; pre_predict_cb = update_estimate!)
+sol_rk4 = forward_trajectory(mukf_rk4, u, y)
 
 x_est_rk4 = reduce(hcat, sol_rk4.xt)'
 m_est_rk4 = 1.0 ./ x_est_rk4[:, 7]
@@ -509,10 +477,10 @@ println("MUKF with linearized RK4 - Mass RMSE: $(round(rmse_m_rk4, digits=4)) kg
 println("MUKF with linearized RK4 - Drag RMSE: $(round(rmse_Cd_rk4, digits=6)) kg/m")
 ```
 
-Since `dynamics` and `A` are separate functions, the integrator step is differentiated twice for each sigma point in this implementation.
+The Jacobian is computed with ForwardDiff for each sigma point and time step, which increases the computational cost compared to an explicit expression for ``A``. Since the filter performs the linearization, [`LinearizedDynamics`](@ref) can also be used for dynamics that are not conditionally linear in continuous time. The nonlinearity with respect to ``x^l`` is then handled by linearization, similar to an extended Kalman filter.
 
 ### Repartitioning the state
-The variables that give rise to the quadratic term can be moved to the nonlinear substate. With ``x^n = [v_x, v_y, v_z, \theta, \varphi]`` and ``x^l = [x, y, z]``, ``A_n = 0`` and ``A`` is constant, the exact discrete-time model is affine in ``x^l``, and the RK4 method can be used without approximation. The number of sigma points increases from 7 to 11, which is still fewer than the 17 sigma points of the UKF. The keyword arguments `n_inds` and `l_inds` of [`MUKF`](@ref) allow the order of the state variables to be kept unchanged.
+The variables that give rise to the quadratic term can be moved to the nonlinear substate. With ``x^n = [v_x, v_y, v_z, \theta, \varphi]`` and ``x^l = [x, y, z]``, ``A_n = 0`` and ``A`` is constant, the exact discrete-time model is affine in ``x^l``, and the RK4 method can be used without approximation. The number of sigma points increases from 7 to 11, which is still fewer than the 17 sigma points of the UKF. The keyword arguments `n_inds` and `l_inds` of [`MUKF`](@ref) allow the order of the state variables to be kept unchanged. When the MUKF is constructed with `dynamics = LinearizedDynamics(discrete_dynamics_ukf)`, `nxn = 5`, `n_inds = [1, 2, 3, 7, 8]` and `l_inds = [4, 5, 6]`, together with a measurement model and `Cl` for this partitioning, the linearization is exact, since the RK4 step is affine in the position.
 
 ### Discretizations that do not preserve the structure
 The forward Euler method with several steps per sample interval, the Heun method and other Runge-Kutta methods applied to the full state, as well as implicit methods, evaluate ``d`` or ``A`` at values of ``x^n`` that depend on ``x^l``, and the resulting discrete-time models are not affine in ``x^l`` when ``A_n \neq 0``. Similarly, treating ``A_n(x^n) x^l`` as an input that is held constant over the sample interval and integrating the nonlinear substate with an accurate integrator results in a model that is not affine in ``x^l``, unless the integrator step is linearized with respect to this input as described above.

@@ -86,6 +86,48 @@ function MUKFPredictCache(x_full_proto, G_proto, xp_proto, ns, static::Bool)
 end
 
 """
+    LinearizedDynamics(f)
+
+Discrete-time dynamics ``x_{k+1} = f(x_k, u_k, p, t)`` of the full state for the [`MUKF`](@ref), where `f` is not required to be affine in the linear substate ``x^l``.
+
+The MUKF requires dynamics that are affine in ``x^l`` given the nonlinear substate ``x^n``. A conditionally linear continuous-time model in general loses this property when it is discretized with an accurate integrator, such as the RK4 method. When the dynamics are wrapped in `LinearizedDynamics`, the MUKF evaluates `f` for each sigma point ``x^n_i`` at the full state composed of ``x^n_i`` and the conditional mean ``\\bar x^l_i`` of ``x^l`` given ``x^n_i``, and replaces the matrix ``A(x^n_i)`` by the Jacobian of `f` with respect to ``x^l`` at this point, computed with ForwardDiff. The propagated sigma points thus coincide with `f`, and the linearization only affects the propagation of the conditional covariance of ``x^l``. The linearization is exact when `f` is affine in ``x^l``, otherwise the resulting error is, to leading order, proportional to the conditional covariance of ``x^l``. The MUKF can thus also be used for dynamics that are not conditionally linear, in which case the nonlinearity with respect to ``x^l`` is handled by linearization, similar to an extended Kalman filter. The measurement model must still be affine in ``x^l``.
+
+`f` must be an out-of-place function `f(x, u, p, t)` of the full state `x`, with the state variables ordered according to the arguments `n_inds` and `l_inds` of the MUKF. The argument `A` of the MUKF is omitted when `LinearizedDynamics` is used.
+
+# Example
+```julia
+using SeeToDee
+discrete_dynamics = SeeToDee.Rk4(continuous_dynamics, Ts) # continuous_dynamics(x, u, p, t) returns ẋ
+mukf = MUKF(; dynamics = LinearizedDynamics(discrete_dynamics), nl_measurement_model, Cl, R1, d0, nxn, nu, ny, Ts)
+```
+"""
+struct LinearizedDynamics{F}
+    f::F
+end
+
+"""
+    linearize_dynamics(ld::LinearizedDynamics, x, xl, Ml, u, p, t)
+
+Return the value of the dynamics at the full state `x`, and the Jacobian of the dynamics with respect to the linear substate at `xl`, the linear substate of `x`. The matrix `Ml` places the linear substate in the full state.
+"""
+function linearize_dynamics(ld::LinearizedDynamics, x, xl, Ml, u, p, t)
+    J = ForwardDiff.jacobian(xli -> ld.f(x + Ml * (xli - xl), u, p, t), xl)
+    ld.f(x, u, p, t), J
+end
+
+"""
+    assemble_state(f::MUKF, xn, xl)
+
+Assemble the full state from the nonlinear substate `xn` and the linear substate `xl`, according to the indices `f.n_inds` and `f.l_inds`.
+"""
+function assemble_state(f, xn, xl)
+    x = similar(f.x, promote_type(eltype(xn), eltype(xl)))
+    x[f.n_inds] = xn
+    x[f.l_inds] = xl
+    x isa MVector ? SVector(x) : x
+end
+
+"""
     MUKF(; dynamics, nl_measurement_model::RBMeasurementModel, A, Cl, R1, d0, nxn, nu, ny, Ts=1.0, p=NullParameters(), weight_params=MerweParams(), names=default_names(length(d0.μ), nu, ny, "MUKF"))
 
 Marginalized Unscented Kalman Filter for mixed linear/nonlinear state-space models.
@@ -112,9 +154,9 @@ where ``x^n`` is the nonlinear substate and ``x^l`` is the linear substate. This
 
 # Arguments
 
-* `dynamics`: Function returning nonlinear contribution to the dynamics `[dn(xn, u, p, t); dl(xn, u, p, t)]`. Control input dependence can be encoded directly in both `dn` and `dl`.
+* `dynamics`: Function returning nonlinear contribution to the dynamics `[dn(xn, u, p, t); dl(xn, u, p, t)]`. Control input dependence can be encoded directly in both `dn` and `dl`. Alternatively, a [`LinearizedDynamics`](@ref) containing the discrete-time dynamics of the full state, which the filter linearizes with respect to the linear substate. `A` is omitted in this case.
 * `nl_measurement_model`: An instance of [`RBMeasurementModel`](@ref) containing `g` and `R_2`
-* `A`: Combined coupling and dynamics matrix/function `[An(xn); Al(xn)]` (nx × nxl). The first nxn rows (An) couple the linear state to the nonlinear state dynamics, and the last nxl rows (Al) define the linear state dynamics matrix.
+* `A`: Combined coupling and dynamics matrix/function `[An(xn); Al(xn)]` (nx × nxl). The first nxn rows (An) couple the linear state to the nonlinear state dynamics, and the last nxl rows (Al) define the linear state dynamics matrix. Omitted when `dynamics` is a [`LinearizedDynamics`](@ref).
 * `Cl`: Measurement matrix/function `Cl(xn, u, p, t)` for the linear substate
 * `R1`: Full process noise covariance matrix (nx × nx) for the combined state [xn; xl] (matrix or function)
 * `d0`: Initial normal distribution for the full state [xn; xl] (`LowLevelParticleFilters.SimpleMvNormal`)
@@ -133,9 +175,9 @@ mutable struct MUKF{IPD,IPM,DT,MMT,AT,CLT,R1T,D0T,XNT,XT,RT,TS,PARAMS,WP,NT,SPC,
 
     # Model functions and parameters
 
-    dynamics::DT              # Returns [dₙ(xⁿ, u, p, t); dₗ(xⁿ, u, p, t)] (uncoupled part of dynamics)
+    dynamics::DT              # Returns [dₙ(xⁿ, u, p, t); dₗ(xⁿ, u, p, t)] (uncoupled part of dynamics), or a LinearizedDynamics
     nl_measurement_model::MMT # Nonlinear measurement model
-    A::AT                     # Combined coupling and dynamics matrix [An; Al] (nx × nxl)
+    A::AT                     # Combined coupling and dynamics matrix [An; Al] (nx × nxl), nothing for LinearizedDynamics
     Cl::CLT                   # Measurement matrix for linear state
 
     # Noise covariances and initial distributions
@@ -176,7 +218,7 @@ end
 function MUKF{IPD,IPM}(;
     dynamics,
     nl_measurement_model::RBMeasurementModel,
-    A,
+    A = nothing,
     Cl,
     R1,
     d0,
@@ -190,6 +232,13 @@ function MUKF{IPD,IPM}(;
     n_inds = nothing,
     l_inds = nothing,
 ) where {IPD,IPM}
+
+    if dynamics isa LinearizedDynamics
+        A === nothing || throw(ArgumentError("The argument A must be omitted when the dynamics is a LinearizedDynamics, the filter computes the Jacobian with respect to the linear substate."))
+        IPD && throw(ArgumentError("LinearizedDynamics requires out-of-place dynamics."))
+    else
+        A === nothing && throw(ArgumentError("The argument A is required unless the dynamics is a LinearizedDynamics."))
+    end
 
     nx = length(d0.μ)
     nxl = nx - nxn
@@ -234,12 +283,6 @@ function MUKF{IPD,IPM}(;
 
     # Create correction cache for MUKF-specific arrays
     correct_cache = MUKFCorrectCache(x_proto, Cl_proto, y_proto, ns, static, IPM)
-
-    # Create predict cache for dynamics transformation
-    x_full_proto = x_proto  # nx-dimensional (same as x_proto)
-    G_proto = get_mat(A, xn0, zeros(T, nu), p, T(0))  # nx×nxl matrix (already concatenated [An; Al])
-    xp_proto = x0  # nx-dimensional (full state) - dynamics returns [dn; dl]
-    predict_cache = MUKFPredictCache(x_full_proto, G_proto, xp_proto, ns, static)
 
     # Initialize joint covariance from unified d0
     R0 = convert_cov_type(R1, d0.Σ)  # Use R1 as type reference
@@ -289,6 +332,16 @@ function MUKF{IPD,IPM}(;
     if R0 isa StaticArray
         linear_state_mapping = SMatrix{nx, nxl, T}(linear_state_mapping)
     end
+
+    # Create predict cache for dynamics transformation
+    x_full_proto = x_proto  # nx-dimensional (same as x_proto)
+    G_proto = if dynamics isa LinearizedDynamics
+        linearize_dynamics(dynamics, x0, x0[l_inds], linear_state_mapping, zeros(T, nu), p, T(0))[2]
+    else
+        get_mat(A, xn0, zeros(T, nu), p, T(0))  # nx×nxl matrix (already concatenated [An; Al])
+    end
+    xp_proto = x0  # nx-dimensional (full state) - dynamics returns [dn; dl]
+    predict_cache = MUKFPredictCache(x_full_proto, G_proto, xp_proto, ns, static)
 
     # Initialize sigma points (will be updated in predict!/correct!)
     # Extract nonlinear part of R0 for sigma point generation
@@ -522,7 +575,15 @@ function predict!(
     G_matrices = f.predict_cache.G_matrices
     xp = f.predict_cache.xp
 
-    if IPD
+    if f.dynamics isa LinearizedDynamics
+        # Linearize the full-state dynamics with respect to xl around the conditional mean νB,
+        # such that Yi = d_i + A_i*νB equals the dynamics evaluated at [sp[i]; νB]
+        for i in eachindex(Y, sp, G_matrices)
+            νB = μl .+ L * (sp[i] .- μn)
+            x_i = assemble_state(f, sp[i], νB)
+            Y[i], G_matrices[i] = linearize_dynamics(f.dynamics, x_i, νB, f.linear_state_mapping, u, p, t)
+        end
+    elseif IPD
         # In-place dynamics
         @inbounds for i in eachindex(sp)
             # Get state-dependent matrix A = [An; Al]
@@ -772,20 +833,13 @@ function measurement(f::MUKF)
 end
 
 function dynamics(f::MUKF)
+    f.dynamics isa LinearizedDynamics && return f.dynamics.f
     function (x, u, p, t)
         xn = x[f.n_inds]
         xl = x[f.l_inds]
-
-        # Get combined A matrix and extract An, Al by row indexing
+        # The rows of the dynamics and of A are ordered like the full state
         A_mat = get_mat(f.A, xn, u, p, t)
-        An = A_mat[f.n_inds, :]  # First nxn rows
-        Al = A_mat[f.l_inds, :]  # Remaining nxl rows
-
-        dyn_full = f.dynamics(xn, u, p, t)
-        xn_next = dyn_full[f.n_inds] .+ An * xl
-        xl_next = dyn_full[f.l_inds] .+ Al * xl
-
-        return [xn_next; xl_next]
+        return f.dynamics(xn, u, p, t) .+ A_mat * xl
     end
 end
 
@@ -798,13 +852,16 @@ function sample_state(f::MUKF{IPD}, x, u, p=parameters(f), t=index(f)*f.Ts; nois
 
     xn = x[f.n_inds]
     xl = x[f.l_inds]
-    A = get_mat(f.A, xn, u, p, t)
 
-    if IPD
+    if f.dynamics isa LinearizedDynamics
+        x_next = f.dynamics.f(x, u, p, t)
+    elseif IPD
+        A = get_mat(f.A, xn, u, p, t)
         dyn_full = similar(x)
         f.dynamics(dyn_full, xn, u, p, t)
         x_next = dyn_full .+ A * xl
     else
+        A = get_mat(f.A, xn, u, p, t)
         dyn_full = f.dynamics(xn, u, p, t)
         x_next = dyn_full .+ A * xl
     end
