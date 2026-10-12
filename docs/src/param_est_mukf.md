@@ -57,8 +57,8 @@ Ts = 0.02   # Sample time
 nothing # hide
 ```
 We'll simulate a scenario where:
-- Mass decreases linearly from 1.0 to 0.85 kg (fuel drain)
-- Drag increases abruptly at t=50s from 0.01 to 0.015 (damage/configuration change)
+- Mass decreases linearly from 1.0 to 0.85 kg during the first 25 s (fuel drain)
+- Drag increases abruptly at t = 25 s from 0.01 to 0.015 (damage/configuration change)
 
 ## MUKF Formulation with Conditionally Linear Structure
 
@@ -74,6 +74,15 @@ $$
 where ``x^n = [v_x, v_y, v_z]`` and ``x^l = [x, y, z, \theta, \varphi]``. The coupling matrix ``A_n(x^n)`` is ``3 \times 5`` and captures how ``\theta`` scales the thrust forces and ``\varphi`` scales the drag forces. The term ``d_l(x^n) = [v_x, v_y, v_z, 0, 0]`` captures how positions depend on velocities.
 
 This clever parameterization reduces the number of sigma points from 17 (for a full 8D UKF with 2nx+1 = 2×8+1) to only 7 (for a 3D nonlinear MUKF with 2×3+1), a 59% reduction. Unscented Kalman filters internally perform a Cholesky factorization of the covariance matrix (to compute sigma points), which scales roughly cubically with state dimension, but the MUKF gets away with factorizing only the part of the covariance corresponding to the nonlinear substate, leading to further computational savings.
+
+The MUKF operates on a discrete-time model ``x_{k+1} = d(x^n_k) + A(x^n_k) x^l_k``, i.e., the discretization of the dynamics must preserve the conditionally linear structure. Below, the velocity is discretized with the forward Euler method, and the position with the update that is exact for constant acceleration over the sample interval,
+```math
+\begin{aligned}
+v_{k+1} &= v_k + T_s \dot v_k \\
+p_{k+1} &= p_k + T_s v_k + \frac{T_s^2}{2} \dot v_k
+\end{aligned}
+```
+where ``p = [x, y, z]`` and ``\dot v_k = d_n(x^n_k) + A_n(x^n_k) x^l_k``. Both updates are affine in ``x^l_k``. The section [Accuracy of the discretization](@ref) below explains this choice and discusses alternatives with higher accuracy.
 
 ```@example mukfparam
 # Nonlinear dynamics function returns [dn; dl] where:
@@ -112,15 +121,20 @@ function An_matrix(xn, u, p, t)
     ]
 end
 
-# Discrete coupling matrix (scaled by sampling time)
-An_matrix_discrete(xn, u, p, t) = An_matrix(xn, u, p, t) * Ts
+# Discrete-time dynamics x⁺ = d(xn) + A(xn)*xl for the MUKF, with
+# v⁺ = v + Ts*v̇ and pos⁺ = pos + Ts*v + Ts²/2*v̇, where v̇ = dn + An*xl
+function discrete_nonlinear_dynamics(xn, u, p, t)
+    dn_dl = quadrotor_nonlinear_dynamics(xn, u, p, t) # [dn; dl]
+    dn = dn_dl[SA[1, 2, 3]]
+    [xn; @SVector(zeros(5))] + Ts .* dn_dl + Ts^2/2 .* [@SVector(zeros(3)); dn; @SVector(zeros(2))]
+end
 
-# Linear state evolution for discrete-time filter
-# Al = I to carry over state from previous time step: xl[k+1] = xl[k] + Ts*dl(xn[k])
-Al_discrete = SMatrix{nxl, nxl}(I(nxl))
-
-# Combined A matrix for MUKF: A = [An; Al] (nx × nxl)
-A_matrix_discrete(xn, u, p, t) = [An_matrix_discrete(xn, u, p, t); Al_discrete]
+# Discrete-time A = [An; Al] (nx × nxl)
+Il = SMatrix{nxl, nxl}(I(nxl))
+function A_matrix_discrete(xn, u, p, t)
+    An = An_matrix(xn, u, p, t)
+    [Ts .* An; Il + Ts^2/2 .* [An; @SMatrix(zeros(2, 5))]]
+end
 
 # Measurement: we measure [x,y,z,vx,vy,vz]
 # This comes from d(xn) + Cl*xl where xl = [x,y,z,θ,φ]
@@ -134,21 +148,18 @@ Cl = SA[
     0.0  0.0  0.0  0.0  0.0    # vz measurement (from xn)
 ]
 
-# Discretize the nonlinear dynamics for the MUKF
-discrete_nonlinear_dynamics(x,u,p,t) = [x; @SVector(zeros(5))] + Ts .* quadrotor_nonlinear_dynamics(x,u,p,t)
-
 nothing # hide
 ```
 
 ## Simulation
-We'll simulate a hovering scenario with small perturbations, where the mass decreases (fuel drain) and drag increases abruptly (damage).
+The thrust in each axis equals the hovering thrust of the nominal mass plus small random variations. In the vertical direction, the thrust balances gravity at the nominal mass, and the quadrotor climbs as the mass decreases. In the horizontal directions, the quadrotor accelerates until the drag force balances the thrust, which makes the drag coefficient observable. The mass decreases (fuel drain) and the drag increases abruptly (damage).
 
 ```@example mukfparam
-Tf = 50  # 50 seconds at 0.01s sampling
+Tf = 50  # Duration (s)
 t_vec = range(0, stop=Tf, step=Ts)
 T = length(t_vec)
 
-# Control: hovering thrust with small variations
+# Control: hovering thrust with small variations in each axis
 m_nominal = 1.0
 F_hover = m_nominal * g
 u = [SA[F_hover + 0.1*randn(), F_hover + 0.1*randn(), F_hover + 0.1*randn()] for _ in eachindex(t_vec)]
@@ -218,7 +229,7 @@ y = [y_true[i] .+ 0.01 .* @SVector(randn(ny)) for i in eachindex(t_vec)]
 # Plot true trajectory and parameters
 p1 = plot(t_vec, x_true[:, 6], label="Altitude (z)", xlabel="Time (s)", ylabel="m", legend=:topright)
 p2 = plot(t_vec, m_true, label="Mass", xlabel="Time (s)", ylabel="kg", legend=:topright, c=:blue)
-p3 = plot(t_vec, Cd_true, label="Drag", ylabel="kg·s/m", c=:red)
+p3 = plot(t_vec, Cd_true, label="Drag", ylabel="kg/m", c=:red)
 plot(p1, p2, p3)
 ```
 
@@ -287,14 +298,14 @@ p1 = plot(t_vec, m_true, label="True mass", lw=2, xlabel="Time (s)", ylabel="Mas
           legend=:topright, c=:black, ls=:dash)
 plot!(p1, t_vec, m_est_mukf, label="MUKF estimate", lw=2, c=:blue)
 
-p2 = plot(t_vec, Cd_true, label="True drag", lw=2, xlabel="Time (s)", ylabel="Drag coeff (kg·s/m)",
+p2 = plot(t_vec, Cd_true, label="True drag", lw=2, xlabel="Time (s)", ylabel="Drag coeff (kg/m)",
           legend=:topleft, c=:black, ls=:dash)
 plot!(p2, t_vec, Cd_est_mukf, label="MUKF estimate", lw=2, c=:blue)
 
 plot(p1, p2, layout=(2,1), size=(800,500))
 ```
 
-The MUKF successfully tracks both parameters through the gradual mass decrease and the abrupt drag increase at t=50s. The estimation converges quickly from the initial guess.
+The MUKF successfully tracks both parameters through the gradual mass decrease and the abrupt drag increase at t = 25 s. The estimation converges quickly from the initial guess.
 
 ## Comparison with UKF Approach
 For comparison, let's solve the same problem using a standard UKF with the full 8D state (no exploitation of conditionally linear structure):
@@ -360,7 +371,7 @@ Let's quantify the estimation accuracy:
 using Statistics
 
 # Compute RMSE for parameters (excluding initial transient)
-transient = 500  # Exclude first 5 seconds
+transient = round(Int, 10/Ts)  # Exclude the first 10 seconds
 rmse_m_mukf = sqrt(mean((m_true[transient:end] - m_est_mukf[transient:end]).^2))
 rmse_Cd_mukf = sqrt(mean((Cd_true[transient:end] - Cd_est_mukf[transient:end]).^2))
 
@@ -368,14 +379,111 @@ rmse_m_ukf = sqrt(mean((m_true[transient:end] - m_est_ukf[transient:end]).^2))
 rmse_Cd_ukf = sqrt(mean((Cd_true[transient:end] - Cd_est_ukf[transient:end]).^2))
 
 println("MUKF - Mass RMSE: $(round(rmse_m_mukf, digits=4)) kg")
-println("MUKF - Drag RMSE: $(round(rmse_Cd_mukf, digits=6)) kg·s/m")
+println("MUKF - Drag RMSE: $(round(rmse_Cd_mukf, digits=6)) kg/m")
 println()
 println("UKF  - Mass RMSE: $(round(rmse_m_ukf, digits=4)) kg")
-println("UKF  - Drag RMSE: $(round(rmse_Cd_ukf, digits=6)) kg·s/m")
+println("UKF  - Drag RMSE: $(round(rmse_Cd_ukf, digits=6)) kg/m")
 ```
 
 Both filters perform comparably in terms of accuracy. However, MUKF uses only 7 sigma points (2×3+1 for 3D nonlinear state) compared to UKF's 17 sigma points (2×8+1 for 8D full state), a 59% reduction illustrating the computational benefit of exploiting the conditionally linear structure with the φ = θ·Cd parameterization.
 
-We should note here that we have performed slightly different discretizations of the dynamics for the UKF and the MUKF. With the standard UKF, we discretized the entire dynamics using an RK4 method, a very accurate integrator in this context. For the MUKF, we instead discretized the dynamics using a simple forward Euler discretization (by multiplying ``A_n`` and the output of `quadrotor_nonlinear_dynamics` by ``T_s``). The reason for this discrepancy is that the conditional linearity that holds for this system in continuous time no longer holds after discretization, _unless_ we use forward Euler discretization, which is the only scheme simple enough to not mess with the linearity. This primitive discretization is often sufficient for state estimation when sample intervals are short, which they tend to be when controlling quadrotors. See the note under [Discretization](@ref) for more comments regarding accuracy of integration for state estimation.
+The two filters use different discretizations of the dynamics. For the UKF, the entire dynamics is discretized with the RK4 method, which is very accurate in this context. The RK4 method cannot be used for the MUKF, since the resulting discrete-time model is not affine in the linear substate, although the continuous-time model is. The MUKF above instead uses the forward Euler method for the velocity and the update that is exact for constant acceleration for the position. With short sample intervals, which are typical for the control of quadrotors, this discretization is sufficient for state estimation, and the estimates of the two filters are nearly identical. See the note under [Discretization](@ref) for more comments regarding accuracy of integration for state estimation.
 
-In special cases, more accurate integration is possible also for MUKF estimators. For example, when ``d_l(x^n) = 0``, the linear state evolves purely linearly as ``x^l_{k+1} = A_l x^l_k``, and we can use the matrix exponential to compute a discretized ``A_l``. When ``A_n = 0``, the nonlinear state evolves purely nonlinearly as ``x^n_{k+1} = f(x^n_k, u_k)``, and we can use any accurate integrator for this part. Even when ``A_n \neq 0``, we could treat the linear part of the nonlinear state evolution ``A_n x^l`` as an additional input to the nonlinear dynamics and use an accurate integrator for this part, this is not yet implemented due to the added complexity it would bring.
+## Accuracy of the discretization
+The MUKF requires a discrete-time model of the form ``x_{k+1} = d(x^n_k) + A(x^n_k) x^l_k``, i.e., a model that is affine in the linear substate. This section explains why the exact discrete-time model of a conditionally linear continuous-time system in general does not have this form, and discusses discretizations that preserve the form with higher accuracy than the forward Euler method.
+
+Let ``z = [x^n; x^l]`` denote the full state, ``f(z) = d(x^n) + A(x^n) x^l`` the continuous-time dynamics and ``h = T_s`` the sample interval. A Taylor expansion of the exact solution over one sample interval gives
+```math
+z_{k+1} = z_k + h f(z_k) + \frac{h^2}{2} \frac{\partial f}{\partial z}(z_k) f(z_k) + O(h^3)
+```
+The term of order ``h`` is affine in ``x^l``, but the term of order ``h^2`` contains
+```math
+\frac{\partial \big(A(x^n) x^l\big)}{\partial x^n} A_n(x^n) x^l
+```
+which is quadratic in ``x^l``. A model that is affine in ``x^l`` cannot reproduce this term for all values of ``x^l``. Consequently, the local truncation error of a discretization in which the discrete-time ``d`` and ``A`` depend only on ``x^n_k`` and ``u_k`` is, in general, of order ``h^2``, the same order as for the forward Euler method. The error constant can nevertheless be reduced substantially, and the limitation does not apply to discretizations that depend on the current estimate of ``x^l``. For the quadrotor, the quadratic term in the equation for ``v_x`` is ``-2\varphi |v_x| (\theta F_x - \varphi v_x |v_x|)``, which describes the change of the drag force over the sample interval.
+
+The quadratic term vanishes when ``A`` does not vary in the directions in which ``x^l`` changes ``x^n``, in particular when ``A_n = 0``. The exact discrete-time model is then affine in ``x^l``, and every Runge-Kutta method applied to the full state preserves this property, since the intermediate stages evaluate ``d`` and ``A`` at values of ``x^n`` that do not depend on ``x^l``. The discrete-time ``A`` is then the Jacobian of the integrator step with respect to ``x^l``, which can be computed with automatic differentiation.
+
+The following discretizations preserve the conditionally linear structure also when ``A_n \neq 0``.
+
+### Local linearization
+The function ``A`` is evaluated at ``x^n_k``, and the function ``d`` is replaced by its linearization around ``x^n_k``. The resulting linear time-invariant system
+```math
+\dot z = J z + c, \quad J = \begin{bmatrix} \dfrac{\partial d}{\partial x^n}(x^n_k) & A(x^n_k) \end{bmatrix}, \quad c = d(x^n_k) - \dfrac{\partial d}{\partial x^n}(x^n_k)\, x^n_k
+```
+is solved exactly over the sample interval using the matrix exponential
+```math
+\exp\left(\begin{bmatrix} J & c \\ 0 & 0 \end{bmatrix} h\right) = \begin{bmatrix} \Phi & \gamma \\ 0 & 1 \end{bmatrix}, \quad \Phi = \begin{bmatrix} \Phi_n & \Phi_l \end{bmatrix}
+```
+which gives the discrete-time model ``z_{k+1} = \Phi_n x^n_k + \gamma + \Phi_l x^l_k``, affine in ``x^l_k``. This is the exponential Rosenbrock-Euler method, also called the local linearization method, with the Jacobian of ``f`` replaced by ``J``, i.e., with the derivative of ``A`` with respect to ``x^n`` omitted. The method retains all terms of order ``h^2`` except those that contain this derivative, and it integrates the linear part of the dynamics exactly, which is beneficial when ``A_l`` has eigenvalues for which the forward Euler method is unstable at the chosen sample interval.
+
+For the quadrotor, ``\partial d / \partial x^n`` is nonzero only in the rows of the position, ``A_l = 0``, and the method reduces to the discretization used in the example above. The velocity update coincides with the forward Euler method, since the only term of order ``h^2`` in the velocity equation is the change of the drag force, which contains the derivative of ``A`` with respect to ``x^n``. The following code implements the general method and verifies that it coincides with the discretization used above. The general method requires a matrix exponential for each sigma point and time step, a closed-form expression is therefore preferable when available.
+
+```@example mukfparam
+using ForwardDiff
+
+# Continuous-time A = [An; Al], where Al = 0
+A_matrix(xn, u, p, t) = [An_matrix(xn, u, p, t); @SMatrix(zeros(5, 5))]
+
+function local_linearization(d, A, xn, u, p, t, h)
+    nxn = length(xn)
+    Jd = ForwardDiff.jacobian(xn -> d(xn, u, p, t), xn)
+    J = [Jd A(xn, u, p, t)]
+    c = d(xn, u, p, t) - Jd*xn
+    nx = size(J, 1)
+    E = exp([J c; zeros(1, nx + 1)] * h)
+    Φn, Φl, γ = E[1:nx, 1:nxn], E[1:nx, nxn+1:nx], E[1:nx, end]
+    Φn*xn + γ, Φl # Discrete-time d and A
+end
+
+xn_test = SA[3.0, -2.0, 0.5]
+d_ll, A_ll = local_linearization(quadrotor_nonlinear_dynamics, A_matrix, xn_test, u[1], nothing, 0.0, Ts)
+maximum(abs, d_ll - discrete_nonlinear_dynamics(xn_test, u[1], nothing, 0.0)),
+maximum(abs, A_ll - A_matrix_discrete(xn_test, u[1], nothing, 0.0))
+```
+
+### Linearization of an accurate integrator step
+Let ``\Phi_h(x^n, x^l)`` denote one step of an accurate integrator applied to the full state, e.g., the RK4 method used for the UKF above, and let ``\bar x^l`` denote a reference value of the linear substate. The linearization
+```math
+z_{k+1} = \Phi_h(x^n_k, \bar x^l) + \frac{\partial \Phi_h}{\partial x^l}(x^n_k, \bar x^l)\, (x^l_k - \bar x^l)
+```
+is affine in ``x^l_k``. Since the term of order ``h`` in ``\Phi_h`` is affine in ``x^l``, the error introduced by the linearization is of order ``h^2``, quadratic in ``x^l_k - \bar x^l``, and zero when ``\bar x^l = x^l_k``.
+
+A suitable reference for the sigma point ``x^n_i`` is the conditional mean of ``x^l`` given ``x^n = x^n_i``, which the MUKF uses to propagate the sigma points. The propagated sigma points then coincide with the steps of the accurate integrator, and the linearization only affects the propagation of the conditional covariance of ``x^l``, similar to the linearization in an extended Kalman filter. The error thus decreases with the conditional covariance of ``x^l``, e.g., as the parameter estimates converge. A fixed reference, such as the initial guess of the parameters, does not require access to the estimate, but the error is then not guaranteed to be smaller than the error of the forward Euler method, since the quadratic term above is indefinite. For the quadrotor, this occurs close to the terminal velocity, where the true acceleration is close to zero while the reference parameters result in a nonzero acceleration.
+
+The MUKF performs this linearization when the dynamics are wrapped in [`LinearizedDynamics`](@ref). The wrapped function is the discrete-time dynamics of the full state, here the RK4 discretization used for the UKF above, and the argument `A` is omitted:
+
+```@example mukfparam
+mukf_rk4 = MUKF(;
+    dynamics = LinearizedDynamics(discrete_dynamics_ukf),
+    nl_measurement_model = mm,
+    Cl,
+    R1,
+    d0,
+    nxn,
+    nu,
+    ny,
+    Ts,
+)
+
+sol_rk4 = forward_trajectory(mukf_rk4, u, y)
+
+x_est_rk4 = reduce(hcat, sol_rk4.xt)'
+m_est_rk4 = 1.0 ./ x_est_rk4[:, 7]
+Cd_est_rk4 = x_est_rk4[:, 8] ./ x_est_rk4[:, 7]
+rmse_m_rk4 = sqrt(mean((m_true[transient:end] - m_est_rk4[transient:end]).^2))
+rmse_Cd_rk4 = sqrt(mean((Cd_true[transient:end] - Cd_est_rk4[transient:end]).^2))
+println("MUKF with linearized RK4 - Mass RMSE: $(round(rmse_m_rk4, digits=4)) kg")
+println("MUKF with linearized RK4 - Drag RMSE: $(round(rmse_Cd_rk4, digits=6)) kg/m")
+```
+
+The Jacobian is computed with ForwardDiff for each sigma point and time step, which increases the computational cost compared to an explicit expression for ``A``. Since the filter performs the linearization, [`LinearizedDynamics`](@ref) can also be used for dynamics that are not conditionally linear in continuous time. The nonlinearity with respect to ``x^l`` is then handled by linearization, similar to an extended Kalman filter.
+
+### Repartitioning the state
+The variables that give rise to the quadratic term can be moved to the nonlinear substate. With ``x^n = [v_x, v_y, v_z, \theta, \varphi]`` and ``x^l = [x, y, z]``, ``A_n = 0`` and ``A`` is constant, the exact discrete-time model is affine in ``x^l``, and the RK4 method can be used without approximation. The number of sigma points increases from 7 to 11, which is still fewer than the 17 sigma points of the UKF. The keyword arguments `n_inds` and `l_inds` of [`MUKF`](@ref) allow the order of the state variables to be kept unchanged. When the MUKF is constructed with `dynamics = LinearizedDynamics(discrete_dynamics_ukf)`, `nxn = 5`, `n_inds = [1, 2, 3, 7, 8]` and `l_inds = [4, 5, 6]`, together with a measurement model and `Cl` for this partitioning, the linearization is exact, since the RK4 step is affine in the position.
+
+### Discretizations that do not preserve the structure
+The forward Euler method with several steps per sample interval, the Heun method and other Runge-Kutta methods applied to the full state, as well as implicit methods, evaluate ``d`` or ``A`` at values of ``x^n`` that depend on ``x^l``, and the resulting discrete-time models are not affine in ``x^l`` when ``A_n \neq 0``. Similarly, treating ``A_n(x^n) x^l`` as an input that is held constant over the sample interval and integrating the nonlinear substate with an accurate integrator results in a model that is not affine in ``x^l``, unless the integrator step is linearized with respect to this input as described above.
+
+### Comparison
+With the sample interval and the noise covariances of this tutorial, the choice of discretization has a negligible effect on the estimates, since the discretization errors are small compared to the process noise. The differences become pronounced for longer sample intervals and smaller noise covariances. In an experiment with ``T_s = 0.2`` s, a measurement noise covariance equal to the covariance of the simulated measurement noise and a small process noise covariance, the forward Euler method for both the velocity and the position resulted in an RMSE of the mass estimate approximately twice as large as for the UKF with RK4, and an RMSE of the position estimate approximately ten times as large. The local linearization removed most of this difference, and both the RK4 step linearized around the conditional mean and the repartitioned state resulted in the same accuracy as the UKF with RK4.

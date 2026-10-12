@@ -54,7 +54,7 @@ struct WikiParams{T} <: UTParams
 end
 
 """
-    MerweParams(; α = 1.0, β = 2.0, κ = 0.0)
+    MerweParams(; α = 1e-3, β = 2.0, κ = 0.0)
     MerweParams(; ακ = 1.0, β = 2.0) # Simplified interface with only one parameter for ακ
 
 Unscented transform parameters suggested by van der Merwe et al.

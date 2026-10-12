@@ -5,7 +5,7 @@ export double_integrator_covariance, double_integrator_covariance_smooth, n_inte
 export UKFWeights, TrivialParams, MerweParams, WikiParams
 export IMM, interact!, combine!
 export RBPF, RBParticle, RBMeasurementModel
-export MUKF
+export MUKF, LinearizedDynamics
 export UIKalmanFilter
 export LinearMeasurementModel, EKFMeasurementModel, IEKFMeasurementModel, UKFMeasurementModel, CompositeMeasurementModel
 export KalmanFilteringSolution, KalmanSmoothingSolution, ParticleFilteringSolution

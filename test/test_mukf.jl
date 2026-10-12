@@ -4,6 +4,8 @@ using LinearAlgebra
 using LowLevelParticleFilters
 using Plots
 using StaticArrays
+using Random
+using SeeToDee
 
 # --- Recreate the RBPF tutorial system exactly ---
 nxn, nxl, ny, nu = 1, 3, 2, 0
@@ -60,7 +62,7 @@ rmse(v1, v2) = sqrt(sum((v1 .- v2).^2) / length(v1))
     @test length(sol.xt) == T
     cov_mat = LowLevelParticleFilters.covariance(mukf)
     @test isposdef(cov_mat) # symmetric positive semi-def check (approx)
-    @test rmse(xn_true, xn_est) < 3.0
+    @test rmse(xn_true, xn_est) < 1.0
 
     # Test that simulate works with MUKF
     x_sim, u_sim, y_sim = simulate(mukf, u_data[1:10])
@@ -123,7 +125,7 @@ end
     # Verify filtering produces reasonable estimates
     xn_true_s = [x_s[t][1] for t in 1:T_s]
     xn_est_s = [x[1] for x in sol_s.xt]
-    @test rmse(xn_true_s, xn_est_s) < 3.0
+    @test rmse(xn_true_s, xn_est_s) < 1.5
 end
 
 @testset "MUKF with in-place dynamics" begin
@@ -190,10 +192,10 @@ end
     @test all(length(x) == nxn_ip + nxl_ip for x in sol_ip.xt)
 
     # Compare state estimates (should be very close)
-    @test sol_ip.xt ≈ sol_oop.xt rtol=1e-5
+    @test sol_ip.xt ≈ sol_oop.xt rtol=1e-10
 
     # Compare log-likelihoods
-    @test sol_ip.ll ≈ sol_oop.ll rtol=1e-6
+    @test sol_ip.ll ≈ sol_oop.ll rtol=1e-10
 
     @test_nowarn simulate(mukf_ip, u_ip[1:10])
 end
@@ -261,10 +263,10 @@ end
     @test all(length(x) == nxn_ipm + nxl_ipm for x in sol_ipm.xt)
 
     # Compare state estimates (should be very close)
-    @test sol_ipm.xt ≈ sol_oop.xt rtol=1e-6
+    @test sol_ipm.xt ≈ sol_oop.xt rtol=1e-10
 
     # Compare log-likelihoods
-    @test sol_ipm.ll ≈ sol_oop.ll rtol=1e-6
+    @test sol_ipm.ll ≈ sol_oop.ll rtol=1e-10
 
     # Verify covariance is positive definite
     cov_ipm = LowLevelParticleFilters.covariance(mukf_ipm)
@@ -457,11 +459,103 @@ end
         nu=nu_test,
         ny=ny_test,
         n_inds=n_inds_rev,
-        l_inds=l_inds_rev
+        l_inds=l_inds_rev,
     )
 
     sol_rev = forward_trajectory(mukf_rev, u_data, y_meas)
 
-    @test sol_rev.ll ≈ sol.ll atol=1e-6
+    @test sol_rev.ll ≈ sol.ll rtol=1e-10
 end
 
+@testset "MUKF dynamics with arbitrary state ordering" begin
+    # The full-state dynamics must be returned in the order of the full state also for custom n_inds and l_inds
+    fn_rev(xn, u, p, t) = SA[0.0, 0.0, 0.0, atan(xn[1])]
+    A_rev = [Al_mat; An_mat]
+    mukf_rev = MUKF(dynamics=fn_rev, nl_measurement_model=RBMeasurementModel((xn, u, p, t) -> SA[0.1 * xn[]^2 * sign(xn[]), 0.0], R2_mat, ny),
+        A=A_rev, Cl=Cl, R1=[R1l_mat zeros(nxl, nxn); zeros(nxn, nxl) R1n_mat], d0=LowLevelParticleFilters.SimpleMvNormal([x0l; x0n], [R0l zeros(nxl, nxn); zeros(nxn, nxl) R0n]),
+        nxn=nxn, nu=nu, ny=ny, n_inds=4:4, l_inds=1:3)
+    x = [1.0, 2.0, 3.0, 0.5] # [xl; xn]
+    @test LowLevelParticleFilters.dynamics(mukf_rev)(x, Float64[], nothing, 0.0) ≈ fn_rev(x[4:4], nothing, nothing, 0) + A_rev * x[1:3]
+    @test LowLevelParticleFilters.multistep_sse(mukf_rev, u_data, y_meas; h=3) ≈ LowLevelParticleFilters.multistep_sse(mukf, u_data, y_meas; h=3)
+end
+
+@testset "MUKF with LinearizedDynamics" begin
+    # Full-state dynamics that are affine in xl, the linearization is then exact and the filter
+    # must reproduce the MUKF with explicit A
+    f_full(x, u, p, t) = fn_mukf(x[1:1], u, p, t) + A_mat * x[2:4]
+    mukf_ld = MUKF(dynamics=LinearizedDynamics(f_full), nl_measurement_model=mm, Cl=Cl, R1=R1_full, d0=d0, nxn=nxn, nu=nu, ny=ny)
+    sol_ld = forward_trajectory(mukf_ld, u_data, y_meas)
+    @test sol_ld.ll ≈ sol.ll rtol=1e-10
+    @test all(sol_ld.xt .≈ sol.xt)
+    @test all(sol_ld.Rt .≈ sol.Rt)
+    @test LowLevelParticleFilters.dynamics(mukf_ld)(x0 .+ 1, u_data[1], nothing, 0.0) ≈ LowLevelParticleFilters.dynamics(mukf)(x0 .+ 1, u_data[1], nothing, 0.0)
+    @test LowLevelParticleFilters.multistep_sse(mukf_ld, u_data, y_meas; h=3) ≈ LowLevelParticleFilters.multistep_sse(mukf, u_data, y_meas; h=3)
+    x_sim, _, y_sim = simulate(mukf_ld, u_data[1:10])
+    @test length(x_sim) == 10
+
+    # Static arrays and the reversed ordering [xl; xn]
+    f_rev(x, u, p, t) = SA[0.0, 0.0, 0.0, atan(x[4])] + SMatrix{4,3}([Al_mat; An_mat]) * x[SA[1, 2, 3]]
+    d0_rev = LowLevelParticleFilters.SimpleMvNormal(SVector{4}([x0l; x0n]), SMatrix{4,4}([R0l zeros(nxl, nxn); zeros(nxn, nxl) R0n]))
+    R1_rev = SMatrix{4,4}([R1l_mat zeros(nxl, nxn); zeros(nxn, nxl) R1n_mat])
+    mm_rev = RBMeasurementModel((xn, u, p, t) -> SA[0.1 * xn[]^2 * sign(xn[]), 0.0], SMatrix{2,2}(R2_mat), ny)
+    mukf_ld_rev = MUKF(dynamics=LinearizedDynamics(f_rev), nl_measurement_model=mm_rev, Cl=SMatrix{2,3}(Cl), R1=R1_rev, d0=d0_rev, nxn=nxn, nu=nu, ny=ny, n_inds=4:4, l_inds=1:3)
+    @test mukf_ld_rev.x isa SVector
+    @test mukf_ld_rev.predict_cache.G_matrices[1] isa SMatrix{4,3}
+    sol_ld_rev = forward_trajectory(mukf_ld_rev, u_data, y_meas)
+    @test sol_ld_rev.ll ≈ sol.ll rtol=1e-10
+    @test all(sol_ld_rev.xt[k][[4, 1, 2, 3]] ≈ sol.xt[k] for k in eachindex(sol.xt))
+
+    @test_throws ArgumentError MUKF(dynamics=LinearizedDynamics(f_full), nl_measurement_model=mm, A=A_mat, Cl=Cl, R1=R1_full, d0=d0, nxn=nxn, nu=nu, ny=ny)
+    @test_throws ArgumentError MUKF(dynamics=fn_mukf, nl_measurement_model=mm, Cl=Cl, R1=R1_full, d0=d0, nxn=nxn, nu=nu, ny=ny)
+end
+
+@testset "MUKF with LinearizedDynamics, dynamics not affine in xl" begin
+    # Velocity with an unknown quadratic drag coefficient θ in the linear substate, discretized with RK4.
+    # The discrete-time dynamics are not affine in θ, and the MUKF must produce estimates close to a UKF
+    # using the same dynamics.
+    Ts_d = 0.1
+    drag(x, u, p, t) = SA[u[1] - x[2] * x[1] * abs(x[1]), 0.0]
+    f_rk4 = SeeToDee.Rk4(drag, Ts_d)
+    T_d = 400
+    u_d = [SA[5sin(0.05k) + 3sin(0.17k)] for k in 1:T_d]
+    θ_true = 0.5
+    x_d = [SA[0.0, θ_true]]
+    for k in 1:T_d-1
+        push!(x_d, f_rk4(x_d[end], u_d[k], nothing, 0.0))
+    end
+    rng = MersenneTwister(1)
+    y_d = [SA[x[1] + 0.01randn(rng)] for x in x_d]
+    R1_d = SA[1e-6 0; 0 1e-8]
+    R2_d = SA[1e-4;;]
+    d0_d = LowLevelParticleFilters.SimpleMvNormal(SA[0.0, 0.3], SA[1.0 0; 0 0.1])
+    mukf_d = MUKF(dynamics=LinearizedDynamics(f_rk4), nl_measurement_model=RBMeasurementModel((xn, u, p, t) -> SA[xn[1]], R2_d, 1),
+        Cl=SA[0.0;;], R1=R1_d, d0=d0_d, nxn=1, nu=1, ny=1, Ts=Ts_d)
+    ukf_d = UnscentedKalmanFilter(f_rk4, (x, u, p, t) -> SA[x[1]], R1_d, R2_d, d0_d; ny=1, nu=1, Ts=Ts_d)
+    sol_mukf_d = forward_trajectory(mukf_d, u_d, y_d)
+    sol_ukf_d = forward_trajectory(ukf_d, u_d, y_d)
+    θ_mukf = [x[2] for x in sol_mukf_d.xt]
+    θ_ukf = [x[2] for x in sol_ukf_d.xt]
+    @test abs(θ_mukf[end] - θ_true) < 0.01
+    @test maximum(abs, θ_mukf[T_d÷2:end] - θ_ukf[T_d÷2:end]) < 1e-5
+    @test sol_mukf_d.ll ≈ sol_ukf_d.ll rtol=1e-3
+end
+
+@testset "MUKF with a large linear substate" begin
+    # The caches contain full-state vectors and matrices of size nx × nxl, static arrays are therefore only used for a
+    # small full state dimension, independently of the dimension of the nonlinear substate
+    nxn_b, nxl_b = 1, 51
+    nx_b = nxn_b + nxl_b
+    fn_b(xn, u, p, t) = [atan(xn[1]); zeros(nxl_b)]
+    A_b = [fill(0.01, 1, nxl_b); Matrix(0.99I, nxl_b, nxl_b)]
+    Cl_b = [zeros(1, nxl_b); fill(1 / nxl_b, 1, nxl_b)]
+    mm_b = RBMeasurementModel((xn, u, p, t) -> [0.1 * xn[1]^2 * sign(xn[1]), 0.0], Matrix(0.1I, 2, 2), 2)
+    d0_b = LowLevelParticleFilters.SimpleMvNormal(zeros(nx_b), Matrix(1.0I, nx_b, nx_b))
+    mukf_b = MUKF(dynamics=fn_b, nl_measurement_model=mm_b, A=A_b, Cl=Cl_b, R1=Matrix(0.01I, nx_b, nx_b), d0=d0_b, nxn=nxn_b, nu=0, ny=2)
+    @test !(mukf_b.predict_cache.Y[1] isa StaticArray)
+    @test !(mukf_b.predict_cache.G_matrices[1] isa StaticArray)
+    u_b = [zeros(0) for _ in 1:20]
+    x_b, _, y_b = simulate(mukf_b, u_b)
+    sol_b = forward_trajectory(mukf_b, u_b, y_b)
+    @test length(sol_b.xt) == 20
+    @test isfinite(sol_b.ll)
+end
