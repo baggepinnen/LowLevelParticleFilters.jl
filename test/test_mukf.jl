@@ -467,7 +467,8 @@ end
     @test sol_rev.ll ≈ sol.ll atol=1e-6
 end
 
-# Equivalent implementations are compared over a short horizon, since this system amplifies differences due to roundoff
+# Equivalent implementations are compared over a short horizon. With the default sigma-point parameters, the filter loses
+# track of xn in some realizations of the random data, and differences due to roundoff are then amplified
 Tc = 30
 u_c, y_c = u_data[1:Tc], y_meas[1:Tc]
 sol_c = forward_trajectory(mukf, u_c, y_c)

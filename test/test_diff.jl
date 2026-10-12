@@ -126,3 +126,28 @@ g3 = ForwardDiff.gradient(costfun3, [1.0])
 # @test g1 ≈ g1_e
 # @test g2 ≈ g2_e
 # @test g3 ≈ g3_e
+## Test differentiability of forward_trajectory, which stores the prediction errors along the trajectory
+
+@testset "forward_trajectory with dual numbers" begin
+    y_missing = Union{Missing, eltype(y)}[k % 5 == 0 ? missing : y[k] for k in eachindex(y)]
+    for yd in (y, [Vector(yi) for yi in y], y_missing)
+        function costfun4(p::AbstractArray{T}) where T
+            d0 = MvNormal(@SVector(zeros(T, nx)), T(1.0))
+            ukf = UnscentedKalmanFilter(dynamics3, measurement3, eye(nx), eye(ny), d0; ny, nu, p)
+            ekf = ExtendedKalmanFilter(dynamics3, measurement3, eye(nx), eye(ny), d0; nu, check=false, p)
+            -forward_trajectory(ukf, u, yd).ll - forward_trajectory(ekf, u, yd).ll
+        end
+        g4 = ForwardDiff.gradient(costfun4, [1.0])
+        h = 1e-6
+        @test g4[1] ≈ (costfun4([1.0 + h]) - costfun4([1.0 - h])) / 2h rtol=1e-5
+    end
+
+    # The prediction errors are stored with the number type of the state, and the type is unchanged for Float64 states
+    D = ForwardDiff.Dual{Nothing, Float64, 1}
+    @test LowLevelParticleFilters.innovation_type(SVector{2, Float64}, Float64) == SVector{2, Float64}
+    @test LowLevelParticleFilters.innovation_type(SVector{2, Float64}, D) == SVector{2, D}
+    @test LowLevelParticleFilters.innovation_type(Vector{Float64}, D) == Vector{D}
+    @test LowLevelParticleFilters.innovation_type(Union{Missing, SVector{2, Float64}}, D) == Union{Missing, SVector{2, D}}
+    @test LowLevelParticleFilters.innovation_type(Vector{Int}, Float64) == Vector{Float64}
+    @test LowLevelParticleFilters.innovation_type(Missing, D) == Missing
+end
