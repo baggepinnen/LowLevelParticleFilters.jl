@@ -938,3 +938,49 @@ end
     @test e isa ErrorException
     @test occursin("innovation covariance failed", sprint(showerror, e))
 end
+
+
+@testset "correct! generates the sigma points from the current estimate" begin
+    # ẋ = u − z, 0 = z³ + z − x, y = z. The DAE UKF agrees with the UKF on the reduced
+    # model x ↦ φ(x), also for a correct! before any reset! or predict!, and when the
+    # estimate is modified between predict! and correct!.
+    solver = LowLevelParticleFilters.scimlbase_solver(SimpleNewtonRaphson(); reltol = 1e-12)
+    residual(x, z, u, p, t) = SA[z[1]^3 + z[1] - x[1]]
+    φ(x, z0 = 0.0) = solver(z -> residual(SA[x], z, nothing, nothing, 0.0), SA[z0])[1]
+    dyn(xz, u, p, t) = (xn = xz[1] + 0.1 * (u[1] - xz[2]); SA[xn, φ(xn, xz[2])])
+    meas(xz, u, p, t) = SA[xz[2]]
+    R1 = SA[1e-3;;]
+    R2 = SA[1e-3;;]
+    d0 = SimpleMvNormal(SA[0.2], SA[2.0;;])
+    kf = DAEUnscentedKalmanFilter(dyn, meas, residual, get_x_z_scalar, build_xz_scalar, R1, R2, d0;
+        xz0 = SA[0.2, φ(0.2)], nu = 1, ny = 1, constraint_solver = solver)
+    ukf = UnscentedKalmanFilter((x, u, p, t) -> SA[x[1] + 0.1 * (u[1] - φ(x[1]))],
+        (x, u, p, t) -> SA[φ(x[1])], R1, R2, d0; nu = 1, ny = 1)
+
+    u = SA[1.0]
+    r_dae = correct!(kf, u, SA[1.0])
+    r_ukf = correct!(ukf, u, SA[1.0])
+    @test r_dae.K[1] > 0
+    @test r_dae.K ≈ r_ukf.K
+    @test kf.x ≈ ukf.x
+    @test kf.R ≈ ukf.R
+    @test r_dae.ll ≈ r_ukf.ll
+
+    rng = Random.Xoshiro(1)
+    for k in 1:20
+        predict!(kf, u)
+        predict!(ukf, u)
+        if k % 5 == 0
+            x_new = kf.x .+ 0.3
+            R_new = 2 .* kf.R
+            kf.x, ukf.x = x_new, x_new
+            kf.R, ukf.R = R_new, R_new
+        end
+        y = SA[φ(1.0) + 0.03 * randn(rng)]
+        r_dae = correct!(kf, u, y)
+        r_ukf = correct!(ukf, u, y)
+        @test r_dae.ll ≈ r_ukf.ll
+    end
+    @test kf.x ≈ ukf.x
+    @test kf.R ≈ ukf.R
+end

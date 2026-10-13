@@ -559,3 +559,25 @@ end
     @test length(sol_b.xt) == 20
     @test isfinite(sol_b.ll)
 end
+
+@testset "MUKF analytic covariance terms with state-dependent coupling matrices" begin
+    # x⁺ₙ = xₙ, x⁺ₗ = xₙ xₗ, y = xₙ xₗ with xₙ ~ N(0, 1), xₗ ~ N(1, 1) independent.
+    # The exact covariance of x⁺ is [1 1; 1 2] and the exact variance of y is 2.
+    dynamics(xn, u, p, t) = SA[xn[1], 0.0]
+    A(xn, u, p, t) = SA[0.0; xn[1];;]
+    g(xn, u, p, t) = SA[0.0]
+    Cl(xn, u, p, t) = SA[xn[1];;]
+
+    μ0 = SA[0.0, 1.0]
+    Σ0 = SMatrix{2,2}(1.0I)
+    R1 = SMatrix{2,2}(1e-8I)
+    R2 = SMatrix{1,1}(1e-8I)
+    for weight_params in (TrivialParams(), MerweParams(α = 1.0, β = 0.0))
+        mukf = MUKF(; dynamics, nl_measurement_model = RBMeasurementModel(g, R2, 1), A, Cl, R1,
+            d0 = LowLevelParticleFilters.SimpleMvNormal(μ0, Σ0), nxn = 1, nu = 0, ny = 1, weight_params)
+        ret = correct!(deepcopy(mukf), SA{Float64}[], SA[0.0])
+        @test ret.S ≈ SA[2.0;;] atol = 1e-6
+        predict!(mukf, SA{Float64}[])
+        @test covariance(mukf) ≈ SA[1.0 1.0; 1.0 2.0] atol = 1e-6
+    end
+end
