@@ -637,8 +637,14 @@ function predict!(
         G_avg = G_avg .+ w .* G_matrices[i]
     end
 
-    # Add analytic MUT term: G*Γ*G'
+    # Analytic MUT term E[G Γ G'] = Ḡ Γ Ḡ' + Cov[G Γ^(1/2)], where the covariance is approximated
+    # with the same weights as the spread covariance
     P_analytic = G_avg * Γ_curr * G_avg'
+    @inbounds for i in eachindex(G_matrices)
+        w = i == 1 ? W.wc : W.wci
+        δG = G_matrices[i] .- G_avg
+        P_analytic = P_analytic .+ w .* (δG * Γ_curr * δG')
+    end
 
     # Full predicted covariance (includes process noise)
     P_pred = P_spread .+ P_analytic .+ R1
@@ -765,8 +771,13 @@ function correct!(
         @bangbang Cl_avg .= Cl_avg .+ w .* Cl_matrices[i]
     end
 
-    # Add analytic MUT term to innovation covariance
+    # Add analytic MUT term E[Cl Γ Cl'] = C̄l Γ C̄l' + Cov[Cl Γ^(1/2)] to innovation covariance
     S = S .+ Cl_avg * Γ_curr * Cl_avg' .+ R2_mat
+    @inbounds for i in eachindex(Cl_matrices)
+        w = i == 1 ? W.wc : W.wci
+        δCl = Cl_matrices[i] .- Cl_avg
+        S = S .+ w .* (δCl * Γ_curr * δCl')
+    end
     S = symmetrize(S)
 
     # Compute cross-covariance Σxy with CRITICAL extra term from equation 16
