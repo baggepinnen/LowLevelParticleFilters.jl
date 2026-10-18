@@ -168,7 +168,9 @@ function correct!(pf, u, y, p = parameters(pf), t = index(pf)*pf.Ts, args...; kw
 end
 
 function correct!(pf::AuxiliaryParticleFilter, u, y, p = parameters(pf), t = index(pf)*pf.Ts, args...; kwargs...)
-    # The measurement update is done already in the predict step for AUX filter
+    # The weights set by `predict!` with the look-ahead measurement hold log Σ wλ − λ_{jᵢ} − log N; adding
+    # log p(y | x′ᵢ) gives the second-stage weights, and their logsumexp the log-likelihood estimate
+    measurement_equation!(pf.pf, u, y, p, t, args...; kwargs...)
     ll = logsumexp!(state(pf))
     ll, 0
 end
@@ -237,46 +239,46 @@ end
 
 
 
+"""
+    predict!(apf::AuxiliaryParticleFilter, u, y1, p = parameters(apf), t = index(apf)*apf.Ts)
+
+Prediction step of the auxiliary particle filter with the next measurement `y1` (see
+[`AuxiliaryParticleFilter`](@ref)); a missing `y1` gives the prediction of the underlying filter.
+"""
 function predict!(pf::AuxiliaryParticleFilter, u, y1, p = parameters(pf), t = index(pf)*pf.Ts)
-    g = measurement(pf)
-    d = measurement_density(pf)
+    (y1 === missing || ismissing_measurement(y1)) && return predict!(pf.pf, u, p, t)
     s = state(pf)
-    propagate_particles!(pf.pf, u, p, t, nothing)# Propagate without noise
-    λ  = s.we
+    λ = pf.λ
+    propagate_particles!(pf.pf, u, p, t, nothing) # noise-free prediction, s.x[i] = f(s.xprev[i])
     λ .= 0
-    measurement_equation!(pf.pf, u, y1, p, t, λ)
-    s.w .+= λ # old w + new w, equivalent to old_we*new_we
-    expnormalize!(s.w) # w used as buffer
-    j = resample(pf.resampling_strategy, s.w , s.j, s.bins)
-    # reset_weights!(s) # We don't do this to keep λ and instead assign into w directly
-    permute_with_buffer!(s.x, s.xprev, j)
-    add_noise!(pf.pf)
-    lN = log(num_particles(pf))
-    for i = 1:length(s.we)
-        # note unresampled λ[i] instead of λ[j[i]]
-        s.w[i] = λ[i] - lN
+    if pf.first_stage === nothing
+        measurement_equation!(pf.pf, u, y1, p, t, λ)  # first-stage weights log p(y1 | f(xᵢ))
+    else
+        g1 = pf.first_stage
+        x = s.x
+        @inbounds for i = eachindex(λ)
+            λ[i] = g1(x[i], u, y1, p, t)
+        end
     end
-
-    s.t[] += 1
-    copyto!(s.xprev, s.x)
-end
-
-function predict!(pf::AuxiliaryParticleFilter{<:AdvancedParticleFilter},u, y, p=parameters(pf), t = index(pf)*pf.Ts)
-    s = state(pf)
-    propagate_particles!(pf.pf, u, p, t, nothing)# Propagate without noise
-    λ  = s.we
-    λ .= 0
-    measurement_equation!(pf.pf, u, y, p, t, λ)
     s.w .+= λ
-    expnormalize!(s.w) # w used as buffer
-    j = resample(pf.resampling_strategy, s.w , s.j, s.bins)
-    reset_weights!(s)
-    # NOTE: this can be sped by letting the user implement `add_noise` and call that here, rather than propagating again
-    propagate_particles!(pf.pf, u, j, p, t)# Propagate with noise and permutation
-
+    l1 = logsumexp!(s.w, s.we)                    # log Σ wλ; s.we holds the normalized first-stage weights
+    j = resample(pf.resampling_strategy, s.we, s.j, s.bins)
+    aux_propagate!(pf.pf, u, j, p, t)             # from the ancestors jᵢ with noise
+    lN = log(num_particles(pf))
+    @inbounds for i = eachindex(s.w)
+        s.w[i] = l1 - λ[j[i]] - lN
+    end
     s.t[] += 1
     copyto!(s.xprev, s.x)
 end
+
+"Propagate the particles from the ancestors `j` with noise, after the noise-free prediction is stored in `x`"
+function aux_propagate!(pf::ParticleFilter, u, j, p, t)
+    s = state(pf)
+    permute_with_buffer!(s.x, s.xprev, j) # the noise-free predictions of the ancestors
+    add_noise!(pf)
+end
+aux_propagate!(pf::AbstractParticleFilter, u, j, p, t) = propagate_particles!(pf, u, j, p, t)
 
 
 (kf::AbstractKalmanFilter)(u, y, p = parameters(kf), t = index(kf)*kf.Ts) =  update!(kf, u, y, p, t)

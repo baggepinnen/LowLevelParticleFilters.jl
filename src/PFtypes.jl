@@ -35,18 +35,39 @@ PFstate(N::Integer) = PFstate([zeros(N)],[zeros(N)],fill(-log(N), N),fill(1/N, N
     ny::Int = length(measurement_density)
 end
 
-struct AuxiliaryParticleFilter{T<:AbstractParticleFilter} <: AbstractParticleFilter
+struct AuxiliaryParticleFilter{T<:AbstractParticleFilter, F} <: AbstractParticleFilter
     pf::T
+    "First-stage log-weights of the particles before resampling"
+    λ::Vector{Float64}
+    "Log first-stage weight `(x, u, y, p, t) -> log λ` of the noise-free prediction `x`, or `nothing` for the measurement likelihood"
+    first_stage::F
 end
 
 parameters(pf::AuxiliaryParticleFilter) = parameters(pf.pf)
 
 """
-    AuxiliaryParticleFilter(args...; kwargs...)
+    AuxiliaryParticleFilter(args...; first_stage = nothing, kwargs...)
+    AuxiliaryParticleFilter(pf::AbstractParticleFilter; first_stage = nothing)
 
-Takes exactly the same arguments as [`ParticleFilter`](@ref), or an instance of [`ParticleFilter`](@ref).
+Takes exactly the same arguments as [`ParticleFilter`](@ref), or an instance of [`ParticleFilter`](@ref) or
+[`AdvancedParticleFilter`](@ref).
+
+`predict!(apf, u, y1, p, t)` uses the next measurement `y1`: the first-stage weights `λᵢ` of the noise-free
+prediction `f(xᵢ)` of each particle select the ancestors `jᵢ` (resampling with the weights `wᵢ λᵢ`), the particles are
+propagated from their ancestors with noise, and their weights are set to `log Σ wλ − log λ_{jᵢ} − log N`. The
+following `correct!(apf, u, y1, p, t)` adds `log p(y1 | x′ᵢ)` (the second-stage weights `p(y1 | x′ᵢ) / λ_{jᵢ}`), so that
+its log-likelihood is the standard estimate of the auxiliary particle filter,
+`log Σᵢ wᵢ λᵢ + log((1/N) Σᵢ p(y1 | x′ᵢ) / λ_{jᵢ})`. A missing `y1` gives a plain prediction.
+
+The first-stage weights are the measurement likelihood of the noise-free prediction, `log p(y1 | f(xᵢ))`, unless
+`first_stage(x, u, y, p, t) -> log λ` is given; it is evaluated at the noise-free prediction `x = f(xᵢ)`. The estimate is
+unbiased (in the likelihood) for any positive first-stage weights, but its variance is large when the first-stage
+weights are much sharper than the predictive density `p(y1 | xᵢ)`, as for a measurement noise smaller than the
+process noise; a first-stage likelihood with the variance of the measurement noise plus the process noise mapped to
+the measurement then reduces the variance.
 """
-AuxiliaryParticleFilter(args...;kwargs...) = AuxiliaryParticleFilter(ParticleFilter(args...;kwargs...))
+AuxiliaryParticleFilter(args...; first_stage = nothing, kwargs...) = AuxiliaryParticleFilter(ParticleFilter(args...;kwargs...); first_stage)
+AuxiliaryParticleFilter(pf::AbstractParticleFilter; first_stage = nothing) = AuxiliaryParticleFilter(pf, zeros(num_particles(pf)), first_stage)
 
 """
     ParticleFilter(N::Integer, dynamics, measurement, dynamics_density, measurement_density, initial_density; threads = false, p = NullParameters(), kwargs...)
@@ -100,6 +121,8 @@ end
 
 function Base.getproperty(pf::AuxiliaryParticleFilter, s::Symbol)
     s === :pf && return getfield(pf, :pf)
+    s === :λ && return getfield(pf, :λ)
+    s === :first_stage && return getfield(pf, :first_stage)
     getproperty(getfield(pf, :pf), s)
 end
 
@@ -137,6 +160,17 @@ Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter,u,j::V
     end
     x
 end
+
+"""
+    propagate_particles!(pf::ParticleFilter, u, p, t)
+    propagate_particles!(pf::ParticleFilter, u, p, t, d)
+
+Propagate the particles of `pf` without resampling, with the noise of the density `d` (by default
+`dynamics_density`) added. The dynamics of a [`ParticleFilter`](@ref) take the four arguments `(x, u, p, t)`.
+The method for densities of Distributions.jl is in the Distributions extension.
+"""
+Base.@propagate_inbounds propagate_particles!(pf::ParticleFilter, u, p, t::Real) = propagate_particles!(pf, u, p, t, pf.dynamics_density)
+# The method for `d::SimpleMvNormal` is in utils.jl, after the definition of `SimpleMvNormal`
 
 
 
