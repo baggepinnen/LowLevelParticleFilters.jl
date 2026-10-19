@@ -3,7 +3,7 @@ abstract type UTParams end
     WikiParams(; α = 1.0, β = 0.0, κ = 1.0)
     WikiParams(; ακ = 1.0, β = 0.0) # Simplified interface with only one parameter for ακ
 
-Unscented transform parameters suggested at [Wiki: Kalman_filter#Sigma_points](https://en.wikipedia.org/wiki/Kalman_filter#Sigma_points).
+Unscented transform parameters suggested at [Wikipedia: Kalman filter, Sigma points](https://en.wikipedia.org/wiki/Kalman_filter#Sigma_points).
 
 - `α`: Scaling parameter (0,1] for the spread of the sigma points. Reduce `α` to reduce the spread.
 - `β`: Incorporates prior knowledge of the distribution of the state.

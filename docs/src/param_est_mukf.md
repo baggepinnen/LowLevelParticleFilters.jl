@@ -64,12 +64,13 @@ We'll simulate a scenario where:
 
 By using the parameterization ``\theta = 1/m`` and ``\varphi = \theta C_d``, we exploit the conditionally linear structure from Morelande & Moran (2007), which has the form:
 
-$$
-\dot{x} = d(x^n) + A(x^n)x^l = \begin{aligned}
-\dot{x}^n &= d_n(x^n) + A_n(x^n) x^l \\
-\dot{x}^l &= d_l(x^n) + A_l(x^n) x^l
-\end{aligned}
-$$
+```math
+\dot{x} =
+\begin{bmatrix} \dot{x}^n \\ \dot{x}^l \end{bmatrix} =
+\begin{bmatrix} d_n(x^n) \\ d_l(x^n) \end{bmatrix} +
+\begin{bmatrix} A_n(x^n) \\ A_l(x^n) \end{bmatrix} x^l =
+d(x^n) + A(x^n) x^l
+```
 
 where ``x^n = [v_x, v_y, v_z]`` and ``x^l = [x, y, z, \theta, \varphi]``. The coupling matrix ``A_n(x^n)`` is ``3 \times 5`` and captures how ``\theta`` scales the thrust forces and ``\varphi`` scales the drag forces. The term ``d_l(x^n) = [v_x, v_y, v_z, 0, 0]`` captures how positions depend on velocities.
 

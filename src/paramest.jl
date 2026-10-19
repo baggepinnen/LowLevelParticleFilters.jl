@@ -301,7 +301,7 @@ for covariance matrices. For a covariance matrix Σ with dimension n:
 
 where:
 - `v` (degrees of freedom): Controls prior strength. Larger v = stronger prior. Must be > n+1 for the prior mean to exist.
-- Prior mean is automatically set to the initial covariance matrices (R1_orig and R2_orig) from the filter.
+- Prior mean is automatically set to the initial covariance matrices (`R1_orig` and `R2_orig`) from the filter.
 - Internally, the scale matrix is computed as: Ψ = (v - n - 1) * R_orig
 
 The mean of the Inverse-Wishart prior is E[Σ] = Ψ/(v - n - 1) = R_orig.
