@@ -46,7 +46,19 @@ jobs:
             Pkg.develop(path = ".")
             Pkg.add(["Reactant", "Test", "StaticArrays", "Statistics", "LinearAlgebra", "Random"])
             include("test/test_reactant.jl")'
-      - uses: julia-actions/julia-processcoverage@v1
+      - name: Process coverage of the Reactant files
+        # Only the files of ReactantParticleFilter: Julia marks the lines of the methods compiled in a run as
+        # coverable, so that this job would report zeros on lines of other files that the main job does not count
+        run: |
+          julia --color=yes -e '
+            using Pkg
+            Pkg.activate(; temp = true)
+            Pkg.add("CoverageTools")
+            using CoverageTools
+            cov = vcat(process_folder("src"), process_folder("ext"))
+            cov = filter(c -> occursin(r"reactant"i, basename(c.filename)), cov)
+            foreach(c -> println(c.filename), cov)
+            LCOV.writefile("lcov.info", cov)'
       - uses: codecov/codecov-action@v4
         with:
           file: ./lcov.info
