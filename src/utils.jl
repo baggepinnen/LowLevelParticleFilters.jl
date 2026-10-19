@@ -269,5 +269,19 @@ end
 Base.length(d::SimpleMvNormal) = length(d.μ)
 Base.eltype(d::SimpleMvNormal) = eltype(d.μ)
 
+# Propagation of the particles of a ParticleFilter without resampling, with the noise of a SimpleMvNormal (the
+# method for densities of Distributions.jl is in the Distributions extension)
+Base.@propagate_inbounds function propagate_particles!(pf::ParticleFilter, u, p, t::Real, d::SimpleMvNormal)
+    f = dynamics(pf)
+    s = state(pf)
+    x,xp = s.x, s.xprev
+    VecT = eltype(s.x)
+    buf = zeros(length(VecT))
+    for i = eachindex(x)
+        x[i] = f(xp[i], u, p, t) + VecT(rand!(pf.rng, d, buf))
+    end
+    x
+end
+
 Statistics.mean(d::SimpleMvNormal) = d.μ
 Statistics.cov(d::SimpleMvNormal) = d.Σ

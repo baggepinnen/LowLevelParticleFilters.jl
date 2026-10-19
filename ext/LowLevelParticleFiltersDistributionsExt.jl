@@ -79,8 +79,9 @@ end
 
 LowLevelParticleFilters.extended_logpdf(d::Distribution, args...) = Distributions.logpdf(d, args...)
 
-# resolve ambiguity
-Base.@propagate_inbounds function LowLevelParticleFilters.propagate_particles!(pf::LowLevelParticleFilters.ParticleFilter, u, p, t::Real, d::Distributions.Sampleable=pf.dynamics_density)
+# Propagation without resampling with a density of Distributions.jl; the method without the density, which
+# passes `dynamics_density`, is in the package
+Base.@propagate_inbounds function LowLevelParticleFilters.propagate_particles!(pf::LowLevelParticleFilters.ParticleFilter, u, p, t::Real, d::Distributions.Sampleable)
     f = pf.dynamics
     x,xp = pf.state.x, pf.state.xprev
     VecT = eltype(pf.state.x)
