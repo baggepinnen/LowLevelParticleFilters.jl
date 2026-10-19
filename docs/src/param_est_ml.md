@@ -34,6 +34,8 @@ xs,u,y = simulate(pf,300,df)
 
 ## Compute likelihood for various values of the parameters
 Since this example looks for a single parameter only, we can plot the likelihood as a function of this parameter. If we had been looking for more than 2 parameters, we typically use an optimizer instead (see [Using an optimizer](@ref "Prediction-Error minimization using an optimizer")).
+
+We compare the [`ParticleFilter`](@ref) with the [`AuxiliaryParticleFilter`](@ref). The auxiliary particle filter uses the next measurement to select the particles that are propagated; the first-stage weights of this selection are by default the measurement likelihood evaluated at the noise-free prediction of each particle. When the dynamics noise is larger than the measurement noise, these weights are much narrower than the predictive density of the measurement, the log-likelihood estimate has a large variance, and its expected value is lower than the true log-likelihood. We therefore provide the keyword `first_stage` with the likelihood of the measurement under the predictive covariance ``CQC^T + R``, i.e., the measurement-noise covariance plus the dynamics-noise covariance mapped to the measurement.
 ```@example ml_map
 p = nothing
 svec = exp10.(LinRange(-0.8, 1.2, 60))
@@ -44,7 +46,9 @@ llspf = map(svec) do s
 end
 llspfaux = map(svec) do s
     df = MvNormal(nx,s)
-    pfs = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0)
+    dp = MvNormal(s^2*C*C' + I) # Prediction error of the measurement, covariance CQCᵀ + R
+    first_stage(x, u, y, p, t) = logpdf(dp, y - C*x)
+    pfs = AuxiliaryParticleFilter(N, dynamics, measurement, df, dg, d0; first_stage)
     loglik(pfs, u, y, p)
 end
 plot( svec, llspf,
