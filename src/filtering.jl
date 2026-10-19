@@ -148,7 +148,7 @@ function predict!(pf, u, p = parameters(pf), t = index(pf)*pf.Ts)
         s.j .= 1:N
         propagate_particles!(pf, u, p, t)
     end
-    copyto!(s.xprev, s.x)
+    store_previous!(s)
     pf.state.t[] += 1
 end
 
@@ -254,11 +254,7 @@ function predict!(pf::AuxiliaryParticleFilter, u, y1, p = parameters(pf), t = in
     if pf.first_stage === nothing
         measurement_equation!(pf.pf, u, y1, p, t, λ)  # first-stage weights log p(y1 | f(xᵢ))
     else
-        g1 = pf.first_stage
-        x = s.x
-        @inbounds for i = eachindex(λ)
-            λ[i] = g1(x[i], u, y1, p, t)
-        end
+        first_stage_weights!(pf.pf, λ, pf.first_stage, u, y1, p, t)
     end
     s.w .+= λ
     l1 = logsumexp!(s.w, s.we)                    # log Σ wλ; s.we holds the normalized first-stage weights
@@ -269,7 +265,19 @@ function predict!(pf::AuxiliaryParticleFilter, u, y1, p = parameters(pf), t = in
         s.w[i] = l1 - λ[j[i]] - lN
     end
     s.t[] += 1
-    copyto!(s.xprev, s.x)
+    store_previous!(s)
+end
+
+"Store the propagated particles `s.x` as the previous particles `s.xprev`"
+store_previous!(s) = copyto!(s.xprev, s.x)
+
+"First-stage log-weights `λᵢ = g1(xᵢ, u, y1, p, t)` of the noise-free predictions `xᵢ` stored in the particles"
+function first_stage_weights!(pf::AbstractParticleFilter, λ, g1, u, y1, p, t)
+    x = particles(pf)
+    @inbounds for i = eachindex(λ)
+        λ[i] = g1(x[i], u, y1, p, t)
+    end
+    λ
 end
 
 "Propagate the particles from the ancestors `j` with noise, after the noise-free prediction is stored in `x`"

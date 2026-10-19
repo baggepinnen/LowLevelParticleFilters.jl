@@ -737,3 +737,10 @@ end
     @info "Testing jet"
     include("test_jet.jl")
 end
+if Base.find_package("Reactant") !== nothing
+    # Reactant is not a test dependency, the tests run when it is available in the environment
+    @testset "ReactantParticleFilter" begin
+        @info "Testing ReactantParticleFilter"
+        include("test_reactant.jl")
+    end
+end

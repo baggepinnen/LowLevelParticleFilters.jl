@@ -31,6 +31,7 @@ makedocs(
             ],
             "Benchmark" => "benchmark.md",
             "Performance tips" => "distributions.md",
+            "Particle filters on a GPU" => "gpu_particle_filter.md",
             "Tutorials" => [
                   "Kalman-filter tutorial with LowLevelParticleFilters" => "adaptive_kalmanfilter.md",
                   "Noise tuning and disturbance modeling for Kalman filtering" => "noisetuning.md",
