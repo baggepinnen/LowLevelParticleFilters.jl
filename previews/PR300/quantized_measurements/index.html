@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Quantized measurements · LowLevelParticleFilters Documentation</title><meta name="title" content="Quantized measurements · LowLevelParticleFilters Documentation"/><meta property="og:title" content="Quantized measurements · LowLevelParticleFilters Documentation"/><meta property="twitter:title" content="Quantized measurements · LowLevelParticleFilters Documentation"/><meta name="description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="og:description" content="Documentation for LowLevelParticleFilters Documentation."/><meta property="twitter:description" content="Documentation for LowLevelParticleFilters Documentation."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.63.2/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">LowLevelParticleFilters Documentation</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../discretization/">Discretization</a></li><li><a class="tocitem" href="../measurement_models/">Multiple measurement models</a></li><li><span class="tocitem">Parameter estimation</span><ul><li><a class="tocitem" href="../parameter_estimation/">Overview</a></li><li><a class="tocitem" href="../param_est_ml/">Maximum-likelihood and MAP</a></li><li><a class="tocitem" href="../param_est_covariances/">Estimating noise covariances</a></li><li><a class="tocitem" href="../param_est_bayesian/">Bayesian inference</a></li><li><a class="tocitem" href="../param_est_joint/">Joint state and parameter estimation</a></li><li><a class="tocitem" href="../param_est_mukf/">MUKF for parameter estimation</a></li><li><a class="tocitem" href="../param_est_optimizer/">Using an optimizer</a></li><li><a class="tocitem" href="../param_est_joint_ml/">Parameters and noise covariances jointly</a></li><li><a class="tocitem" href="../param_est_multistep/">Multi-step prediction errors</a></li><li><a class="tocitem" href="../param_est_identifiability/">Identifiability</a></li></ul></li><li><a class="tocitem" href="../benchmark/">Benchmark</a></li><li><a class="tocitem" href="../distributions/">Performance tips</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../adaptive_kalmanfilter/">Kalman-filter tutorial with LowLevelParticleFilters</a></li><li><a class="tocitem" href="../noisetuning/">Noise tuning and disturbance modeling for Kalman filtering</a></li><li><a class="tocitem" href="../beetle_example/">Particle-filter tutorial</a></li><li><a class="tocitem" href="../beetle_example_imm/">IMM-filter tutorial</a></li><li><a class="tocitem" href="../rbpf_example/">Rao-Blackwellized filter tutorial</a></li><li><a class="tocitem" href="../dae/">State estimation for DAE systems</a></li><li><a class="tocitem" href="../adaptive_control/">Adaptive estimation and control</a></li><li><a class="tocitem" href="../neural_network/">Adaptive Neural-Network training</a></li><li><a class="tocitem" href="../friction_nn_example/">SciML: Adaptive Universal Differential Equation</a></li><li><a class="tocitem" href="../thermal_nn_example/">SciML: Learning a sunshine disturbance model</a></li><li><a class="tocitem" href="../fault_detection/">Fault detection</a></li><li><a class="tocitem" href="../missing_data/">Missing data and outliers</a></li><li class="is-active"><a class="tocitem" href>Quantized measurements</a><ul class="internal"><li><a class="tocitem" href="#The-system"><span>The system</span></a></li><li><a class="tocitem" href="#Kalman-filter-with-the-quantization-error-as-white-noise"><span>Kalman filter with the quantization error as white noise</span></a></li><li><a class="tocitem" href="#Unscented-Kalman-filter-with-the-quantizer-in-the-measurement-function"><span>Unscented Kalman filter with the quantizer in the measurement function</span></a></li><li><a class="tocitem" href="#Assumed-density-filter-(moment-matching)"><span>Assumed-density filter (moment matching)</span></a></li><li><a class="tocitem" href="#Particle-filter"><span>Particle filter</span></a></li><li><a class="tocitem" href="#Comparison"><span>Comparison</span></a></li><li><a class="tocitem" href="#Parameter-estimation"><span>Parameter estimation</span></a></li><li><a class="tocitem" href="#Discussion"><span>Discussion</span></a></li></ul></li><li><a class="tocitem" href="../ut/">Unscented transform</a></li><li><a class="tocitem" href="../disturbance_gallery/">Disturbance gallery</a></li><li><a class="tocitem" href="../sample_rate/">Influence of sample rate on performance</a></li><li><a class="tocitem" href="../cross_covariance/">Cross-covariance between dynamics and measurement</a></li></ul></li><li><a class="tocitem" href="../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Quantized measurements</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Quantized measurements</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/baggepinnen/LowLevelParticleFilters.jl/blob/master/docs/src/quantized_measurements.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Quantized-measurements"><a class="docs-heading-anchor" href="#Quantized-measurements">Quantized measurements</a><a id="Quantized-measurements-1"></a><a class="docs-heading-anchor-permalink" href="#Quantized-measurements" title="Permalink"></a></h1><p>Many sensors deliver their measurements with a limited resolution: a thermometer that reports whole degrees, an encoder that counts pulses, or a signal that is stored with few bits. A sensor with resolution <span>$Δ$</span> reports</p><p class="math-container">\[y_k = Δ \operatorname{round}\big((C x_k + v_k)/Δ\big), \quad v_k \sim N(0, σ_v^2),\]</p><p>i.e., the measurement does not determine the output <span>$C x_k + v_k$</span> but only the band <span>$[y_k - Δ/2, y_k + Δ/2]$</span> in which it lies. The likelihood of a measurement is thus the probability of this band, which is not Gaussian.</p><p>If the output varies over several quantization levels between samples, or if the noise <span>$v_k$</span> is large compared to <span>$Δ$</span>, the quantization error is approximately uniformly distributed, independent between samples, and has variance <span>$Δ^2/12$</span>. A Kalman filter with this variance added to the measurement noise then works well, see the section on quantization in <a href="../missing_data/#Missing-data-and-outliers">Missing data and outliers</a>. This tutorial treats the case where this approximation fails: the uncertainty of the estimated output is smaller than <span>$Δ$</span>, and the quantization error is strongly correlated in time. We compare the following estimators on a simple system:</p><ul><li>a Kalman filter with the quantization error modeled as white noise of variance <span>$Δ^2/12$</span>,</li><li>an unscented Kalman filter with the quantizer in the measurement function,</li><li>an assumed-density filter that computes the exact posterior of a Gaussian prior and one quantized measurement and approximates it by a Gaussian (moment matching),</li><li>a particle filter with the exact likelihood of the quantized measurement.</li></ul><h2 id="The-system"><a class="docs-heading-anchor" href="#The-system">The system</a><a id="The-system-1"></a><a class="docs-heading-anchor-permalink" href="#The-system" title="Permalink"></a></h2><p>The state <span>$x_k$</span> follows a first-order system with a known input <span>$u_k$</span> that moves the state across several quantization levels, and the measurement is rounded to whole numbers. The process noise is small compared to the quantization step.</p><pre><code class="language-julia hljs">using LowLevelParticleFilters, LinearAlgebra, StaticArrays, Plots, Random, Statistics, Printf
+using LowLevelParticleFilters: SimpleMvNormal
+using Distributions: Normal, cdf, logcdf, logpdf
+Random.seed!(0)
+
+a  = 0.98   # Pole of the system
+Δ  = 1.0    # Quantization step
+σw = 0.03   # Standard deviation of the process noise
+σv = 0.01   # Standard deviation of the measurement noise before quantization
+T  = 1000
+A  = SA[a;;]
+B  = SA[1-a;;]
+C  = SA[1.0;;]
+R1 = SA[σw^2;;]
+d0 = SimpleMvNormal(SA[3.2], SA[σw^2/(1-a^2);;]) # Stationary distribution about the initial mean
+quantize(z) = Δ .* round.(z ./ Δ)
+
+u = [SA[3.2 + 1.5sin(2π*k/400)] for k in 1:T]
+x = [d0.μ + sqrt(d0.Σ[1])*randn(SVector{1})]
+for k in 1:T-1
+    push!(x, A*x[k] + B*u[k] + σw*randn(SVector{1}))
+end
+y = [quantize(C*xk + σv*randn(SVector{1})) for xk in x]
+xtrue = getindex.(x, 1)
+
+plot(xtrue, label=&quot;State&quot;, xlabel=&quot;Time step&quot;)
+plot!(getindex.(y, 1), label=&quot;Quantized measurement&quot;, seriestype=:steppost)</code></pre><img src="b207d110.png" alt="Example block output"/><p>To compare the estimators, we compute the root-mean-square error of the filtered estimate and the fraction of time steps at which the true state lies in the interval of ±1.96 standard deviations about the estimate, which should be close to 0.95 for a consistent estimator.</p><pre><code class="language-julia hljs">function evaluate(xh, σ)
+    e = xtrue .- xh
+    (; rmse = sqrt(mean(abs2, e)), coverage = mean(abs.(e) .&lt;= 1.96 .* σ))
+end</code></pre><h2 id="Kalman-filter-with-the-quantization-error-as-white-noise"><a class="docs-heading-anchor" href="#Kalman-filter-with-the-quantization-error-as-white-noise">Kalman filter with the quantization error as white noise</a><a id="Kalman-filter-with-the-quantization-error-as-white-noise-1"></a><a class="docs-heading-anchor-permalink" href="#Kalman-filter-with-the-quantization-error-as-white-noise" title="Permalink"></a></h2><p>The Kalman filter treats the quantization error as additional white measurement noise with variance <span>$Δ^2/12$</span>:</p><pre><code class="language-julia hljs">kf = KalmanFilter(A, B, C, 0, R1, SA[σv^2 + Δ^2/12;;], d0)
+sol = forward_trajectory(kf, u, y)
+xh_kf = getindex.(sol.xt, 1)
+σ_kf  = sqrt.(getindex.(sol.Rt, 1))
+evaluate(xh_kf, σ_kf)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(rmse = 0.20626395587886706, coverage = 0.471)</code></pre><p>Between two changes of the quantized value, the filter receives the same measurement at every time step and treats the errors of these measurements as independent. Its estimate is drawn towards the quantized value, and its covariance decreases as if each measurement carried new information, which makes the filter overconfident.</p><h2 id="Unscented-Kalman-filter-with-the-quantizer-in-the-measurement-function"><a class="docs-heading-anchor" href="#Unscented-Kalman-filter-with-the-quantizer-in-the-measurement-function">Unscented Kalman filter with the quantizer in the measurement function</a><a id="Unscented-Kalman-filter-with-the-quantizer-in-the-measurement-function-1"></a><a class="docs-heading-anchor-permalink" href="#Unscented-Kalman-filter-with-the-quantizer-in-the-measurement-function" title="Permalink"></a></h2><p>An <a href="../api/#LowLevelParticleFilters.UnscentedKalmanFilter-Union{Tuple{AUGM}, Tuple{AUGD}, Tuple{IPM}, Tuple{IPD}, Tuple{Any, LowLevelParticleFilters.AbstractMeasurementModel, Any}, Tuple{Any, LowLevelParticleFilters.AbstractMeasurementModel, Any, Any}} where {IPD, IPM, AUGD, AUGM}"><code>UnscentedKalmanFilter</code></a> with augmented measurement noise (the fourth type parameter <code>AUGM = true</code>) accepts a measurement function <code>h(x, u, p, t, e)</code> in which the measurement noise <code>e</code> enters before a nonlinearity, here the quantizer:</p><pre><code class="language-julia hljs">h(x, u, p, t, e) = quantize(C*x + e)
+ukf = UnscentedKalmanFilter{false, false, false, true}((x, u, p, t) -&gt; A*x + B*u, h, R1, SA[σv^2;;], d0; ny=1, nu=1)</code></pre><p>The sigma points sample the quantizer, a piecewise constant function, at a few points. If all sigma points fall into the same band, the predicted measurement has zero variance, and the correction step either fails because the innovation covariance is singular, or leaves the estimate unchanged. If one sigma point falls into a neighboring band, the predicted measurement covariance is determined by the weight of that single point, and the correction may produce a covariance that is not positive definite. In the loop below, a failed correction is undone and counted, and so is a correction with a vanishing innovation variance:</p><pre><code class="language-julia hljs">function ukf_trajectory(ukf, u, y)
+    xh = zeros(length(y)); σ = zeros(length(y))
+    nfailed = 0; nvanishing = 0; ll = 0.0
+    for k in eachindex(y)
+        x0, R0 = ukf.x, ukf.R
+        try
+            res = correct!(ukf, u[k], y[k])
+            res.S[1] &lt; 1e-10 &amp;&amp; (nvanishing += 1)
+            ukf.R[1] &gt; 0 || error(&quot;Covariance not positive definite&quot;)
+            ll += res.ll
+        catch
+            ukf.x, ukf.R = x0, R0
+            nfailed += 1
+        end
+        xh[k], σ[k] = ukf.x[1], sqrt(ukf.R[1])
+        predict!(ukf, u[k])
+    end
+    xh, σ, nfailed, nvanishing, ll
+end
+xh_ukf, σ_ukf, nfailed, nvanishing, ll_ukf = ukf_trajectory(ukf, u, y)
+(; nfailed, nvanishing, ll_ukf, evaluate(xh_ukf, σ_ukf)...)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(nfailed = 644, nvanishing = 232, ll_ukf = -1.0141204801825833e31, rmse = 0.1265433082276077, coverage = 0.88)</code></pre><p>Most corrections fail or carry no information. The filter therefore uses the measurements essentially only when the quantized value changes, and ignores the information that the output remains in the band of the measured value at the other time steps. The log-likelihood <code>ll_ukf</code> accumulated over the successful corrections is dominated by the corrections with a nearly vanishing innovation variance and is meaningless; it cannot be used for parameter estimation.</p><h2 id="Assumed-density-filter-(moment-matching)"><a class="docs-heading-anchor" href="#Assumed-density-filter-(moment-matching)">Assumed-density filter (moment matching)</a><a id="Assumed-density-filter-(moment-matching)-1"></a><a class="docs-heading-anchor-permalink" href="#Assumed-density-filter-(moment-matching)" title="Permalink"></a></h2><p>For a linear measurement, the exact posterior of a Gaussian prior and one quantized measurement is available in closed form. With the prior <span>$x \sim N(\hat x, P)$</span>, the output <span>$z = c^T x + v$</span> before quantization is Gaussian, <span>$z \sim N(μ, S)$</span> with <span>$μ = c^T \hat x$</span> and <span>$S = c^T P c + σ_v^2$</span>. The measurement <span>$y$</span> states that <span>$z$</span> lies in the band <span>$[y - Δ/2, y + Δ/2]$</span>, so the posterior of <span>$z$</span> is a normal distribution truncated to the band. With <span>$α = (y - Δ/2 - μ)/\sqrt{S}$</span>, <span>$β = (y + Δ/2 - μ)/\sqrt{S}$</span>, the standard normal density <span>$φ$</span> and distribution function <span>$Φ$</span>, the probability of the band and the mean and variance of the truncated distribution are</p><p class="math-container">\[\begin{aligned}
+Z &amp;= Φ(β) - Φ(α), \\
+E[z \mid y] &amp;= μ + \sqrt{S}\, \frac{φ(α) - φ(β)}{Z}, \\
+\operatorname{Var}[z \mid y] &amp;= S \left(1 + \frac{α φ(α) - β φ(β)}{Z} - \left(\frac{φ(α) - φ(β)}{Z}\right)^2\right).
+\end{aligned}\]</p><p>Since <span>$x$</span> and <span>$z$</span> are jointly Gaussian, the conditional distribution of <span>$x$</span> given <span>$z$</span> is Gaussian with a mean linear in <span>$z$</span>, and the posterior mean and covariance of <span>$x$</span> follow from those of <span>$z$</span>:</p><p class="math-container">\[\begin{aligned}
+K &amp;= P c / S, \\
+\hat x^+ &amp;= \hat x + K\big(E[z \mid y] - μ\big), \\
+P^+ &amp;= P - K \big(S - \operatorname{Var}[z \mid y]\big) K^T.
+\end{aligned}\]</p><p>The only approximation is that the posterior is replaced by the Gaussian with the same mean and covariance. The contribution of the measurement to the log-likelihood is <span>$\log Z$</span>. Several quantized outputs with independent noise are processed one at a time, since their likelihood factorizes. The probability of a band in the tails of the distribution is computed in logarithmic form to avoid cancellation:</p><pre><code class="language-julia hljs">const N01 = Normal()
+&quot;log P(α &lt; s &lt; β) for s ~ N(0, 1)&quot;
+function logband(α, β)
+    α &gt; 0 &amp;&amp; return logband(-β, -α) # Mirror to the lower tail
+    if β &lt; 0
+        lb = logcdf(N01, β)
+        lb + log(-expm1(logcdf(N01, α) - lb))
+    else
+        log(cdf(N01, β) - cdf(N01, α))
+    end
+end
+
+&quot;Log-probability, mean and variance of s ~ N(0, 1) truncated to (α, β)&quot;
+function truncated_moments(α, β)
+    α &gt; 0 &amp;&amp; return ((lz, m, v) = truncated_moments(-β, -α); (lz, -m, v))
+    lz = logband(α, β)
+    pa = exp(logpdf(N01, α) - lz)
+    pb = exp(logpdf(N01, β) - lz)
+    m = pa - pb
+    v = 1 + α*pa - β*pb - m^2
+    lz, m, clamp(v, 1e-8, 1.0)
+end
+
+&quot;&quot;&quot;
+    quantized_correct!(kf, u, y; Δ, σv)
+
+Correction of a Kalman-type filter `kf` with linear measurement matrix `kf.C` by the measurement `y`,
+quantized with step `Δ` after the addition of Gaussian noise with standard deviations `σv`.
+Returns the log-likelihood of `y`.
+&quot;&quot;&quot;
+function quantized_correct!(kf, u, y; Δ, σv)
+    x, P, Cm = kf.x, kf.R, kf.C
+    ll = 0.0
+    for i in eachindex(y)
+        c = Cm[i, :]
+        g = P*c
+        μ = dot(c, x)
+        S = dot(c, g) + σv[i]^2
+        lz, m, v = truncated_moments((y[i] - Δ/2 - μ)/sqrt(S), (y[i] + Δ/2 - μ)/sqrt(S))
+        K = g/S
+        x = x + K*(sqrt(S)*m)
+        P = P - (1 - v)*K*g&#39;
+        ll += lz
+    end
+    kf.x, kf.R = x, (P + P&#39;)/2
+    ll
+end</code></pre><p>The function updates the mean and covariance of a <a href="../api/#LowLevelParticleFilters.KalmanFilter"><code>KalmanFilter</code></a>, whose prediction step is used unchanged:</p><pre><code class="language-julia hljs">function adf_trajectory(kf, u, y; Δ, σv)
+    reset!(kf)
+    xh = zeros(length(y)); σ = zeros(length(y)); ll = 0.0
+    for k in eachindex(y)
+        ll += quantized_correct!(kf, u[k], y[k]; Δ, σv)
+        xh[k], σ[k] = kf.x[1], sqrt(kf.R[1])
+        predict!(kf, u[k])
+    end
+    xh, σ, ll
+end
+xh_adf, σ_adf, ll_adf = adf_trajectory(kf, u, y; Δ, σv = [σv])
+evaluate(xh_adf, σ_adf)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(rmse = 0.12204620543832409, coverage = 0.9)</code></pre><h2 id="Particle-filter"><a class="docs-heading-anchor" href="#Particle-filter">Particle filter</a><a id="Particle-filter-1"></a><a class="docs-heading-anchor-permalink" href="#Particle-filter" title="Permalink"></a></h2><p>A particle filter represents the posterior by samples, and the likelihood of the quantized measurement, the probability of its band, enters through the measurement likelihood of an <a href="../api/#LowLevelParticleFilters.AdvancedParticleFilter-Tuple{Integer, Function, Function, Any, Any, Any}"><code>AdvancedParticleFilter</code></a>:</p><pre><code class="language-julia hljs">dynamics(x, u, p, t, noise=false) = A*x + B*u + noise*σw*randn(SVector{1})
+measurement(x, u, p, t, noise=false) = quantize(C*x + noise*σv*randn(SVector{1}))
+function measurement_likelihood(x, u, y, p, t)
+    z = C*x
+    sum(logband((y[i] - Δ/2 - z[i])/σv, (y[i] + Δ/2 - z[i])/σv) for i in eachindex(y))
+end
+pf = AdvancedParticleFilter(2000, dynamics, measurement, measurement_likelihood, SimpleMvNormal(R1), d0)
+solpf = forward_trajectory(pf, u, y)
+xs = getindex.(solpf.x, 1)                  # Particles × time steps
+xh_pf = vec(sum(solpf.we .* xs, dims=1))
+σ_pf  = vec(sqrt.(sum(solpf.we .* (xs .- xh_pf&#39;) .^ 2, dims=1)))
+evaluate(xh_pf, σ_pf)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(rmse = 0.11920725330665376, coverage = 0.933)</code></pre><h2 id="Comparison"><a class="docs-heading-anchor" href="#Comparison">Comparison</a><a id="Comparison-1"></a><a class="docs-heading-anchor-permalink" href="#Comparison" title="Permalink"></a></h2><pre><code class="language-julia hljs">for (name, xh, σ) in [(&quot;Kalman filter, Δ²/12&quot;, xh_kf, σ_kf), (&quot;UKF, quantizer in h&quot;, xh_ukf, σ_ukf),
+                      (&quot;Moment matching&quot;, xh_adf, σ_adf), (&quot;Particle filter&quot;, xh_pf, σ_pf)]
+    r = evaluate(xh, σ)
+    @printf(&quot;%-22s RMSE %.4f   coverage of the 95 %% interval %.2f\n&quot;, name, r.rmse, r.coverage)
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Kalman filter, Δ²/12   RMSE 0.2063   coverage of the 95 % interval 0.47
+UKF, quantizer in h    RMSE 0.1265   coverage of the 95 % interval 0.88
+Moment matching        RMSE 0.1220   coverage of the 95 % interval 0.90
+Particle filter        RMSE 0.1192   coverage of the 95 % interval 0.93</code></pre><p>The moment-matching filter and the particle filter attain nearly the same error, with a coverage close to the nominal 0.95. The Kalman filter with the quantization noise has a larger error and is strongly overconfident: it is drawn towards the quantized value between the changes of the measurement. In this example, with small process noise, most of the information is contained in the changes of the quantized value, and the error of the unscented Kalman filter is only slightly larger than that of the moment-matching filter; it is, however, overconfident, and its likelihood cannot be used. The difference grows with the process noise, when the information that the output remains in its band becomes more important. The plot below shows the estimates in an interval in which the state crosses quantization thresholds.</p><pre><code class="language-julia hljs">inds = 250:450
+plot(inds, xtrue[inds], label=&quot;True state&quot;, l=(:black, 2), xlabel=&quot;Time step&quot;, legend=:bottomleft)
+for (name, xh, σ) in [(&quot;Kalman filter, Δ²/12&quot;, xh_kf, σ_kf), (&quot;UKF, quantizer in h&quot;, xh_ukf, σ_ukf),
+                      (&quot;Moment matching&quot;, xh_adf, σ_adf), (&quot;Particle filter&quot;, xh_pf, σ_pf)]
+    plot!(inds, xh[inds], ribbon=1.96σ[inds], fillalpha=0.15, label=name)
+end
+hline!([2.5, 3.5], l=(:dash, :gray), label=&quot;Quantization thresholds&quot;)</code></pre><img src="4705040a.png" alt="Example block output"/><h2 id="Parameter-estimation"><a class="docs-heading-anchor" href="#Parameter-estimation">Parameter estimation</a><a id="Parameter-estimation-1"></a><a class="docs-heading-anchor-permalink" href="#Parameter-estimation" title="Permalink"></a></h2><p>The log-likelihood of the moment-matching filter, the sum of <span>$\log Z$</span> over the measurements, approximates the exact log-likelihood of the quantized data and can be used for maximum-likelihood estimation. Below, we compute the log-likelihood as a function of the standard deviation of the process noise <span>$σ_w$</span> for the moment-matching filter, the particle filter and the Kalman filter with the quantization noise:</p><pre><code class="language-julia hljs">σws = σw .* exp2.(-2:0.25:2)
+ll_adf_prof = map(σws) do σ
+    kfσ = KalmanFilter(A, B, C, 0, SA[σ^2;;], SA[σv^2 + Δ^2/12;;], d0)
+    adf_trajectory(kfσ, u, y; Δ, σv = [σv])[3]
+end
+ll_kf_prof = map(σws) do σ
+    loglik(KalmanFilter(A, B, C, 0, SA[σ^2;;], SA[σv^2 + Δ^2/12;;], d0), u, y)
+end
+ll_pf_prof = map(σws) do σ
+    dyn(x, u, p, t, noise=false) = A*x + B*u + noise*σ*randn(SVector{1})
+    pfσ = AdvancedParticleFilter(2000, dyn, measurement, measurement_likelihood, SimpleMvNormal(SA[σ^2;;]), d0)
+    Random.seed!(1) # The same random numbers for every value of σ
+    loglik(pfσ, u, y)
+end
+plot(σws, [ll_adf_prof .- maximum(ll_adf_prof), ll_pf_prof .- maximum(ll_pf_prof), ll_kf_prof .- maximum(ll_kf_prof)],
+    label=[&quot;Moment matching&quot; &quot;Particle filter&quot; &quot;Kalman filter, Δ²/12&quot;], xscale=:log10, m=:o,
+    xlabel=&quot;σw&quot;, ylabel=&quot;Log-likelihood − maximum&quot;, ylims=(-60, 5), legend=:bottomleft)
+vline!([σw], l=(:dash, :black), label=&quot;True σw&quot;)</code></pre><img src="f3a9aa45.png" alt="Example block output"/><p>The maximum of the likelihood of the moment-matching filter is close to that of the particle filter and to the true value, while the Kalman filter with the quantization noise overestimates the process noise, since it explains the jumps of the quantized measurement at the thresholds by large state changes.</p><h2 id="Discussion"><a class="docs-heading-anchor" href="#Discussion">Discussion</a><a id="Discussion-1"></a><a class="docs-heading-anchor-permalink" href="#Discussion" title="Permalink"></a></h2><ul><li>The moment-matching filter has the cost of a Kalman filter. Its approximation is accurate when each measurement is weakly informative compared to the prior, such that the posterior is close to Gaussian, which is the case for quantized measurements of a system whose state is observed over many time steps.</li><li>In Monte Carlo simulations of the system above over a range of process- and measurement-noise levels, the root-mean-square error of the moment-matching filter was within 1 % of that of a particle filter with <span>$10^5$</span> particles in every case, while that of the unscented Kalman filter with the quantizer in the measurement function was up to 74 % larger, and that of the Kalman filter with the quantization noise up to 96 % larger.</li><li>In a study on a model of a geothermal borehole with a state dimension of 12 and two outputs quantized to whole degrees, the moment-matching filter attained the root-mean-square error of a particle filter with <span>$10^5$</span> particles to within 1 %, and its maximum-likelihood estimates were unbiased. The Gaussian-sum filter of <a href="https://arxiv.org/abs/2509.07837">Cedeño et al. (2025)</a>, which approximates the indicator function of the band by a Gaussian mixture, was marginally closer to the posterior of the particle filter, at a computational cost about four orders of magnitude larger.</li><li>For a nonlinear measurement function, the mean, the covariance <span>$S$</span> of the output and the cross-covariance <span>$P c$</span> may be computed by linearization or by sigma points of the unquantized output; the update above then applies unchanged.</li><li>If <span>$σ_v$</span> is large compared to <span>$Δ$</span>, or the output changes by several quantization levels between samples, the Kalman filter with the variance <span>$Δ^2/12$</span> added to the measurement noise is adequate.</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../missing_data/">« Missing data and outliers</a><a class="docs-footer-nextpage" href="../ut/">Unscented transform »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Monday 19 October 2026 06:48">Monday 19 October 2026</span>. Using Julia version 1.13.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
