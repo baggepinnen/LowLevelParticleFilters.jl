@@ -38,16 +38,28 @@ The values returned by `correct!` are
 - `e`: the difference between the measurement and the predicted output before quantization,
 - `S`: the predicted covariance of the output before quantization, and `Sᵪ` its Cholesky factorization,
 - `K`: the gain of an update by the output before quantization, `Pxz / S`, which differs from the
-  update applied.
+  update applied,
+- `lls`: the contribution of each output to `ll`,
+- `r`: for each output, the standardized correction `(E[z_i | y_i] - ẑ_i)/σ_i` of the sequential update,
+  which is the standardized innovation for an unquantized output,
+- `quantized`: for each output, whether it is quantized.
 
 `measurement(model)` returns the measurement function of `inner`, i.e., the output before
 quantization. The model may be passed to the constructors of [`ExtendedKalmanFilter`](@ref) and
 [`UnscentedKalmanFilter`](@ref), and to `correct!` of any Kalman-type filter.
 
-Cost functions based on the prediction errors `e`, such as [`LowLevelParticleFilters.sse`](@ref),
-[`LowLevelParticleFilters.prediction_errors!`](@ref) and the multi-step prediction errors, do not
-take the quantization into account; use [`loglik`](@ref) for parameter estimation. See the
-tutorial [Quantized measurements](@ref).
+!!! warning "Cost functions based on prediction errors"
+    Sums of squared prediction errors compare the quantized measurement with the predicted output
+    before quantization as if their difference were Gaussian, and their minimum is in general not
+    located at the true parameters. For a filter with a quantized measurement model,
+    [`LowLevelParticleFilters.sse`](@ref), [`LowLevelParticleFilters.prediction_errors!`](@ref) with
+    `loglik = false`, [`LowLevelParticleFilters.multistep_sse`](@ref) and
+    [`LowLevelParticleFilters.multistep_prediction_errors!`](@ref) therefore throw an error. Use
+    [`loglik`](@ref), or `prediction_errors!` with `loglik = true`, which returns the residual
+    ``\\sqrt{-\\log P_i}`` for each quantized output, with ``P_i`` the predicted probability of its
+    band, such that the sum of squared residuals is the negative log-likelihood.
+
+See the tutorial [Quantized measurements](@ref).
 """
 struct QuantizedMeasurementModel{M <: AbstractMeasurementModel, DT, BT, RT} <: AbstractMeasurementModel
     inner::M
@@ -169,15 +181,19 @@ function correct!(
     Sᵪ = cholesky(Symmetric(S); check = false)
     issuccess(Sᵪ) || error("Cholesky factorization of the covariance of the output before quantization failed at time step $(kf.t), got S = $(printarray(S))")
     K = Pxz / Sᵪ
-    ll = zero(promote_type(eltype(kf.x), eltype(kf.R), eltype(y)))
+    T = promote_type(eltype(kf.x), eltype(kf.R), eltype(y))
+    ll = zero(T)
+    lls = zeros(T, model.ny)
+    r = zeros(T, model.ny)
+    quantized = [!iszero(quantization_step(model.Δ, i)) for i in 1:model.ny]
     for i in 1:model.ny
         # The moments of the remaining outputs change with the estimate, recompute them after each update
         ŷi, Si, Pxzi = i == 1 ? (ŷ, S, Pxz) : output_moments(kf, model.inner, u, p, t, R2)
         Δi = quantization_step(model.Δ, i)
         σ = sqrt(Si[i, i])
         if iszero(Δi) # Not quantized: the standard update
-            r = (y[i] - ŷi[i])/σ
-            lz, m, v = normlogpdf_q(r) - log(σ), r, zero(r)
+            ri = (y[i] - ŷi[i])/σ
+            lz, m, v = normlogpdf_q(ri) - log(σ), ri, zero(ri)
         else
             lo, hi = model.band(y[i], Δi)
             lz, m, v = truncated_normal_moments((lo - ŷi[i])/σ, (hi - ŷi[i])/σ)
@@ -187,6 +203,50 @@ function correct!(
         kf.x = kf.x + Ki*(σ*m)
         kf.R = symmetrize(kf.R - (1 - v)*(Ki*g'))
         ll += lz
+        lls[i] = lz
+        r[i] = m
     end
-    (; ll, e, S, Sᵪ, K)
+    (; ll, e, S, Sᵪ, K, lls, r, quantized)
+end
+
+has_quantized_measurement(model) = false
+has_quantized_measurement(model::QuantizedMeasurementModel) = true
+has_quantized_measurement(model::CompositeMeasurementModel) = any(has_quantized_measurement, model.models)
+
+"""
+    check_quantization_support(f, fname)
+
+Throw an error if the filter `f` holds a quantized measurement model, for cost functions that treat
+the prediction errors as Gaussian.
+"""
+function check_quantization_support(f, fname)
+    if hasfield(typeof(f), :measurement_model) && has_quantized_measurement(getfield(f, :measurement_model))
+        throw(ArgumentError("$fname compares the measurements with the predicted outputs as if their difference were Gaussian, which does not hold for a filter with a QuantizedMeasurementModel. Use loglik, or prediction_errors! with loglik = true."))
+    end
+    nothing
+end
+
+"""
+    quantized_loglik_residuals!(res, ret, offset)
+
+Residuals of one time step for [`LowLevelParticleFilters.prediction_errors!`](@ref) with
+`loglik = true` from the result `ret` of `correct!` with a [`QuantizedMeasurementModel`](@ref):
+``\\sqrt{-\\log P_i}`` for a quantized output, the whitened innovation ``r_i/\\sqrt{2}`` for an
+unquantized output, and in the last entry the square root of the constant terms of the unquantized
+outputs plus `offset`, such that `sum(abs2, res) == -ret.ll + offset`.
+"""
+function quantized_loglik_residuals!(res, ret, offset)
+    ny = length(ret.lls)
+    c = offset
+    for i in 1:ny
+        if ret.quantized[i]
+            res[i] = sqrt(max(-ret.lls[i], zero(ret.lls[i])))
+        else
+            res[i] = ret.r[i]/sqrt(2)
+            c += -ret.lls[i] - ret.r[i]^2/2 # log σ + log(2π)/2
+        end
+    end
+    c < 0 && error("Negative value ($c) inside square root when calculating log-likelihood residuals. Increase the offset argument to prediction_errors! (currently set to offset=$offset)")
+    res[ny+1] = sqrt(c)
+    res
 end

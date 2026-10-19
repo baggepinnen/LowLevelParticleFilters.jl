@@ -153,6 +153,7 @@ See also [`LowLevelParticleFilters.prediction_errors!`](@ref) which returns the 
 """
 function sse(f::AbstractFilter, u, y, p=parameters(f), λ=1; post_update_cb=(args...)->nothing)
     check_prediction_error_support(f, "sse")
+    check_quantization_support(f, "sse")
     reset!(f)
     sum(zip(u, y)) do (u,y)
         ll, e = f(u,y,p)
@@ -176,12 +177,15 @@ Calculate the prediction errors and store the result in `res`. Similar to [`sse`
 - `loglik`: If `true`, the residuals are calculated as `Sᵪ\e`, where `Sᵪ` is the Cholesky factor of the innovation covariance. This turns least-squares optimization into maximum likelihood estimation. When this is true, the `λ` argument is ignored and the length of `res` must be `length(y)*(ny+1)`, where an extra residual per time step is added for the log-determinant term.
 - `offset`: When using `loglik = true`, an offset may be added to the log-determinant term to avoid negative values inside the square root. The result of adding this offset is that the log-likelihood is shifted by a constant value, which does not affect optimization. With `loglik = true`, the residuals satisfy `res'res == -ll + length(y)*offset`, where `ll` is the log-likelihood.
 
+For a filter with a [`QuantizedMeasurementModel`](@ref), only `loglik = true` is supported; the residual of a quantized output is then ``\\sqrt{-\\log P_i}``, where ``P_i`` is the predicted probability of the band of the measurement, and the identity `res'res == -ll + length(y)*offset` holds as well.
+
 For missing measurements (see [`LowLevelParticleFilters.ismissing_measurement`](@ref)), the `ny` residuals of the time step are zero, and the additional residual of the log-determinant term (when `loglik = true`) equals `sqrt(offset)`. The layout of `res` is thus independent of which measurements are missing.
 
 See example in [Solving using Gauss-Newton optimization](@ref). See also [`LowLevelParticleFilters.multistep_prediction_errors!`](@ref) for multi-step prediction errors.
 """
 function prediction_errors!(res, f::AbstractFilter, u, y, p=parameters(f), λ=1; loglik=false, offset=0)
     check_prediction_error_support(f, "prediction_errors!")
+    loglik || check_quantization_support(f, "prediction_errors! with loglik = false")
     reset!(f)
     ny = f.ny
     N = length(u)
@@ -196,7 +200,8 @@ function prediction_errors!(res, f::AbstractFilter, u, y, p=parameters(f), λ=1;
     # index ranges
     idx = 0
     for (uk, yk) in zip(u, y)
-        ll, e, S, Sᵪ = f(uk, yk, p)  # Sᵪ is a Cholesky factorization of S (lower)
+        ret = f(uk, yk, p)
+        ll, e, S, Sᵪ = ret  # Sᵪ is a Cholesky factorization of S (lower)
         # Place for the ny residuals for this timestep
         inds = (idx+1):(idx+ny)
 
@@ -209,6 +214,10 @@ function prediction_errors!(res, f::AbstractFilter, u, y, p=parameters(f), λ=1;
             else
                 idx += ny
             end
+        elseif loglik && hasproperty(ret, :lls)
+            # Quantized measurement model: residuals from the log-probabilities of the bands
+            @views quantized_loglik_residuals!(res[idx+1:idx+ny+1], ret, offset)
+            idx += ny + 1
         elseif loglik
             # whitened residual: r = (1/√2) * L\e, since S = L L', so r'r = ½ e' S⁻¹ e
             @views ldiv!(res[inds], Sᵪ.L, e)

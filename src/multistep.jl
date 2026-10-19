@@ -85,9 +85,8 @@ function noisefree_dynamics(f::UnscentedKalmanFilter{IPD,<:Any,AUGD}) where {IPD
 end
 function noisefree_measurement(f::UnscentedKalmanFilter)
     mm = f.measurement_model
-    mm_e = mm isa QuantizedMeasurementModel ? mm.inner : mm # The output before quantization
-    if mm_e isa UKFMeasurementModel{<:Any, true}
-        e0 = zero(mm_e.cache.x0[1][length(f.x)+1:end])
+    if mm isa UKFMeasurementModel{<:Any, true}
+        e0 = zero(mm.cache.x0[1][length(f.x)+1:end])
     else
         e0 = nothing
     end
@@ -173,6 +172,7 @@ See also [`LowLevelParticleFilters.multistep_sse`](@ref).
 """
 function multistep_prediction_errors!(res, f::AbstractFilter, u, y, p = parameters(f), λ = 1; h::Integer, horizon_weights = nothing)
     check_prediction_error_support(f, "multistep_prediction_errors!")
+    check_quantization_support(f, "multistep_prediction_errors!")
     check_multistep_arguments(h, horizon_weights)
     N = length(y)
     ny = f.ny
@@ -198,6 +198,7 @@ Calculate the sum of squared multi-step prediction errors ``\\sum_k \\sum_{j=1}^
 """
 function multistep_sse(f::AbstractFilter, u, y, p = parameters(f), λ = 1; h::Integer, horizon_weights = nothing)
     check_prediction_error_support(f, "multistep_sse")
+    check_quantization_support(f, "multistep_sse")
     check_multistep_arguments(h, horizon_weights)
     acc0 = zero(float(eltype(state(f))))
     multistep_fold(acc0, f, u, y, p, h) do acc, k, j, e

@@ -1,4 +1,5 @@
 using LowLevelParticleFilters, Test, Random, LinearAlgebra, Statistics, StaticArrays, Distributions, ForwardDiff
+import LeastSquaresOptim
 using LowLevelParticleFilters: SimpleMvNormal, truncated_normal_moments
 Random.seed!(0)
 
@@ -140,12 +141,31 @@ end
     @test solq.Rt ≈ solk.Rt
     @test solq.ll ≈ solk.ll
 
-    # Multi-step prediction errors use the output before quantization, also with augmented noise
-    haug(x, u, p, t, e) = C*x + e
-    qmm_aug = QuantizedMeasurementModel(UKFMeasurementModel{Float64, false, true}(haug, SA[σv^2;;]; nx = 1, ny = 1), Δ)
-    ukf_aug = UnscentedKalmanFilter(dynamics, qmm_aug, R1, d0; nu = 1, ny = 1)
-    @test loglik(ukf_aug, u, y) ≈ sol.ll rtol = 1e-8
-    @test LowLevelParticleFilters.multistep_sse(ukf_aug, u, y; h = 3) ≈ LowLevelParticleFilters.multistep_sse(ukf, u, y; h = 3)
+    # Cost functions based on prediction errors: sums of squares of Gaussian prediction errors are not
+    # supported, the log-likelihood residuals satisfy res'res == -ll + N*offset
+    @test_throws ArgumentError LowLevelParticleFilters.sse(ekf, u, y)
+    @test_throws ArgumentError LowLevelParticleFilters.multistep_sse(ekf, u, y; h = 3)
+    @test_throws ArgumentError LowLevelParticleFilters.multistep_prediction_errors!(zeros(3T), ekf, u, y; h = 3)
+    @test_throws ArgumentError LowLevelParticleFilters.prediction_errors!(zeros(T), ekf, u, y)
+    for (filt, yy, offset) in [(ekf, y, 0.0), (ekf, y, 2.0), (ExtendedKalmanFilter(dynamics, qmm2, R1, d0; nu = 1), y2, 10.0)]
+        ny = length(yy[1])
+        res = zeros(T*(ny + 1))
+        LowLevelParticleFilters.prediction_errors!(res, filt, u, yy; loglik = true, offset)
+        @test sum(abs2, res) ≈ -loglik(filt, u, yy) + T*offset
+        @test all(isfinite, res)
+    end
+    @test_throws ErrorException LowLevelParticleFilters.prediction_errors!(zeros(2T), ExtendedKalmanFilter(dynamics, qmm3, R1, d0; nu = 1), u, y2; loglik = true)
+
+    # Gauss-Newton on the log-likelihood residuals finds a stationary point of the log-likelihood
+    function filt(θ)
+        Tθ = eltype(θ)
+        d0θ = SimpleMvNormal(SVector{1}(convert(Tθ, 3.2)), SMatrix{1,1}(convert(Tθ, σw^2/(1-a^2))))
+        ExtendedKalmanFilter(dynamics, qmm, SA[exp(2θ[1]);;], d0θ; nu = 1, Ajac = (x, u, p, t) -> A)
+    end
+    res!(r, θ) = LowLevelParticleFilters.prediction_errors!(r, filt(θ), u, y; loglik = true)
+    lsq = LeastSquaresOptim.optimize!(LeastSquaresOptim.LeastSquaresProblem(x = [log(0.1)], f! = res!, output_length = 2T, autodiff = :forward), LeastSquaresOptim.LevenbergMarquardt())
+    @test lsq.converged
+    @test abs(ForwardDiff.derivative(θ -> loglik(filt([θ]), u, y), lsq.minimizer[1])) < 1e-2
 
     # Gradient of the log-likelihood with respect to the process noise
     function ll(θ)
