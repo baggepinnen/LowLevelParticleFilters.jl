@@ -4,7 +4,7 @@ using LowLevelParticleFilters: SimpleMvNormal, truncated_normal_moments
 Random.seed!(0)
 
 @testset "truncated_normal_moments" begin
-    for (α, β) in [(-1.0, 1.0), (-0.3, 2.5), (0.5, 1.5), (-3.0, -2.0), (2.0, 3.0), (-Inf, 0.3), (0.2, Inf), (-8.0, -7.5), (6.0, 6.2), (-Inf, Inf)]
+    for (α, β) in [(-1.0, 1.0), (-0.3, 2.5), (0.5, 1.5), (-3.0, -2.0), (2.0, 3.0), (-Inf, 0.3), (0.2, Inf), (-8.0, -7.5), (6.0, 6.2), (-Inf, Inf), (-1.0, 0.0), (0.0, 1.0)]
         lz, m, v = truncated_normal_moments(α, β)
         d = truncated(Normal(), α, β)
         @test lz ≈ log(cdf(Normal(), β) - cdf(Normal(), α)) rtol = 1e-8
@@ -79,6 +79,22 @@ end
     @test isfinite(res.ll)
     # The band (0, 1) of the first output lies above its predicted mean, the estimate moves upwards
     @test (C*kf.x)[1] > (C*m0)[1]
+
+    # In-place measurement function of an EKF model, with arrays that are not static
+    h!(yy, x, u, p, t) = mul!(yy, Matrix(C), x)
+    kfm = KalmanFilter(Matrix(1.0I(3)), zeros(3, 1), Matrix(C), 0, Matrix(0.01I(3)), Matrix(R2), SimpleMvNormal(Vector(m0), Matrix(P0)))
+    resm = correct!(kfm, QuantizedMeasurementModel(EKFMeasurementModel{Float64, true}(h!, Matrix(R2); nx, ny), 1.0), [0.0], Vector(y))
+    @test kfm.x ≈ results[1][1] atol = 1e-10
+    @test kfm.R ≈ results[1][2] atol = 1e-10
+    @test resm.ll ≈ results[1][3] atol = 1e-10
+
+    lmm = LinearMeasurementModel(C, 0, R2)
+    qmm0 = QuantizedMeasurementModel(lmm, 1.0)
+    @test LowLevelParticleFilters.measurement(qmm0) === LowLevelParticleFilters.measurement(lmm)
+    @test LowLevelParticleFilters.has_quantized_measurement(qmm0)
+    @test !LowLevelParticleFilters.has_quantized_measurement(lmm)
+    @test LowLevelParticleFilters.has_quantized_measurement(CompositeMeasurementModel(lmm, qmm0))
+    @test !LowLevelParticleFilters.has_quantized_measurement(CompositeMeasurementModel(lmm, lmm))
 
     @test_throws ArgumentError QuantizedMeasurementModel(LinearMeasurementModel(C, 0, SA[1.0 0.1; 0.1 1.0]), 1.0)
     @test_throws ArgumentError QuantizedMeasurementModel(LinearMeasurementModel(C, 0, R2), [1.0, 1.0, 1.0])
