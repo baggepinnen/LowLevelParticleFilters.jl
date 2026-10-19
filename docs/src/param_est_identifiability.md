@@ -152,7 +152,7 @@ This shows a connection between the Fisher Information Matrix and the parameter 
 
 ### Summary
 
-In joint state–parameter estimation with constant parameters, the parameter covariance block $R_{pp,k}$ of the augmented Kalman filter (or EKF/UKF approximation) decreases as information is accumulated according to the *Fisher information matrix.
+In joint state–parameter estimation with constant parameters, the parameter covariance block $R_{pp,k}$ of the augmented Kalman filter (or EKF/UKF approximation) decreases as information is accumulated according to the *Fisher information matrix*.
 This link provides a principled way to analyze *parameter identifiability* and *experiment excitation design* using information theory.
 
 
