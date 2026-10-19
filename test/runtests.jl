@@ -673,6 +673,11 @@ end
     include("test_missing_data.jl")
 end
 
+@testset "quantized" begin
+    @info "Testing quantized"
+    include("test_quantized.jl")
+end
+
 @testset "multistep" begin
     @info "Testing multistep"
     include("test_multistep.jl")

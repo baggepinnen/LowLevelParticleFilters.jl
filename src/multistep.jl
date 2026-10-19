@@ -172,6 +172,7 @@ See also [`LowLevelParticleFilters.multistep_sse`](@ref).
 """
 function multistep_prediction_errors!(res, f::AbstractFilter, u, y, p = parameters(f), λ = 1; h::Integer, horizon_weights = nothing)
     check_prediction_error_support(f, "multistep_prediction_errors!")
+    check_quantization_support(f, "multistep_prediction_errors!")
     check_multistep_arguments(h, horizon_weights)
     N = length(y)
     ny = f.ny
@@ -197,6 +198,7 @@ Calculate the sum of squared multi-step prediction errors ``\\sum_k \\sum_{j=1}^
 """
 function multistep_sse(f::AbstractFilter, u, y, p = parameters(f), λ = 1; h::Integer, horizon_weights = nothing)
     check_prediction_error_support(f, "multistep_sse")
+    check_quantization_support(f, "multistep_sse")
     check_multistep_arguments(h, horizon_weights)
     acc0 = zero(float(eltype(state(f))))
     multistep_fold(acc0, f, u, y, p, h) do acc, k, j, e

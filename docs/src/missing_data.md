@@ -196,7 +196,7 @@ A sensor with resolution ``Δ`` rounds the measured value to the nearest multipl
 Δ = 0.05
 R2q = R2 + SA[Δ^2/12;;]
 ```
-If the signal varies by less than one quantization level over long intervals, the quantization error is strongly correlated in time, and the variance above underestimates its effect on the estimate.
+If the signal varies by less than one quantization level over long intervals, the quantization error is strongly correlated in time, and the variance above underestimates its effect on the estimate. The tutorial [Quantized measurements](@ref) treats this case with filters that use the exact likelihood of the quantized measurement.
 
 ## Slowly varying disturbances
 Slowly varying disturbances, such as drift, bias, or environmental influences that are not measured, cause prediction errors that are correlated in time. Such disturbances are modeled by augmenting the model with additional state variables, e.g., an integrator driven by white noise, that the filter estimates together with the state of the system. The [Fault detection](fault_detection.md) tutorial uses this approach, and the [Disturbance gallery](@ref) contains a collection of disturbance models.
