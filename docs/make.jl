@@ -44,6 +44,7 @@ makedocs(
                   "SciML: Learning a sunshine disturbance model" => "thermal_nn_example.md",
                   "Fault detection" => "fault_detection.md",
                   "Missing data and outliers" => "missing_data.md",
+                  "Quantized measurements" => "quantized_measurements.md",
                   "Unscented transform" => "ut.md",
                   "Disturbance gallery" => "disturbance_gallery.md",
                   "Influence of sample rate on performance" => "sample_rate.md",
