@@ -37,7 +37,7 @@ barrier(x...) = Ops.optimization_barrier(map(mat, x)...)
 "Conversion of an unsigned integer to the floating-point type `T`"
 @inline tofloat(::Type{T}, x::TracedRNumber{S}) where {T, S} = S === T ? x : Ops.convert(TracedRNumber{T}, x)
 @inline tofloat(::Type{T}, x::Union{UInt64, Float32}) where {T} = T(x)
-"Conversion of the element type of an array"
+"Conversion of the element type of an array (Reactant promotes Float32 to Float64 in operations with `Irrational`s such as `2π`)"
 convert_array(::Type{T}, x::TracedRArray{S, N}) where {T, S, N} = S === T ? x : Ops.convert(TracedRArray{T, N}, x)
 convert_array(::Type{T}, x::AbstractArray) where {T} = T.(x)
 "Conversion of a (traced) integer to UInt64"
@@ -167,7 +167,7 @@ function step(fns, cfg, X, w, ll, k, data, p, consts)
     u = data.u[:, k]
     ynext = data.y[:, :, k+1]
     h = Reactant.@allowscalar data.hasy[k+1]
-    λ = fns.first_stage === nothing ? zero(T) .* w : ifelse.(h, fns.first_stage(X, u, ynext, p, k), zero(T))
+    λ = fns.first_stage === nothing ? zero(T) .* w : ifelse.(h, convert_array(T, fns.first_stage(X, u, ynext, p, k)), zero(T))
     λ, = barrier(λ)
     a = w .+ λ
     la = lse_rows(a)
@@ -178,8 +178,8 @@ function step(fns, cfg, X, w, ll, k, data, p, consts)
     lin = ancestor_index(j, consts.bidx)
     Xg = map(x -> gather_rows(x, lin), X)
     W = normals(T, consts.kp, k, consts.iv, cval(cfg).nw)
-    X = fns.dynamics(Xg, u, p, k, W)
-    lw = ifelse.(h, fns.measurement_loglik(X, u, ynext, p, k + 1), zero(T)) .- gather_rows(λ, lin)
+    X = map(x -> convert_array(T, x), fns.dynamics(Xg, u, p, k, W))
+    lw = ifelse.(h, convert_array(T, fns.measurement_loglik(X, u, ynext, p, k + 1)), zero(T)) .- gather_rows(λ, lin)
     out = barrier(X..., lw)
     X, lw = out[1:end-1], out[end]
     w0 = ifelse.(res, T(-log(N)), w)
@@ -192,11 +192,11 @@ end
 
 function loglik_device(fns, cfg, data, p, consts)
     T = Reactant.unwrapped_eltype(consts.w0)
-    X = fns.initial_state(p, normals(T, consts.k0, 0, consts.iv, cval(cfg).nx))
+    X = map(x -> convert_array(T, x), fns.initial_state(p, normals(T, consts.k0, 0, consts.iv, cval(cfg).nx)))
     w = consts.w0
     # The measurement of the first time step, by a plain correction (in the likelihood if burnin = 0)
     h1 = Reactant.@allowscalar data.hasy[1]
-    a = w .+ ifelse.(h1, fns.measurement_loglik(X, data.u[:, 1], data.y[:, :, 1], p, 1), zero(T))
+    a = w .+ ifelse.(h1, convert_array(T, fns.measurement_loglik(X, data.u[:, 1], data.y[:, :, 1], p, 1)), zero(T))
     l1 = lse_rows(a)
     w = a .- l1
     ll = ifelse.(h1 & (consts.burnin < 1), convert_array(Float64, vec(l1)), 0.0)
@@ -215,6 +215,11 @@ end
 
 "Batch size of the parameters: the first dimension of their arrays"
 batchsize(p) = maximum(x -> x isa AbstractArray ? size(x, 1) : 1, values(p))
+"""
+Parameters with floating-point arrays in the precision `T` of the particles, so that the particles keep their
+element type through the user functions (the types of the loop-carried values must not change)
+"""
+convert_params(::Type{T}, p) where {T} = map(x -> x isa AbstractArray{<:AbstractFloat} ? T.(x) : x, p)
 
 "Constant arrays of the filter for the seeds `seeds` (one per batch member)"
 function make_consts(::Type{T}, N, B, seeds; burnin) where {T}
@@ -239,9 +244,9 @@ function LowLevelParticleFilters.compile_loglik(pf::BatchedParticleFilter, u, y,
     fns = (; pf.dynamics, pf.measurement_loglik, pf.initial_state, pf.first_stage)
     cfg = Static{(; pf.nx, pf.nw, pf.unroll, pf.ess_threshold)}()
     f = Reactant.compile((data, p, consts) -> loglik_device(fns, cfg, data, p, consts),
-        (data, Reactant.to_rarray(p), Reactant.to_rarray(c0)); compile_options = COMPILE_OPTIONS)
+        (data, Reactant.to_rarray(convert_params(T, p)), Reactant.to_rarray(c0)); compile_options = COMPILE_OPTIONS)
     function (p, seeds)
-        Array(f(data, Reactant.to_rarray(p), Reactant.to_rarray(make_consts(T, pf.N, B, seeds; burnin))))
+        Array(f(data, Reactant.to_rarray(convert_params(T, p)), Reactant.to_rarray(make_consts(T, pf.N, B, seeds; burnin))))
     end
 end
 
