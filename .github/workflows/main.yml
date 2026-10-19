@@ -27,3 +27,21 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
+  test-reactant:
+    # ReactantParticleFilter on the CPU backend of Reactant. Reactant is not a test dependency of the
+    # package, it is added to a temporary environment for this job only.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@latest
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v2
+      - name: Test ReactantParticleFilter
+        run: |
+          julia --color=yes -e '
+            using Pkg
+            Pkg.activate(; temp = true)
+            Pkg.develop(path = ".")
+            Pkg.add(["Reactant", "Test", "StaticArrays", "Statistics", "LinearAlgebra", "Random"])
+            include("test/test_reactant.jl")'
