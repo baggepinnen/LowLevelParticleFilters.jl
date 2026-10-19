@@ -1,6 +1,6 @@
 # Quantized measurements
 
-Many sensors deliver their measurements with a limited resolution: a thermometer that reports whole degrees, an encoder that counts pulses, or a signal that is stored with few bits. A sensor with resolution ``Δ`` reports
+Many sensors deliver their measurements with a limited resolution: a thermometer that reports whole degrees, an encoder that counts pulses, or a signal that is stored with few bits. In general, the quantizer acts on the output of a measurement function ``h(x, u, p, t)`` that may be nonlinear, as everywhere else in this package. To keep the exposition simple, this tutorial considers a linear measurement function ``h(x) = C x``, for which the posterior of a Gaussian prior and one quantized measurement is available in closed form; the extension to nonlinear measurement functions is discussed at the end. A sensor with resolution ``Δ`` then reports
 ```math
 y_k = Δ \operatorname{round}\big((C x_k + v_k)/Δ\big), \quad v_k \sim N(0, σ_v^2),
 ```
