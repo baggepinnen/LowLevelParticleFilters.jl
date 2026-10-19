@@ -26,6 +26,7 @@ Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 LeastSquaresOptim = "0fc2ff8b-aaa3-5acd-a817-1944a5e08891"
 MonteCarloMeasurements = "0987c9cc-fe09-11e8-30f0-b96dd679fdca"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 
 [extensions]
@@ -34,6 +35,7 @@ LowLevelParticleFiltersDistributionsExt = "Distributions"
 LowLevelParticleFiltersLSOptExt = "LeastSquaresOptim"
 LowLevelParticleFiltersMonteCarloMeasurementsExt = "MonteCarloMeasurements"
 LowLevelParticleFiltersPlotsExt = "Plots"
+LowLevelParticleFiltersReactantExt = "Reactant"
 LowLevelParticleFiltersSciMLBaseExt = "SciMLBase"
 
 [compat]
@@ -51,6 +53,7 @@ PDMats = "0.10, 0.11"
 Plots = "1"
 Printf = "1.7"
 Random = "1.7"
+Reactant = "0.2.295"
 RecipesBase = "0.8, 1.0"
 SLEEFPirates = "0.6"
 SciMLBase = "2, 3"
