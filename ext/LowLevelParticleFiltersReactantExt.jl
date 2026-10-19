@@ -1,28 +1,37 @@
 """
-Device functions of `ReactantParticleFilter`: the propagation of the particles, the log-likelihood of a measurement
-and the first-stage weights of the auxiliary particle filter. The per-particle functions of the model are traced for
-a single particle and batched over the columns of the particle matrix (nx × N) with `mapslices`. Every device
-function is compiled at its first call for each combination of argument types and sizes and stored in the cache of
-the filter.
+Device functions of `ReactantParticleFilter`. The per-particle functions of the model are traced for a single particle
+and batched over the columns of the particle matrix (nx × N). A time step consists of two compiled device functions:
+the correction (measurement log-likelihood, normalization of the weights, log-likelihood of the measurement), and the
+prediction (effective sample size, systematic resampling, propagation), for the bootstrap filter or the auxiliary
+particle filter. The compiled functions are stored in a global cache, by the model functions and the argument types
+and sizes.
 """
 module LowLevelParticleFiltersReactantExt
 
 using LowLevelParticleFilters
-using LowLevelParticleFilters: ReactantParticleFilter, DevicePFstate, ParticleFilter, state, rng, num_particles,
-    dynamics, measurement, initial_density, dynamics_density, measurement_density, device_eltype,
-    ismissing_measurement
-import LowLevelParticleFilters: make_device_state, propagate_particles!, measurement_equation!, first_stage_weights!,
-    aux_propagate!, reset!
+using LowLevelParticleFilters: ReactantParticleFilter, DevicePFstate, ParticleFilter, AdvancedParticleFilter,
+    AuxiliaryParticleFilter, state, rng, num_particles, dynamics, measurement, initial_density, dynamics_density,
+    measurement_density, resample_threshold, device_eltype, ismissing_measurement, parameters, index
+import LowLevelParticleFilters: make_device_state, propagate_particles!, measurement_equation!, reset!, predict!,
+    correct!, logsumexp!, reset_weights!, randn_noise
 using Reactant: Reactant, Ops, TracedRNumber, TracedRArray, ConcreteRNumber
 using StaticArrays, LinearAlgebra, Statistics
+
+"""
+Compile options: the default loop-raising passes may hoist quantities that depend only on the counters of the random
+numbers out of loops as large arrays
+"""
+const COMPILE_OPTIONS = Reactant.CompileOptions(; disable_loop_raising_passes = true)
 
 # ------------------------------------------------------------------------------------------------------------
 # Conversions for traced numbers that Reactant does not provide
 # ------------------------------------------------------------------------------------------------------------
+"Materialization of a wrapped traced array (reshape, view), which `scatter` and indexing reject"
+mat(x) = x isa TracedRArray ? x : Reactant.TracedUtils.materialize_traced_array(x)
 "Logical right shift (Base.>> has no method for traced unsigned integers)"
 @inline shr(x::TracedRNumber{UInt64}, n) = Ops.shift_right_logical(x, Reactant.promote_to(TracedRNumber{UInt64}, UInt64(n)))
 @inline shr(x::UInt64, n) = x >> n
-"Conversion of a traced number to the floating-point type `T`"
+"Conversion of a traced number to the type `T`"
 @inline tofloat(::Type{T}, x::TracedRNumber{S}) where {T, S} = S === T ? x : Ops.convert(TracedRNumber{T}, x)
 @inline tofloat(::Type{T}, x::Real) where {T} = T(x)
 """
@@ -30,6 +39,7 @@ Conversion of the element type of an array (Reactant promotes Float32 to Float64
 such as `2π`)
 """
 convert_array(::Type{T}, x::TracedRArray{S, N}) where {T, S, N} = S === T ? x : Ops.convert(TracedRArray{T, N}, x)
+convert_array(::Type{T}, x) where {T} = convert_array(T, mat(x))
 
 # ------------------------------------------------------------------------------------------------------------
 # Counter-based random numbers (SplitMix64 output function over a Weyl sequence, Box-Muller)
@@ -55,6 +65,11 @@ end
 @inline normal_cos(::Type{T}, key, ctr2) where {T} = normal_pair(T, key, ctr2)[1]
 @inline normal_sin(::Type{T}, key, ctr2) where {T} = normal_pair(T, key, ctr2)[2]
 
+const SALT_PROP = 0x0000000000000000
+const SALT_RESAMPLE = 0x5851f42d4c957f2d
+"Key of the stream `salt` of the time step `k` for the seed `seed`"
+step_key(seed, k, salt) = mix64(seed ⊻ mix64(k * 0x9e3779b97f4a7c15 + salt))
+
 """
 Standard normal matrix (n × N) of the stream `key`: the entry (s, i) uses the words 2 (np (i − 1) + ⌈s/2⌉ − 1) and
 the following one, with np = ⌈n/2⌉ pairs per particle. `iv` is the row (1, N) of 0:N−1.
@@ -68,6 +83,26 @@ function normals(::Type{T}, key, iv, n) where {T}
     n == 1 ? rows[1] : vcat(rows...)
 end
 
+"""
+Source of standard normal numbers of one particle in the traced dynamics of an `AdvancedParticleFilter`, passed as
+the argument `noise`: the draw number `c` of the particle uses the words 2c and 2c + 1 of the stream `key`. The counter
+advances while the function is traced, so that every call of `randn_noise` has its own numbers.
+"""
+struct DeviceNoise{T, K}
+    key::K
+    counter::Base.RefValue{Int}
+end
+DeviceNoise{T}(key) where {T} = DeviceNoise{T, typeof(key)}(key, Ref(0))
+
+function next_normal(noise::DeviceNoise{T}) where {T}
+    c = noise.counter[]
+    noise.counter[] += 1
+    normal_cos(T, noise.key, UInt64(2c))
+end
+randn_noise(noise::DeviceNoise) = next_normal(noise)
+randn_noise(noise::DeviceNoise, ::Type{<:AbstractFloat}) = next_normal(noise)
+randn_noise(noise::DeviceNoise, ::Type{S}) where {S <: StaticVector} = SVector(ntuple(_ -> next_normal(noise), Val(length(S))))
+
 # ------------------------------------------------------------------------------------------------------------
 # Batched evaluation of per-particle functions
 # ------------------------------------------------------------------------------------------------------------
@@ -79,76 +114,293 @@ tovec(::Type{T}, v::TracedRArray) where {T} = convert_array(T, vec(v))
 tovec(::Type{T}, v::Number) where {T} = Reactant.TracedUtils.broadcast_to_size(tracedscalar(T, v), (1,))
 tovec(::Type{T}, v::AbstractVector) where {T} = length(v) == 1 ? tovec(T, v[1]) : vcat(map(s -> tovec(T, s), Tuple(v))...)
 
-"""
-    batched(f, T, X)
+"`SVector` of the entries of a traced vector of static length `n`"
+svec(v, ::Val{n}) where {n} = Reactant.@allowscalar SVector(ntuple(i -> v[i], Val(n)))
 
-The per-particle function `f(x::SVector) -> vector or number` evaluated for every column of the traced matrix
-`X` (nx × N), as a matrix (n × N) of the type `T`
 """
-function batched(f, ::Type{T}, X) where {T}
+    batched(f, T, X, keys = nothing)
+
+The per-particle function `f(x::SVector) -> vector or number` evaluated for every column of the traced matrix `X`
+(nx × N), as a matrix (n × N) of the type `T`. With the per-particle keys `keys` (N), `f(x, key)`.
+
+`f` is traced by native execution with traced numbers rather than by Reactant's interpreter: the interpreter replaces
+the arithmetic of `SVector`s of numbers with traced arrays, so that expressions that mix constant `SVector`s or
+matrices with `SVector`s of traced numbers fail (`A*x + B*(σ*w)`), whereas the methods of StaticArrays operate on the
+traced numbers directly.
+"""
+function batched(f, ::Type{T}, X, keys = nothing) where {T}
     nx = Val(size(X, 1))
-    mapslices(X; dims = 1) do x
-        Reactant.@allowscalar tovec(T, f(SVector(ntuple(i -> x[i], nx))))
+    Xt = permutedims(X, (2, 1))
+    res = if keys === nothing
+        Ops.batch([Xt], [size(X, 2)]) do x
+            Reactant.@allowscalar tovec(T, Reactant.call_with_native(f, svec(x, nx)))
+        end
+    else
+        Ops.batch([Xt, keys], [size(X, 2)]) do x, k
+            Reactant.@allowscalar tovec(T, Reactant.call_with_native(f, svec(x, nx), k[]))
+        end
     end
+    permutedims(only(res), (2, 1))
 end
+
+# ------------------------------------------------------------------------------------------------------------
+# Log-sum-exp and systematic resampling
+# ------------------------------------------------------------------------------------------------------------
+"Log of the sum of the exponentials over the particles: (1, N) → (1, 1)"
+function lse_rows(a)
+    mx = maximum(a; dims = 2)
+    mx .+ log.(sum(exp.(a .- mx); dims = 2))
+end
+
+"""
+Cumulative sum of the weights p (B, N) along the particles: Float32 within blocks of `MIXED_BLOCK` particles and
+Float64 for the offsets of the blocks. A Float64 cumulative sum is slow on consumer GPUs (1/64 of the Float32 rate);
+in Float32 alone the position N c_i / c_N has an error of the order of 1e-7 N slots.
+"""
+const MIXED_BLOCK = 1024
+function cumsum_weights(p)
+    B, N = size(p)
+    N <= MIXED_BLOCK && return cumsum(convert_array(Float64, p); dims = 2)
+    nb = cld(N, MIXED_BLOCK)
+    Np = nb * MIXED_BLOCK
+    pp = Np == N ? p : hcat(p, Ops.fill(zero(Reactant.unwrapped_eltype(p)), (B, Np - N)))
+    loc = cumsum(reshape(pp, B, MIXED_BLOCK, nb); dims = 2)
+    tot = convert_array(Float64, loc[:, MIXED_BLOCK:MIXED_BLOCK, :])
+    off = cumsum(tot; dims = 3) .- tot
+    c = reshape(off .+ convert_array(Float64, loc), B, Np)
+    Np == N ? c : c[:, 1:N]
+end
+
+"""
+    systematic(a, u, consts)
+
+Ancestor indices (1, N) of systematic resampling of the normalized log-weights `a` (1, N) with the uniform number `u`.
+The ancestor of slot n (0-based) is j_n = 1 + #{i < N : N c_i/c_N < u + n}. With the first slot f_i = ⌊N c_i/c_N − u⌋ + 1
+after particle i, nondecreasing in i, the count is max{i < N : f_i ≤ n}: the last particle of each value of f_i is
+written to the slot f_i (scatter with the combiner `max`), followed by a cumulative maximum over the slots. A histogram
+by scatter-add suffered from atomic contention, and a plain store with unique indices raced (the cumulative sum of XLA
+is not exactly monotone in floating point).
+"""
+function systematic(a, u, consts)
+    B, N = size(a)
+    c = cumsum_weights(exp.(a))
+    s = c .* (Float64(N) ./ c[:, N:N])
+    f = convert_array(Int64, clamp.(floor.(s .- u) .+ 1, 0.0, Float64(N)))
+    f = ifelse.(consts.lastslot, N, f)
+    fnext = hcat(f[:, 2:N], Ops.fill(Int64(N + 1), (B, 1)))
+    target = ifelse.(f .!= fnext, f, N) # slot N is out of bounds
+    lin = mat(reshape(1 .+ target, B * N, 1))
+    hist = Ops.fill(Int32(0), (B * N,))
+    hist = Ops.scatter(max, [hist], lin, [mat(reshape(consts.iota, B * N))];
+        update_window_dims = Int64[], inserted_window_dims = [1], input_batching_dims = Int64[],
+        scatter_indices_batching_dims = Int64[], scatter_dims_to_operand_dims = [1], index_vector_dim = 2)[1]
+    Int32(1) .+ accumulate(max, reshape(hist, B, N); dims = 2)
+end
+
+"Columns of `X` at the ancestors `j` (1, N)"
+gather(X, j) = X[:, mat(vec(convert_array(Int64, j)))]
 
 # ------------------------------------------------------------------------------------------------------------
 # Device functions
 # ------------------------------------------------------------------------------------------------------------
 """
-    device_propagate(f, Val(gather), Val(noise), X, j, u, p, t, key, iv, μ, L)
-
-Propagated particles f(X[:, j]) + μ + L Z with the standard normal matrix Z of the stream `key`; `f = nothing` for
-X[:, j] + μ + L Z (the noise-free predictions are already in `X`). `gather = false` for the particles in their own
-order, `noise = false` for f(X).
+Static settings of a compiled device function as a type parameter (numbers captured by a traced function would be
+traced): `nu`, `ny` lengths of the input and the measurement in the packed host data, `kind` (:pf or :advanced),
+`gaussian` (Gaussian measurement density), `th` resampling threshold
 """
-function device_propagate(f, ::Val{gather}, ::Val{noise}, X, j, u, p, t, key, iv, μ, L) where {gather, noise}
+struct Static{C} end
+cval(::Static{C}) where {C} = C
+
+"""
+    unpack(T, v, cfg)
+
+Seed, time-step counter, time, input and measurement from the packed host data `v` (Float64):
+[seed ÷ 2³², seed mod 2³², k, t, u..., y...]
+"""
+function unpack(::Type{T}, v, cfg) where {T}
+    nu, ny = cval(cfg).nu, cval(cfg).ny
+    Reactant.@allowscalar begin
+        seed = Ops.convert(TracedRNumber{UInt64}, v[1]) * 0x0000000100000000 + Ops.convert(TracedRNumber{UInt64}, v[2])
+        k = Ops.convert(TracedRNumber{UInt64}, v[3])
+        t = tofloat(T, v[4])
+        u = SVector(ntuple(i -> tofloat(T, v[4+i]), Val(nu)))
+        y = SVector(ntuple(i -> tofloat(T, v[4+nu+i]), Val(ny)))
+    end
+    (; seed, k, t, u, y)
+end
+
+"Log-likelihood (1 × N) of the measurement `y` for the particles `X`, with `fns.loglik` or the Gaussian density"
+function meas_loglik(fns, cfg, X, inp, y, p, consts)
     T = Reactant.unwrapped_eltype(X)
-    Xg = gather ? X[:, j] : X
-    Xn = f === nothing ? Xg : batched(x -> f(x, u, p, t), T, Xg)
-    noise || return Xn
-    Z = normals(T, key, iv, size(L, 2))
-    Xn .+ μ .+ L * Z
+    u, t = inp.u, inp.t
+    if cval(cfg).gaussian
+        g = fns.measurement
+        mn = consts.meas
+        E = reshape(tovec(T, y), :, 1) .- batched(x -> g(x, u, p, t), T, X) .- mn.μ
+        Z = mn.Linv * E
+        mn.c .- sum(abs2, Z; dims = 1) ./ 2
+    else
+        g = fns.loglik
+        batched(x -> g(x, u, y, p, t), T, X)
+    end
+end
+
+"Noise-free prediction of the particles `X`"
+function predict_mean(fns, cfg, X, inp, p)
+    T = Reactant.unwrapped_eltype(X)
+    f = fns.dynamics
+    u, t = inp.u, inp.t
+    cval(cfg).kind === :pf ? batched(x -> f(x, u, p, t), T, X) : batched(x -> f(x, u, p, t, false), T, X)
 end
 
 """
-Log-likelihood c − ½‖L⁻¹ (y − g(x) − μ)‖² of a measurement with additive Gaussian noise, for every particle (1 × N).
-(A `vec` of the result would be returned as a lazy wrapper, whose transfer to the host is slow.)
+Propagation of the particles `X` with noise from the stream `key`: f(x) + μ + L z for a `ParticleFilter`, and
+f(x, u, p, t, noise) with a `DeviceNoise` per particle for an `AdvancedParticleFilter`. `Xmean`: the noise-free
+predictions f(x) for a `ParticleFilter` if already computed.
 """
-function device_gaussian_loglik(g, X, u, y, p, t, μ, Linv, c)
-    T = Reactant.unwrapped_eltype(X)
-    E = y .- batched(x -> g(x, u, p, t), T, X) .- μ
-    Z = Linv * E
-    c .- sum(abs2, Z; dims = 1) ./ 2
+function propagate_noisy(fns, cfg, X, inp, p, consts, key; Xmean = nothing)
+    T = Reactant.unwrapped_eltype(Xmean === nothing ? X : Xmean)
+    u, t = inp.u, inp.t
+    if cval(cfg).kind === :pf
+        Xm = Xmean === nothing ? predict_mean(fns, cfg, X, inp, p) : Xmean
+        dn = consts.dyn
+        dn === nothing && return Xm
+        Xm .+ dn.μ .+ dn.L * normals(T, key, consts.iv, size(dn.L, 2))
+    else
+        f = fns.dynamics
+        keys = mix64.(vec(consts.iv) .⊻ key)
+        batched((x, k) -> f(x, u, p, t, DeviceNoise{T}(k)), T, X, keys)
+    end
 end
 
-"Per-particle log-likelihood `g(x, u, y, p, t)` (a measurement likelihood or first-stage weights) for every particle (1 × N)"
-function device_loglik(g, X, u, y, p, t)
+"Correction: log-weights plus the measurement log-likelihood, normalized; returns the new weights and log Σ"
+function device_correct(fns, cfg, X, w, v, p, consts)
     T = Reactant.unwrapped_eltype(X)
-    batched(x -> g(x, u, y, p, t), T, X)
+    inp = unpack(T, v, cfg)
+    a = w .+ convert_array(T, meas_loglik(fns, cfg, X, inp, inp.y, p, consts))
+    l = lse_rows(a)
+    a .- l, l
+end
+
+"Normalization of the log-weights; returns the new weights and log Σ"
+function device_normalize(w)
+    l = lse_rows(w)
+    w .- l, l
+end
+
+"Measurement log-likelihood added to the log-weights, without normalization"
+function device_add_loglik(fns, cfg, X, w, v, p, consts)
+    T = Reactant.unwrapped_eltype(X)
+    inp = unpack(T, v, cfg)
+    w .+ convert_array(T, meas_loglik(fns, cfg, X, inp, inp.y, p, consts))
+end
+
+"""
+Prediction of the bootstrap filter: resampling when the effective sample size is below `th N`, propagation with noise.
+Returns the new particles and log-weights.
+"""
+function device_predict(fns, cfg, X, w, v, p, consts)
+    T = Reactant.unwrapped_eltype(X)
+    N = size(X, 2)
+    inp = unpack(T, v, cfg)
+    th = cval(cfg).th
+    uu = u01(Float64, draw64(step_key(inp.seed, inp.k, SALT_RESAMPLE), zero(inp.k)), false)
+    if th >= 1
+        j = systematic(w, uu, consts)
+        wn = Ops.fill(T(-log(N)), (1, N))
+    else
+        ess = 1 ./ sum(exp.(2 .* w); dims = 2)
+        res = ess .< T(th * N)
+        j = ifelse.(res, systematic(w, uu, consts), consts.iota)
+        wn = ifelse.(res, T(-log(N)), w)
+    end
+    Xn = propagate_noisy(fns, cfg, gather(X, j), inp, p, consts, step_key(inp.seed, inp.k, SALT_PROP))
+    Xn, wn
+end
+
+"Propagation without resampling (`j = nothing`) or from the ancestors `j` (N), with noise"
+function device_propagate(fns, cfg, X, j, v, p, consts)
+    T = Reactant.unwrapped_eltype(X)
+    inp = unpack(T, v, cfg)
+    Xg = j === nothing ? X : X[:, j]
+    propagate_noisy(fns, cfg, Xg, inp, p, consts, step_key(inp.seed, inp.k, SALT_PROP))
+end
+
+"""
+Prediction of the auxiliary particle filter with the next measurement y1: first-stage weights λ of the noise-free
+predictions, resampling with the weights w λ, propagation from the ancestors with noise, log-weights
+log Σ wλ − λ_j − log N (see `predict!(::AuxiliaryParticleFilter, ...)`).
+"""
+function device_apf_predict(fns, cfg, X, w, v, p, consts)
+    T = Reactant.unwrapped_eltype(X)
+    N = size(X, 2)
+    inp = unpack(T, v, cfg)
+    Xm = predict_mean(fns, cfg, X, inp, p)
+    λ = if fns.first_stage === nothing
+        convert_array(T, meas_loglik(fns, cfg, Xm, inp, inp.y, p, consts))
+    else
+        g1 = fns.first_stage
+        u, y, t = inp.u, inp.y, inp.t
+        batched(x -> g1(x, u, y, p, t), T, Xm)
+    end
+    a = w .+ λ
+    l1 = lse_rows(a)
+    uu = u01(Float64, draw64(step_key(inp.seed, inp.k, SALT_RESAMPLE), zero(inp.k)), false)
+    j = systematic(a .- l1, uu, consts)
+    key = step_key(inp.seed, inp.k, SALT_PROP)
+    Xn = if cval(cfg).kind === :pf
+        propagate_noisy(fns, cfg, nothing, inp, p, consts, key; Xmean = gather(Xm, j))
+    else
+        propagate_noisy(fns, cfg, gather(X, j), inp, p, consts, key)
+    end
+    Xn, l1 .- gather(λ, j) .- T(log(N))
 end
 
 # ------------------------------------------------------------------------------------------------------------
-# Host side
+# Compilation and the global cache of compiled functions
 # ------------------------------------------------------------------------------------------------------------
 "Key of the argument types and sizes of a compiled device function"
 argkey(a::AbstractArray) = (typeof(a), size(a))
 argkey(a::Union{Tuple, NamedTuple}) = map(argkey, a)
 argkey(a) = typeof(a)
 
-"""
-    device_call(pf, name, f, args...)
+const CACHE = Dict{Any, Any}()
+const CACHE_LOCK = ReentrantLock()
 
-`f(args...)` with the compiled version of `f` from the cache of `pf`, compiled at the first call for the name `name`
-and the argument types and sizes of `args`
 """
-function device_call(pf::ReactantParticleFilter, name, f, args...)
-    thunk = get!(pf.cache, (name, map(argkey, args))) do
-        Reactant.compile(f, args)
+    device_call(name, fns, cfg, f, args...)
+
+`f(args...)` with the compiled version of `f`, compiled at the first call for the name `name`, the model functions
+`fns`, the settings `cfg` and the argument types and sizes of `args`
+"""
+function device_call(name, fns, cfg, f, args...)
+    key = (name, fns, cfg, map(argkey, args))
+    thunk = lock(CACHE_LOCK) do
+        get!(CACHE, key) do
+            check_no_random(f, args)
+            Reactant.compile(f, args; compile_options = COMPILE_OPTIONS)
+        end
     end
     thunk(args...)
 end
 
+"""
+Error if the model functions draw random numbers (`rand`, `randn`): such numbers are drawn once, when the function is
+traced, and compiled as constants, so that the same numbers would be used in every time step and for every particle.
+They are detected as a difference between two traces of the function, or as a random-number operation of Reactant.
+"""
+function check_no_random(f, args)
+    hlo1 = string(Reactant.@code_hlo optimize = false f(args...))
+    hlo2 = string(Reactant.@code_hlo optimize = false f(args...))
+    (hlo1 != hlo2 || occursin("rng_bit_generator", hlo1)) && error("The model functions of a ReactantParticleFilter " *
+        "must not draw random numbers (`rand`, `randn`), these would be compiled as constants. Draw the noise of the " *
+        "dynamics of an AdvancedParticleFilter with `randn_noise(noise, ...)`.")
+    nothing
+end
+
+# ------------------------------------------------------------------------------------------------------------
+# Host side
+# ------------------------------------------------------------------------------------------------------------
 """
 Parameters with floating-point numbers and arrays in the precision `T` of the particles, so that the particles keep
 their element type through the user functions
@@ -158,23 +410,32 @@ convert_params(::Type{T}, p::AbstractFloat) where {T} = T(p)
 convert_params(::Type{T}, p::Union{Tuple, NamedTuple}) where {T} = map(x -> convert_params(T, x), p)
 convert_params(::Type{T}, p) where {T} = p
 
-"Input, measurement or time as a device value of the type `T`"
-todevice(::Type{T}, x::AbstractArray{<:Real}) where {T} = Reactant.to_rarray(T.(collect(x)))
-todevice(::Type{T}, x::Real) where {T} = ConcreteRNumber(T(x))
-todevice(::Type{T}, ::Nothing) where {T} = nothing
-
-"The parameters `p` on the device, uploaded again only when they differ from those of the previous call"
+"""
+The parameters `p` on the device, uploaded again only when they differ from those of the previous call. Floating-point
+numbers are traced (without `track_numbers`, Reactant compiles numbers as constants), integers are compiled as
+constants.
+"""
 function device_params(pf::ReactantParticleFilter, p)
-    cached = get(pf.cache, :params, nothing)
+    cached = get(pf.device_data, :params, nothing)
     cached !== nothing && isequal(cached[1], p) && return cached[2]
-    pd = Reactant.to_rarray(convert_params(device_eltype(pf), p))
-    pf.cache[:params] = (deepcopy(p), pd)
+    pd = Reactant.to_rarray(convert_params(device_eltype(pf), p); track_numbers = AbstractFloat)
+    pf.device_data[:params] = (deepcopy(p), pd)
     pd
 end
 
-"Row (1, N) of 0:N−1 on the device, the particle counters of the random numbers"
-device_iv(pf::ReactantParticleFilter) =
-    get!(() -> Reactant.to_rarray(reshape(UInt64.(0:num_particles(pf)-1), 1, :)), pf.cache, :iv)
+veclength(::Nothing) = 0
+veclength(x) = length(x)
+
+"""
+Packed host data of a device function: [seed ÷ 2³², seed mod 2³², k, t, u..., y...], uploaded as a single array
+"""
+function pack(pf::ReactantParticleFilter, t, u, y = nothing)
+    s = state(pf)
+    v = Float64[s.seed >> 32, s.seed & 0xffffffff, s.t[], t]
+    u === nothing || append!(v, u)
+    y === nothing || append!(v, y)
+    Reactant.to_rarray(v)
+end
 
 "Mean and Cholesky factor of a Gaussian density (`nothing` for no noise)"
 function gaussian_factors(::Type{T}, d) where {T}
@@ -184,96 +445,151 @@ function gaussian_factors(::Type{T}, d) where {T}
     (; μ, L)
 end
 
-"Mean and Cholesky factor of the dynamics noise on the device"
-function device_dynamics_noise(pf::ReactantParticleFilter)
-    get!(pf.cache, :dynamics_noise) do
-        fac = gaussian_factors(device_eltype(pf), dynamics_density(pf))
-        fac === nothing ? nothing : (; μ = Reactant.to_rarray(fac.μ), L = Reactant.to_rarray(fac.L))
-    end
-end
-
-"Mean, inverse Cholesky factor and normalization constant of a Gaussian measurement density on the device"
-function device_measurement_noise(pf::ReactantParticleFilter)
-    get!(pf.cache, :measurement_noise) do
-        fac = gaussian_factors(Float64, measurement_density(pf))
+"Constant device data of the filter: particle indices and the factors of the Gaussian noise densities"
+function device_consts(pf::ReactantParticleFilter)
+    get!(pf.device_data, :consts) do
         T = device_eltype(pf)
-        ny = length(fac.μ)
-        c = -ny / 2 * log(2π) - sum(log, diag(fac.L))
-        (; μ = Reactant.to_rarray(T.(fac.μ)), Linv = Reactant.to_rarray(T.(Matrix(inv(LowerTriangular(fac.L))))),
-           c = ConcreteRNumber(T(c)))
+        N = num_particles(pf)
+        inner = pf.pf
+        dyn = nothing
+        if inner isa ParticleFilter
+            fac = gaussian_factors(T, dynamics_density(pf))
+            dyn = fac === nothing ? nothing : (; μ = Reactant.to_rarray(fac.μ), L = Reactant.to_rarray(fac.L))
+        end
+        meas = nothing
+        if pf.measurement_likelihood === nothing
+            fac = gaussian_factors(Float64, measurement_density(pf))
+            ny = length(fac.μ)
+            c = -ny / 2 * log(2π) - sum(log, diag(fac.L))
+            meas = (; μ = Reactant.to_rarray(T.(fac.μ)), Linv = Reactant.to_rarray(T.(Matrix(inv(LowerTriangular(fac.L))))),
+                c = ConcreteRNumber(T(c)))
+        end
+        (; iv = Reactant.to_rarray(reshape(UInt64.(0:N-1), 1, N)), iota = Reactant.to_rarray(reshape(Int32.(1:N), 1, N)),
+           lastslot = Reactant.to_rarray(reshape((1:N) .== N, 1, N)), dyn, meas)
     end
 end
 
-function make_device_state(pf::ParticleFilter, ::Type{T}) where {T}
-    s = pf.state
-    X = T.(reduce(hcat, s.x))
-    DevicePFstate(Reactant.to_rarray(X), Reactant.to_rarray(copy(X)), copy(s.w), copy(s.we), Ref(s.maxw[]),
-        copy(s.j), copy(s.bins), Ref(s.t[]))
+"Model functions of the filter, the part of the key of the compiled functions that identifies the model"
+function model_functions(pf::ReactantParticleFilter; loglik = pf.measurement_likelihood, first_stage = nothing)
+    (; dynamics = dynamics(pf), measurement = pf.pf isa ParticleFilter ? measurement(pf) : nothing, loglik, first_stage)
+end
+
+function config(pf::ReactantParticleFilter, u, y; loglik = pf.measurement_likelihood)
+    Static{(; nu = veclength(u), ny = veclength(y), kind = pf.pf isa ParticleFilter ? :pf : :advanced,
+        gaussian = loglik === nothing, th = resample_threshold(pf))}()
+end
+
+function make_device_state(pf::Union{ParticleFilter, AdvancedParticleFilter}, ::Type{T}) where {T}
+    X = T.(reduce(hcat, pf.state.x))
+    N = size(X, 2)
+    DevicePFstate(Reactant.to_rarray(X), Reactant.to_rarray(X), Reactant.to_rarray(fill(T(-log(N)), 1, N)),
+        rand(rng(pf), UInt64), Ref(0), zeros(N))
 end
 
 function reset!(pf::ReactantParticleFilter)
     s = state(pf)
     N = num_particles(pf)
-    X = device_eltype(pf).(reduce(hcat, [rand(rng(pf), initial_density(pf)) for _ in 1:N]))
-    s.xprev = Reactant.to_rarray(X)
-    s.x = Reactant.to_rarray(copy(X))
-    fill!(s.w, -log(N))
-    fill!(s.we, 1/N)
-    s.maxw[] = 0
+    T = device_eltype(pf)
+    X = T.(reduce(hcat, [rand(rng(pf), initial_density(pf)) for _ in 1:N]))
+    s.x = Reactant.to_rarray(X)
+    s.xprev = s.x
+    s.w = Reactant.to_rarray(fill(T(-log(N)), 1, N))
+    s.seed = rand(rng(pf), UInt64)
     s.t[] = 1
     pf
 end
 
+function reset_weights!(s::DevicePFstate)
+    N = num_particles(s)
+    s.w = Reactant.to_rarray(fill(eltype(s.w)(-log(N)), 1, N))
+    s
+end
+
 """
-    propagate(pf, f, gather, noise, X, j, u, p, t)
+    ll, e = correct!(pf::ReactantParticleFilter, u, y, p = parameters(pf), t = index(pf)*pf.Ts; g = pf.measurement_likelihood)
 
-Propagation on the device, see `device_propagate`. The result replaces the particles `x` of the state.
+Correction with the measurement `y` on the device: the log-weights are incremented by the measurement log-likelihood
+and normalized. Returns the log-likelihood of `y` and `0`. `g`: a measurement likelihood `(x, u, y, p, t) -> log p(y | x)`
+that replaces the one of the filter.
 """
-function propagate(pf::ReactantParticleFilter, f, gather::Bool, noise::Bool, X, j, u, p, t)
-    T = device_eltype(pf)
-    dn = device_dynamics_noise(pf)
-    noise &= dn !== nothing
-    jd = gather ? Reactant.to_rarray(j) : nothing
-    key = ConcreteRNumber(rand(rng(pf), UInt64))
-    μ, L = dn === nothing ? (nothing, nothing) : (dn.μ, dn.L)
-    name = (:propagate, f === nothing, gather, noise)
-    fd = (X, j, u, p, t, key, iv, μ, L) -> device_propagate(f, Val(gather), Val(noise), X, j, u, p, t, key, iv, μ, L)
-    state(pf).x = device_call(pf, name, fd, X, jd, todevice(T, u), device_params(pf, p), todevice(T, t), key,
-        device_iv(pf), μ, L)
+function correct!(pf::ReactantParticleFilter, u, y, p = parameters(pf), t = index(pf)*pf.Ts; g = pf.measurement_likelihood)
+    (y === missing || ismissing_measurement(y)) && return 0.0, 0
+    s = state(pf)
+    fns = model_functions(pf; loglik = g)
+    cfg = config(pf, u, y; loglik = g)
+    s.w, l = device_call(:correct, fns, cfg, (X, w, v, p, c) -> device_correct(fns, cfg, X, w, v, p, c),
+        s.x, s.w, pack(pf, t, u, y), device_params(pf, p), device_consts(pf))
+    Float64(only(Array(l))), 0
 end
 
-propagate_particles!(pf::ReactantParticleFilter, u, j::Vector{Int}, p, t::Real) =
-    propagate(pf, dynamics(pf), true, true, state(pf).xprev, j, u, p, t)
-propagate_particles!(pf::ReactantParticleFilter, u, p, t::Real) =
-    propagate(pf, dynamics(pf), false, true, state(pf).xprev, nothing, u, p, t)
-propagate_particles!(pf::ReactantParticleFilter, u, p, t::Real, ::Nothing) =
-    propagate(pf, dynamics(pf), false, false, state(pf).xprev, nothing, u, p, t)
-# The noise-free predictions are in x: the new particles are the predictions of the ancestors plus the noise
-aux_propagate!(pf::ReactantParticleFilter, u, j, p, t) =
-    propagate(pf, nothing, true, true, state(pf).x, j, u, p, t)
+"""
+    predict!(pf::ReactantParticleFilter, u, p = parameters(pf), t = index(pf)*pf.Ts)
 
-function measurement_equation!(pf::ReactantParticleFilter, u, y, p, t, w = weights(pf); g = pf.measurement_likelihood)
-    (y === missing || ismissing_measurement(y)) && return w
-    T = device_eltype(pf)
-    X = state(pf).x
-    args = (todevice(T, u), todevice(T, y), device_params(pf, p), todevice(T, t))
-    lw = if g === nothing
-        mn = device_measurement_noise(pf)
-        gm = measurement(pf)
-        device_call(pf, :gaussian_loglik, (X, u, y, p, t, μ, Linv, c) -> device_gaussian_loglik(gm, X, u, y, p, t, μ, Linv, c),
-            X, args..., mn.μ, mn.Linv, mn.c)
-    else
-        device_call(pf, (:loglik, g), (X, u, y, p, t) -> device_loglik(g, X, u, y, p, t), X, args...)
-    end
-    w .+= vec(Array(lw))
+Prediction on the device: systematic resampling if the effective sample size is below `resample_threshold N`,
+propagation of the particles with noise
+"""
+function predict!(pf::ReactantParticleFilter, u, p = parameters(pf), t = index(pf)*pf.Ts)
+    s = state(pf)
+    fns = model_functions(pf)
+    cfg = config(pf, u, nothing)
+    s.x, s.w = device_call(:predict, fns, cfg, (X, w, v, p, c) -> device_predict(fns, cfg, X, w, v, p, c),
+        s.x, s.w, pack(pf, t, u), device_params(pf, p), device_consts(pf))
+    s.xprev = s.x
+    s.t[] += 1
+    pf
 end
 
-function first_stage_weights!(pf::ReactantParticleFilter, λ, g1, u, y1, p, t)
-    T = device_eltype(pf)
-    X = state(pf).x
-    lw = device_call(pf, (:loglik, g1), (X, u, y, p, t) -> device_loglik(g1, X, u, y, p, t),
-        X, todevice(T, u), todevice(T, y1), device_params(pf, p), todevice(T, t))
-    λ .= vec(Array(lw))
+correct!(apf::AuxiliaryParticleFilter{<:ReactantParticleFilter}, u, y, p = parameters(apf), t = index(apf)*apf.Ts; kwargs...) =
+    correct!(apf.pf, u, y, p, t; kwargs...)
+
+function predict!(apf::AuxiliaryParticleFilter{<:ReactantParticleFilter}, u, y1, p = parameters(apf), t = index(apf)*apf.Ts)
+    (y1 === missing || ismissing_measurement(y1)) && return predict!(apf.pf, u, p, t)
+    pf = apf.pf
+    s = state(pf)
+    fns = model_functions(pf; first_stage = apf.first_stage)
+    cfg = config(pf, u, y1)
+    s.x, s.w = device_call(:apf_predict, fns, cfg, (X, w, v, p, c) -> device_apf_predict(fns, cfg, X, w, v, p, c),
+        s.x, s.w, pack(pf, t, u, y1), device_params(pf, p), device_consts(pf))
+    s.xprev = s.x
+    s.t[] += 1
+    apf
 end
+
+"""
+    measurement_equation!(pf::ReactantParticleFilter, u, y, p, t; g = pf.measurement_likelihood)
+
+Increment of the log-weights on the device by the measurement log-likelihood, without normalization (see
+[`logsumexp!`](@ref))
+"""
+function measurement_equation!(pf::ReactantParticleFilter, u, y, p, t; g = pf.measurement_likelihood)
+    (y === missing || ismissing_measurement(y)) && return pf
+    s = state(pf)
+    fns = model_functions(pf; loglik = g)
+    cfg = config(pf, u, y; loglik = g)
+    s.w = device_call(:add_loglik, fns, cfg, (X, w, v, p, c) -> device_add_loglik(fns, cfg, X, w, v, p, c),
+        s.x, s.w, pack(pf, t, u, y), device_params(pf, p), device_consts(pf))
+    pf
+end
+
+function logsumexp!(s::DevicePFstate)
+    s.w, l = device_call(:normalize, nothing, nothing, device_normalize, s.w)
+    Float64(only(Array(l)))
+end
+
+"""
+    propagate_particles!(pf::ReactantParticleFilter, u, p, t)
+    propagate_particles!(pf::ReactantParticleFilter, u, j::AbstractVector{<:Integer}, p, t)
+
+Propagation of the particles with noise on the device, without resampling or from the ancestors `j`
+"""
+function propagate_particles!(pf::ReactantParticleFilter, u, j::Union{Nothing, AbstractVector{<:Integer}}, p, t::Real)
+    s = state(pf)
+    fns = model_functions(pf)
+    cfg = config(pf, u, nothing)
+    jd = j === nothing ? nothing : Reactant.to_rarray(collect(Int64, j))
+    s.x = device_call(:propagate, fns, cfg, (X, j, v, p, c) -> device_propagate(fns, cfg, X, j, v, p, c),
+        s.xprev, jd, pack(pf, t, u), device_params(pf, p), device_consts(pf))
+end
+propagate_particles!(pf::ReactantParticleFilter, u, p, t::Real) = propagate_particles!(pf, u, nothing, p, t)
 
 end # module

@@ -220,7 +220,7 @@ See the docs for more information: https://baggepinnen.github.io/LowLevelParticl
 
 # Arguments:
 - `N`: Number of particles
-- `dynamics`: A discrete-time dynamics function `(x, u, p, t, noise=false) -> x⁺`. It's important that the `noise` argument defaults to `false`.
+- `dynamics`: A discrete-time dynamics function `(x, u, p, t, noise=false) -> x⁺`. It's important that the `noise` argument defaults to `false`. If the noise is drawn with [`randn_noise`](@ref)`(noise, ...)`, the filter can also be evaluated on a GPU with [`ReactantParticleFilter`](@ref).
 - `measurement`: A measurement function `(x, u, p, t, noise=false) -> y`. It's important that the `noise` argument defaults to `false`.
 - `measurement_likelihood`: A function `(x, u, y, p, t)->logl` to evaluate the log-likelihood of a measurement.
 - `dynamics_density`: This field is not used by the advanced filter and can be set to `nothing`.
