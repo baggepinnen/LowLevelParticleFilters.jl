@@ -250,6 +250,8 @@ SimpleMvNormal(Σ::Function) = error("A SimpleMvNormal distribution must be init
 
 # We define this new function extended_logpdf and overload that for Distributions.jl in the extension
 extended_logpdf(d::SimpleMvNormal, x) = mvnormal_c0(d) - PDMats.invquad(d.Σ, x .- d.μ)/2
+# Density of the additive dynamics noise `x - xp` between the state `x` and the noise-free prediction `xp`, as used by the particle smoother (the Distributions.jl extension defines the same for `Distribution`)
+extended_logpdf(d::SimpleMvNormal, x, xp, t) = extended_logpdf(d, x .- xp)
 const log2π = log(2π)
 function mvnormal_c0(d::SimpleMvNormal)
     ldcd = logdet(d.Σ)
