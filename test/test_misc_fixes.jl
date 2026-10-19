@@ -1,4 +1,4 @@
-using LowLevelParticleFilters, ForwardDiff, LinearAlgebra, Statistics, Test
+using LowLevelParticleFilters, ForwardDiff, LinearAlgebra, Statistics, Test, Random, StaticArrays
 const LLPF = LowLevelParticleFilters
 
 @testset "UKFMeasurementModel explicit ne" begin
@@ -85,4 +85,28 @@ end
     @test smooth(kf, u, y) isa LLPF.KalmanSmoothingSolution
     @test smooth(kf, u, y, LLPF.parameters(kf)) isa LLPF.KalmanSmoothingSolution
     @test !hasmethod(smooth, Tuple{typeof(kf), Nothing})
+end
+
+@testset "Particle smoother with SimpleMvNormal dynamics density" begin
+    # Forward filtering, backward simulation evaluates the dynamics density at the difference between
+    # a state and a noise-free prediction; compared with the RTS smoother of the same linear Gaussian model
+    Random.seed!(1)
+    A, B, C = SA[0.9;;], SA[1.0;;], SA[1.0;;]
+    R1, R2 = SA[0.1^2;;], SA[0.2^2;;]
+    d0 = LLPF.SimpleMvNormal(SA[0.0], SA[1.0;;])
+    kf = KalmanFilter(A, B, C, 0, R1, R2, d0)
+    T = 100
+    u = [SA[sin(k/10)] for k in 1:T]
+    x, u, y = LLPF.simulate(kf, u)
+    xT = getindex.(smooth(kf, u, y).xT, 1)
+    dyn(x, u, p, t, noise = false) = A*x + B*u + noise*0.1*randn(SVector{1})
+    meas(x, u, p, t, noise = false) = C*x + noise*0.2*randn(SVector{1})
+    meas_ll(x, u, y, p, t) = LLPF.extended_logpdf(LLPF.SimpleMvNormal(R2), y - C*x)
+    apf = AdvancedParticleFilter(1000, dyn, meas, meas_ll, LLPF.SimpleMvNormal(R1), d0)
+    pf = ParticleFilter(1000, (x, u, p, t) -> A*x + B*u, (x, u, p, t) -> C*x, LLPF.SimpleMvNormal(R1), LLPF.SimpleMvNormal(R2), d0)
+    for f in (apf, pf)
+        xb, ll = smooth(f, 200, u, y)
+        @test size(xb) == (200, T)
+        @test sqrt(mean(abs2, vec(smoothed_mean(xb)) .- xT)) < 0.03
+    end
 end
