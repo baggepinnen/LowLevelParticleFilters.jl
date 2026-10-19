@@ -7,7 +7,7 @@ export IMM, interact!, combine!
 export RBPF, RBParticle, RBMeasurementModel
 export MUKF, LinearizedDynamics
 export UIKalmanFilter
-export LinearMeasurementModel, EKFMeasurementModel, IEKFMeasurementModel, UKFMeasurementModel, CompositeMeasurementModel
+export LinearMeasurementModel, EKFMeasurementModel, IEKFMeasurementModel, UKFMeasurementModel, CompositeMeasurementModel, QuantizedMeasurementModel
 export KalmanFilteringSolution, KalmanSmoothingSolution, ParticleFilteringSolution
 @deprecate weigthed_mean weighted_mean
 @deprecate weigthed_cov weighted_cov
@@ -98,6 +98,7 @@ include("measurement_model.jl")
 include("kalman.jl")
 include("ukf.jl")
 include("filtering.jl")
+include("quantized_measurement_model.jl")
 include("resample.jl")
 include("utils.jl")
 include("smoothing.jl")

@@ -85,8 +85,9 @@ function noisefree_dynamics(f::UnscentedKalmanFilter{IPD,<:Any,AUGD}) where {IPD
 end
 function noisefree_measurement(f::UnscentedKalmanFilter)
     mm = f.measurement_model
-    if mm isa UKFMeasurementModel{<:Any, true}
-        e0 = zero(mm.cache.x0[1][length(f.x)+1:end])
+    mm_e = mm isa QuantizedMeasurementModel ? mm.inner : mm # The output before quantization
+    if mm_e isa UKFMeasurementModel{<:Any, true}
+        e0 = zero(mm_e.cache.x0[1][length(f.x)+1:end])
     else
         e0 = nothing
     end

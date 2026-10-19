@@ -14,6 +14,7 @@ This is possible by constructing a filter with an explicitly created measurement
 - [`IEKFMeasurementModel`](@ref) uses iterated linearization to propagate covariance (as is done in [`IteratedExtendedKalmanFilter`](@ref)).
 - [`UKFMeasurementModel`](@ref) uses the unscented transform to propagate covariance (as is done in [`UnscentedKalmanFilter`](@ref)).
 - [`CompositeMeasurementModel`](@ref) combines multiple measurement models.
+- [`QuantizedMeasurementModel`](@ref) handles measurements that are quantized after the addition of noise, given a linear, EKF or UKF model of the output before quantization, see [Quantized measurements](@ref).
 
 ## Constructing a filter with a custom measurement model
 

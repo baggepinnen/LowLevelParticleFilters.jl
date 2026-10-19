@@ -696,7 +696,8 @@ function sigmapoints_c!(
     nv = size(R2, 1)
     xm = [x; 0 * R2[:, 1]]
     Raug = cat(R, R2, dims = (1, 2))
-    sigmapoints!(xsm, xm, Raug, measurement_model.weight_params, kf.cholesky!)
+    chol = hasproperty(kf, :cholesky!) ? kf.cholesky! : cholesky!
+    sigmapoints!(xsm, xm, Raug, measurement_model.weight_params, chol)
     isnan(xsm[1][1]) && error("Cholesky factorization of augmented state covariance failed at time step $(kf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got R = $(printarray(R))")
     nothing
 end
