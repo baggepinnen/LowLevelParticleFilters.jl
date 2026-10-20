@@ -14,7 +14,7 @@ A time step consists of two calls of compiled device functions:
 - [`correct!`](@ref): the measurement log-likelihood of each particle, the normalization of the weights and the log-likelihood of the measurement, which is the only quantity transferred to the host.
 - [`predict!`](@ref): the effective sample size, systematic resampling if the effective sample size is below `resample_threshold * N`, and the propagation of the particles through the dynamics including the noise. For an [`AuxiliaryParticleFilter`](@ref), also the first-stage weights of the noise-free predictions.
 
-The time loop, the handling of missing measurements and the accumulation of the log-likelihood are the generic implementations of the package. Functions that operate on the particles or the weights on the host, such as [`particles`](@ref), [`weights`](@ref), [`expweights`](@ref), [`weighted_mean`](@ref), [`forward_trajectory`](@ref) and [`smooth`](@ref), copy them from the device.
+The time loop, the handling of missing measurements and the accumulation of the log-likelihood are the generic implementations of the package. Functions that operate on the particles or the weights on the host, such as [`particles`](@ref), [`weights`](@ref), [`expweights`](@ref), [`weighted_mean`](@ref) and [`forward_trajectory`](@ref), copy them from the device. The particle smoother [`smooth`](@ref) runs on the device, see [Particle smoothing](@ref gpu_smoothing).
 
 ## Example: `ParticleFilter`
 
@@ -74,6 +74,17 @@ rpf = ReactantParticleFilter(apf; T = Float32)
 ll = [loglik(rpf, u, y, (; σ)) for σ in (0.5, 1.0, 2.0)]
 ```
 (`erf` requires `using SpecialFunctions`.) The same `apf` runs on the CPU unchanged.
+
+## [Particle smoothing](@id gpu_smoothing)
+
+[`smooth`](@ref)`(rpf, M, u, y, p)` performs particle smoothing by forward filtering and backward simulation of `M` trajectories, also for an [`AuxiliaryParticleFilter`](@ref) of a `ReactantParticleFilter`. The cost of the backward simulation is proportional to ``M N T``: in each time step, the transition density between each of the ``M`` smoothed particles and each of the ``N`` filter particles is evaluated, which is well suited for a GPU. The particles and weights of the forward pass remain on the device, which requires memory for ``n_x N T`` numbers; only the smoothed particles are transferred to the host. The result has the same format as for the particle filters on the CPU:
+```julia
+xb, ll = smooth(rpf, 10_000, u, y, p) # xb: M × T matrix of SVectors
+xm = smoothed_mean(xb)               # nx × T
+```
+The backward simulation uses the transition density defined by the Gaussian `dynamics_density` of a [`ParticleFilter`](@ref); an [`AdvancedParticleFilter`](@ref), whose transition density is not available, is not supported.
+
+For the first example above with ``T = 100`` time steps, the smoother took 9.5 s with ``N = M = 1000`` and 85 s with ``N = M = 3000`` on a single CPU thread, and 0.10 s and 0.15 s on an NVIDIA H100 GPU. With ``N = M = 3 \cdot 10^4``, it took 2.8 s in `Float32` and 4.7 s in `Float64` on the GPU.
 
 ## Requirements on the model
 

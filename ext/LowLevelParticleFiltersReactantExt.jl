@@ -13,7 +13,7 @@ using LowLevelParticleFilters: ReactantParticleFilter, DevicePFstate, ParticleFi
     AuxiliaryParticleFilter, state, rng, num_particles, dynamics, measurement, initial_density, dynamics_density,
     measurement_density, resample_threshold, device_eltype, ismissing_measurement, parameters, index
 import LowLevelParticleFilters: make_device_state, propagate_particles!, measurement_equation!, reset!, predict!,
-    correct!, logsumexp!, reset_weights!, randn_noise
+    correct!, logsumexp!, reset_weights!, randn_noise, smooth
 using Reactant: Reactant, Ops, TracedRNumber, TracedRArray, ConcreteRNumber
 using StaticArrays, LinearAlgebra, Statistics
 
@@ -67,6 +67,7 @@ end
 
 const SALT_PROP = 0x0000000000000000
 const SALT_RESAMPLE = 0x5851f42d4c957f2d
+const SALT_SMOOTH = 0x14057b7ef767814f
 "Key of the stream `salt` of the time step `k` for the seed `seed`"
 step_key(seed, k, salt) = mix64(seed ⊻ mix64(k * 0x9e3779b97f4a7c15 + salt))
 
@@ -357,6 +358,52 @@ function device_apf_predict(fns, cfg, X, w, v, p, consts)
 end
 
 # ------------------------------------------------------------------------------------------------------------
+# Particle smoother (forward filtering, backward simulation)
+# ------------------------------------------------------------------------------------------------------------
+"""
+    draw_rows(lw, uu)
+
+Categorical draws (M × 1), one per row of the unnormalized log-weights `lw` (M × N), by inversion of the cumulative
+weights with the uniform numbers `uu` (M × 1)
+"""
+function draw_rows(lw, uu)
+    N = size(lw, 2)
+    c = cumsum_weights(exp.(lw .- maximum(lw; dims = 2)))
+    count = sum(convert_array(Int64, c .< uu .* c[:, N:N]); dims = 2)
+    min.(count .+ 1, N)
+end
+
+"Uniform numbers (M × 1) of the stream `key`, `im` is 0:M−1"
+uniform_rows(key, im) = reshape(u01.(Float64, draw64.(key, im), false), :, 1)
+
+"Initial smoothed particles (nx × M): draws from the filter particles `Xf` with the log-weights `wf` (1 × N)"
+function device_smooth_init(Xf, wf, im, v, cfg)
+    T = Reactant.unwrapped_eltype(Xf)
+    inp = unpack(T, v, cfg)
+    lw = wf .+ Ops.fill(zero(T), (length(im), 1))
+    gather(Xf, draw_rows(lw, uniform_rows(step_key(inp.seed, inp.k, SALT_SMOOTH), im)))
+end
+
+"""
+Step t + 1 → t of the backward simulation: the smoothed particle m at t is the filter particle n at t drawn with the
+probabilities ∝ w_n p(xb_m | x_n), with the Gaussian transition density p(x′ | x) = N(x′; f(x) + μ, L Lᵀ). The quadratic
+forms ‖L⁻¹(xb_m − f(x_n) − μ)‖² are computed from the differences (M × N) rather than by the expansion
+‖a‖² + ‖b‖² − 2 aᵀb, which loses accuracy in Float32 when the states are large compared with the noise.
+"""
+function device_smooth_step(fns, cfg, Xf, wf, xb, im, v, p, consts)
+    T = Reactant.unwrapped_eltype(Xf)
+    inp = unpack(T, v, cfg)
+    dn = consts.dyn
+    G = dn.Linv * (predict_mean(fns, cfg, Xf, inp, p) .+ dn.μ) # (nx, N)
+    Z = dn.Linv * xb                                           # (nx, M)
+    nx, N = size(G)
+    M = size(Z, 2)
+    q = reshape(sum(abs2, reshape(Z, nx, M, 1) .- reshape(G, nx, 1, N); dims = 1), M, N)
+    lw = wf .- q ./ 2
+    gather(Xf, draw_rows(lw, uniform_rows(step_key(inp.seed, inp.k, SALT_SMOOTH), im)))
+end
+
+# ------------------------------------------------------------------------------------------------------------
 # Compilation and the global cache of compiled functions
 # ------------------------------------------------------------------------------------------------------------
 "Key of the argument types and sizes of a compiled device function"
@@ -427,11 +474,11 @@ veclength(::Nothing) = 0
 veclength(x) = length(x)
 
 """
-Packed host data of a device function: [seed ÷ 2³², seed mod 2³², k, t, u..., y...], uploaded as a single array
+Packed host data of a device function: [seed ÷ 2³², seed mod 2³², k, t, u..., y...], uploaded as a single array.
+By default the seed and the time-step counter `k` of the state of the filter.
 """
-function pack(pf::ReactantParticleFilter, t, u, y = nothing)
-    s = state(pf)
-    v = Float64[s.seed >> 32, s.seed & 0xffffffff, s.t[], t]
+function pack(pf::ReactantParticleFilter, t, u, y = nothing; seed = state(pf).seed, k = state(pf).t[])
+    v = Float64[seed >> 32, seed & 0xffffffff, k, t]
     u === nothing || append!(v, u)
     y === nothing || append!(v, y)
     Reactant.to_rarray(v)
@@ -454,7 +501,8 @@ function device_consts(pf::ReactantParticleFilter)
         dyn = nothing
         if inner isa ParticleFilter
             fac = gaussian_factors(T, dynamics_density(pf))
-            dyn = fac === nothing ? nothing : (; μ = Reactant.to_rarray(fac.μ), L = Reactant.to_rarray(fac.L))
+            dyn = fac === nothing ? nothing : (; μ = Reactant.to_rarray(fac.μ), L = Reactant.to_rarray(fac.L),
+                Linv = Reactant.to_rarray(T.(Matrix(inv(LowerTriangular(Float64.(fac.L)))))))
         end
         meas = nothing
         if pf.measurement_likelihood === nothing
@@ -591,5 +639,59 @@ function propagate_particles!(pf::ReactantParticleFilter, u, j::Union{Nothing, A
         s.xprev, jd, pack(pf, t, u), device_params(pf, p), device_consts(pf))
 end
 propagate_particles!(pf::ReactantParticleFilter, u, p, t::Real) = propagate_particles!(pf, u, nothing, p, t)
+
+"""
+    xb, ll = smooth(pf::ReactantParticleFilter, M, u, y, p = parameters(pf))
+    xb, ll = smooth(apf::AuxiliaryParticleFilter{<:ReactantParticleFilter}, M, u, y, p = parameters(apf))
+
+Particle smoothing by forward filtering and backward simulation of `M` trajectories on the device. The particles and
+weights of the forward pass remain on the device. Returns the smoothed particles `xb` (M × T, as for the other particle
+filters) and the log-likelihood of the forward pass. Requires a `ParticleFilter` with a Gaussian `dynamics_density`,
+which defines the transition density of the backward simulation. The memory required on the device is that of the
+particles of all time steps, `nx N T` numbers.
+"""
+smooth(pf::ReactantParticleFilter, M::Integer, u, y, p = parameters(pf)) = device_smooth(pf, pf, M, u, y, p)
+smooth(apf::AuxiliaryParticleFilter{<:ReactantParticleFilter}, M::Integer, u, y, p = parameters(apf)) =
+    device_smooth(apf, apf.pf, M, u, y, p)
+
+function device_smooth(f, pf::ReactantParticleFilter, M, u, y, p)
+    pf.pf isa ParticleFilter && dynamics_density(pf) !== nothing || throw(ArgumentError("smoothing of a " *
+        "ReactantParticleFilter requires a ParticleFilter with a Gaussian dynamics_density (the transition density)"))
+    length(u) == length(y) || throw(ArgumentError("u and y must have the same length"))
+    Tn = length(y)
+    # Forward pass: the particles and weights after the correction of every time step
+    reset!(f)
+    s = state(pf)
+    X = Vector{typeof(s.x)}(undef, Tn)
+    W = Vector{typeof(s.w)}(undef, Tn)
+    ll = 0.0
+    for t in 1:Tn
+        ti = (t - 1) * pf.Ts
+        ll += correct!(f, u[t], y[t], p, ti)[1]
+        X[t], W[t] = s.x, s.w
+        t < Tn || break
+        f isa AuxiliaryParticleFilter ? predict!(f, u[t], y[t+1], p, ti) : predict!(f, u[t], p, ti)
+    end
+    # Backward simulation
+    seed = rand(rng(pf), UInt64)
+    im = Reactant.to_rarray(UInt64.(0:M-1))
+    fns = model_functions(pf)
+    cfg = config(pf, u[1], nothing)
+    cfg0 = config(pf, nothing, nothing)
+    xd = device_call(:smooth_init, nothing, cfg0, (Xf, wf, im, v) -> device_smooth_init(Xf, wf, im, v, cfg0),
+        X[Tn], W[Tn], im, pack(pf, 0.0, nothing; seed, k = Tn))
+    nx = size(s.x, 1)
+    xb = Matrix{SVector{nx, device_eltype(pf)}}(undef, M, Tn)
+    tohost(x) = collect(reinterpret(SVector{nx, eltype(x)}, vec(Array(x))))
+    xb[:, Tn] = tohost(xd)
+    consts = device_consts(pf)
+    pd = device_params(pf, p)
+    for t in Tn-1:-1:1
+        xd = device_call(:smooth_step, fns, cfg, (Xf, wf, xb, im, v, p, c) -> device_smooth_step(fns, cfg, Xf, wf, xb, im, v, p, c),
+            X[t], W[t], xd, im, pack(pf, (t - 1) * pf.Ts, u[t]; seed, k = t), pd, consts)
+        xb[:, t] = tohost(xd)
+    end
+    xb, ll
+end
 
 end # module

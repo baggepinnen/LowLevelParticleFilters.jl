@@ -68,7 +68,7 @@ pa = [a, σw]
         @test mean(loglik(rn, u, yv, (; a, σ = 2σw)) for _ in 1:3) ≈ loglik(kf2, u, yv) atol = tol
     end
 
-    @testset "forward_trajectory and smoothing" begin
+    @testset "forward_trajectory" begin
         sol = forward_trajectory(rpf, u, yv, p)
         @test sol.ll ≈ llkf atol = 2tol
         xm = only.(mean_trajectory(sol))
@@ -76,10 +76,24 @@ pa = [a, σw]
         @test sqrt(mean(abs2, xm .- only.(solk.xt))) < 0.1
         @test weighted_mean(rpf) isa AbstractVector
         @test sum(expweights(rpf)) ≈ 1 atol = 1e-4
-        rs = ReactantParticleFilter(200, dyn, meas, df, dm, d0; p, T)
-        xb, ll = smooth(rs, 50, u, yv, p)
+    end
+
+    @testset "smoothing" begin
         ssol = smooth(kf, u, yv)
-        @test sqrt(mean(abs2, vec(mean(only.(xb), dims = 1)) .- only.(ssol.xT))) < 0.2
+        xT, RT = only.(ssol.xT), only.(ssol.RT)
+        for rs in (ReactantParticleFilter(N, dyn, meas, df, dm, d0; p, T),
+                   AuxiliaryParticleFilter(ReactantParticleFilter(N, dyn, meas, df, dm, d0; p, T); first_stage = fs))
+            xb, ll = smooth(rs, 500, u, yv, p)
+            @test size(xb) == (500, Tn)
+            @test eltype(xb) == SVector{1, T}
+            @test ll ≈ llkf atol = 2tol
+            xs = only.(xb)
+            # The smoothed mean and variance against the Rauch-Tung-Striebel smoother (posterior standard deviation ≈ 0.6)
+            @test sqrt(mean(abs2, vec(mean(xs, dims = 1)) .- xT)) < 0.1
+            @test mean(vec(var(xs, dims = 1)) ./ RT) ≈ 1 atol = 0.15
+        end
+        radv = ReactantParticleFilter(AdvancedParticleFilter(N, adyn, ameas, ml, nothing, d0; p = pa); T)
+        @test_throws ArgumentError smooth(radv, 10, u, yv, pa)
     end
 
     @testset "missing measurements" begin
@@ -137,4 +151,32 @@ end
     bad(x, u, p, t, noise = false) = SA[p[1] * x[1] + randn()]
     radv = ReactantParticleFilter(AdvancedParticleFilter(100, bad, ameas, ml, nothing, d0; p = pa))
     @test_throws ErrorException loglik(radv, u, yv, pa)
+end
+
+@testset "Smoothing, state dimension 2" begin
+    Ts = 0.1
+    A = [1 Ts; 0 1]
+    R1 = 0.5^2 * [Ts^2 / 2, Ts] * [Ts^2 / 2, Ts]' + 1e-3 * I(2)
+    σy = 0.2
+    Tn2 = 100
+    rng2 = Xoshiro(4)
+    xs = [randn(rng2, 2)]
+    for k in 2:Tn2
+        push!(xs, A * xs[end] + cholesky(R1).L * randn(rng2, 2))
+    end
+    ys = [[x[1] + σy * randn(rng2)] for x in xs]
+    us = [zeros(0) for _ in 1:Tn2]
+    d02 = LLPF.SimpleMvNormal(zeros(2), Matrix(1.0I(2)))
+    kf2 = KalmanFilter(A, zeros(2, 0), [1.0 0.0], zeros(1, 0), Matrix(R1), [σy^2;;], d02; check = false)
+    ssol = smooth(kf2, us, ys)
+    As = SMatrix{2, 2}(A)
+    dyn2(x, u, p, t) = As * x
+    meas2(x, u, p, t) = SA[x[1]]
+    rpf = ReactantParticleFilter(5000, dyn2, meas2, LLPF.SimpleMvNormal(zeros(2), Matrix(R1)), LLPF.SimpleMvNormal([0.0], [σy^2;;]), d02)
+    xb, ll = smooth(rpf, 500, us, ys)
+    xm = smoothed_mean(xb)
+    xT = reduce(hcat, ssol.xT)
+    sdT = sqrt.(reduce(hcat, diag.(ssol.RT)))
+    # Errors of the smoothed means relative to the posterior standard deviations
+    @test sqrt(mean(abs2, (xm .- xT) ./ sdT)) < 0.2
 end
