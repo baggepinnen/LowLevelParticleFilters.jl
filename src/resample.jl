@@ -20,12 +20,13 @@ function resample(::Type{ResampleSystematic}, we, j, bins, M = length(we))
     for i = 2:N
         bins[i] = bins[i-1] + we[i]
     end
-    r = rand()*bins[end]/N
-    s = r:(1/M):(bins[N]+r) # Added r in the end to ensure correct length (r < 1/N)
+    W = bins[N]
+    r = rand()*W/M
+    s = range(r, step=W/M, length=M)
     bo = 1
     for i = 1:M
         @inbounds for b = bo:N
-            if s[i] < bins[b]
+            if s[i] < bins[b] || b == N # b == N guards against rounding in s[M] ≥ bins[N]
                 j[i] = b
                 bo = b
                 break

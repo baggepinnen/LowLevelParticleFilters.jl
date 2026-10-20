@@ -66,6 +66,23 @@ end
     @test counts ./ sum(counts) ≈ we atol = 0.01
 end
 
+@testset "Systematic resampling with a different number of samples" begin
+    Random.seed!(5)
+    N = 500
+    we = fill(1/N, N)
+    # More samples than particles: every sample is assigned a particle
+    @test all(sort(LLPF.resample(LLPF.ResampleSystematic, we, 4N)) == repeat(1:N, inner = 4) for _ in 1:200)
+    # Fewer samples than particles: every particle is selected with probability proportional to its weight
+    counts = zeros(N)
+    for _ in 1:20000
+        for j in LLPF.resample(LLPF.ResampleSystematic, we, 10)
+            counts[j] += 1
+        end
+    end
+    @test all(>(0), counts)
+    @test maximum(abs, counts ./ sum(counts) .- 1/N) < 0.5/N
+end
+
 @testset "Conditional particle filter keeps the reference trajectory" begin
     for (name, f) in pairs(filters)
         N = num_particles(f)
