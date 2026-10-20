@@ -10,6 +10,7 @@ module LowLevelParticleFiltersReactantExt
 
 using LowLevelParticleFilters
 using LowLevelParticleFilters: ReactantParticleFilter, DevicePFstate, ParticleFilter, AdvancedParticleFilter,
+    ParticleSmoothingMethod, FFBSi, GenealogySmoother, ParticleGibbsSmoother,
     AuxiliaryParticleFilter, state, rng, num_particles, dynamics, measurement, initial_density, dynamics_density,
     measurement_density, resample_threshold, device_eltype, ismissing_measurement, parameters, index
 import LowLevelParticleFilters: make_device_state, propagate_particles!, measurement_equation!, reset!, predict!,
@@ -298,7 +299,7 @@ end
 
 """
 Prediction of the bootstrap filter: resampling when the effective sample size is below `th N`, propagation with noise.
-Returns the new particles and log-weights.
+Returns the new particles, log-weights and ancestor indices (1 × N).
 """
 function device_predict(fns, cfg, X, w, v, p, consts)
     T = Reactant.unwrapped_eltype(X)
@@ -316,7 +317,7 @@ function device_predict(fns, cfg, X, w, v, p, consts)
         wn = ifelse.(res, T(-log(N)), w)
     end
     Xn = propagate_noisy(fns, cfg, gather(X, j), inp, p, consts, step_key(inp.seed, inp.k, SALT_PROP))
-    Xn, wn
+    Xn, wn, j
 end
 
 "Propagation without resampling (`j = nothing`) or from the ancestors `j` (N), with noise"
@@ -330,7 +331,8 @@ end
 """
 Prediction of the auxiliary particle filter with the next measurement y1: first-stage weights λ of the noise-free
 predictions, resampling with the weights w λ, propagation from the ancestors with noise, log-weights
-log Σ wλ − λ_j − log N (see `predict!(::AuxiliaryParticleFilter, ...)`).
+log Σ wλ − λ_j − log N (see `predict!(::AuxiliaryParticleFilter, ...)`). Returns the new particles, log-weights and
+ancestor indices (1 × N).
 """
 function device_apf_predict(fns, cfg, X, w, v, p, consts)
     T = Reactant.unwrapped_eltype(X)
@@ -354,7 +356,7 @@ function device_apf_predict(fns, cfg, X, w, v, p, consts)
     else
         propagate_noisy(fns, cfg, gather(X, j), inp, p, consts, key)
     end
-    Xn, l1 .- gather(λ, j) .- T(log(N))
+    Xn, l1 .- gather(λ, j) .- T(log(N)), j
 end
 
 # ------------------------------------------------------------------------------------------------------------
@@ -384,12 +386,12 @@ function device_loglik_loop(fns, cfg, apf::Val, X, w, Vc, Vp, hasy, hasy1, p, co
 end
 
 "Prediction in the traced loop of `loglik`: of the bootstrap filter, or of the auxiliary filter if the next measurement is present (`h1`)"
-loop_predict(::Val{false}, fns, cfg, X, w, vp, h1, p, consts) = device_predict(fns, cfg, X, w, vp, p, consts)
+loop_predict(::Val{false}, fns, cfg, X, w, vp, h1, p, consts) = device_predict(fns, cfg, X, w, vp, p, consts)[1:2]
 function loop_predict(::Val{true}, fns, cfg, X, w, vp, h1, p, consts)
     @trace track_numbers = false if h1
-        Xn, wn = device_apf_predict(fns, cfg, X, w, vp, p, consts)
+        Xn, wn = device_apf_predict(fns, cfg, X, w, vp, p, consts)[1:2]
     else
-        Xn, wn = device_predict(fns, cfg, X, w, vp, p, consts)
+        Xn, wn = device_predict(fns, cfg, X, w, vp, p, consts)[1:2]
     end
     Xn, wn
 end
@@ -568,7 +570,7 @@ function make_device_state(pf::Union{ParticleFilter, AdvancedParticleFilter}, ::
     X = T.(reduce(hcat, pf.state.x))
     N = size(X, 2)
     DevicePFstate(Reactant.to_rarray(X), Reactant.to_rarray(X), Reactant.to_rarray(fill(T(-log(N)), 1, N)),
-        rand(rng(pf), UInt64), Ref(0), zeros(N))
+        rand(rng(pf), UInt64), Ref(0), zeros(N), nothing)
 end
 
 function reset!(pf::ReactantParticleFilter)
@@ -581,6 +583,7 @@ function reset!(pf::ReactantParticleFilter)
     s.w = Reactant.to_rarray(fill(T(-log(N)), 1, N))
     s.seed = rand(rng(pf), UInt64)
     s.t[] = 1
+    s.ancestors = nothing
     pf
 end
 
@@ -617,7 +620,7 @@ function predict!(pf::ReactantParticleFilter, u, p = parameters(pf), t = index(p
     s = state(pf)
     fns = model_functions(pf)
     cfg = config(pf, u, nothing)
-    s.x, s.w = device_call(:predict, fns, cfg, (X, w, v, p, c) -> device_predict(fns, cfg, X, w, v, p, c),
+    s.x, s.w, s.ancestors = device_call(:predict, fns, cfg, (X, w, v, p, c) -> device_predict(fns, cfg, X, w, v, p, c),
         s.x, s.w, pack(pf, t, u), device_params(pf, p), device_consts(pf))
     s.xprev = s.x
     s.t[] += 1
@@ -633,7 +636,7 @@ function predict!(apf::AuxiliaryParticleFilter{<:ReactantParticleFilter}, u, y1,
     s = state(pf)
     fns = model_functions(pf; first_stage = apf.first_stage)
     cfg = config(pf, u, y1)
-    s.x, s.w = device_call(:apf_predict, fns, cfg, (X, w, v, p, c) -> device_apf_predict(fns, cfg, X, w, v, p, c),
+    s.x, s.w, s.ancestors = device_call(:apf_predict, fns, cfg, (X, w, v, p, c) -> device_apf_predict(fns, cfg, X, w, v, p, c),
         s.x, s.w, pack(pf, t, u, y1), device_params(pf, p), device_consts(pf))
     s.xprev = s.x
     s.t[] += 1
@@ -720,22 +723,34 @@ function traced_loglik(f, pf::ReactantParticleFilter, u, y, p)
 end
 
 """
-    xb, ll = smooth(pf::ReactantParticleFilter, M, u, y, p = parameters(pf))
-    xb, ll = smooth(apf::AuxiliaryParticleFilter{<:ReactantParticleFilter}, M, u, y, p = parameters(apf))
+    xb, ll = smooth(pf::ReactantParticleFilter, M, u, y, p = parameters(pf); method = FFBSi())
+    xb, ll = smooth(apf::AuxiliaryParticleFilter{<:ReactantParticleFilter}, M, u, y, p = parameters(apf); method = FFBSi())
 
-Particle smoothing by forward filtering and backward simulation of `M` trajectories on the device. The particles and
-weights of the forward pass remain on the device. Returns the smoothed particles `xb` (M × T, as for the other particle
-filters) and the log-likelihood of the forward pass. Requires a `ParticleFilter` with a Gaussian `dynamics_density`,
-which defines the transition density of the backward simulation. The memory required on the device is that of the
-particles of all time steps, `nx N T` numbers.
+Particle smoothing of `M` trajectories. Returns the smoothed particles `xb` (M × T, as for the other particle filters)
+and the log-likelihood of the forward pass.
+
+- `FFBSi()`: forward filtering and backward simulation on the device. The particles and weights of the forward pass
+  remain on the device, which requires memory for `nx N T` numbers. Requires a `ParticleFilter` with a Gaussian
+  `dynamics_density`, which defines the transition density.
+- `GenealogySmoother(...)` and `FFBSi(; transition_logpdf)`: [`forward_trajectory`](@ref) with the filter on the
+  device, and the smoother of the package on the host.
+- `ParticleGibbsSmoother` is not supported, since the conditional particle filter is not implemented on the device.
 """
-smooth(pf::ReactantParticleFilter, M::Integer, u, y, p = parameters(pf)) = device_smooth(pf, pf, M, u, y, p)
-smooth(apf::AuxiliaryParticleFilter{<:ReactantParticleFilter}, M::Integer, u, y, p = parameters(apf)) =
-    device_smooth(apf, apf.pf, M, u, y, p)
+smooth(pf::ReactantParticleFilter, M::Integer, u, y, p = parameters(pf); method::ParticleSmoothingMethod = FFBSi()) =
+    device_smooth(method, pf, pf, M, u, y, p)
+smooth(apf::AuxiliaryParticleFilter{<:ReactantParticleFilter}, M::Integer, u, y, p = parameters(apf); method::ParticleSmoothingMethod = FFBSi()) =
+    device_smooth(method, apf, apf.pf, M, u, y, p)
 
-function device_smooth(f, pf::ReactantParticleFilter, M, u, y, p)
-    pf.pf isa ParticleFilter && dynamics_density(pf) !== nothing || throw(ArgumentError("smoothing of a " *
-        "ReactantParticleFilter requires a ParticleFilter with a Gaussian dynamics_density (the transition density)"))
+"Smoothing methods of the package on the host, with the forward pass of the filter on the device"
+device_smooth(method::ParticleSmoothingMethod, f, pf, M, u, y, p) = smooth(forward_trajectory(f, u, y, p), M, p; method)
+device_smooth(::ParticleGibbsSmoother, f, pf, M, u, y, p) = throw(ArgumentError("ParticleGibbsSmoother is not " *
+    "supported by the ReactantParticleFilter, use GenealogySmoother() or FFBSi(), or the filter on the CPU"))
+
+function device_smooth(method::FFBSi, f, pf::ReactantParticleFilter, M, u, y, p)
+    method.transition_logpdf === nothing || return smooth(forward_trajectory(f, u, y, p), M, p; method)
+    pf.pf isa ParticleFilter && dynamics_density(pf) !== nothing || throw(ArgumentError("FFBSi on the device " *
+        "requires a ParticleFilter with a Gaussian dynamics_density (the transition density); use " *
+        "GenealogySmoother() or FFBSi(; transition_logpdf) for an AdvancedParticleFilter"))
     length(u) == length(y) || throw(ArgumentError("u and y must have the same length"))
     Tn = length(y)
     # Forward pass: the particles and weights after the correction of every time step

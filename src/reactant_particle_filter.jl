@@ -16,9 +16,11 @@ randn_noise(noise::Bool, ::Type{S}) where {S <: StaticVector} = noise ? randn(S)
 randn_noise(::Nothing, args...) = randn_noise(false, args...)
 
 """
-State of a [`ReactantParticleFilter`](@ref): the particles `x` and `xprev` (nx × N) and the normalized
-log-weights `w` (1 × N) on the device, the key `seed` of the random numbers, the time index `t`, and a buffer `bins`
-(N) on the host for the functions that operate on the host, such as the backward simulation of [`smooth`](@ref)
+State of a [`ReactantParticleFilter`](@ref): the particles `x` and `xprev` (nx × N), the normalized log-weights `w`
+(1 × N) and the ancestor indices of the last prediction `ancestors` (1 × N, or `nothing`) on the device, the key `seed`
+of the random numbers, the time index `t`, and a buffer `bins` (N) on the host for the functions that operate on the
+host. The property `j` is the vector of ancestor indices on the host, as for [`PFstate`](@ref), which
+[`forward_trajectory`](@ref) records.
 """
 mutable struct DevicePFstate{XT, WT}
     x::XT
@@ -27,6 +29,13 @@ mutable struct DevicePFstate{XT, WT}
     seed::UInt64
     t::Base.RefValue{Int}
     bins::Vector{Float64}
+    ancestors::Any
+end
+
+function Base.getproperty(s::DevicePFstate, name::Symbol)
+    name === :j || return getfield(s, name)
+    a = getfield(s, :ancestors)
+    a === nothing ? collect(1:length(getfield(s, :bins))) : Int.(vec(Array(a)))
 end
 
 """

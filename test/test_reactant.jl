@@ -94,6 +94,20 @@ pa = [a, σw]
         end
         radv = ReactantParticleFilter(AdvancedParticleFilter(N, adyn, ameas, ml, nothing, d0; p = pa); T)
         @test_throws ArgumentError smooth(radv, 10, u, yv, pa)
+        @test_throws ArgumentError smooth(radv, 10, u, yv, pa; method = ParticleGibbsSmoother())
+        # Smoothers of the package on the host, with the forward pass on the device
+        rs = ReactantParticleFilter(N, dyn, meas, df, dm, d0; p, T)
+        sol = forward_trajectory(rs, u, yv, p)
+        @test all(a -> 1 <= a <= N, sol.a)
+        @test any(!=(0), diff(sol.a; dims = 1)) # resampling has occurred
+        for (f, pp) in ((rs, p), (radv, pa))
+            xb, ll = smooth(f, 500, u, yv, pp; method = GenealogySmoother(lag = 10))
+            @test size(xb) == (500, Tn)
+            @test sqrt(mean(abs2, vec(mean(only.(xb), dims = 1)) .- xT)) < 0.2
+        end
+        tl(x⁺, x, u, p, t) = -0.5 * (x⁺[1] - a * x[1])^2 / σw^2
+        xb, _ = smooth(rs, 200, u, yv, p; method = FFBSi(; transition_logpdf = tl))
+        @test sqrt(mean(abs2, vec(mean(only.(xb), dims = 1)) .- xT)) < 0.15
     end
 
     @testset "missing measurements" begin
