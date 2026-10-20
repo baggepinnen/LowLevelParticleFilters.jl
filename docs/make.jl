@@ -25,6 +25,7 @@ makedocs(
                   "Joint state and parameter estimation" => "param_est_joint.md",
                   "MUKF for parameter estimation" => "param_est_mukf.md",
                   "Using an optimizer" => "param_est_optimizer.md",
+                  "Population-based optimization on a GPU" => "param_est_population_gpu.md",
                   "Parameters and noise covariances jointly" => "param_est_joint_ml.md",
                   "Multi-step prediction errors" => "param_est_multistep.md",
                   "Identifiability" => "param_est_identifiability.md",
