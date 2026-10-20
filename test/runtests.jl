@@ -708,6 +708,11 @@ end
     include("test_apf_loglik.jl")
 end
 
+@testset "particle smoothers" begin
+    @info "Testing particle smoothers"
+    include("test_particle_smoothers.jl")
+end
+
 
 end
 
