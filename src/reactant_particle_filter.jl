@@ -53,7 +53,7 @@ The interface is the one of the other particle filters: [`update!`](@ref), [`pre
 [`loglik`](@ref), [`forward_trajectory`](@ref), [`smooth`](@ref), [`simulate`](@ref),
 `AuxiliaryParticleFilter(ReactantParticleFilter(pf); first_stage)`, etc. A time step requires one call of a compiled
 device function for `correct!` and one for `predict!`; only the inputs, the measurement and the log-likelihood are
-transferred between the host and the device. Functions that operate on the particles or the weights on the host,
+transferred between the host and the device. [`loglik`](@ref) performs all time steps in one device program. Functions that operate on the particles or the weights on the host,
 such as [`particles`](@ref), [`weights`](@ref) and [`weighted_mean`](@ref), copy them from the device.
 
 - `T`: precision of the particles and weights on the device. `Float32` is faster on most GPUs, but the accuracy may

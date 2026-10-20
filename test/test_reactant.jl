@@ -110,6 +110,33 @@ pa = [a, σw]
         @test l[1] == l[2]
     end
 
+    @testset "loglik in one device program" begin
+        # The generic loglik, which calls update! in every time step
+        function stepwise(f, u, y, p)
+            reset!(f)
+            if f isa AuxiliaryParticleFilter
+                sum(t -> f(u[t], y[t], y[t+1], p, (t - 1) * f.Ts)[1], 1:length(u)-1) + f.pf(u[end], y[end], p, (length(u) - 1) * f.Ts)[1]
+            else
+                sum(t -> f(u[t], y[t], p)[1], 1:length(u))
+            end
+        end
+        ym = Union{Vector{Float64}, Vector{Missing}}[yv...]
+        ym[10:20] .= Ref([missing])
+        makers = [
+            () -> ReactantParticleFilter(N, dyn, meas, df, dm, d0; p, T, resample_threshold = 0.5, rng = Xoshiro(7)),
+            () -> AuxiliaryParticleFilter(ReactantParticleFilter(N, dyn, meas, df, dm, d0; p, T, rng = Xoshiro(7)); first_stage = fs),
+            () -> ReactantParticleFilter(AdvancedParticleFilter(N, adyn, ameas, ml, nothing, d0; p = pa, rng = Xoshiro(7)); T),
+        ]
+        for mk in makers, yy in (yv, ym)
+            f = mk()
+            pp = f isa ReactantParticleFilter && f.pf isa AdvancedParticleFilter ? pa : p
+            l1 = loglik(f, u, yy, pp)
+            l2 = stepwise(mk(), u, yy, pp)
+            # Float32: XLA may round differently in the fused loop, which can change a resampling decision
+            T == Float64 ? (@test l1 ≈ l2 rtol = 1e-10) : (@test l1 ≈ l2 atol = tol)
+        end
+    end
+
     @testset "lower-level functions" begin
         reset!(rpf)
         LLPF.measurement_equation!(rpf, u[1], yv[1], p, 0.0)
@@ -172,11 +199,12 @@ end
     As = SMatrix{2, 2}(A)
     dyn2(x, u, p, t) = As * x
     meas2(x, u, p, t) = SA[x[1]]
-    rpf = ReactantParticleFilter(5000, dyn2, meas2, LLPF.SimpleMvNormal(zeros(2), Matrix(R1)), LLPF.SimpleMvNormal([0.0], [σy^2;;]), d02)
+    rpf = ReactantParticleFilter(5000, dyn2, meas2, LLPF.SimpleMvNormal(zeros(2), Matrix(R1)), LLPF.SimpleMvNormal([0.0], [σy^2;;]), d02; rng = Xoshiro(1))
     xb, ll = smooth(rpf, 500, us, ys)
     xm = smoothed_mean(xb)
     xT = reduce(hcat, ssol.xT)
     sdT = sqrt.(reduce(hcat, diag.(ssol.RT)))
-    # Errors of the smoothed means relative to the posterior standard deviations
-    @test sqrt(mean(abs2, (xm .- xT) ./ sdT)) < 0.2
+    # Errors of the smoothed means relative to the posterior standard deviations (Monte Carlo error with M = 500 and
+    # the degeneracy of the paths about 0.1–0.2)
+    @test sqrt(mean(abs2, (xm .- xT) ./ sdT)) < 0.3
 end

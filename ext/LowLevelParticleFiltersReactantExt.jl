@@ -13,8 +13,8 @@ using LowLevelParticleFilters: ReactantParticleFilter, DevicePFstate, ParticleFi
     AuxiliaryParticleFilter, state, rng, num_particles, dynamics, measurement, initial_density, dynamics_density,
     measurement_density, resample_threshold, device_eltype, ismissing_measurement, parameters, index
 import LowLevelParticleFilters: make_device_state, propagate_particles!, measurement_equation!, reset!, predict!,
-    correct!, logsumexp!, reset_weights!, randn_noise, smooth
-using Reactant: Reactant, Ops, TracedRNumber, TracedRArray, ConcreteRNumber
+    correct!, logsumexp!, reset_weights!, randn_noise, smooth, loglik
+using Reactant: Reactant, Ops, TracedRNumber, TracedRArray, ConcreteRNumber, @trace
 using StaticArrays, LinearAlgebra, Statistics
 
 """
@@ -358,6 +358,43 @@ function device_apf_predict(fns, cfg, X, w, v, p, consts)
 end
 
 # ------------------------------------------------------------------------------------------------------------
+# Log-likelihood of a whole trajectory in one device program
+# ------------------------------------------------------------------------------------------------------------
+"""
+    device_loglik_loop(fns, cfg, Val(apf), X, w, Vc, Vp, hasy, hasy1, p, consts)
+
+The time steps of `loglik` in one traced loop: correction with the packed data `Vc[:, k]` if step `k` has a measurement
+(`hasy[k]`), followed by the prediction with `Vp[:, k]`; for the auxiliary particle filter (`apf`), the prediction with
+the next measurement in `Vp[:, k]` if it is present (`hasy1[k]`). Returns the final particles, log-weights and the
+log-likelihood (1 × 1).
+"""
+function device_loglik_loop(fns, cfg, apf::Val, X, w, Vc, Vp, hasy, hasy1, p, consts)
+    ll = Ops.fill(0.0, (1, 1))
+    # Numbers captured by the body, such as the values captured by closures among the model functions, are compiled as
+    # constants as in the device functions of single time steps (`track_numbers = false`); with the default, they are
+    # traced outside of the batched per-particle functions, which XLA rejects
+    @trace track_numbers = false for k in 1:size(Vc, 2)
+        h = Reactant.@allowscalar hasy[k]
+        wc, l = device_correct(fns, cfg, X, w, Vc[:, k], p, consts)
+        w = ifelse.(h, wc, w)
+        ll = ll .+ ifelse.(h, convert_array(Float64, l), 0.0)
+        X, w = loop_predict(apf, fns, cfg, X, w, Vp[:, k], Reactant.@allowscalar(hasy1[k]), p, consts)
+    end
+    X, w, ll
+end
+
+"Prediction in the traced loop of `loglik`: of the bootstrap filter, or of the auxiliary filter if the next measurement is present (`h1`)"
+loop_predict(::Val{false}, fns, cfg, X, w, vp, h1, p, consts) = device_predict(fns, cfg, X, w, vp, p, consts)
+function loop_predict(::Val{true}, fns, cfg, X, w, vp, h1, p, consts)
+    @trace track_numbers = false if h1
+        Xn, wn = device_apf_predict(fns, cfg, X, w, vp, p, consts)
+    else
+        Xn, wn = device_predict(fns, cfg, X, w, vp, p, consts)
+    end
+    Xn, wn
+end
+
+# ------------------------------------------------------------------------------------------------------------
 # Particle smoother (forward filtering, backward simulation)
 # ------------------------------------------------------------------------------------------------------------
 """
@@ -639,6 +676,48 @@ function propagate_particles!(pf::ReactantParticleFilter, u, j::Union{Nothing, A
         s.xprev, jd, pack(pf, t, u), device_params(pf, p), device_consts(pf))
 end
 propagate_particles!(pf::ReactantParticleFilter, u, p, t::Real) = propagate_particles!(pf, u, nothing, p, t)
+
+"""
+    ll = loglik(pf::ReactantParticleFilter, u, y, p = parameters(pf))
+    ll = loglik(apf::AuxiliaryParticleFilter{<:ReactantParticleFilter}, u, y, p = parameters(apf))
+
+Log-likelihood of the trajectory `u, y`, with all time steps in one device program. The result is the one of the generic
+`loglik`, which calls `update!` in every time step, but without a transfer between the host and the device in every
+time step. The program is compiled for each length of the trajectory.
+"""
+loglik(pf::ReactantParticleFilter, u, y, p = parameters(pf)) = traced_loglik(pf, pf, u, y, p)
+loglik(apf::AuxiliaryParticleFilter{<:ReactantParticleFilter}, u, y, p = parameters(apf)) = traced_loglik(apf, apf.pf, u, y, p)
+
+function traced_loglik(f, pf::ReactantParticleFilter, u, y, p)
+    length(u) == length(y) || throw(ArgumentError("u and y must have the same length"))
+    apf = f isa AuxiliaryParticleFilter
+    reset!(f)
+    s = state(pf)
+    Tn = length(y)
+    hasy = [!(yk === missing || ismissing_measurement(yk)) for yk in y]
+    ny = any(hasy) ? length(y[findfirst(hasy)]) : 0
+    nu = veclength(u[1])
+    # The times of the generic loglik: k Ts for the bootstrap filter, (k - 1) Ts for the auxiliary filter
+    time(k) = (apf ? k - 1 : k) * pf.Ts
+    function column(k, yk)
+        v = Float64[s.seed >> 32, s.seed & 0xffffffff, k, time(k)]
+        u[k] === nothing || append!(v, u[k])
+        yk === nothing ? append!(v, zeros(ny)) : append!(v, yk)
+    end
+    Vc = reduce(hcat, [column(k, hasy[k] ? y[k] : nothing) for k in 1:Tn])
+    hasy1 = [k < Tn && hasy[k+1] for k in 1:Tn]
+    Vp = reduce(hcat, [column(k, hasy1[k] ? y[k+1] : nothing) for k in 1:Tn])
+    fns = model_functions(pf; first_stage = apf ? f.first_stage : nothing)
+    cfg = Static{(; nu, ny, kind = pf.pf isa ParticleFilter ? :pf : :advanced,
+        gaussian = pf.measurement_likelihood === nothing, th = resample_threshold(pf))}()
+    s.x, s.w, ll = device_call(:loglik_loop, fns, (cfg, apf),
+        (X, w, Vc, Vp, hasy, hasy1, p, c) -> device_loglik_loop(fns, cfg, Val(apf), X, w, Vc, Vp, hasy, hasy1, p, c),
+        s.x, s.w, Reactant.to_rarray(Vc), Reactant.to_rarray(Vp), Reactant.to_rarray(hasy), Reactant.to_rarray(hasy1),
+        device_params(pf, p), device_consts(pf))
+    s.xprev = s.x
+    s.t[] += Tn
+    Float64(only(Array(ll)))
+end
 
 """
     xb, ll = smooth(pf::ReactantParticleFilter, M, u, y, p = parameters(pf))

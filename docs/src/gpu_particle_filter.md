@@ -9,12 +9,12 @@ using Reactant
 
 ## Division of work between the device and the host
 
-A time step consists of two calls of compiled device functions:
+In [`update!`](@ref), [`forward_trajectory`](@ref) etc., a time step consists of two calls of compiled device functions:
 
 - [`correct!`](@ref): the measurement log-likelihood of each particle, the normalization of the weights and the log-likelihood of the measurement, which is the only quantity transferred to the host.
 - [`predict!`](@ref): the effective sample size, systematic resampling if the effective sample size is below `resample_threshold * N`, and the propagation of the particles through the dynamics including the noise. For an [`AuxiliaryParticleFilter`](@ref), also the first-stage weights of the noise-free predictions.
 
-The time loop, the handling of missing measurements and the accumulation of the log-likelihood are the generic implementations of the package. Functions that operate on the particles or the weights on the host, such as [`particles`](@ref), [`weights`](@ref), [`expweights`](@ref), [`weighted_mean`](@ref) and [`forward_trajectory`](@ref), copy them from the device. The particle smoother [`smooth`](@ref) runs on the device, see [Particle smoothing](@ref gpu_smoothing).
+The time loop, the handling of missing measurements and the accumulation of the log-likelihood are the generic implementations of the package. [`loglik`](@ref) instead performs all time steps in one device program, with the same step functions and the same result as the generic implementation, but without a transfer between the host and the device in each time step; the inputs and measurements of the whole trajectory are transferred once, and the program is compiled for each length of the trajectory. Functions that operate on the particles or the weights on the host, such as [`particles`](@ref), [`weights`](@ref), [`expweights`](@ref), [`weighted_mean`](@ref) and [`forward_trajectory`](@ref), copy them from the device. The particle smoother [`smooth`](@ref) runs on the device, see [Particle smoothing](@ref gpu_smoothing).
 
 ## Example: `ParticleFilter`
 
@@ -112,9 +112,9 @@ The following table lists the time per time step of [`loglik`](@ref) for the fir
 
 | ``N`` | `Float64`, device | `Float32`, device | `ParticleFilter`, CPU |
 |------:|------------------:|------------------:|----------------------:|
-| ``10^3`` | 0.44 ms | 0.42 ms | 0.33 ms |
-| ``10^4`` | 0.52 ms | 0.48 ms | 1.6 ms |
-| ``10^5`` | 0.69 ms | 0.66 ms | 16 ms |
-| ``10^6`` | 4.4 ms | 3.8 ms | |
+| ``10^3`` | 0.04 ms | 0.03 ms | 0.33 ms |
+| ``10^4`` | 0.06 ms | 0.06 ms | 1.6 ms |
+| ``10^5`` | 0.22 ms | 0.21 ms | 16 ms |
+| ``10^6`` | 2.5 ms | 2.5 ms | |
 
-The cost of a time step consists of a fixed part of approximately 0.4 ms, determined by the two calls of the device functions and the transfers of the inputs, the measurement and the log-likelihood, and a part proportional to ``N``. The device is therefore advantageous for ``N \gtrsim 10^4`` particles.
+On the device, the cost of a time step of `loglik` consists of a fixed part of approximately 0.03–0.04 ms and a part proportional to ``N``. The device is therefore advantageous already for ``N \approx 10^3`` particles. [`update!`](@ref) and [`forward_trajectory`](@ref), which call the device functions in each time step, have a fixed cost of approximately 0.4 ms per time step (0.44 ms for ``N = 10^3``, 0.69 ms for ``N = 10^5``).
