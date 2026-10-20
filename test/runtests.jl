@@ -341,11 +341,21 @@ out = zeros(2, 10000)
         @test sum(abs, sum(xTmbf .- xT)) < 1e-10
         @test sum(abs, sum(Rmbf .- R)) < 1e-10
 
-        @test_skip mean(abs2, xm) > mean(abs2, xm - reduce(hcat,ksol.x)) > mean(abs2, xm - reduce(hcat,ksol.xt)) #> mean(abs2, xm - reduce(hcat,xT)) # Kalman: prediction > filtering > smoothing
-        @test_skip mean(abs2, xm) > mean(abs2, xm - reduce(hcat,xpf)) #> mean(abs2, xm - reduce(hcat,xT)) # particle filtering improves but not as good as kalman smoothing
-        @test_skip mean(abs2, xm - reduce(hcat,xpf)) > mean(abs2, xm - xbm) # particle smoothing improves over filtering
-        # NOTE: smoothing sometimes fails to improve so some tests are deactivated
-        # plot(xm', layout=2)
+        # The ordering of the estimation errors below holds in expectation, but fails for a few percent of realizations of length 200. It is therefore tested on a longer realization, for which the probability of failure is negligible.
+        let T = 2000, N = 500, M = 50
+            pfl = ParticleFilter(N, dynamics, measurement, df, dg, d0)
+            xl,ul,yl = LowLevelParticleFilters.simulate(pfl,T,du)
+            xml = reduce(hcat,xl)
+            ul,yl = tosvec.((ul,yl))
+            err(x̂) = mean(abs2, xml - reduce(hcat,x̂))
+            ssoll = smooth(kf, ul, yl)
+            xpfl = mean_trajectory(pfl, ul, yl)[1]
+            xbl, _ = smooth(pfl, M, ul, yl)
+            xbml = smoothed_mean(xbl)
+            @test mean(abs2, xml) > err(ssoll.x) > err(ssoll.xt) > err(ssoll.xT) # Kalman: prediction > filtering > smoothing
+            @test mean(abs2, xml) > err(xpfl) > err(ssoll.xT) # particle filtering improves but not as good as Kalman smoothing
+            @test err(xpfl) > mean(abs2, xml - xbml) # particle smoothing improves over filtering
+        end
 
         w = [x[i+1] - (A_test*x[i] + B_test*u[i]) for i = 1:T-1]
         w_pred = [ksol.x[i+1] - (A_test*ksol.x[i] + B_test*u[i]) for i = 1:T-1]
@@ -706,6 +716,11 @@ end
 @testset "particle-filter log-likelihoods" begin
     @info "Testing particle-filter log-likelihoods"
     include("test_apf_loglik.jl")
+end
+
+@testset "particle smoothers" begin
+    @info "Testing particle smoothers"
+    include("test_particle_smoothers.jl")
 end
 
 

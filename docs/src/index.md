@@ -150,7 +150,7 @@ For a full usage example, see the benchmark section below or [example_lineargaus
 The particle filter will perform a resampling step whenever the distribution of the weights has become degenerate. The resampling is triggered when the *effective number of samples* is smaller than `pf.resample_threshold` ``\in [0, 1]``, this value can be set when constructing the filter. How the resampling is done is governed by `pf.resampling_strategy`, and we currently provide `ResampleSystematic <: ResamplingStrategy`, `ResampleStratified <: ResamplingStrategy`, and `ResampleResidual <: ResamplingStrategy`. See https://en.wikipedia.org/wiki/Particle_filter for more info.
 
 # Particle Smoothing
-Smoothing is the process of finding the best state estimate given both past and future data. Smoothing is thus only possible in an offline setting. This package provides a particle smoother, based on forward filtering, backward simulation (FFBS), example usage follows:
+Smoothing is the process of finding the best state estimate given both past and future data. Smoothing is thus only possible in an offline setting. By default, [`smooth`](@ref) performs particle smoothing by forward filtering, backward simulation (FFBSi), example usage follows:
 ```@example lingauss
 N     = 2000 # Number of particles
 T     = 80   # Number of time steps
@@ -180,6 +180,17 @@ scatter!(xbt[1, 1:downsample:end, :]', subplot=1, show=false, m=(1,:black, 0.5),
 scatter!(xbt[2, 1:downsample:end, :]', subplot=2, m=(1,:black, 0.5), lab="")
 DisplayAs.PNG(Plots.current()) # hide
 ```
+
+## Choice of particle smoother
+The smoothing method is selected with the keyword argument `method` to [`smooth`](@ref). All methods return a matrix of smoothed particles of size `(M, T)`, to be used with [`smoothed_mean`](@ref), [`smoothed_cov`](@ref) and [`smoothed_trajs`](@ref).
+
+| Method | Requires the transition density ``p(x_{t+1} \mid x_t)`` | Computational cost | Remarks |
+|:--|:--|:--|:--|
+| [`FFBSi`](@ref) (default) | Yes | ``O(MNT)`` | Formed from `dynamics_density` for additive noise, or provided as `FFBSi(; transition_logpdf)` |
+| [`ParticleGibbsSmoother`](@ref) | No | `burnin + M*thin` forward filters | MCMC that targets the exact joint smoothing distribution, consecutive trajectories are correlated |
+| [`GenealogySmoother`](@ref) | No | ``O(MT)`` in addition to one forward filter | Path degeneracy far from the end of the data set, the keyword `lag` gives fixed-lag smoothing |
+
+FFBSi requires the density of the transition from ``x_t`` to ``x_{t+1}``. For a [`ParticleFilter`](@ref), the noise is additive with density `dynamics_density`, and the transition density is available. For an [`AdvancedParticleFilter`](@ref), the noise is drawn inside the dynamics function, and the transition density is in general not available, see [Smoothing with the AdvancedParticleFilter](@ref) below. The methods [`ParticleGibbsSmoother`](@ref) and [`GenealogySmoother`](@ref) only require the operations performed by the particle filter itself, i.e., sampling of the dynamics and evaluation of the measurement likelihood.
 
 
 
@@ -328,6 +339,18 @@ sol = forward_trajectory(apfa, u, y, ny)
 plot(sol, dim=1, xreal=x) # Same as above, but only plots a single dimension
 DisplayAs.PNG(Plots.current()) # hide
 ```
+
+## Smoothing with the AdvancedParticleFilter
+Since the noise of an [`AdvancedParticleFilter`](@ref) is drawn inside the dynamics function, the transition density ``p(x_{t+1} \mid x_t)`` required by the default smoother [`FFBSi`](@ref) is in general not available. The default transition density is formed from `dynamics_density` under the assumption that the noise is additive, as it is in the dynamics function above. If the noise is not additive but its density is known, the transition density may be provided as `FFBSi(; transition_logpdf)`. Otherwise, the [`ParticleGibbsSmoother`](@ref) may be used. This smoother runs a sequence of conditional particle filters, in which one particle is constrained to follow a reference trajectory, and draws a new reference trajectory from each filter. The trajectories form a Markov chain that has the joint smoothing distribution as its stationary distribution, of which the first `burnin` trajectories are discarded. The smoother is applicable to the [`AuxiliaryParticleFilter`](@ref) as well.
+
+```@example lingauss
+xb,ll = smooth(apfa, 50, u, y; method = ParticleGibbsSmoother(burnin = 10))
+xbm = smoothed_mean(xb)
+plot(xbm', lab="Particle Gibbs smooth", layout=2)
+plot!(vecvec_to_mat(x), l=:dash, lab="True")
+```
+
+Each trajectory requires one run of the particle filter, and consecutive trajectories are correlated, in particular for time steps far from the end of the data set. The cheaper [`GenealogySmoother`](@ref) traces the ancestry of the particles of a single run of the filter, optionally with a fixed lag, `GenealogySmoother(lag = 10)`. See the [smoothing in the beetle example](@ref beetle_smoothing) for an application with a discrete state variable, for which the transition density is not available.
 
 See the tutorials section for more advanced examples, including state estimation for DAE (Differential-Algebraic Equation) systems.
 

@@ -99,46 +99,218 @@ end
 get_A(kf::KalmanFilter, x, u, p, t) = get_mat(kf.A, x, u, p, t)
 get_C(kf::KalmanFilter, x, u, p, t) = get_mat(kf.C, x, u, p, t)
 
-function smooth(pf::AbstractParticleFilter, M, u, y, p=parameters(pf))
-    sol = forward_trajectory(pf, u, y, p)
-    smooth(pf::AbstractParticleFilter, sol.x, sol.w, sol.we, sol.ll, M, u, y, p)
+abstract type ParticleSmoothingMethod end
+
+"""
+    FFBSi(; transition_logpdf = nothing)
+
+Particle smoothing by forward filtering, backward simulation (FFBSi) [Godsill, Doucet and West (2004)], for use with [`smooth`](@ref). Each of the `M` smoothing trajectories is drawn backwards in time, the particle at time step ``t`` is drawn among the filter particles ``x_t^i`` with probability proportional to ``w_t^i \\, p(x_{t+1} \\mid x_t^i)``. The computational cost is ``O(MNT)``.
+
+The method requires the transition density ``p(x_{t+1} \\mid x_t)``:
+- By default, the noise in the dynamics is assumed to be additive with density `dynamics_density(pf)`, i.e., ``\\log p(x_{t+1} \\mid x_t) = \\log p_w(x_{t+1} - f(x_t, u_t, p, t))``. For an [`AdvancedParticleFilter`](@ref), this is correct only if the dynamics function adds noise with the density `dynamics_density` to the noise-free prediction `dynamics(x, u, p, t, false)`.
+- `transition_logpdf(x⁺, x, u, p, t) -> log p(x⁺ | x)`: A function that evaluates the log-density of the transition from `x` to `x⁺` under the input `u`. Use this when the noise is not additive but the transition density is known, e.g., for state-dependent noise.
+
+If the transition density is not available, use [`ParticleGibbsSmoother`](@ref) or [`GenealogySmoother`](@ref).
+"""
+@kwdef struct FFBSi{F} <: ParticleSmoothingMethod
+    transition_logpdf::F = nothing
 end
 
 """
-    xb,ll = smooth(pf, M, u, y, p=parameters(pf))
+    GenealogySmoother(; lag = nothing)
+
+Particle smoothing by tracing the ancestry of the particles of the forward filter [Kitagawa (1996)], for use with [`smooth`](@ref). This method requires only the ancestor indices recorded by [`forward_trajectory`](@ref). It does not require the transition density, and the computational cost in addition to the forward filter is ``O(MT)`` without a lag and ``O(MTL)`` with lag ``L``.
+
+- `lag = nothing`: The `M` returned trajectories are ancestral paths of particles drawn according to the weights at the final time step. They are samples from the particle approximation of the joint smoothing distribution ``p(x_{1:T} \\mid y_{1:T})``. Due to resampling, the number of distinct ancestors decreases rapidly backwards in time (path degeneracy), and the approximation of the smoothing distribution is poor for time steps far from the end of the data set.
+- `lag = L::Int`: Fixed-lag smoothing [Kitagawa and Sato (2001); Olsson, Cappé, Douc and Moulines (2008)]. The smoothing distribution at time step ``t`` is approximated by ``p(x_t \\mid y_{1:\\min(t+L, T)})``, i.e., by the ancestors at time step ``t`` of particles drawn at time step ``t+L``. The lag determines the trade-off between the bias (small `L`) and the variance caused by path degeneracy (large `L`). `lag = 0` gives the filtering distribution. With a lag, the samples at different time steps are drawn independently, the rows of the returned matrix are thus samples of the marginal smoothing distributions rather than trajectories.
+"""
+@kwdef struct GenealogySmoother{L} <: ParticleSmoothingMethod
+    lag::L = nothing
+end
+
+"""
+    ParticleGibbsSmoother(; burnin = 10, thin = 1)
+
+Particle smoothing by the particle Gibbs sampler, i.e., by iterated conditional particle filters [Andrieu, Doucet and Holenstein (2010)], for use with [`smooth`](@ref). The method does not require the transition density, it only requires the operations performed by the particle filter itself, i.e., sampling of the dynamics and evaluation of the measurement likelihood. This makes it suitable for an [`AdvancedParticleFilter`](@ref) with non-additive noise or discrete state variables.
+
+Each iteration runs a conditional particle filter, in which one particle is constrained to follow a reference trajectory, and draws a new reference trajectory by tracing the ancestry of a particle drawn according to the weights at the final time step. This defines a Markov chain that has the joint smoothing distribution ``p(x_{1:T} \\mid y_{1:T})`` as its stationary distribution, for any number of particles `N`. The initial reference trajectory is an ancestral path of the unconditional forward filter. For an [`AuxiliaryParticleFilter`](@ref), the conditional auxiliary particle filter [Pitt, Silva, Giordani and Kohn (2012)] is used. The conditional resampling is multinomial, irrespective of the resampling strategy of the filter, while the decision whether or not to resample follows the filter's `resample_threshold`.
+
+- `burnin`: The number of initial iterations that are discarded.
+- `thin`: Every `thin`-th iteration after the burn-in is kept, `smooth` thus runs `burnin + M*thin` conditional particle filters, each with the computational cost of the forward filter.
+
+Due to path degeneracy, the reference trajectory is retained with high probability for time steps far from the end of the data set, consecutive trajectories are therefore correlated there. The correlation decreases with the number of particles `N`; a number of particles proportional to the length of the data set ensures a mixing rate that does not deteriorate with the length of the data set [Lindsten, Douc and Moulines (2015)]. The mixing may be assessed by the fraction of iterations in which the trajectory changes at time step `t`, `mean(xb[m,t] != xb[m-1,t] for m in 2:M)` (with `thin = 1`); a fraction close to zero indicates that the chain has not explored the smoothing distribution at this time step. For an [`AuxiliaryParticleFilter`](@ref), first-stage weights that are much sharper than the predictive density ``p(y_{t+1} \\mid x_t)`` give the reference particle a large second-stage weight, and the chain may then retain the reference trajectory in nearly all iterations; see [`AuxiliaryParticleFilter`](@ref) for the choice of first-stage weights.
+
+Supported filters are [`ParticleFilter`](@ref), [`AdvancedParticleFilter`](@ref), and [`AuxiliaryParticleFilter`](@ref) of these.
+"""
+@kwdef struct ParticleGibbsSmoother <: ParticleSmoothingMethod
+    burnin::Int = 10
+    thin::Int = 1
+end
+
+"""
+    xb,ll = smooth(pf, M, u, y, p=parameters(pf); method = FFBSi())
+    xb,ll = smooth(sol::ParticleFilteringSolution, M, p=parameters(sol.f); method = FFBSi())
     xb,ll = smooth(pf, xf, wf, wef, ll, M, u, y, p=parameters(pf))
 
-Perform particle smoothing using forward-filtering, backward simulation. Return smoothed particles and loglikelihood.
+Perform particle smoothing and return `M` smoothed particles per time step in a matrix `xb` of size `(M, T)`, together with the log-likelihood `ll` estimated by the forward filter. The second form uses the solution `sol` of [`forward_trajectory`](@ref) rather than running the filter. The third form performs FFBSi with the default transition density.
+
+The smoothing method is selected by `method`:
+- [`FFBSi`](@ref): Forward filtering, backward simulation. Requires the transition density, which by default is formed from the additive noise density `dynamics_density(pf)`.
+- [`ParticleGibbsSmoother`](@ref): Iterated conditional particle filters. Does not require the transition density, suitable for an [`AdvancedParticleFilter`](@ref) with non-additive noise.
+- [`GenealogySmoother`](@ref): Ancestral paths of the forward filter, optionally with a fixed lag. Does not require the transition density and has the lowest computational cost, but suffers from path degeneracy.
+
 See also [`smoothed_trajs`](@ref), [`smoothed_mean`](@ref), [`smoothed_cov`](@ref)
 """
+function smooth(pf::AbstractParticleFilter, M, u, y, p=parameters(pf); method::ParticleSmoothingMethod = FFBSi())
+    sol = forward_trajectory(pf, u, y, p)
+    smooth(sol, M, p; method)
+end
+
+smooth(sol::ParticleFilteringSolution, M::Integer, p=parameters(sol.f); method::ParticleSmoothingMethod = FFBSi()) = _smooth(method, sol, M, p)
+
 function smooth(pf::AbstractParticleFilter, xf, wf, wef, ll, M, u, y, p=parameters(pf))
-    T = length(y)
-    N = num_particles(pf)
-    f = dynamics(pf)
+    ffbsi(pf, transition_logpdf_function(pf, nothing), xf, wf, wef, M, u, p), ll
+end
+
+_smooth(method::FFBSi, sol, M, p) = ffbsi(sol.f, transition_logpdf_function(sol.f, method.transition_logpdf), sol.x, sol.w, sol.we, M, sol.u, p), sol.ll
+
+function transition_logpdf_function(pf, ::Nothing)
     df = dynamics_density(pf)
+    df === nothing && throw(ArgumentError("FFBSi requires the transition density, but the dynamics density of the filter is `nothing`. Provide the transition density as `FFBSi(; transition_logpdf)`, or use a smoothing method that does not require the transition density, `ParticleGibbsSmoother()` or `GenealogySmoother()`."))
+    f = dynamics(pf)
+    (x⁺, x, u, p, t) -> extended_logpdf(df, x⁺, f(x, u, p, t), t)
+end
+transition_logpdf_function(pf, transition_logpdf) = transition_logpdf
+
+function ffbsi(pf, transition_logpdf::F, xf, wf, wef, M, u, p) where F
+    T = size(xf, 2)
+    N = num_particles(pf)
     @assert M <= N "Must extend cache size of bins and j to allow this"
     xb = Array{particletype(pf)}(undef,M,T)
     j = resample(pf.resampling_strategy, wef[:,T], M)
-    # @show Set(j)
     for i = 1:M
         xb[i,T] = xf[j[i], T]
     end
     wb = Vector{Float64}(undef,N)
     @inbounds for t = T-1:-1:1
         ti = (t-1)*pf.Ts
-        # tset = Set{Int}()
         for m = 1:M
             for n = 1:N
-                wb[n] = wf[n,t] + extended_logpdf(df, xb[m,t+1], f(xf[n,t],u[t],p,ti), ti)
+                wb[n] = wf[n,t] + transition_logpdf(xb[m,t+1], xf[n,t], u[t], p, ti)
             end
             i = draw_one_categorical(pf,wb)
-            # push!(tset, i)
             xb[m,t] = xf[i, t]
         end
-        # @show tset
     end
-    return xb,ll
+    return xb
 end
+
+function _smooth(method::GenealogySmoother, sol, M, p)
+    sol.a === nothing && throw(ArgumentError("The solution does not contain the ancestor indices required by the GenealogySmoother."))
+    genealogy_paths(sol.f, sol.x, sol.a, sol.we, M, method.lag), sol.ll
+end
+
+"Store the particles along the ancestry of particle `k` at time step `s` in `xb[m, t:s]`"
+function trace_ancestors!(xb, m, x, a, k, s, t)
+    @inbounds for τ = s:-1:t
+        xb[m,τ] = x[k,τ]
+        k = a[k,τ]
+    end
+    xb
+end
+
+function genealogy_paths(pf, x, a, we, M, lag)
+    T = size(x, 2)
+    xb = similar(x, M, T)
+    if lag === nothing
+        k = resample(resampling_strategy(pf), we[:,T], M)
+        for m = 1:M
+            trace_ancestors!(xb, m, x, a, k[m], T, 1)
+        end
+    else
+        lag >= 0 || throw(ArgumentError("The lag must be non-negative, got lag = $lag"))
+        for t = 1:T
+            s = min(t + lag, T)
+            k = resample(resampling_strategy(pf), we[:,s], M)
+            @inbounds for m = 1:M
+                km = k[m]
+                for τ = s:-1:t+1
+                    km = a[km,τ]
+                end
+                xb[m,t] = x[km,t]
+            end
+        end
+    end
+    xb
+end
+
+supports_conditional_smc(pf) = false
+supports_conditional_smc(::Union{ParticleFilter, AdvancedParticleFilter}) = true
+supports_conditional_smc(pf::AuxiliaryParticleFilter) = supports_conditional_smc(pf.pf)
+
+function _smooth(method::ParticleGibbsSmoother, sol, M, p)
+    pf = sol.f
+    supports_conditional_smc(pf) || throw(ArgumentError("The ParticleGibbsSmoother does not support filters of type $(nameof(typeof(pf))), supported filters are ParticleFilter, AdvancedParticleFilter and AuxiliaryParticleFilter of these."))
+    sol.a === nothing && throw(ArgumentError("The solution does not contain the ancestor indices required by the ParticleGibbsSmoother."))
+    (; burnin, thin) = method
+    burnin >= 0 && thin >= 1 || throw(ArgumentError("burnin must be non-negative and thin must be positive, got burnin = $burnin and thin = $thin"))
+    (; u, y) = sol
+    N, T = size(sol.x)
+    xref = genealogy_paths(pf, sol.x, sol.a, sol.we, 1, nothing) # 1×T matrix holding the reference trajectory
+    xb = Array{particletype(pf)}(undef, M, T)
+    x  = Array{particletype(pf)}(undef, N, T)
+    we = Array{Float64}(undef, N, T)
+    a  = Matrix{Int}(undef, N, T)
+    a[:,1] .= 1:N
+    m = 0
+    for iter = 1:burnin + M*thin
+        conditional_forward_trajectory!(x, we, a, pf, u, y, p, xref)
+        k = draw_categorical(rng(pf), @view(we[:,T]))
+        trace_ancestors!(xref, 1, x, a, k, T, 1)
+        if iter > burnin && (iter - burnin) % thin == 0
+            m += 1
+            xb[m, :] .= @view xref[1, :]
+        end
+    end
+    xb, sol.ll
+end
+
+"Draw an index from the categorical distribution with (possibly unnormalized) weights `we`"
+function draw_categorical(rng, we)
+    r = sum(we)*rand(rng)
+    c = zero(eltype(we))
+    @inbounds for i in eachindex(we)
+        c += we[i]
+        r <= c && return i
+    end
+    lastindex(we)
+end
+
+"""
+    conditional_forward_trajectory!(x, we, a, pf, u, y, p, xref)
+
+Run a conditional particle filter, in which particle `N` follows the reference trajectory `xref`, and store the particles, the normalized weights and the ancestor indices in `x, we, a`.
+"""
+function conditional_forward_trajectory!(x, we, a, pf, u, y, p, xref)
+    reset!(pf)
+    s = state(pf)
+    N = num_particles(pf)
+    T = length(y)
+    s.x[N] = s.xprev[N] = xref[1]
+    for t = 1:T
+        ti = (t-1)*pf.Ts
+        correct!(pf, u[t], y[t], p, ti)
+        x[:,t] .= particles(pf)
+        we[:,t] .= expweights(pf)
+        t == T && break
+        conditional_predict!(pf, u, y, p, t, ti, xref[t+1])
+        a[:,t+1] .= s.j
+    end
+    x
+end
+
+conditional_predict!(pf, u, y, p, t, ti, xref) = _predict!(pf, u[t], p, ti, xref)
+conditional_predict!(pf::AuxiliaryParticleFilter, u, y, p, t, ti, xref) = _predict!(pf, u[t], y[t+1], p, ti, xref)
 
 """
     sse(f::AbstractFilter, u, y, p = parameters(pf), λ = 1; post_update_cb=(f, u, y, p, ll, e)->nothing)

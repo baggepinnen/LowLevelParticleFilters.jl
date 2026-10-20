@@ -20,12 +20,13 @@ function resample(::Type{ResampleSystematic}, we, j, bins, M = length(we))
     for i = 2:N
         bins[i] = bins[i-1] + we[i]
     end
-    r = rand()*bins[end]/N
-    s = r:(1/M):(bins[N]+r) # Added r in the end to ensure correct length (r < 1/N)
+    W = bins[N]
+    r = rand()*W/M
+    s = range(r, step=W/M, length=M)
     bo = 1
     for i = 1:M
         @inbounds for b = bo:N
-            if s[i] < bins[b]
+            if s[i] < bins[b] || b == N # b == N guards against rounding in s[M] ≥ bins[N]
                 j[i] = b
                 bo = b
                 break
@@ -149,4 +150,20 @@ function draw_one_categorical(pf,w)
         end
     end
     length(bins)
+end
+
+"""
+    conditional_resample!(we, j, bins, rng = Random.default_rng())
+
+Conditional multinomial resampling, used by the conditional particle filter of the [`ParticleGibbsSmoother`](@ref). The ancestors `j[1:N-1]` are drawn independently from the categorical distribution with the weights `we`, while `j[N] = N`, i.e., the reference particle in slot `N` is its own ancestor. `bins` is a work array of length `N`.
+"""
+function conditional_resample!(we, j, bins, rng = Random.default_rng())
+    N = length(we)
+    cumsum!(bins, we)
+    W = bins[N]
+    @inbounds for i = 1:N-1
+        j[i] = min(searchsortedfirst(bins, W*rand(rng)), N)
+    end
+    j[N] = N
+    j
 end

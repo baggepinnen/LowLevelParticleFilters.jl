@@ -137,17 +137,22 @@ end
 
 Move filter state forward in time using dynamics equation and input vector `u`.
 """
-function predict!(pf, u, p = parameters(pf), t = index(pf)*pf.Ts)
+predict!(pf, u, p = parameters(pf), t = index(pf)*pf.Ts) = _predict!(pf, u, p, t, nothing)
+
+# With a reference state `xref` (conditional particle filter, see `ParticleGibbsSmoother`), particle `N` is
+# set to `xref` after propagation and is its own ancestor
+function _predict!(pf, u, p, t, xref)
     s = pf.state
     N = num_particles(s)
     if shouldresample(pf)
-        j = resample(pf)
+        j = xref === nothing ? resample(pf) : conditional_resample!(s.we, s.j, s.bins, rng(pf))
         propagate_particles!(pf, u, j, p, t)
         reset_weights!(s)
     else # Resample not needed
         s.j .= 1:N
         propagate_particles!(pf, u, p, t)
     end
+    xref === nothing || (s.x[N] = xref)
     copyto!(s.xprev, s.x)
     pf.state.t[] += 1
 end
@@ -245,8 +250,10 @@ end
 Prediction step of the auxiliary particle filter with the next measurement `y1` (see
 [`AuxiliaryParticleFilter`](@ref)); a missing `y1` gives the prediction of the underlying filter.
 """
-function predict!(pf::AuxiliaryParticleFilter, u, y1, p = parameters(pf), t = index(pf)*pf.Ts)
-    (y1 === missing || ismissing_measurement(y1)) && return predict!(pf.pf, u, p, t)
+predict!(pf::AuxiliaryParticleFilter, u, y1, p = parameters(pf), t = index(pf)*pf.Ts) = _predict!(pf, u, y1, p, t, nothing)
+
+function _predict!(pf::AuxiliaryParticleFilter, u, y1, p, t, xref)
+    (y1 === missing || ismissing_measurement(y1)) && return _predict!(pf.pf, u, p, t, xref)
     s = state(pf)
     λ = pf.λ
     propagate_particles!(pf.pf, u, p, t, nothing) # noise-free prediction, s.x[i] = f(s.xprev[i])
@@ -262,8 +269,9 @@ function predict!(pf::AuxiliaryParticleFilter, u, y1, p = parameters(pf), t = in
     end
     s.w .+= λ
     l1 = logsumexp!(s.w, s.we)                    # log Σ wλ; s.we holds the normalized first-stage weights
-    j = resample(pf.resampling_strategy, s.we, s.j, s.bins)
+    j = xref === nothing ? resample(pf.resampling_strategy, s.we, s.j, s.bins) : conditional_resample!(s.we, s.j, s.bins, rng(pf))
     aux_propagate!(pf.pf, u, j, p, t)             # from the ancestors jᵢ with noise
+    xref === nothing || (s.x[end] = xref)
     lN = log(num_particles(pf))
     @inbounds for i = eachindex(s.w)
         s.w[i] = l1 - λ[j[i]] - lN
@@ -426,7 +434,7 @@ promoted_eltype(E::Type, T::Type) = E === Missing ? E : promote_type(E, T)
     sol = forward_trajectory(pf, u::AbstractVector, y::AbstractVector, p=parameters(pf))
 
 Run the particle filter for a sequence of inputs and measurements (offline / batch filtering). Return a solution with
-`x,w,we,ll = particles, weights, expweights and loglikelihood`
+`x,w,we,ll = particles, weights, expweights and loglikelihood`, as well as the ancestor indices `a` of the particles, see [`ParticleFilteringSolution`](@ref).
 
 If [MonteCarloMeasurements.jl](https://github.com/baggepinnen/MonteCarloMeasurements.jl) is loaded, you may transform the output particles to `Matrix{MonteCarloMeasurements.Particles}` using `Particles(x,we)`. Internally, the particles are then resampled such that they all have unit weight. This is conventient for making use of the [plotting facilities of MonteCarloMeasurements.jl](https://baggepinnen.github.io/MonteCarloMeasurements.jl/stable/#Plotting-1).
 
@@ -442,6 +450,8 @@ function forward_trajectory(pf, u::AbstractVector, y::AbstractVector, p=paramete
     x = Array{particletype(pf)}(undef,N,T)
     w = Array{Float64}(undef,N,T)
     we = Array{Float64}(undef,N,T)
+    a = Matrix{Int}(undef,N,T)
+    a[:,1] .= 1:N
     ll = 0.
     @inbounds for t = 1:T
         ti = (t-1)*pf.Ts
@@ -454,9 +464,10 @@ function forward_trajectory(pf, u::AbstractVector, y::AbstractVector, p=paramete
         we[:,t] .= expweights(pf)
         pre_predict_cb(pf, u[t], y[t], p, ti, lli)
         predict!(pf, u[t], p, ti)
+        t < T && (a[:,t+1] .= state(pf).j)
         post_predict_cb(pf, u[t], y[t], p, ti)
     end
-    ParticleFilteringSolution(pf,u,y,x,w,we,ll)
+    ParticleFilteringSolution(pf,u,y,x,w,we,ll; a)
 end
 
 function forward_trajectory(pf::AuxiliaryParticleFilter, u::AbstractVector, y::AbstractVector, p=parameters(pf))
@@ -466,6 +477,8 @@ function forward_trajectory(pf::AuxiliaryParticleFilter, u::AbstractVector, y::A
     x = Array{particletype(pf)}(undef,N,T)
     w = Array{Float64}(undef,N,T)
     we = Array{Float64}(undef,N,T)
+    a = Matrix{Int}(undef,N,T)
+    a[:,1] .= 1:N
     ll = 0.
     @inbounds for t = 1:T
         ti = (t-1)*pf.Ts
@@ -473,9 +486,12 @@ function forward_trajectory(pf::AuxiliaryParticleFilter, u::AbstractVector, y::A
         x[:,t] .= particles(pf)
         w[:,t] .= weights(pf)
         we[:,t] .= expweights(pf)
-        t < T && predict!(pf, u[t], y[t+1], p, ti)
+        if t < T
+            predict!(pf, u[t], y[t+1], p, ti)
+            a[:,t+1] .= state(pf).j
+        end
     end
-    ParticleFilteringSolution(pf,u,y,x,w,we,ll)
+    ParticleFilteringSolution(pf,u,y,x,w,we,ll; a)
 end
 
 
