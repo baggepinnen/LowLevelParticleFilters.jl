@@ -6,6 +6,7 @@ export UKFWeights, TrivialParams, MerweParams, WikiParams
 export IMM, interact!, combine!
 export RBPF, RBParticle, RBMeasurementModel
 export MUKF, LinearizedDynamics
+export ReactantParticleFilter, randn_noise
 export UIKalmanFilter
 export LinearMeasurementModel, EKFMeasurementModel, IEKFMeasurementModel, UKFMeasurementModel, CompositeMeasurementModel, QuantizedMeasurementModel
 export KalmanFilteringSolution, KalmanSmoothingSolution, ParticleFilteringSolution
@@ -115,6 +116,7 @@ include("uikf.jl")
 include("enkf.jl")
 include("multistep.jl")
 include("paramest.jl")
+include("reactant_particle_filter.jl")
 
 index(f::AbstractFilter) = f.t
 

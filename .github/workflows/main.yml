@@ -27,3 +27,42 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
+  test-reactant:
+    # ReactantParticleFilter on the CPU backend of Reactant. Reactant is not a test dependency of the
+    # package, it is added to a temporary environment for this job only.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@latest
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v2
+      - name: Test ReactantParticleFilter
+        # Coverage only of the files of this repository (`user` would also instrument Reactant)
+        run: |
+          julia --color=yes --code-coverage=@${{ github.workspace }} -e '
+            using Pkg
+            Pkg.activate(; temp = true)
+            Pkg.develop(path = ".")
+            Pkg.add(["Reactant", "Test", "StaticArrays", "Statistics", "LinearAlgebra", "Random"])
+            include("test/test_reactant.jl")'
+      - name: Process coverage of the Reactant files
+        # Only the files of ReactantParticleFilter: Julia marks the lines of the methods compiled in a run as
+        # coverable, so that this job would report zeros on lines of other files that the main job does not count
+        run: |
+          julia --color=yes -e '
+            using Pkg
+            Pkg.activate(; temp = true)
+            Pkg.add("CoverageTools")
+            using CoverageTools
+            cov = vcat(process_folder("src"), process_folder("ext"))
+            cov = filter(c -> occursin(r"reactant"i, basename(c.filename)), cov)
+            foreach(c -> println(c.filename), cov)
+            LCOV.writefile("lcov.info", cov)'
+      - uses: codecov/codecov-action@v4
+        with:
+          file: ./lcov.info
+          flags: reactant
+          name: codecov-reactant
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
