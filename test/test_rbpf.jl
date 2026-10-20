@@ -35,7 +35,7 @@ x,u,y = simulate(pf, u)
 
 sol = forward_trajectory(pf, u, y)
 a = @allocated forward_trajectory(pf, u, y)
-@test a < 200092592*1.1
+@test a < (200092592 + sizeof(Int)*500*length(y))*1.1 # The second term is the matrix of ancestor indices
 
 a = @allocations forward_trajectory(pf, u, y)
 @test a < (isinteractive() ? 10*1.1 : 59936*1.1) # For some reason, CI gives worse performance

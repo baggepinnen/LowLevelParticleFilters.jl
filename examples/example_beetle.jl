@@ -117,7 +117,7 @@ vline!([findfirst(x->x>0.9, xh[:,5])], l=(:green, :dash, 2), subplot=4, lab="Swi
 ##
 
 M = 10 # Number of smoothing trajectories, NOTE: if this is set higher, the result will be better at the expense of linear scaling of the computational cost.
-sb,ll = smooth(pf, M, u, y) # Sample smooting particles (b for backward-trajectory)
+sb,ll = smooth(pf, M, u, y; method = ParticleGibbsSmoother(burnin = 10)) # The transition density is not available since the noise is not additive
 sbm = smoothed_mean(sb)     # Calculate the mean of smoothing trajectories
 sbc = smoothed_cov(sb)      # And covariance
 sbt = smoothed_trajs(sb)    # Get smoothing trajectories

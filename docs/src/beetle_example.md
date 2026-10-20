@@ -119,11 +119,11 @@ DisplayAs.PNG(fig2) # hide
 ```
 The particle plot above indicate that the posterior is multimodal. This phenomenon arises due to the simple model that uses an angle that is allowed to leave the interval ``0-2π`` rad. In this example, we are not interested in the angle, but rather when the beetle switches mode. The filtering distribution above gives a hint at when this happens, but we will not plot the mode trajectory until we have explored smoothing as well.
 
-## Smoothing
-The filtering results above does not use all the available information when trying to figure out the state trajectory. To do this, we may call a smoother. We use a particle smoother and compute 10 smoothing trajectories.
+## [Smoothing](@id beetle_smoothing)
+The filtering results above do not use all the available information when trying to figure out the state trajectory. To do this, we may call a smoother. The default particle smoother, [`FFBSi`](@ref), requires the transition density ``p(x_{t+1} \mid x_t)``, which is not available for the dynamics above: the mode switch is a discrete random event, the angle noise is scaled by a function of the state, and the velocity is passed through a saturation. The density `df` describes the noise sources, not the transition of the state. We therefore use the [`ParticleGibbsSmoother`](@ref), which only requires sampling of the dynamics and evaluation of the measurement likelihood. Each smoothing trajectory requires one run of a conditional particle filter, we discard the first `burnin` trajectories and keep `M` trajectories.
 ```@example beetle
-M = 10 # Number of smoothing trajectories, NOTE: if this is set higher, the result will be better at the expense of linear scaling of the computational cost.
-sb,ll = smooth(pf, M, u, y) # Sample smoothing particles (b for backward-trajectory)
+M = 20 # Number of smoothing trajectories
+sb,ll = smooth(pf, M, u, y; method = ParticleGibbsSmoother(burnin = 10)) # Sample smoothing trajectories (b for backward-trajectory)
 sbm = smoothed_mean(sb)     # Calculate the mean of smoothing trajectories
 sbt = smoothed_trajs(sb)    # Get smoothing trajectories
 plot!(fig1, sbm[1,:],sbm[2,:], lab="xs")
@@ -133,13 +133,23 @@ plot!(fig1, sbm[1,:],sbm[2,:], lab="xs")
 plot!(fig2, identity.(sbm'[:,4]), lab="smoothed")
 DisplayAs.PNG(fig2) # hide
 ```
-We see that the smoothed trajectory may look very different from the filter trajectory. This is an indication that it's hard to tell what state the beetle is currently in, but easier to look back and tell what state the beetle must have been in at a historical point. 
+We see that the smoothed trajectory may look very different from the filter trajectory. This is an indication that it's hard to tell what state the beetle is currently in, but easier to look back and tell what state the beetle must have been in at a historical point.
 
+The smoothing trajectories form a Markov chain, and consecutive trajectories are correlated. The fraction of iterations in which the trajectory changes at a time step indicates how well the chain explores the smoothing distribution at this time step:
+```@example beetle
+update_rate = [mean(sb[m,t] != sb[m-1,t] for m in 2:M) for t in 1:T]
+plot(update_rate, xlabel="Time step", ylabel="Update rate", lab="", size=(500,250))
+```
+Far from the end of the data set, the trajectory rarely changes. In the conditional particle filter, the ancestral lines of all particles at the final time step coalesce into the reference trajectory, the new trajectory therefore equals the reference trajectory before the time of coalescence. The trajectories at these time steps are thus strongly correlated, and the smoothing distribution is represented by few distinct trajectories. The correlation decreases as the number of particles is increased. A cheaper alternative that represents each time step by many distinct particles is the fixed-lag smoother [`GenealogySmoother`](@ref)`(lag = L)`, which approximates the smoothing distribution at time step ``t`` by the distribution conditioned on the measurements up to time step ``t+L``. This is a good approximation when the measurements more than `L` time steps ahead carry little information about the state at time step ``t``. The samples at different time steps are then drawn independently, i.e., they do not form trajectories.
+```@example beetle
+sl,_ = smooth(pf, 200, u, y; method = GenealogySmoother(lag = 20))
+```
 
 We can also visualize the mode state
 ```@example beetle
 plot(xh[:,5], lab="Filtering")
-plot!(to1series(sbt[5,:,:]')..., lab="Smoothing", title="Mode trajectories", l=(:black,0.2))
+plot!(vec(mean(getindex.(sl, 5), dims=1)), lab="Fixed-lag smoothing")
+plot!(to1series(sbt[5,:,:]')..., lab="Particle Gibbs trajectories", title="Mode", l=(:black,0.2))
 ```
 also this state variable indicates that it's hard to tell what state the beetle is in during filtering, but obvious with hindsight (smoothing). The mode switch occurs when the filtering distribution of the angle becomes drastically wider, indicating that increased dynamics noise is required in order to describe the motion of the beetle.
 

@@ -9,6 +9,7 @@ export MUKF, LinearizedDynamics
 export UIKalmanFilter
 export LinearMeasurementModel, EKFMeasurementModel, IEKFMeasurementModel, UKFMeasurementModel, CompositeMeasurementModel, QuantizedMeasurementModel
 export KalmanFilteringSolution, KalmanSmoothingSolution, ParticleFilteringSolution
+export FFBSi, GenealogySmoother, ParticleGibbsSmoother
 @deprecate weigthed_mean weighted_mean
 @deprecate weigthed_cov weighted_cov
 

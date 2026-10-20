@@ -223,7 +223,7 @@ See the docs for more information: https://baggepinnen.github.io/LowLevelParticl
 - `dynamics`: A discrete-time dynamics function `(x, u, p, t, noise=false) -> x⁺`. It's important that the `noise` argument defaults to `false`.
 - `measurement`: A measurement function `(x, u, p, t, noise=false) -> y`. It's important that the `noise` argument defaults to `false`.
 - `measurement_likelihood`: A function `(x, u, y, p, t)->logl` to evaluate the log-likelihood of a measurement.
-- `dynamics_density`: This field is not used by the advanced filter and can be set to `nothing`.
+- `dynamics_density`: This field is not used by the filter and can be set to `nothing`. It is used only by the particle smoother [`FFBSi`](@ref), which assumes that the noise is additive with this density. For non-additive noise, see [`smooth`](@ref) for smoothing methods that do not require the transition density.
 - `initial_density`: The distribution of the initial state.
 - `threads`: use threads to propagate particles in parallel. Only activate this if your dynamics is thread-safe. `SeeToDee.SimpleColloc` is not thread-safe by default due to the use of internal caches, but `SeeToDee.Rk4` is.
 

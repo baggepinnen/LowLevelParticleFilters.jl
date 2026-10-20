@@ -334,7 +334,7 @@ end
 end
 
 """
-    ParticleFilteringSolution{F, Tu, Ty, Tx, Tw, Twe, Tll} <: AbstractFilteringSolution
+    ParticleFilteringSolution{F, Tu, Ty, Tx, Tw, Twe, Tll, Tt, Ta} <: AbstractFilteringSolution
 
 # Fields:
 - `f`: The filter used to produce the solution.
@@ -344,6 +344,8 @@ end
 - `w`: Weights (log space). These are used for internal computations.
 - `we`: Weights (exponentiated / original space). These are the ones to use to compute weighted means etc., they sum to one for each time step.
 - `ll`: Log likelihood
+- `t`: Time vector
+- `a`: Ancestor indices, a matrix of size `(N,T)` (or `nothing` if not recorded). `a[i,k+1]` is the index at time step `k` of the ancestor of particle `i` at time step `k+1`, and `a[:,1] = 1:N`. Used by the [`GenealogySmoother`](@ref).
 
 # Plot
 The solution object can be plotted
@@ -353,7 +355,7 @@ plot(sol; nbinsy=30, xreal=nothing, dim=nothing, ploty=true, q=nothing)
 
 By default, a weighted 2D histogram is plotted, one for each state variable. If a vector of quantiles are provided in `q`, the quantiles are plotted instead of the histogram. If `xreal` is provided, the true state is plotted as a scatter plot on top of the histogram. If `dim` is provided, only the specified dimension is plotted. If `ploty` is true, the measurements are plotted as well.
 """
-struct ParticleFilteringSolution{F,Tu,Ty,Tx,Tw,Twe,Tll,Tt} <: AbstractFilteringSolution
+struct ParticleFilteringSolution{F,Tu,Ty,Tx,Tw,Twe,Tll,Tt,Ta} <: AbstractFilteringSolution
     f::F
     u::Tu
     y::Ty
@@ -362,9 +364,10 @@ struct ParticleFilteringSolution{F,Tu,Ty,Tx,Tw,Twe,Tll,Tt} <: AbstractFilteringS
     we::Twe
     ll::Tll
     t::Tt
+    a::Ta
 end
 
-ParticleFilteringSolution(f,u,y,x,w,we,ll) = ParticleFilteringSolution(f,u,y,x,w,we,ll,range(0, step=f.Ts, length=size(x,2)))
+ParticleFilteringSolution(f,u,y,x,w,we,ll,t=range(0, step=f.Ts, length=size(x,2)); a=nothing) = ParticleFilteringSolution(f,u,y,x,w,we,ll,t,a)
 
 function td_getargs(sol::ParticleFilteringSolution, d::Int=1)
     (; f,x,w,u,y) = sol
