@@ -222,3 +222,41 @@ end
     # the degeneracy of the paths about 0.1–0.2)
     @test sqrt(mean(abs2, (xm .- xT) ./ sdT)) < 0.3
 end
+
+@testset "batched_loglik for a KalmanFilter" begin
+    # Two regimes selected through the input u[1], noise covariances as functions of the parameters
+    Ab(x, u, p, t) = map((a1, a2) -> ifelse(u[1] > 0.5, a1, a2), p.A1, p.A2)
+    Bb(x, u, p, t) = SA[0.0 1.0; 0.0 0.0] * p.b
+    R1b(x, u, p, t) = p.σw^2 * SMatrix{2, 2}(1.0I)
+    R2b(x, u, p, t) = SMatrix{1, 1}(p.r)
+    Cb = [1.0 0.0]
+    θ2p(θ) = (; A1 = SA[θ[1] 0.1; 0.0 0.8], A2 = SA[0.5 0.0; θ[2] 0.95], b = θ[3], σw = θ[4], r = θ[5], n = 2)
+    kfb = KalmanFilter(Ab, Bb, Cb, 0, R1b, R2b, LLPF.SimpleMvNormal(SA[0.0, 0.0], SMatrix{2, 2}(1.0I));
+        nx = 2, nu = 2, ny = 1, check = false)
+    rng = Xoshiro(3)
+    Tb = 200
+    ub = [SA[Float64(isodd(k ÷ 20)), randn(rng)] for k in 1:Tb]
+    θ0 = [0.9, 0.2, 0.5, 0.3, 0.25]
+    _, _, yb = LLPF.simulate(kfb, ub, θ2p(θ0))
+    yb = Union{Missing, eltype(yb)}[yb...]
+    yb[30:45] .= missing
+    θs = [θ0 .* (1 .+ 0.2 .* randn(rng, 5)) for _ in 1:7]
+    θs[3][5] = -1.0 # innovation covariance not positive definite
+    ps = θ2p.(θs)
+    ref = [i == 3 ? -Inf : loglik(kfb, ub, yb, p) for (i, p) in enumerate(ps)]
+    ll = batched_loglik(kfb, ub, yb, ps)
+    @test ll[3] == -Inf
+    @test ll[[1:2; 4:7]] ≈ ref[[1:2; 4:7]] rtol = 1e-10
+    @test batched_loglik(kfb, ub, yb, ps[1:1]) ≈ ref[1:1] rtol = 1e-10
+    @test batched_loglik(kfb, ub, yb, ps[[1, 2]]; T = Float32) ≈ ref[[1, 2]] rtol = 1e-3
+    # Constant matrices and a vector of parameters
+    kfc = KalmanFilter([0.9 0.1; 0.0 0.8], [0.0; 1.0;;], Cb, 0, (x, u, p, t) -> p[1] * SMatrix{2, 2}(1.0I),
+        (x, u, p, t) -> SMatrix{1, 1}(p[2]), LLPF.SimpleMvNormal([0.0, 0.0], [1.0 0.0; 0.0 1.0]); nx = 2, nu = 1, ny = 1, check = false)
+    uc = [[randn(rng)] for _ in 1:Tb]
+    yc = [[randn(rng)] for _ in 1:Tb]
+    pc = [[0.1, 0.5], [0.2, 1.0], [0.05, 2.0]]
+    @test batched_loglik(kfc, uc, yc, pc) ≈ [loglik(kfc, uc, yc, p) for p in pc] rtol = 1e-10
+    @test_throws ArgumentError batched_loglik(kfb, ub, yb, [θ2p(θ0), merge(θ2p(θ0), (; n = 3))])
+    # No inputs, parameters that are not used by the filter
+    @test batched_loglik(kf, u, yv, [0.0, 1.0]) ≈ [llkf, llkf] rtol = 1e-10
+end
