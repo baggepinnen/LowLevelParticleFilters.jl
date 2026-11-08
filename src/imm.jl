@@ -36,6 +36,8 @@ These two orders are cyclic permutations of each other, and the order used in [`
 
 The initial (combined) state and covariance of the IMM filter is made up of the weighted average of the states and covariances of the individual filters. The weights are the initial mixing probabilities `μ`.
 
+Fixed-interval smoothing of the state and the mode probabilities is available through [`smooth`](@ref), which implements the two-filter IMM smoother of Helmick, Blair and Hoffman (1995).
+
 Ref: "Interacting multiple model methods in target tracking: a survey", E. Mazor; A. Averbuch; Y. Bar-Shalom; J. Dayan
 
 # Arguments:
@@ -274,6 +276,16 @@ When performing batch filtering using an [`IMM`](@ref) filter, one may
 The returned solution object is of type [`KalmanFilteringSolution`](@ref) and has the following fields:
 """
 function forward_trajectory(imm::IMM, u::AbstractVector, y::AbstractVector, p=parameters(imm); t = range(0, step=imm.Ts, length=length(y)), interact = imm.interact)
+    sol, _ = _forward_trajectory_imm(imm, u, y, p, t, interact, Val(false))
+    sol
+end
+
+# Internal implementation of forward_trajectory(::IMM). If `save_models = Val(true)`, the
+# filtered estimates of each individual model, x^j(k|k) and R^j(k|k) (after the correction
+# but before the interaction), as well as the mixed (interacted) states that each model was
+# propagated from in the prediction step, are stored and returned as well. These are required
+# by the IMM smoother.
+function _forward_trajectory_imm(imm::IMM, u::AbstractVector, y::AbstractVector, p, t, interact, ::Val{save_models}) where save_models
     reset!(imm)
     T    = length(y)
     x    = Array{particletype(imm)}(undef,T)
@@ -283,6 +295,11 @@ function forward_trajectory(imm::IMM, u::AbstractVector, y::AbstractVector, p=pa
     μ    = zeros(eltype(imm.μ), length(imm.μ), T)
     e    = similar(y, innovation_type(eltype(y), eltype(particletype(imm))))
     ll   = zero(eltype(particletype(imm)))
+    if save_models
+        xf = [Vector{typeof(m.x)}(undef, T) for m in imm.models] # Filtered x^j(k|k)
+        Rf = [Vector{typeof(m.R)}(undef, T) for m in imm.models] # Filtered R^j(k|k)
+        xm = [Vector{typeof(m.x)}(undef, T) for m in imm.models] # Mixed states used in predict!
+    end
     for k = 1:T
         ti = t[k]
         x[k]  = state(imm)      |> copy
@@ -290,6 +307,12 @@ function forward_trajectory(imm::IMM, u::AbstractVector, y::AbstractVector, p=pa
         lli, _ = correct!(imm, u[k], y[k], p, ti)
         ll += lli
         μ[:, k] .= imm.μ
+        if save_models
+            for (j, model) in enumerate(imm.models)
+                xf[j][k] = copy(model.x)
+                Rf[j][k] = copy(model.R)
+            end
+        end
         combine!(imm)
         yk = y[k]
         if yk === missing || ismissing_measurement(yk)
@@ -299,9 +322,16 @@ function forward_trajectory(imm::IMM, u::AbstractVector, y::AbstractVector, p=pa
             e[k] = yk .- yh
         end
         interact && interact!(imm)
+        if save_models
+            for (j, model) in enumerate(imm.models)
+                xm[j][k] = copy(model.x)
+            end
+        end
         xt[k] = state(imm)      |> copy
         Rt[k] = covariance(imm) |> copy
         predict!(imm, u[k], p, ti)
     end
-    KalmanFilteringSolution(imm,u,y,x,xt,R,Rt,ll,e,nothing,nothing,μ,t)
+    sol = KalmanFilteringSolution(imm,u,y,x,xt,R,Rt,ll,e,nothing,nothing,μ,t)
+    models_sol = save_models ? (; xf, Rf, xm) : nothing
+    sol, models_sol
 end

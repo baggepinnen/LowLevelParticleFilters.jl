@@ -623,6 +623,11 @@ end
     include("test_imm.jl")
 end
 
+@testset "imm smoothing" begin
+    @info "Testing imm smoothing"
+    include("test_imm_smoothing.jl")
+end
+
 @testset "smoother time-varying" begin
     @info "Testing smoother with time-varying A"
     include("test_smoother_timevarying.jl")
