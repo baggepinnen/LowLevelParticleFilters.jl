@@ -145,3 +145,41 @@ end
 weighted_mean(pf::ReactantParticleFilter) = weighted_mean(particles(pf), expweights(pf))
 
 (pf::ReactantParticleFilter)(u, y, p = parameters(pf), t = index(pf)*pf.Ts) = update!(pf, u, y, p, t)
+
+"""
+    batched_loglik(kf::KalmanFilter, u, y, ps::AbstractVector; T = Float64)
+
+The log-likelihoods `[loglik(kf, u, y, p) for p in ps]` of the Kalman filter `kf` for a batch of parameter objects
+`ps`, computed for all candidates in parallel in a single device program with Reactant.jl (requires `using Reactant`).
+The device is the default backend of Reactant, a GPU if one is available. This function is intended for optimizers
+that evaluate a population of candidates in each iteration, such as particle swarm or evolution strategies, see
+[Population-based optimization on a GPU](@ref).
+
+The matrices `A, B, C, D, R1, R2` of `kf` are constant matrices or functions `(x, u, p, t) -> matrix` of the parameters
+`p`, as for [`KalmanFilter`](@ref). The functions are traced for a single candidate and batched over the candidates.
+Each parameter object is a number, an array, or a (named) tuple of these. Its floating-point numbers and arrays may
+differ between the candidates; all other entries (e.g. integers) are compiled as constants and must be equal for all
+candidates. Computations that cannot be traced, such as the matrix exponential of a discretization, are performed
+on the host when the parameter objects are constructed, and the results are included in the parameter objects.
+
+The initial state distribution `kf.d0` is the same for all candidates. Missing measurements (`missing`) are handled as
+in [`loglik`](@ref). A candidate for which the covariance of the innovation is not positive definite has the
+log-likelihood `-Inf`. `T` is the precision of the state and covariance; the log-likelihood is accumulated in `Float64`.
+The program is compiled at the first call for a given filter, structure of the parameter objects, number of
+candidates and length of the data, and the data `u, y` are uploaded to the device when they differ from those of the
+previous call.
+
+Inside the functions of the model, the state, input, parameters and time are static arrays and numbers of traced
+values. Comparisons of traced numbers return traced Booleans, select between values with `ifelse` rather than with
+`if` or `? :`, applied elementwise with `map` to arrays, e.g., `A(x, u, p, t) = map((a, b) -> ifelse(u[1] > 0.5, a, b), p.A_on, p.A_off)`.
+Broadcasting over static arrays with a traced number as an argument (`ifelse.(c, a, b)`, `a .* s`) is not supported.
+
+# Example: maximum-likelihood estimation with an optimizer from Metaheuristics.jl
+```julia
+using Reactant, Metaheuristics
+θ2p(θ) = (; A = ..., σ = θ[2])     # parameter object from a decision vector, on the host
+f(X) = -batched_loglik(kf, u, y, [θ2p(X[i, :]) for i in axes(X, 1)])  # one candidate per row
+res = optimize(f, [lower upper], PSO(; N = 256, options = Options(; parallel_evaluation = true)))
+```
+"""
+function batched_loglik end

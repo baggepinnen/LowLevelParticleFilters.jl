@@ -14,7 +14,7 @@ using LowLevelParticleFilters: ReactantParticleFilter, DevicePFstate, ParticleFi
     AuxiliaryParticleFilter, state, rng, num_particles, dynamics, measurement, initial_density, dynamics_density,
     measurement_density, resample_threshold, device_eltype, ismissing_measurement, parameters, index
 import LowLevelParticleFilters: make_device_state, propagate_particles!, measurement_equation!, reset!, predict!,
-    correct!, logsumexp!, reset_weights!, randn_noise, smooth, loglik
+    correct!, logsumexp!, reset_weights!, randn_noise, smooth, loglik, batched_loglik
 using Reactant: Reactant, Ops, TracedRNumber, TracedRArray, ConcreteRNumber, @trace
 using StaticArrays, LinearAlgebra, Statistics
 
@@ -787,5 +787,7 @@ function device_smooth(method::FFBSi, f, pf::ReactantParticleFilter, M, u, y, p)
     end
     xb, ll
 end
+
+include("reactant_kalman.jl")
 
 end # module

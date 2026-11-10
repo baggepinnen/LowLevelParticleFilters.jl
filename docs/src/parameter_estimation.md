@@ -59,6 +59,7 @@ A simulation-error criterion is appropriate only if the system is stable and not
 - [Joint state and parameter estimation](@ref): Estimate time-varying parameters by augmenting the state.
 - [Joint state and parameter estimation using MUKF](@ref): Use the Marginalized Unscented Kalman Filter for efficient joint estimation.
 - [Using an optimizer](@ref "Prediction-Error minimization using an optimizer"): Use gradient-based optimization with automatic differentiation for parameter estimation.
+- [Population-based optimization on a GPU](@ref): Evaluate the log-likelihood of a Kalman filter for a whole population of candidate parameters on a GPU, for gradient-free global optimizers such as particle swarm optimization.
 - [Joint estimation of plant parameters and noise covariances](@ref): Estimate plant parameters and noise covariance matrices simultaneously, quantify the uncertainty, and combine multiple experiments.
 - [Multi-step prediction-error estimation](@ref): Estimate models intended for prediction over a horizon.
 - [Identifiability](@ref): Analyze structural identifiability and Fisher information for parameter estimation problems.
