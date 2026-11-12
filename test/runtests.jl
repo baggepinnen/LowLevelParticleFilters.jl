@@ -618,6 +618,11 @@ end
     include("test_iekf.jl")
 end
 
+@testset "Float32" begin
+    @info "Testing Float32"
+    include("test_float32.jl")
+end
+
 @testset "imm" begin
     @info "Testing imm"
     include("test_imm.jl")

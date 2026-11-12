@@ -74,13 +74,12 @@ function predict!(kf::AbstractKalmanFilter, u, p=parameters(kf), t::Real = index
 end
 
 @inline function symmetrize(x::SArray)
-    x = 0.5 .* (x .+ x')
-    x
+    (x .+ x') ./ 2
 end
 @inline function symmetrize(x)
     n = size(x,1)
     @inbounds for i = 1:n, j = i+1:n
-        x[i,j] = 0.5 * (x[i,j] + x[j,i])
+        x[i,j] = (x[i,j] + x[j,i]) / 2
         x[j,i] = x[i,j]
     end
     x
