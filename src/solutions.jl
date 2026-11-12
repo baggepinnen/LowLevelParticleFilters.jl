@@ -230,6 +230,7 @@ A structure representing the solution to a Kalman smoothing problem.
 - `sol`: A solution object containing the results of the _filtering_ process.
 - `xT`: The smoothed state estimate.
 - `RT`: The smoothed state covariance.
+- `extraT`: Additional smoothing output that is specific to the filter type, `nothing` by default. For an [`IMM`](@ref) filter, this is a matrix of smoothed mode probabilities of size `(n_modes, T)`, mirroring the field `extra` of the filtering solution which holds the filtered mode probabilities.
 
 The solution object can be plotted
 ```
@@ -248,7 +249,10 @@ struct KalmanSmoothingSolution <: AbstractKalmanFilteringSolution
     sol
     xT
     RT
+    extraT
 end
+
+KalmanSmoothingSolution(sol, xT, RT) = KalmanSmoothingSolution(sol, xT, RT, nothing)
 
 function Base.getproperty(sol::KalmanSmoothingSolution, s::Symbol)
     s ∈ fieldnames(typeof(sol)) && return getfield(sol, s)
