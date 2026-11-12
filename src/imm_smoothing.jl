@@ -15,7 +15,7 @@
 #   x̂^{b,i}(k)   Backward one-step prediction of x(k) given y(k+1:T), conditioned on M_{k+1}^i
 
 """
-    ssol = smooth(imm::IMM, u, y, p = parameters(imm); t, interact, backward_init = :diffuse, diffuse_scale = 1e8)
+    ssol = smooth(imm::IMM, u, y, p = parameters(imm); t, interact, backward_init = :diffuse, diffuse_scale)
     ssol = smooth(sol::KalmanFilteringSolution, imm::IMM, u = sol.u, y = sol.y, p = parameters(imm); kwargs...)
 
 Fixed-interval smoothing for an [`IMM`](@ref) filter using the two-filter approach of Helmick, Blair and Hoffman (1995). A forward-time IMM filter and a backward-time IMM filter are run over the data, and the smoothed estimate at time `k` is formed by fusing the ``n_m^2`` combinations of forward filtered model-conditioned estimates (conditioned on the mode active on the interval ``(k-1, k]``) and backward predicted model-conditioned estimates (conditioned on the mode active on ``(k, k+1]``), followed by moment matching.
@@ -25,7 +25,7 @@ Returns a [`KalmanSmoothingSolution`](@ref) with smoothed (combined) states `xT`
 When called with a filtering solution `sol`, the forward pass is recomputed since the smoother requires the model-conditioned estimates of each individual model, which are not stored by [`forward_trajectory`](@ref).
 
 # Supported models
-The backward filter propagates the model-conditioned estimates backwards in time through the inverse of the dynamics, the dynamics of each model must thus be invertible (which is always the case for dynamics obtained by discretizing a continuous-time system). The following model types are supported in the IMM:
+The backward filter propagates the model-conditioned estimates backwards in time through the inverse of the dynamics, the dynamics of each model must thus be invertible. This is the case for dynamics obtained by exact (zero-order-hold) discretization of a continuous-time linear system, and for dynamics obtained by numerical integration of a continuous-time system with a sufficiently small step size, but not, e.g., for dynamics with a singular Jacobian. The following model types are supported in the IMM:
 - [`KalmanFilter`](@ref): The backward prediction is exact.
 - [`ExtendedKalmanFilter`](@ref) (including [`IteratedExtendedKalmanFilter`](@ref)): The dynamics are inverted using Newton's method and linearized around the inverted point.
 - [`UnscentedKalmanFilter`](@ref) with additive dynamics noise (`AUGD = false`): The backward prediction is performed using linearization (ForwardDiff) like for the EKF, while the measurement update uses the unscented transform.
@@ -36,14 +36,19 @@ The forward pass applies the forgetting factor `α` of the individual filters, w
 - `t`: Time vector, defaults to `range(0, step=imm.Ts, length=length(y))` (or `sol.t`).
 - `interact`: Whether or not to run the interaction step in the forward pass. The smoother assumes that the forward filter is an IMM filter, i.e., `interact = true`.
 - `backward_init`: How to initialize the backward filter at the final time step `T`.
-    - `:diffuse` (default): The backward filter of each mode is initialized with the forward filtered mean and a covariance equal to `diffuse_scale` times the forward filtered covariance, and is then corrected with the measurement `y[T]`. This makes the backward filter approximate the likelihood ``p(y_{k+1:T} | x_k)`` rather than a posterior, which avoids double counting the information in `y[1:T]`. With this choice, the smoother reduces to the Rauch-Tung-Striebel smoother when the IMM contains a single linear model.
+    - `:diffuse` (default): The backward filter of each mode is initialized with the forward filtered mean and a covariance equal to `diffuse_scale` times the forward filtered covariance, and is then corrected with the measurement `y[T]`. The backward filter thus approximates the likelihood ``p(y_{k+1:T} | x_k)`` rather than a posterior, which avoids double counting the information in `y[1:T]`. With this choice, the smoother reduces to the Rauch-Tung-Striebel smoother when the IMM contains a single linear model.
     - `:forward`: The backward filter is initialized with the forward filtered model-conditioned estimates at time `T`, as in the description of the algorithm in the EKF/UKF toolbox for Matlab (Hartikainen, Solin & Särkkä). This double counts the information in the forward filtered estimates at the end of the interval, leading to overconfident covariance estimates there.
-- `diffuse_scale`: See `backward_init`.
+- `diffuse_scale`: See `backward_init`. The default is `1/sqrt(eps(T))`, where `T` is the floating-point type of the covariance matrices. A larger value reduces the influence of the initialization on the backward filter, but increases the cancellation error in the first measurement update of the backward filter, which leads to indefinite covariance matrices if the scale approaches `1/eps(T)`.
 
-The backward filter is initialized with the forward filtered mode probabilities at time `T`, and the backward mode transition probabilities are computed from the prior mode probabilities as in the reference.
+# Backward likelihoods and mode probabilities
+The backward filter of mode ``i`` represents the likelihood of the future measurements as ``p(y_{k+1:T} | x_k, M_{k+1}^i) ≈ c_i \\mathcal{N}(x_k; \\hat{x}^{b,i}_k, \\hat{R}^{b,i}_k)``. The mode-dependent normalization constant ``c_i`` is propagated along with the mean and covariance: it accumulates the log-likelihoods of the measurement updates, is divided by ``|\\det A_i|`` (the Jacobian determinant of the dynamics) in each backward prediction, and is initialized such that the likelihood of a diffuse initialization does not depend on the mode. The mixing step of the backward filter for mode ``j`` approximates the mixture ``\\sum_i P_{ji} c_i \\mathcal{N}(x_k; \\hat{x}^{b,i}_k, \\hat{R}^{b,i}_k)`` by a single scaled Gaussian. The mean and covariance are obtained by moment matching with the weights ``P(M_{k+1}^i | M_k^j, y_{1:T})``, i.e., the expected values of the components under the forward filtered density of mode ``j`` at time ``k``, and the normalization constant is chosen such that the expected value of the approximation under the same density is equal to that of the mixture. The forward filtered estimates thus determine which components of the mixture are accurately represented, but do not enter the mean and covariance of the backward filter. No backward mode probabilities or prior mode probabilities are required. The smoothed mode probabilities are computed as
+```math
+P(M_k^j | y_{1:T}) ∝ μ_{k|k}^j \\sum_i P_{ji} c_i \\mathcal{N}(\\hat{x}^{b,i}_k - x^j_{k|k}; 0, \\hat{R}^{b,i}_k + R^j_{k|k}).
+```
+Omitting the constants ``c_i``, i.e., using only the Gaussian density in the sum, biases the smoothed mode probabilities towards modes for which the backward predicted covariance is small, and makes them depend on the data even when all measurements are missing.
 
 !!! note "Approximations"
-    In addition to the moment-matching approximations made by the forward and backward IMM filters, the smoothed mode probabilities are computed using the approximation of Helmick et al. where the future measurements ``y_{k+1:T}`` are replaced by the backward-predicted model-conditioned means and covariances, i.e., ``p(y_{k+1:T} | M_k^j, M_{k+1}^i, y_{1:k}) ≈ \\mathcal{N}(\\hat{x}^{b,i}_k - x^j_{k|k}; 0, \\hat{R}^{b,i}_k + R^j_{k|k})``.
+    In addition to the moment-matching approximations made by the forward and backward IMM filters, the backward likelihoods are approximated by scaled Gaussian densities, and the diffuse initialization with a finite `diffuse_scale` introduces an error that decreases with increasing `diffuse_scale`.
 
 # Example
 ```julia
@@ -62,7 +67,7 @@ function smooth(imm::IMM, u::AbstractVector, y::AbstractVector, p=parameters(imm
     t = range(0, step=imm.Ts, length=length(y)),
     interact = imm.interact,
     backward_init::Symbol = :diffuse,
-    diffuse_scale::Real = 1e8,
+    diffuse_scale::Union{Real, Nothing} = nothing,
 )
     backward_init ∈ (:diffuse, :forward) || throw(ArgumentError("backward_init must be either :diffuse or :forward, got :$backward_init"))
     for model in imm.models
@@ -76,18 +81,13 @@ function smooth(imm::IMM, u::AbstractVector, y::AbstractVector, p=parameters(imm
     P  = imm.P
     nm = length(imm.models)
     FT = eltype(μf)
+    if diffuse_scale === nothing
+        diffuse_scale = 1/sqrt(eps(float(real(eltype(Rf[1][T])))))
+    end
 
     # The backward filter is run on copies of the models so that the state of `imm` after
     # smoothing is the same as after a call to `forward_trajectory`.
     models = deepcopy(imm.models)
-
-    # Prior mode probabilities π[:, k] = P(M_k), consistent with the forward pass where the first
-    # correction step uses P'μ0 as the prior mode probabilities.
-    π = zeros(FT, nm, T)
-    π[:, 1] .= P'*imm.μ0
-    for k = 2:T
-        π[:, k] .= P'*π[:, k-1]
-    end
     logP = log.(P)
 
     xT = similar(sol.xt)
@@ -97,40 +97,49 @@ function smooth(imm::IMM, u::AbstractVector, y::AbstractVector, p=parameters(imm
     RT[T] = copy(sol.Rt[T])
     μT[:, T] .= μf[:, T]
 
-    # Initialization of the backward filter at time T
-    xb = [copy(xf[j][T]) for j in 1:nm] # Backward filtered x^{b,j}(k|k:T), conditioned on M_k^j
+    # Initialization of the backward filter at time T. The backward filter of mode j represents the
+    # likelihood p(y_{k:T} | x_k, M_k^j) ≈ c_j N(x_k; xb[j], Rb[j]), logc[j] = log(c_j).
+    xb = [copy(xf[j][T]) for j in 1:nm]
     Rb = [copy(Rf[j][T]) for j in 1:nm]
-    if backward_init === :diffuse
-        for j in 1:nm
+    logc = zeros(FT, nm)
+    for j in 1:nm
+        if backward_init === :diffuse
             models[j].x = copy(xf[j][T])
             models[j].R = symmetrize(diffuse_scale .* Rf[j][T])
+            # The density of the diffuse prior is approximately constant, equal to 1/sqrt(det(2πR)),
+            # in the region where the likelihood is large. The likelihood is thus approximately the
+            # posterior density times the evidence times sqrt(det(2πR)).
+            logc[j] = _half_logdet_2π(models[j].R)
             if !(y[T] === missing || ismissing_measurement(y[T]))
-                correct!(models[j], u[T], y[T], p, t[T])
+                ll, _ = correct!(models[j], u[T], y[T], p, t[T])
+                logc[j] += ll
             end
             xb[j] = copy(models[j].x)
             Rb[j] = copy(models[j].R)
+        else
+            logc[j] = _half_logdet_2π(Rb[j]) # The maximum of the likelihood is 1 for every mode
         end
     end
-    μb = μf[:, T] # Backward mode probabilities P(M_k | y_{k:T})
 
     XT = eltype(xb)
     RTT = eltype(Rb)
     x̂b = Vector{XT}(undef, nm)          # Backward predictions x̂^{b,i}(k), conditioned on M_{k+1}^i
     R̂b = Vector{RTT}(undef, nm)
+    logĉ  = zeros(FT, nm)               # log of the normalization constants of the backward predictions
     xs_ji = Matrix{XT}(undef, nm, nm)   # Fused estimates conditioned on M_k^j and M_{k+1}^i
     Rs_ji = Matrix{RTT}(undef, nm, nm)
     logΛ  = zeros(FT, nm, nm)           # logΛ[j, i] ≈ log p(y_{k+1:T} | M_k^j, M_{k+1}^i, y_{1:k})
     logd  = zeros(FT, nm)
     logμs = zeros(FT, nm)
-    logμb = zeros(FT, nm)
-    w     = zeros(FT, nm)
+    W     = zeros(FT, nm, nm)           # W[j, i] = P(M_{k+1}^i | M_k^j, y_{1:T})
     xs    = Vector{XT}(undef, nm)       # Model-conditioned smoothed estimates
     Rs    = Vector{RTT}(undef, nm)
 
     for k = T-1:-1:1
         # Backward prediction k+1 -> k through the inverse dynamics of each model
         for i in 1:nm
-            x̂b[i], R̂b[i] = _imm_backward_predict(models[i], xb[i], Rb[i], xm[i][k], u[k], p, t[k])
+            x̂b[i], R̂b[i], logabsdetA = _imm_backward_predict(models[i], xb[i], Rb[i], xm[i][k], u[k], p, t[k])
+            logĉ[i] = logc[i] - logabsdetA
         end
 
         # Fusion of forward filtered and backward predicted model-conditioned estimates
@@ -141,7 +150,7 @@ function smooth(imm::IMM, u::AbstractVector, y::AbstractVector, p=parameters(imm
             Dc  = cholesky(Symmetric(D))
             Δ   = x̂b[i] - xfj
             # The constant term -n/2*log(2π) is the same for all (i,j) and cancels in the normalizations below
-            logΛ[j, i] = -(dot(Δ, Dc\Δ) + logdet(Dc))/2
+            logΛ[j, i] = logĉ[i] - (dot(Δ, Dc\Δ) + logdet(Dc))/2
             K = Rfj/Dc
             xs_ji[j, i] = xfj + K*Δ
             Rs_ji[j, i] = symmetrize(Rfj - K*Rfj) # = (Rf⁻¹ + R̂b⁻¹)⁻¹
@@ -158,11 +167,11 @@ function smooth(imm::IMM, u::AbstractVector, y::AbstractVector, p=parameters(imm
         # conditional mode probabilities P(M_{k+1}^i | M_k^j, y_{1:T}) = P[j, i]Λ[j, i] / d_j
         for j in 1:nm
             if isfinite(logd[j])
-                @views w .= exp.(logP[j, :] .+ logΛ[j, :] .- logd[j])
+                @views W[j, :] .= exp.(logP[j, :] .+ logΛ[j, :] .- logd[j])
             else
-                w .= P[j, :]
+                W[j, :] .= P[j, :]
             end
-            xs[j], Rs[j] = _moment_match(w, view(xs_ji, j, :), view(Rs_ji, j, :))
+            xs[j], Rs[j] = _moment_match(view(W, j, :), view(xs_ji, j, :), view(Rs_ji, j, :))
         end
 
         # Combined smoothed estimate
@@ -170,34 +179,42 @@ function smooth(imm::IMM, u::AbstractVector, y::AbstractVector, p=parameters(imm
 
         k == 1 && break
 
-        # Backward IMM filter step, results in the backward filtered estimates at time k
+        # Backward IMM filter step, results in the backward filtered estimates at time k.
+        # The likelihood p(y_{k+1:T} | x_k, M_k^j) = ∑_i P[j, i] p(y_{k+1:T} | x_k, M_{k+1}^i) is
+        # approximated by a single scaled Gaussian. The components are weighted by their expected values
+        # under the forward filtered density of mode j, i.e., by P(M_{k+1}^i | M_k^j, y_{1:T}), and the
+        # scale is chosen such that the expected value of the approximation under the same density equals
+        # that of the mixture, d_j = p(y_{k+1:T} | M_k^j, y_{1:k}). Weighting by the integrals of the
+        # components instead would change the value of the mixture in the relevant region when the
+        # components are diffuse with different covariances.
         for j in 1:nm
-            # Backward mode transition probabilities pb[i, j] = P(M_k^j | M_{k+1}^i) = P[j, i]π_k[j] / π_{k+1}[i]
-            for i in 1:nm
-                pbij = iszero(π[i, k+1]) ? zero(FT) : P[j, i]*π[j, k] / π[i, k+1]
-                w[i] = pbij * μb[i]
-            end
-            aj = sum(w)
-            if iszero(aj) # Mode j is not reachable from any mode with nonzero probability, let it evolve on its own
+            if isfinite(logd[j])
+                x0, R0 = _moment_match(view(W, j, :), x̂b, R̂b)
+                Dc = cholesky(Symmetric(symmetrize(Rf[j][k] + R0)))
+                Δ  = x0 - xf[j][k]
+                logcj = logd[j] + (dot(Δ, Dc\Δ) + logdet(Dc))/2
+            else # Mode j has no successor mode with nonzero likelihood, let it evolve on its own
                 x0, R0 = x̂b[j], R̂b[j]
-                logμb[j] = FT(-Inf)
-            else
-                w ./= aj
-                x0, R0 = _moment_match(w, x̂b, R̂b)
-                logμb[j] = log(aj)
+                logcj = logĉ[j]
             end
             models[j].x = x0
             models[j].R = R0
             if !(y[k] === missing || ismissing_measurement(y[k]))
                 ll, _ = correct!(models[j], u[k], y[k], p, t[k])
-                logμb[j] += ll
+                logcj += ll
             end
+            logc[j] = logcj
             xb[j] = copy(models[j].x)
             Rb[j] = copy(models[j].R)
         end
-        μb = exp.(logμb .- _logsumexp(logμb))
     end
     KalmanSmoothingSolution(sol, xT, RT, μT)
+end
+
+# log(sqrt(det(2πR)))
+function _half_logdet_2π(R)
+    n = size(R, 1)
+    (n*log(2*eltype(R)(π)) + logdet(cholesky(Symmetric(R))))/2
 end
 
 function _logsumexp(v)
@@ -228,9 +245,9 @@ _check_imm_smoothing_support(::Union{KalmanFilter, _IMMSmoothableNonlinear}) = n
 _check_imm_smoothing_support(model) = throw(ArgumentError("IMM smoothing is not supported for models of type $(nameof(typeof(model))). Supported model types are KalmanFilter, ExtendedKalmanFilter (including IteratedExtendedKalmanFilter) and UnscentedKalmanFilter with additive dynamics noise (AUGD = false)."))
 
 """
-    x̂, R̂ = _imm_backward_predict(model, x, R, xlin, u, p, t)
+    x̂, R̂, logabsdetA = _imm_backward_predict(model, x, R, xlin, u, p, t)
 
-Propagate the estimate `x, R` of the state at time `k+1` backwards in time to time `k` through the inverse of the dynamics of `model`, ``x_k = f^{-1}(x_{k+1} - w_k)`` with ``w_k ∼ N(0, R_1)``, i.e., the covariance is ``A^{-1}(R + R_1)A^{-T}``. `xlin` is the point at which time and state-dependent matrices are evaluated (the state the forward pass propagated from), and the initial guess for the inversion of nonlinear dynamics.
+Propagate the estimate `x, R` of the state at time `k+1` backwards in time to time `k` through the inverse of the dynamics of `model`, ``x_k = f^{-1}(x_{k+1} - w_k)`` with ``w_k ∼ N(0, R_1)``, i.e., the covariance is ``A^{-1}(R + R_1)A^{-T}``. `logabsdetA` is ``\\log|\\det A|``, where ``A`` is the Jacobian of the dynamics at the inverted point. `xlin` is the point at which time and state-dependent matrices are evaluated (the state the forward pass propagated from), and the initial guess for the inversion of nonlinear dynamics.
 """
 function _imm_backward_predict(kf::KalmanFilter, x, R, xlin, u, p, t)
     A  = get_mat(kf.A, xlin, u, p, t)
@@ -238,7 +255,7 @@ function _imm_backward_predict(kf::KalmanFilter, x, R, xlin, u, p, t)
     xp = (u === nothing || length(u) == 0) ? x : x .- get_mat(kf.B, xlin, u, p, t)*u
     F  = lu(A)
     x̂  = F \ xp
-    x̂, _inv_sandwich(F, R + R1)
+    x̂, _inv_sandwich(F, R + R1), first(logabsdet(F))
 end
 
 function _imm_backward_predict(kf::_IMMSmoothableNonlinear, x, R, xlin, u, p, t; maxiters = 20)
@@ -259,8 +276,8 @@ function _imm_backward_predict(kf::_IMMSmoothableNonlinear, x, R, xlin, u, p, t;
         end
     end
     converged || @warn "Inversion of the dynamics did not converge in the backward pass of the IMM smoother at t = $t" maxlog=10
-    A = _dynamics_jacobian(kf, x̂, u, p, t)
-    x̂, _inv_sandwich(lu(A), R + R1)
+    F = lu(_dynamics_jacobian(kf, x̂, u, p, t))
+    x̂, _inv_sandwich(F, R + R1), first(logabsdet(F))
 end
 
 # Computes A⁻¹ M A⁻ᵀ given F = lu(A) and a symmetric matrix M

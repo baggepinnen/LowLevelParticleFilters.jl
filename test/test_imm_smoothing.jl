@@ -125,11 +125,7 @@ end
     @test e_smooth < 0.6e_filt
     @test e_smooth < 1.1e_exact
     @test d_smooth < 0.1d_filt   # The smoothed estimate is much closer to the exact posterior mean than the filtered estimate
-    # The smoothed mode probabilities of the HBH smoother are not closer to the exact posterior mode
-    # probabilities than the filtered ones in this example. The approximation of Helmick et al. replaces
-    # the likelihood of future data under mode i by a Gaussian density with the covariance of the backward
-    # prediction under mode i, which favours modes with small process noise (mode 1 here).
-    @test_broken m_smooth < m_filt
+    @test m_smooth < 0.2m_filt # The smoothed mode probabilities are closer to the exact ones than the filtered
 end
 
 @testset "Mode estimation on a longer sequence" begin
@@ -162,6 +158,37 @@ end
     @test all(isfinite, ssol.extraT)
     # The smoother bridges the gap, so the uncertainty in the gap is smaller than that of the filter
     @test tr(ssol.RT[23]) < tr(ssol.Rt[23])
+end
+
+@testset "No information about the mode without measurements" begin
+    # Without measurements, the smoothed mode probabilities equal the prior mode probabilities,
+    # independent of the dynamics of the modes and of diffuse_scale
+    mk(a) = KalmanFilter(SA[a;;], SA[0.0;;], SA[1.0;;], 0, SA[1.0;;], SA[1.0;;], SimpleMvNormal(SA[0.0], SA[1.0;;]))
+    Tm = 4
+    ym = Vector{Union{Missing, Vector{Float64}}}(fill(missing, Tm))
+    um = [zeros(1) for _ in 1:Tm]
+    for Pm in ([1.0 0; 0 1], Ptr), scale in (nothing, 1e4)
+        imm = IMM([mk(1.0), mk(0.5)], Pm, μ0)
+        ssol = smooth(imm, um, ym; diffuse_scale = scale)
+        @test ssol.extraT ≈ ssol.extra rtol = 1e-3
+    end
+end
+
+@testset "Float32" begin
+    fid(x, u, p, t) = x
+    d032 = SimpleMvNormal(SA[0f0], SA[1f0;;])
+    mk32() = UnscentedKalmanFilter(fid, fid, SA[1f0;;], SA[1f0;;], d032; nu = 0, ny = 1)
+    kf64 = KalmanFilter(fill(1.0,1,1), zeros(1,0), fill(1.0,1,1), 0, fill(1.0,1,1), fill(1.0,1,1), SimpleMvNormal(zeros(1), fill(1.0,1,1)))
+    rng = MersenneTwister(2)
+    for rep in 1:20
+        Ts = rand(rng, 2:30)
+        y32 = [Float32[randn(rng)] for _ in 1:Ts]
+        u32 = [Float32[] for _ in 1:Ts]
+        ssol = smooth(IMM([mk32(), mk32()], Float32[0.9 0.1; 0.1 0.9], Float32[0.5, 0.5]), u32, y32)
+        ref = smooth(kf64, [Float64[] for _ in 1:Ts], Vector{Float64}.(y32))
+        @test all(isapprox(ssol.RT[k][1], ref.RT[k][1], rtol = 1e-3) for k in 1:Ts)
+        @test all(isapprox(ssol.xT[k][1], ref.xT[k][1], atol = 1e-3) for k in 1:Ts)
+    end
 end
 
 @testset "Nonlinear model types" begin
