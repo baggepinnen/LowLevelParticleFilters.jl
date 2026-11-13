@@ -102,7 +102,7 @@ function correct!(kf::AbstractKalmanFilter,  measurement_model::IEKFMeasurementM
             K = (R*C')/Sᵪ
         end
         dx = x-xi
-        xi += vec(step*(dx + K*(e-C*dx)))
+        xi += vec(convert(eltype(xi), step)*(dx + K*(e-C*dx)))
         # @show i, sum(abs, xi-prev)
         if sum(abs, xi-prev) < epsilon || i >= maxiters
             kf.x = xi

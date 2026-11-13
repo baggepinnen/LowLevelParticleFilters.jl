@@ -179,6 +179,19 @@ function UKFWeights(::TrivialParams, L::Integer)
     UKFWeights(wm, wc, wm, wc, typeof(wm)(L))
 end
 
+"""
+    UKFWeights(weight_params, L, T)
+
+Weights converted to the floating-point type `T`, if `T <: AbstractFloat`. This avoids promotion of sigma points with a narrower floating-point type than the weight parameters, e.g., `Float32`, to the type of the weight parameters.
+"""
+function UKFWeights(weight_params, L::Integer, ::Type{T}) where T
+    W = UKFWeights(weight_params, L)
+    T <: AbstractFloat || return W
+    UKFWeights{T}(W.wm, W.wc, W.wmi, W.wci, W.W)
+end
+
+_sigma_point_eltype(xs) = eltype(eltype(xs))
+
 
 
 
@@ -203,7 +216,7 @@ function sigmapoints!(xs, m, Σ::AbstractMatrix, weight_params, cholesky! = chol
     n = length(xs[1])
     @assert n == length(m)
     @assert length(xs) == 2n+1
-    W = UKFWeights(weight_params, n)
+    W = UKFWeights(weight_params, n, _sigma_point_eltype(xs))
     CI = Symmetric(W.W*Σ)
     if cholesky! === LinearAlgebra.cholesky!
         # X = sqrt(CI) # 2.184 μs (16 allocations: 2.27 KiB)
@@ -602,13 +615,13 @@ end
 
 function mean_with_weights(mean, xs, weight_params)
     n = length(xs)
-    W = UKFWeights(weight_params, ns2L(n))
+    W = UKFWeights(weight_params, ns2L(n), _sigma_point_eltype(xs))
     mean(xs, W)
 end
 
 function cov_with_weights(cov, xs, m, weight_params)
     n = length(xs)
-    W = UKFWeights(weight_params, ns2L(n))
+    W = UKFWeights(weight_params, ns2L(n), _sigma_point_eltype(xs))
     cov(xs, m, W)
 end
 
@@ -825,7 +838,7 @@ end
 
 function cross_cov_with_weights(cross_cov, xsm, x, ys, y, weight_params)
     n = length(xsm)
-    W = UKFWeights(weight_params, ns2L(n))
+    W = UKFWeights(weight_params, ns2L(n), _sigma_point_eltype(xsm))
     cross_cov(xsm, x, ys, y, W)
 end
 
