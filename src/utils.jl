@@ -259,14 +259,27 @@ function mvnormal_c0(d::SimpleMvNormal)
 end
 
 
-Base.rand(rng::AbstractRNG, d::SimpleMvNormal) = d.μ + cholesky(d.Σ).L*randn(rng, length(d.μ))
+"""
+    cov_factor(Σ)
 
-Base.rand(rng::AbstractRNG, d::SimpleMvNormal{<:SVector{N}}) where N = d.μ + cholesky(d.Σ).L*@SVector(randn(rng, N))
+Return a matrix `L` such that `L*L' ≈ Σ`, used to draw samples from a normal distribution with covariance `Σ`. This is the Cholesky factor if `Σ` is positive definite. If `Σ` is positive semidefinite and singular, the Cholesky factorization fails and `L` is computed from an eigendecomposition of `Σ`, with negative eigenvalues (rounding errors) set to zero.
+"""
+cov_factor(Σ::PDMats.AbstractPDMat) = cholesky(Σ).L
+cov_factor(Σ::Diagonal) = Diagonal(sqrt.(max.(Σ.diag, zero(eltype(Σ)))))
+function cov_factor(Σ::AbstractMatrix)
+    C = cholesky(Symmetric(Σ); check = false)
+    issuccess(C) && return C.L
+    E = eigen(Symmetric(Σ))
+    return E.vectors * Diagonal(sqrt.(max.(E.values, zero(eltype(E.values)))))
+end
+
+Base.rand(rng::AbstractRNG, d::SimpleMvNormal) = d.μ + cov_factor(d.Σ)*randn(rng, length(d.μ))
+
+Base.rand(rng::AbstractRNG, d::SimpleMvNormal{<:SVector{N}}) where N = d.μ + cov_factor(d.Σ)*@SVector(randn(rng, N))
 
 function Random.rand!(rng::AbstractRNG, d::SimpleMvNormal, out)
     randn!(rng, out)
-    mul!(out, cholesky(d.Σ).L, out) # This might work due to L being lower triangular
-    out .+= d.μ
+    out .= cov_factor(d.Σ)*out .+ d.μ
 end
 Base.length(d::SimpleMvNormal) = length(d.μ)
 Base.eltype(d::SimpleMvNormal) = eltype(d.μ)
