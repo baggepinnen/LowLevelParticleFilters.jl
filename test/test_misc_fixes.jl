@@ -110,3 +110,24 @@ end
         @test sqrt(mean(abs2, vec(smoothed_mean(xb)) .- xT)) < 0.03
     end
 end
+
+@testset "Sampling with singular positive semidefinite covariance" begin
+    rng = Xoshiro(1)
+    v = [1.0, 2.0]
+    for Σ in (SA_F64[0.0;;], SMatrix{2,2}(v*v'), v*v', Diagonal([1.0, 0.0]), Diagonal(SA[1.0, 0.0]), SA[2.0 1; 1 3])
+        L = LLPF.cov_factor(Σ)
+        @test L*L' ≈ Σ
+        d = LLPF.SimpleMvNormal(Σ)
+        x = rand(rng, d)
+        @test length(x) == size(Σ, 1)
+        @test x isa (Σ isa Union{SMatrix, Diagonal{<:Any,<:SVector}} ? SVector : Vector)
+        @test all(isfinite, x)
+        out = zeros(size(Σ, 1), 20000)
+        for i in axes(out, 2)
+            rand!(rng, LLPF.SimpleMvNormal(Vector(d.μ), Matrix(Σ)), @view(out[:, i]))
+        end
+        @test cov(out, dims = 2) ≈ Σ atol = 0.15
+    end
+    x = rand(rng, LLPF.SimpleMvNormal(SMatrix{2,2}(v*v')))
+    @test x[2] ≈ 2x[1] # The sample lies in the range of Σ
+end
