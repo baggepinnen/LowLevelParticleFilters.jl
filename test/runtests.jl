@@ -559,6 +559,11 @@ end
     include("test_diff.jl")
 end
 
+@testset "log_likelihood_fun" begin
+    @info "Testing log_likelihood_fun"
+    include("test_loglikfun.jl")
+end
+
 
 @testset "Advanced filters" begin
     @info "testing Advanced filters"
