@@ -456,26 +456,29 @@ function loglik_x(f::AbstractKalmanFilter,u,y,x::AbstractVector,p=parameters(f);
 end
 
 """
-    ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors::Vector{Distribution}, u, y, p)
-    ll(θ) = log_likelihood_fun(filter_from_parameters(θ::Vector)::Function, priors::Vector{Distribution}, u, y, x, p)
+    ll(θ) = log_likelihood_fun(filter_from_parameters, priors::Vector{Distribution}, u, y, p)
+    ll(θ) = log_likelihood_fun(filter_from_parameters, priors::Vector{Distribution}, u, y, x, p)
 
-returns function θ -> p(y|θ)p(θ)
+Return the function `θ -> log p(y|θ) + log p(θ)`, where the filter is constructed by `filter_from_parameters`.
+
+The constructor is called as `filter_from_parameters(θ)` the first time, and as `filter_from_parameters(θ, previous_filter)` afterwards if such a method exists, which permits reusing the memory of the previous filter (e.g., the particles of a particle filter). An exception thrown when constructing the filter or computing the log-likelihood results in `-Inf`, except for `MethodError`, `UndefVarError` and `InterruptException`, which are rethrown.
+
+The returned function stores the previous filter and is therefore not safe to call from several threads at the same time; [`metropolis_threaded`](@ref) gives each chain its own copy.
 """
 function log_likelihood_fun(filter_from_parameters,priors::AbstractVector,args...)
-    n = numargs(filter_from_parameters)
     pf = nothing
     function (θ)
-        pf === nothing && (pf = filter_from_parameters(θ))
         length(θ) == length(priors) || throw(ArgumentError("Input must have same length as priors"))
         ll = sum(i->extended_logpdf(priors[i], θ[i]), eachindex(priors))
         isfinite(ll) || return eltype(θ)(-Inf)
-        pf = filter_from_parameters(θ,pf)
         try
+            pf = (pf === nothing || !applicable(filter_from_parameters, θ, pf)) ?
+                filter_from_parameters(θ) : filter_from_parameters(θ, pf)
             return ll + loglik(pf,args...)
-        catch
+        catch err
+            err isa Union{MethodError, UndefVarError, InterruptException} && rethrow()
             return eltype(θ)(-Inf)
         end
-
     end
 end
 
@@ -528,13 +531,13 @@ end
 """
     metropolis_threaded(burnin, args...; nthreads=Threads.nthreads())
 
-Run `Threads.nthreads()` individual Markov chains. `args...` are the same as for [`metropolis`](@ref).
+Run `nthreads` individual Markov chains. `args...` are the same as for [`metropolis`](@ref). Each chain uses its own `deepcopy` of the log-likelihood function `ll = args[1]`, so that a function that stores state, such as the one returned by [`log_likelihood_fun`](@ref), is not shared between threads.
 """
 function metropolis_threaded(burnin, args...; nthreads=Threads.nthreads())
     res = []
     mtx = ReentrantLock()
     Threads.@threads for i = 1:nthreads
-        p,l = metropolis(args...)
+        p,l = metropolis(deepcopy(args[1]), Base.tail(args)...)
         resi = [reduce(hcat,p)' l]
         resi = resi[burnin+1:end,:]
         lock(mtx)
