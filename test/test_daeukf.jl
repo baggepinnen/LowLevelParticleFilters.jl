@@ -926,17 +926,17 @@ end
 end
 
 
-@testset "non-positive-definite innovation covariance raises a clear error" begin
-    # The Cholesky guard in correct! (src/ukf.jl:1372-1373) catches a broken-down
-    # innovation covariance. A non-informative (constant) measurement makes
-    # cov(ys) = 0, so S = cov(ys) + R2 = R2; overriding R2 with an indefinite
-    # value drives S non-PD and the factorization must fail loudly.
+@testset "non-positive-definite innovation covariance raises a PosDefException" begin
+    # The Cholesky guard in correct! catches a broken-down innovation covariance.
+    # A non-informative (constant) measurement makes cov(ys) = 0, so
+    # S = cov(ys) + R2 = R2; overriding R2 with an indefinite value drives S non-PD
+    # and the factorization must fail with the exception type of LinearAlgebra, with
+    # the description in a debug log message.
     const_meas = (xz, u, p, t) -> SA[0.0]
     kf = _mk_t1(measurement = const_meas)
     predict!(kf, SA[0.0])
-    e = _catch_err(() -> correct!(kf, SA[0.0], SA[0.0]; R2 = SA[-1.0;;]))
-    @test e isa ErrorException
-    @test occursin("innovation covariance failed", sprint(showerror, e))
+    e = @test_logs (:debug, r"innovation covariance failed at time step") min_level = Base.CoreLogging.Debug match_mode = :any _catch_err(() -> correct!(kf, SA[0.0], SA[0.0]; R2 = SA[-1.0;;]))
+    @test e isa PosDefException
 end
 
 

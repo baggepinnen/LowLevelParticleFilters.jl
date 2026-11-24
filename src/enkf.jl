@@ -385,8 +385,8 @@ function correct!(
     # Cholesky factorization
     Sᵪ = cholesky(Symmetric(S); check=false)
     if !issuccess(Sᵪ)
-        hint = AUGM ? " With augmented measurement, S is the sample covariance of the predicted measurements, which is singular if the ensemble size is smaller than ny + 1 or if the measurement noise does not affect all outputs." : ""
-        error("Cholesky factorization of innovation covariance failed at time step $(enkf.t), got S = $(printarray(S)).$hint")
+        hint = AUGM ? "With augmented measurement, S is the sample covariance of the predicted measurements, which is singular if the ensemble size is smaller than ny + 1 or if the measurement noise does not affect all outputs." : ""
+        throw_factorization_failure(Sᵪ, "innovation covariance", enkf.t, "S", S, hint)
     end
 
     # Compute Kalman gain: K = Xa * Ya' / (N-1) * inv(S)

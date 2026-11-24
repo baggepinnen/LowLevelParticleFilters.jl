@@ -560,7 +560,7 @@ function sigmapoints_p!(ukf::UnscentedKalmanFilter{<:Any,<:Any,true}, R1)
     ukf.R1x === nothing || (ukf.R += ukf.R1x)# # Ability to regularize the state covariance when R1 applies to explicit disturbance inputs
     Raug = cat(ukf.R, R1, dims=(1,2))
     sigmapoints!(xsd0, m, Raug, ukf.weight_params, ukf.cholesky!)
-    isnan(xsd0[1][1]) && error("Cholesky factorization of augmented state covariance failed at time step $(ukf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got Raug = $(printarray(Raug))")
+    isnan(xsd0[1][1]) && throw_factorization_failure(nothing, "augmented state covariance", ukf.t, "Raug", Raug)
     nothing
 end
 
@@ -568,7 +568,7 @@ function sigmapoints_p!(ukf::UnscentedKalmanFilter{<:Any,<:Any,false}, R1)
     sigma_point_cache = ukf.predict_sigma_point_cache
     xsd0 = sigma_point_cache.x0
     sigmapoints!(xsd0, ukf.x, ukf.R, ukf.weight_params, ukf.cholesky!)
-    isnan(xsd0[1][1]) && error("Cholesky factorization of state covariance failed at time step $(ukf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got R = $(printarray(ukf.R))")
+    isnan(xsd0[1][1]) && throw_factorization_failure(nothing, "state covariance", ukf.t, "R", ukf.R)
     nothing
 end
 
@@ -674,7 +674,7 @@ function correct!(
     S  = compute_S(measurement_model, R2, ym)
     Sᵪ = cholesky(Symmetric(S); check = false)
     issuccess(Sᵪ) ||
-        error("Cholesky factorization of innovation covariance failed at time step $(kf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got S = $(printarray(S))")
+        throw_factorization_failure(Sᵪ, "innovation covariance", kf.t, "S", S)
     K = C / Sᵪ # ns normalization to make it a covariance matrix
     kf.x += K * e
     # mul!(x, K, e, 1, 1) # K and e will be SVectors if ukf correctly initialized
@@ -693,7 +693,7 @@ function sigmapoints_c!(
     xsm = sigma_point_cache.x0
     chol = hasproperty(kf, :cholesky!) ? kf.cholesky! : cholesky!
     sigmapoints!(xsm, eltype(xsm)(kf.x), kf.R, measurement_model.weight_params, chol)
-    isnan(xsm[1][1]) && error("Cholesky factorization of state covariance failed at time step $(kf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got R = $(printarray(kf.R))")
+    isnan(xsm[1][1]) && throw_factorization_failure(nothing, "state covariance", kf.t, "R", kf.R)
     nothing
 end
 
@@ -711,7 +711,7 @@ function sigmapoints_c!(
     Raug = cat(R, R2, dims = (1, 2))
     chol = hasproperty(kf, :cholesky!) ? kf.cholesky! : cholesky!
     sigmapoints!(xsm, xm, Raug, measurement_model.weight_params, chol)
-    isnan(xsm[1][1]) && error("Cholesky factorization of augmented state covariance failed at time step $(kf.t), see https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/parameter_estimation/#Troubleshooting-Kalman-filters for more help. Got R = $(printarray(R))")
+    isnan(xsm[1][1]) && throw_factorization_failure(nothing, "augmented state covariance", kf.t, "R", R)
     nothing
 end
 
@@ -1380,7 +1380,7 @@ function correct!(kf::DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y,
     # Step 5: Cholesky factor of S.
     Sᵪ = cholesky(Symmetric(S); check = false)
     issuccess(Sᵪ) ||
-        error("Cholesky factorization of innovation covariance failed at DAE-UKF time step $(kf.t). Got S = $(printarray(S))")
+        throw_factorization_failure(Sᵪ, "innovation covariance", kf.t, "S", S)
 
     # Step 6: cross-cov between the differential state and the measurement.
     # xs_diff holds the differential parts of the descriptor sigma points.

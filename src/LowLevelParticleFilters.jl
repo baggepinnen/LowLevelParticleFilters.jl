@@ -92,6 +92,30 @@ function printarray(A::AbstractMatrix)
     return String(take!(io))
 end
 
+"""
+    throw_factorization_failure(F, what, t, name, M, hint = "")
+
+Throw a `LinearAlgebra.PosDefException` for the failed Cholesky factorization `F` of the
+matrix `M` (called `name` in the description) of `what`, at time `t`. All failed
+factorizations of a filter thereby raise the same exception type. `F`, `t`, `name` and `M`
+may be `nothing`.
+
+A `PosDefException` cannot carry a message, so the description is emitted as a debug log
+message, shown with `ENV["JULIA_DEBUG"] = "LowLevelParticleFilters"`. It is only formatted
+when debug logging is enabled, which keeps failures cheap inside optimization loops. The
+arguments are passed explicitly rather than through a closure, since a closure that captures
+a reassigned local variable makes the caller allocate on every call.
+"""
+@noinline function throw_factorization_failure(F, what, t, name, M, hint = "")
+    @debug string("Cholesky factorization of ", what, " failed",
+        t === nothing ? "" : string(" at time step ", t),
+        M === nothing ? "" : string(", got ", name, " = ", printarray(M)), ".",
+        isempty(hint) ? "" : string(" ", hint),
+        " See https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/#Troubleshooting-Kalman-filters")
+    info = F isa LinearAlgebra.Factorization && hasfield(typeof(F), :info) ? Int(F.info) : 1
+    throw(PosDefException(info == 0 ? 1 : info))
+end
+
 include("indexing_matrix.jl")
 include("signalnames.jl")
 include("PFtypes.jl")
