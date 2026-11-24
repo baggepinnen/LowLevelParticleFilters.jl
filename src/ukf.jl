@@ -711,7 +711,7 @@ function sigmapoints_c!(
     Raug = cat(R, R2, dims = (1, 2))
     chol = hasproperty(kf, :cholesky!) ? kf.cholesky! : cholesky!
     sigmapoints!(xsm, xm, Raug, measurement_model.weight_params, chol)
-    isnan(xsm[1][1]) && throw_factorization_failure(nothing, "augmented state covariance", kf.t, "R", R)
+    isnan(xsm[1][1]) && throw_factorization_failure(nothing, "augmented state covariance", kf.t, "Raug", Raug)
     nothing
 end
 
@@ -1268,6 +1268,7 @@ function predict!(kf::DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u,
 
     # Step 1: sigma points on the differential state x.
     sigmapoints!(xs_diff, kf.x, kf.R, kf.weight_params, kf.cholesky!)
+    isnan(xs_diff[1][1]) && throw_factorization_failure(nothing, "state covariance", kf.t, "R", kf.R)
 
     # Step 2: reproject each sigma point onto the constraint manifold.
     for i in eachindex(xs_diff)
@@ -1353,6 +1354,7 @@ function correct!(kf::DAEUnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u, y,
     # Step 0: sigma points on the differential state from (kf.x, kf.R), reprojected
     # onto the constraint manifold with the previous descriptors as warm-start guesses.
     sigmapoints!(xs_diff, kf.x, kf.R, kf.weight_params, kf.cholesky!)
+    isnan(xs_diff[1][1]) && throw_factorization_failure(nothing, "state covariance", kf.t, "R", kf.R)
     for i in eachindex(xs_diff)
         xzs[i] = calc_xz(kf, xzs[i], u, p, t, xs_diff[i])
     end

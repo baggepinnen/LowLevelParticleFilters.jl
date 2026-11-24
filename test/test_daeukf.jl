@@ -940,6 +940,18 @@ end
 end
 
 
+@testset "state covariance that is not positive definite raises a PosDefException" begin
+    # sigmapoints! marks a failed factorization of kf.R with NaN sigma points; predict!
+    # and correct! must not continue with them.
+    kf = _mk_t1()
+    kf.R = -kf.R
+    @test _catch_err(() -> predict!(kf, SA[0.0])) isa PosDefException
+    kf = _mk_t1()
+    kf.R = -kf.R
+    @test _catch_err(() -> correct!(kf, SA[0.0], SA[0.0])) isa PosDefException
+end
+
+
 @testset "correct! generates the sigma points from the current estimate" begin
     # ẋ = u − z, 0 = z³ + z − x, y = z. The DAE UKF agrees with the UKF on the reduced
     # model x ↦ φ(x), also for a correct! before any reset! or predict!, and when the
