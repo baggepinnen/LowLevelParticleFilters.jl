@@ -698,6 +698,8 @@ end
     include("test_missing_data.jl")
 end
 
+include("test_lag_one.jl")
+
 @testset "quantized" begin
     @info "Testing quantized"
     include("test_quantized.jl")

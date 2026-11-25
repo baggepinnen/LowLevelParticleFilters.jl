@@ -873,7 +873,7 @@ function add_to_C!(C, xsm, x, d, xinds)
     end
 end
 
-function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u::AbstractVector=sol.u, y::AbstractVector=sol.y, p=parameters(kf)) where {IPD,IPM,AUGD,AUGM}
+function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter{IPD,IPM,AUGD,AUGM}, u::AbstractVector=sol.u, y::AbstractVector=sol.y, p=parameters(kf); lag_one=false) where {IPD,IPM,AUGD,AUGM}
     # ref: "Unscented Rauch–Tung–Striebel Smoother" Simo Särkkä
     (; x,xt,R,Rt,ll) = sol
     T            = length(y)
@@ -887,6 +887,7 @@ function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter{IPD,IPM,
     C = zeros(nx,nx)
     P⁻ = zeros(nx,nx)
 
+    Rlag = lag_one ? similar(RT, T-1) : nothing
     for t = T-1:-1:1
         tt = (t-1)*kf.Ts
         R1 = get_mat(kf.R1, xt[t], u[t], p, tt)
@@ -932,10 +933,11 @@ function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter{IPD,IPM,
         end
         @bangbang C .= C ./ ns
         D = C / cholesky(P⁻)
+        lag_one && (Rlag[t] = D * RT[t+1])
         xT[t] = m + D*(xT[t+1]-m⁻[xi])
         RT[t] = Rt[t] + symmetrize(D*(RT[t+1] .- P⁻)*D')
     end
-    KalmanSmoothingSolution(sol, xT, RT)
+    KalmanSmoothingSolution(sol, xT, RT, nothing, Rlag)
 end
 
 
