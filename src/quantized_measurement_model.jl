@@ -237,6 +237,7 @@ outputs plus `offset`, such that `sum(abs2, res) == -ret.ll + offset`.
 """
 function quantized_loglik_residuals!(res, ret, offset)
     ny = length(ret.lls)
+    length(res) == ny + 1 || throw(DimensionMismatch("The residual vector must have length ny+1 = $(ny+1), got $(length(res))"))
     c = offset
     for i in 1:ny
         if ret.quantized[i]
@@ -246,7 +247,7 @@ function quantized_loglik_residuals!(res, ret, offset)
             c += -ret.lls[i] - ret.r[i]^2/2 # log σ + log(2π)/2
         end
     end
-    c < 0 && error("Negative value ($c) inside square root when calculating log-likelihood residuals. Increase the offset argument to prediction_errors! (currently set to offset=$offset)")
+    c < 0 && negative_radicand_error(c, offset)
     res[ny+1] = sqrt(c)
     res
 end

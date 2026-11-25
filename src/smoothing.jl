@@ -337,34 +337,54 @@ end
 check_prediction_error_support(f::AbstractKalmanFilter, fname) = nothing
 check_prediction_error_support(f, fname) = throw(ArgumentError("$fname requires a Kalman-type filter (a subtype of AbstractKalmanFilter) that returns one-step prediction errors, got a filter of type $(nameof(typeof(f))). Use loglik for particle filters and IMM."))
 
-"""
-    gaussian_loglik_residuals!(res, ret, offset=0)
+negative_radicand_error(c, offset) = error("Negative value ($c) inside square root when calculating log-likelihood residuals. Increase the offset argument of prediction_errors! or loglik_residuals! (currently offset=$offset)")
 
-Write the Gaussian likelihood residuals for one observed correction returned by
-[`correct!`](@ref). For `n` observed channels, provide an output vector of length
-`n+1`. Its first entries are the innovation whitened by the lower Cholesky
-factor of its covariance and divided by √2. Its last entry includes the
-log determinant and Gaussian normalization, so `sum(abs2, res) ≈ -ret.ll + offset`.
-Choose a fixed offset large enough to keep the final radicand nonnegative
-over the parameter domain used for estimation. For a missing sample, pass the usual residual block.
-The innovation entries are zero and the final entry is `sqrt(offset)`.
 """
-function gaussian_loglik_residuals!(res, ret, offset=0)
-    hasproperty(ret, :lls) && throw(ArgumentError("use quantized_loglik_residuals! for a quantized correction"))
-    _, e, _, Sᵪ = ret
-    if e === missing
-        isempty(res) && throw(DimensionMismatch("expected space for the normalization residual"))
-        offset >= 0 || error("increase the likelihood offset for a missing sample (currently $offset)")
+    loglik_residuals!(res, ret, offset=0)
+
+Write the log-likelihood residuals of one correction into `res`, where `ret` is the result of
+[`correct!`](@ref) (or of calling the filter) for a measurement with `ny` outputs, and `res` is a
+vector of length `ny+1`. The residuals satisfy `sum(abs2, res) ≈ -ret.ll + offset`, which makes it
+possible to assemble the residual vector of a Gauss-Newton maximum-likelihood problem from
+individual corrections, for example when several measurements are processed at the same time
+instant. [`LowLevelParticleFilters.prediction_errors!`](@ref) with `loglik = true` uses this
+function for each time step.
+
+- For a Gaussian correction, the first `ny` entries are the innovation whitened by the lower
+  Cholesky factor of the innovation covariance and divided by ``\\sqrt{2}``, and the last entry is
+  ``\\sqrt{\\frac{1}{2}(\\log\\det S + n_y \\log 2π) + \\text{offset}}``.
+- For a correction with a [`QuantizedMeasurementModel`](@ref), the residuals are those described
+  in [`LowLevelParticleFilters.prediction_errors!`](@ref).
+- For a missing measurement, the first entries are zero and the last entry is `sqrt(offset)`.
+  The returned `ret` does not contain the number of outputs, and the length of `res` is therefore
+  not validated in this case; the caller must provide a vector of length `ny+1`.
+
+The `offset` is to be chosen large enough for the expression inside the square root to be
+nonnegative over the parameter domain explored during estimation, and to be held fixed during the
+optimization. An error is thrown if the expression is negative.
+"""
+function loglik_residuals!(res, ret, offset=0)
+    if ret[2] === missing
+        isempty(res) && throw(DimensionMismatch("The residual vector must have length ny+1, got an empty vector"))
+        offset < 0 && negative_radicand_error(offset, offset)
         fill!(res, 0)
         res[end] = sqrt(offset)
-        return res
+        res
+    elseif hasproperty(ret, :lls)
+        quantized_loglik_residuals!(res, ret, offset)
+    else
+        gaussian_loglik_residuals!(res, ret, offset)
     end
-    n = length(e)
-    length(res) == n + 1 || throw(DimensionMismatch("expected $(n+1) likelihood residuals"))
-    c = (logdet(Sᵪ) + n*log(2π))/2 + offset
-    c < 0 && error("increase the likelihood offset (currently $offset, radicand $c)")
-    r = view(res, 1:n)
-    ldiv!(r, Sᵪ.L, e)
+end
+
+function gaussian_loglik_residuals!(res, ret, offset)
+    _, e, _, Sᵪ = ret
+    ny = length(e)
+    length(res) == ny + 1 || throw(DimensionMismatch("The residual vector must have length ny+1 = $(ny+1), got $(length(res))"))
+    c = (logdet(Sᵪ) + ny*log(2π))/2 + offset
+    c < 0 && negative_radicand_error(c, offset)
+    r = view(res, 1:ny)
+    ldiv!(r, Sᵪ.L, e) # r'r = e'S⁻¹e since S = LL'
     r .*= inv(sqrt(2))
     res[end] = sqrt(c)
     res
@@ -385,6 +405,8 @@ Calculate the prediction errors and store the result in `res`. Similar to [`sse`
 For a filter with a [`QuantizedMeasurementModel`](@ref), only `loglik = true` is supported; the residual of a quantized output is then ``\\sqrt{-\\log P_i}``, where ``P_i`` is the predicted probability of the band of the measurement, and the identity `res'res == -ll + length(y)*offset` holds as well.
 
 For missing measurements (see [`LowLevelParticleFilters.ismissing_measurement`](@ref)), the `ny` residuals of the time step are zero, and the additional residual of the log-determinant term (when `loglik = true`) equals `sqrt(offset)`. The layout of `res` is thus independent of which measurements are missing.
+
+The residuals of each time step are computed by [`loglik_residuals!`](@ref), which may be used directly to assemble residual vectors from individual corrections.
 
 See example in [Solving using Gauss-Newton optimization](@ref). See also [`LowLevelParticleFilters.multistep_prediction_errors!`](@ref) for multi-step prediction errors.
 """
@@ -411,12 +433,7 @@ function prediction_errors!(res, f::AbstractFilter, u, y, p=parameters(f), λ=1;
         inds = (idx+1):(idx+ny)
 
         if loglik
-            block = view(res, idx+1:idx+ny+1)
-            if hasproperty(ret, :lls)
-                quantized_loglik_residuals!(block, ret, offset)
-            else
-                gaussian_loglik_residuals!(block, ret, offset)
-            end
+            loglik_residuals!(view(res, idx+1:idx+ny+1), ret, offset)
             idx += ny + 1
         elseif e === missing
             @views res[inds] .= 0

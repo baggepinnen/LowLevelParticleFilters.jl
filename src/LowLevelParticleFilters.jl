@@ -10,7 +10,7 @@ export ReactantParticleFilter, randn_noise
 export UIKalmanFilter, FilterPosDefException
 export LinearMeasurementModel, EKFMeasurementModel, IEKFMeasurementModel, UKFMeasurementModel, CompositeMeasurementModel, QuantizedMeasurementModel
 export KalmanFilteringSolution, KalmanSmoothingSolution, ParticleFilteringSolution
-export gaussian_loglik_residuals!
+export loglik_residuals!
 export FFBSi, GenealogySmoother, ParticleGibbsSmoother
 @deprecate weigthed_mean weighted_mean
 @deprecate weigthed_cov weighted_cov
