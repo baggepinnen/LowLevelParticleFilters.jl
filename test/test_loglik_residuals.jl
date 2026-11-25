@@ -32,6 +32,15 @@ end
     LowLevelParticleFilters.prediction_errors!(r, kf, u, y; loglik=true, offset=3)
     @test r[3:4] == [0, sqrt(3)]
     @test sum(abs2, r) ≈ -loglik(kf, u, y) + 9
+    @test_throws DimensionMismatch LowLevelParticleFilters.prediction_errors!(zeros(8), kf, fill([0.], 4), y; loglik=true)
+end
+
+@testset "BigFloat precision" begin
+    S = big.([2.0;;])
+    e = big.([2.0])
+    ret = (; ll = -(dot(e, S \ e) + logdet(S) + log(2*big(π)))/2, e, S, Sᵪ = cholesky(S))
+    r = loglik_residuals!(zeros(BigFloat, 2), ret, 1)
+    @test sum(abs2, r) ≈ -ret.ll + 1
 end
 
 @testset "Quantized correction" begin

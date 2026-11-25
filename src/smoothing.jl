@@ -381,11 +381,11 @@ function gaussian_loglik_residuals!(res, ret, offset)
     _, e, _, Sᵪ = ret
     ny = length(e)
     length(res) == ny + 1 || throw(DimensionMismatch("The residual vector must have length ny+1 = $(ny+1), got $(length(res))"))
-    c = (logdet(Sᵪ) + ny*log(2π))/2 + offset
+    c = (logdet(Sᵪ) + ny*log(2*one(eltype(res))*π))/2 + offset
     c < 0 && negative_radicand_error(c, offset)
     r = view(res, 1:ny)
     ldiv!(r, Sᵪ.L, e) # r'r = e'S⁻¹e since S = LL'
-    r .*= inv(sqrt(2))
+    r ./= sqrt(2*one(eltype(r)))
     res[end] = sqrt(c)
     res
 end
@@ -399,14 +399,14 @@ Calculate the prediction errors and store the result in `res`. Similar to [`sse`
 - `res`: A vector of length `ny*length(y)`. Note, for each datapoint in `u` and `u`, there are `ny` outputs, and thus `ny` residuals. If `loglik = true`, the length of `res` must be `length(y)*(ny+1)`, since an extra residual is added for the log-determinant term.
 - `f`: Any Kalman type filter
 - `λ`: A weighting factor to minimize `dot(e, λ, e)`. A commonly used metric is `λ = Diagonal(1 ./ (mag.^2))`, where `mag` is a vector of the "typical magnitude" of each output. Internally, the square root of `W = sqrt(λ)` is calculated so that the residuals stored in `res` are `W*e`.
-- `loglik`: If `true`, the residuals are calculated as `Sᵪ\e`, where `Sᵪ` is the Cholesky factor of the innovation covariance. This turns least-squares optimization into maximum likelihood estimation. When this is true, the `λ` argument is ignored and the length of `res` must be `length(y)*(ny+1)`, where an extra residual per time step is added for the log-determinant term.
+- `loglik`: If `true`, the residuals are calculated as `(Sᵪ.L\e)/√2`, where `Sᵪ` is the Cholesky factor of the innovation covariance. This turns least-squares optimization into maximum likelihood estimation. When this is true, the `λ` argument is ignored and the length of `res` must be `length(y)*(ny+1)`, where an extra residual per time step is added for the log-determinant term.
 - `offset`: When using `loglik = true`, an offset may be added to the log-determinant term to avoid negative values inside the square root. The result of adding this offset is that the log-likelihood is shifted by a constant value, which does not affect optimization. With `loglik = true`, the residuals satisfy `res'res == -ll + length(y)*offset`, where `ll` is the log-likelihood.
 
 For a filter with a [`QuantizedMeasurementModel`](@ref), only `loglik = true` is supported; the residual of a quantized output is then ``\\sqrt{-\\log P_i}``, where ``P_i`` is the predicted probability of the band of the measurement, and the identity `res'res == -ll + length(y)*offset` holds as well.
 
 For missing measurements (see [`LowLevelParticleFilters.ismissing_measurement`](@ref)), the `ny` residuals of the time step are zero, and the additional residual of the log-determinant term (when `loglik = true`) equals `sqrt(offset)`. The layout of `res` is thus independent of which measurements are missing.
 
-The residuals of each time step are computed by [`loglik_residuals!`](@ref), which may be used directly to assemble residual vectors from individual corrections.
+With `loglik = true`, the residuals of each time step are computed by [`loglik_residuals!`](@ref), which may be used directly to assemble residual vectors from individual corrections.
 
 See example in [Solving using Gauss-Newton optimization](@ref). See also [`LowLevelParticleFilters.multistep_prediction_errors!`](@ref) for multi-step prediction errors.
 """
@@ -416,6 +416,7 @@ function prediction_errors!(res, f::AbstractFilter, u, y, p=parameters(f), λ=1;
     reset!(f)
     ny = f.ny
     N = length(u)
+    length(y) == N || throw(DimensionMismatch("u and y must have the same length, got $N and $(length(y))"))
     if loglik
         # Need one extra residual per time step for the constant term
         length(res) == N*(ny + 1) || error("When loglik=true, residual vector length must be N*(ny+1)")
