@@ -109,7 +109,7 @@ function correct!(kf::AbstractKalmanFilter, mm::LinearMeasurementModel, u, y, p=
         S = symmetrize(Ct*R*Ct' + CR12 + CR12')
         @bangbang S .+= R2
         Sᵪ  = cholesky(Symmetric(S); check = false)
-        issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed at time step $(kf.t), got S = $(printarray(S))")
+        issuccess(Sᵪ) || throw_factorization_failure(Sᵪ, "innovation covariance", kf.t, "S", S)
         K   = (R*Ct' + R12)/Sᵪ
         kf.x += K*e
         kf.R  = symmetrize((I - K*Ct)*R - K*R12')
@@ -117,7 +117,7 @@ function correct!(kf::AbstractKalmanFilter, mm::LinearMeasurementModel, u, y, p=
         S = symmetrize(Ct*R*Ct')
         @bangbang S .+= R2
         Sᵪ  = cholesky(Symmetric(S); check = false)
-        issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed at time step $(kf.t), got S = $(printarray(S))")
+        issuccess(Sᵪ) || throw_factorization_failure(Sᵪ, "innovation covariance", kf.t, "S", S)
         K   = (R*Ct')/Sᵪ
         kf.x += K*e
         kf.R  = symmetrize((I - K*Ct)*R) # WARNING against I .- A

@@ -807,7 +807,7 @@ function correct!(
     # Factorize S and compute Kalman gain
     Sᵪ = cholesky(Symmetric(S), check = false)
     if !issuccess(Sᵪ)
-        error("Cholesky factorization of innovation covariance failed at time step $(f.t), got S = $(printarray(S))")
+        throw_factorization_failure(Sᵪ, "innovation covariance", f.t, "S", S)
     end
     K = Σxy / Sᵪ
 

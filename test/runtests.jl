@@ -728,6 +728,11 @@ end
     include("test_misc_fixes.jl")
 end
 
+@testset "posdef exceptions" begin
+    @info "Testing posdef exceptions"
+    include("test_posdef_exceptions.jl")
+end
+
 @testset "particle-filter log-likelihoods" begin
     @info "Testing particle-filter log-likelihoods"
     include("test_apf_loglik.jl")

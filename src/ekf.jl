@@ -173,14 +173,14 @@ function correct!(kf::AbstractKalmanFilter, measurement_model::EKFMeasurementMod
         CR12 = C*R12
         S   = symmetrize(C*R*C' + CR12 + CR12') + R2
         Sᵪ  = cholesky(Symmetric(S); check=false)
-        issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed at time step $t, got S = $(printarray(S))")
+        issuccess(Sᵪ) || throw_factorization_failure(Sᵪ, "innovation covariance", t, "S", S)
         K   = (R*C' + R12)/Sᵪ
         kf.x += vec(K*e)
         kf.R  = symmetrize((I - K*C)*R - K*R12')
     else
         S   = symmetrize(C*R*C') + R2
         Sᵪ  = cholesky(Symmetric(S); check=false)
-        issuccess(Sᵪ) || error("Cholesky factorization of innovation covariance failed at time step $t, got S = $(printarray(S))")
+        issuccess(Sᵪ) || throw_factorization_failure(Sᵪ, "innovation covariance", t, "S", S)
         K   = (R*C')/Sᵪ
         kf.x += vec(K*e)
         kf.R  = symmetrize((I - K*C)*R) # WARNING against I .- A

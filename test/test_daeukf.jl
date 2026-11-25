@@ -926,17 +926,30 @@ end
 end
 
 
-@testset "non-positive-definite innovation covariance raises a clear error" begin
-    # The Cholesky guard in correct! (src/ukf.jl:1372-1373) catches a broken-down
-    # innovation covariance. A non-informative (constant) measurement makes
-    # cov(ys) = 0, so S = cov(ys) + R2 = R2; overriding R2 with an indefinite
-    # value drives S non-PD and the factorization must fail loudly.
+@testset "non-positive-definite innovation covariance raises a FilterPosDefException" begin
+    # The Cholesky guard in correct! catches a broken-down innovation covariance.
+    # A non-informative (constant) measurement makes cov(ys) = 0, so
+    # S = cov(ys) + R2 = R2; overriding R2 with an indefinite value drives S non-PD
+    # and the factorization must fail with a FilterPosDefException that names the matrix.
     const_meas = (xz, u, p, t) -> SA[0.0]
     kf = _mk_t1(measurement = const_meas)
     predict!(kf, SA[0.0])
     e = _catch_err(() -> correct!(kf, SA[0.0], SA[0.0]; R2 = SA[-1.0;;]))
-    @test e isa ErrorException
-    @test occursin("innovation covariance failed", sprint(showerror, e))
+    @test e isa FilterPosDefException
+    @test occursin("innovation covariance failed at time step", sprint(showerror, e))
+end
+
+
+@testset "state covariance that is not positive definite raises a factorization exception" begin
+    # sigmapoints! marks a failed factorization of kf.R with NaN sigma points; predict!
+    # and correct! must not continue with them. The static covariance is factorized by
+    # StaticArrays, which throws PosDefException itself, so both types are accepted.
+    kf = _mk_t1()
+    kf.R = -kf.R
+    @test _catch_err(() -> predict!(kf, SA[0.0])) isa Union{PosDefException, FilterPosDefException}
+    kf = _mk_t1()
+    kf.R = -kf.R
+    @test _catch_err(() -> correct!(kf, SA[0.0], SA[0.0])) isa Union{PosDefException, FilterPosDefException}
 end
 
 

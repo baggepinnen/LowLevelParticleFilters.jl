@@ -179,7 +179,7 @@ function correct!(
     ŷ, S, Pxz = output_moments(kf, model.inner, u, p, t, R2)
     e = y .- ŷ
     Sᵪ = cholesky(Symmetric(S); check = false)
-    issuccess(Sᵪ) || error("Cholesky factorization of the covariance of the output before quantization failed at time step $(kf.t), got S = $(printarray(S))")
+    issuccess(Sᵪ) || throw_factorization_failure(Sᵪ, "the covariance of the output before quantization", kf.t, "S", S)
     K = Pxz / Sᵪ
     T = promote_type(eltype(kf.x), eltype(kf.R), eltype(y))
     ll = zero(T)
