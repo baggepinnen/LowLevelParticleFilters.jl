@@ -55,6 +55,8 @@ end
     @test loglik_residuals!(r, ret, 1) === r
     @test sum(abs2, r) ≈ -ret.ll + 1
     @test_throws DimensionMismatch loglik_residuals!(zeros(3), ret, 1)
+    ret2 = correct!(ekf(), SA[0.0], [1.0, 2.0]) # More measurements than outputs of the model
+    @test_throws DimensionMismatch loglik_residuals!(ones(3), ret2, 1)
 
     # Missing measurements in a filter with a quantized measurement model
     u = fill(SA[0.0], 4)
@@ -75,7 +77,7 @@ end
     x̂ = copy(f.kf.x)
     ret = correct!(f, [0.0], [2.0, -1.0])
     @test ret.e ≈ [2.0, -1.0] - C*x̂
-    @test ret.e_star ≈ [2.0, -1.0] - C*f.kf.x
+    @test ret.e_star ≈ ret.e - C*G*ret.d
     r = loglik_residuals!(zeros(3), ret, 3)
     @test sum(abs2, r) ≈ -ret.ll + 3
 
@@ -88,6 +90,14 @@ end
 end
 
 @testset "CompositeMeasurementModel" begin
+    # A component model that writes its innovation into a shared buffer
+    buf = zeros(1)
+    mb = UKFMeasurementModel{Float64, false, false}((x, u, p, t) -> x, [1.0;;]; nx = 1, ny = 1, innovation = (y, ŷ) -> (buf .= y .- ŷ))
+    kfb = UnscentedKalmanFilter((x, u, p, t) -> x, CompositeMeasurementModel(mb, mb), [1.0;;], LowLevelParticleFilters.SimpleMvNormal([0.0], [1.0;;]); nu = 1, ny = 2)
+    ret = correct!(kfb, [0.0], [2.0])
+    @test ret.e ≈ [2.0, 1.0]
+    @test sum(abs2, loglik_residuals!(zeros(3), ret)) ≈ -ret.ll
+
     dyn(x, u, p, t) = [0.9x[1] + 0.1x[2], 0.8x[2]]
     # Every component model is corrected with the full measurement vector
     m1 = LinearMeasurementModel([1.0 0.0; 0.2 1.0], 0, [0.2 0.0; 0.0 0.3])

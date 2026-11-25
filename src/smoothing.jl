@@ -360,8 +360,8 @@ function for each time step.
 - For a correction with a [`QuantizedMeasurementModel`](@ref), the residuals are those described
   in [`LowLevelParticleFilters.prediction_errors!`](@ref).
 - For a correction with a [`CompositeMeasurementModel`](@ref), the first `ny` entries are the
-  concatenated residuals of the component models, and the last entry contains the sum of their
-  constant terms. The component models may be Gaussian or quantized.
+  concatenated residuals of the component models, and the last entry is the square root of the sum
+  of their constant terms plus `offset`. The component models may be Gaussian or quantized.
 - For a missing measurement, the first entries are zero and the last entry is `sqrt(offset)`.
   The returned `ret` does not contain the number of outputs, and the length of `res` is therefore
   not validated in this case; the caller must provide a vector of length `ny+1`.

@@ -67,7 +67,12 @@ function correct!(
 )
     R2 === nothing || @warn("correct! with a composite measurement model ignores the custom R2 argument, open an issue if you need this feature.", maxlog=3)
     # The component models correct the state sequentially, map over the tuple preserves this order
-    parts = map(m -> correct!(kf, m, u, y, p, t), measurement_model.models)
+    # The innovation is copied since a component model may write it into a buffer that the next
+    # component reuses
+    parts = map(measurement_model.models) do m
+        part = correct!(kf, m, u, y, p, t)
+        merge(part, (; e = copy(part.e)))
+    end
     ll = sum(part -> part[1], parts)
     e = reduce(vcat, map(part -> part[2], parts))
     S = map(part -> part[3], parts)

@@ -235,6 +235,7 @@ whitened innovation ``r_i/\\sqrt{2}`` for an unquantized output. Return the sum 
 terms of the unquantized outputs, such that `sum(abs2, r) + c == -ret.ll`. See [`loglik_residuals!`](@ref).
 """
 function quantized_loglik_terms!(r, ret)
+    length(r) == length(ret.lls) || throw(DimensionMismatch("The quantized measurement model has $(length(ret.lls)) outputs, but the residual block has length $(length(r))"))
     c = 0 # An exact zero when all outputs are quantized, so that the derivative of the final square root at offset = 0 is not NaN
     for i in eachindex(ret.lls)
         if ret.quantized[i]

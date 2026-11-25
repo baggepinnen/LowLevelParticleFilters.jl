@@ -33,10 +33,11 @@ In addition to the standard Kalman filter outputs `(ll, e, S, Sᵪ, K)`, the `co
 also returns:
 - `d`: The estimate of the unknown input d(k-1)
 - `M`: The matrix M used for unknown input estimation (weighted least squares matrix)
-- `e_star`: The innovation ``e^*(k) = y(k) - C(k)x̂^*(k|k)`` after the state has been updated with
-  the unknown-input estimate
+- `e_star`: The innovation ``e^*(k) = y(k) - C(k)x̂^*(k|k) - D(k)u(k)`` after the state has been
+  updated with the unknown-input estimate, ``x̂^*(k|k) = x̂(k|k-1) + G\\hat d(k-1)``, and before
+  the final update with the gain `K`
 
-The innovation `e` is the one-step prediction error ``y(k) - C(k)x̂(k|k-1)`` before the
+The innovation `e` is the one-step prediction error ``y(k) - C(k)x̂(k|k-1) - D(k)u(k)`` before the
 unknown-input estimation, `S` is its covariance and `ll` is the log-likelihood of `e` under
 ``N(0, S)``. The log-likelihood residuals of [`LowLevelParticleFilters.prediction_errors!`](@ref) and
 [`loglik_residuals!`](@ref) are thus consistent with `ll`.
