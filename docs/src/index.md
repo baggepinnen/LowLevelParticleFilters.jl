@@ -249,6 +249,28 @@ plot!(xbm', lab="pf smooth")
 plot!(vecvec_to_mat(x), lab="true")
 ```
 
+### Uncertainty in a change in stored thermal energy
+
+Suppose a tank has known heat capacity `Cth` in J/K. Its change in stored energy over a measurement interval is the temperature change multiplied by `Cth`. Consecutive smoothed temperatures depend on the same observations, so the variance of their difference includes their covariance. Request `lag_one=true` to obtain this covariance in `sol.extraT[k]`, with rows corresponding to time `k` and columns to time `k+1`.
+
+```@example tank_energy
+using LowLevelParticleFilters
+
+# Model the tank temperature as a random walk observed by a noisy thermometer.
+prior = LowLevelParticleFilters.SimpleMvNormal([20.0], [1.0;;])
+kf = KalmanFilter([1.0;;], [0.0;;], [1.0;;], 0, [0.01;;], [0.25;;], prior)
+y = [[20.0], [20.1], [20.3]]
+sol = smooth(kf, fill([0.0], length(y)), y; lag_one=true)
+
+k = 2
+Cth = 4200.0  # J/K
+ΔE = Cth * (sol.xT[k+1][1] - sol.xT[k][1])
+var_ΔT = sol.RT[k+1][1,1] + sol.RT[k][1,1] - 2 * sol.extraT[k][1,1]
+(energy_change_J = ΔE, standard_deviation_J = Cth * sqrt(var_ΔT))
+```
+
+The posterior standard deviation is about 0.41 kJ. Treating the two temperatures as independent would give 1.69 kJ because it would omit their positive covariance.
+
 ## Kalman filter tuning tutorial
 The tutorial ["How to tune a Kalman filter"](https://juliahub.com/pluto/editor.html?id=ad9ecbf9-bf83-45e7-bbe8-d2e5194f2240) details how to figure out appropriate covariance matrices for the Kalman filter, as well as how to add disturbance models to the system model.
 
