@@ -5,31 +5,35 @@
 
 Returns a [`KalmanSmoothingSolution`](@ref) with smoothed estimates of state `xT` and covariance `RT` given all input output data `u,y` or an existing filtering solution `filtersol` obtained from [`forward_trajectory`](@ref).
 
+For a Gaussian RTS smoother, request `lag_one=true` to store consecutive-state covariance blocks in `sol.extraT`. With `L = sol.extraT[t]`, the covariance of `x[t+1]-x[t]` is `sol.RT[t+1] + sol.RT[t] - L - L'`. The option uses the same smoother gain and factorization as the marginal update.
+
 The return smoothing can be plotted using `plot(sol)`, see [`KalmanSmoothingSolution`](@ref) and [`KalmanFilteringSolution`](@ref) for details.
 """
-function smooth(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractVector=sol.u, y::AbstractVector=sol.y,  p=parameters(kf))
+function smooth(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractVector=sol.u, y::AbstractVector=sol.y,  p=parameters(kf); lag_one=false)
     (; x,xt,R,Rt,ll) = sol
     T            = length(y)
     xT           = similar(xt)
     RT           = similar(Rt)
     xT[end]      = xt[end]      |> copy
     RT[end]      = Rt[end]      |> copy
+    Rlag = lag_one ? similar(RT, T-1) : nothing
     for t = T-1:-1:1
         # A_t propagates step t -> t+1, matching the forward pass which
         # evaluates it at time (t-1)*Ts (so the 3-D array form returns A[:,:,t]).
         C     = Rt[t]*get_mat(kf.A, xt[t], u[t], p, (t-1)*kf.Ts)'/cholesky(Symmetric(R[t+1]))
+        lag_one && (Rlag[t] = C * RT[t+1])
         xT[t] = xt[t] .+ C*(xT[t+1] .- x[t+1])
         RT[t] = Rt[t] .+ symmetrize(C*(RT[t+1] .- R[t+1])*C')
     end
-    KalmanSmoothingSolution(sol, xT, RT)
+    KalmanSmoothingSolution(sol, xT, RT, Rlag)
 end
 
-smooth(sol::KalmanFilteringSolution) = smooth(sol, sol.f)
+smooth(sol::KalmanFilteringSolution; kwargs...) = smooth(sol, sol.f; kwargs...)
 
-function smooth(kf::KalmanFilter, u::AbstractVector, y::AbstractVector, args...)
+function smooth(kf::KalmanFilter, u::AbstractVector, y::AbstractVector, args...; lag_one=false)
     reset!(kf)
     sol = forward_trajectory(kf, u, y, args...)
-    smooth(sol, kf, u, y, args...)
+    smooth(sol, kf, u, y, args...; lag_one)
 end
 
 # This smoother requires more information to be stored from the forward pass, K and S. The benefit of this implementation is that it does not invert the state covariance matrix, instead, it inverts the residual covariance. Pick the smoother that inverts the smallest matrix.

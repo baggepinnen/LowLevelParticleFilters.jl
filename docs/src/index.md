@@ -249,6 +249,22 @@ plot!(xbm', lab="pf smooth")
 plot!(vecvec_to_mat(x), lab="true")
 ```
 
+### Smoothed uncertainty of state change
+
+How much did a state variable change between consecutive samples? For example, if the variable is position, the change is displacement. Subtracting the two smoothed means gives the estimated change. Its uncertainty also depends on the covariance between the two samples, since both estimates use the full measurement record.
+
+Pass `lag_one=true` to [`smooth`](@ref) to compute that covariance. The following computes the change over the first interval and its covariance matrix.
+
+```@example lingauss
+s = smooth(sol; lag_one=true)
+k = 1
+Δx = s.xT[k+1] - s.xT[k]
+L = s.extraT[k]  # Covariance between x[k] (rows) and x[k+1] (columns)
+P_Δx = s.RT[k+1] + s.RT[k] - L - L'
+
+(change = Δx[1], standard_deviation = sqrt(P_Δx[1, 1]))
+```
+
 ## Kalman filter tuning tutorial
 The tutorial ["How to tune a Kalman filter"](https://juliahub.com/pluto/editor.html?id=ad9ecbf9-bf83-45e7-bbe8-d2e5194f2240) details how to figure out appropriate covariance matrices for the Kalman filter, as well as how to add disturbance models to the system model.
 

@@ -190,17 +190,19 @@ function correct!(kf::AbstractKalmanFilter, measurement_model::EKFMeasurementMod
 end
 
 # Consider smooth_mbf in case the state dimension is large
-function smooth(sol, kf::AbstractExtendedKalmanFilter, u::AbstractVector=sol.u, y::AbstractVector=sol.y, p=parameters(kf))
+function smooth(sol, kf::AbstractExtendedKalmanFilter, u::AbstractVector=sol.u, y::AbstractVector=sol.y, p=parameters(kf); lag_one=false)
     T            = length(y)
     (; x,xt,R,Rt,ll) = sol
     xT           = similar(xt)
     RT           = similar(Rt)
     xT[end]      = xt[end]      |> copy
     RT[end]      = Rt[end]      |> copy
+    Rlag = lag_one ? similar(RT, T-1) : nothing
     for t = T-1:-1:1
         # A_t propagates step t -> t+1 and must be evaluated at the same point as in the forward pass
         A = kf.Ajac(xt[t], u[t], p, (t-1)*kf.Ts)
         C     = Rt[t]*A'/cholesky(Symmetric(R[t+1]))
+        lag_one && (Rlag[t] = C * RT[t+1])
         Ce = C*(xT[t+1] .- x[t+1])
         @bangbang Ce .+= xt[t]
         xT[t] = Ce
@@ -215,14 +217,14 @@ function smooth(sol, kf::AbstractExtendedKalmanFilter, u::AbstractVector=sol.u, 
         end
         RT[t] = @bangbang R0 .+= Rt[t]
     end
-    KalmanSmoothingSolution(sol, xT, RT)
+    KalmanSmoothingSolution(sol, xT, RT, Rlag)
 end
 
 
-function smooth(kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::AbstractVector, args...)
+function smooth(kf::AbstractExtendedKalmanFilter, u::AbstractVector, y::AbstractVector, args...; lag_one=false)
     reset!(kf)
     sol = forward_trajectory(kf, u, y, args...)
-    smooth(sol, kf, u, y, args...)
+    smooth(sol, kf, u, y, args...; lag_one)
 end
 
 sample_state(kf::AbstractExtendedKalmanFilter, p=parameters(kf); noise=true) = noise ? rand(kf.d0) : mean(kf.d0)

@@ -252,7 +252,7 @@ Performs Rauch-Tung-Striebel smoothing for the Square-root Extended Kalman Filte
 Returns smoothed states and covariance matrices (converted from Cholesky factors).
 """
 function smooth(sol, kf::SqExtendedKalmanFilter, u::AbstractVector=sol.u, y::AbstractVector=sol.y,
-p=parameters(kf))
+p=parameters(kf); lag_one=false)
     T = length(y)
     (; x, xt, R, Rt, ll) = sol
     xT = similar(xt)
@@ -262,6 +262,7 @@ p=parameters(kf))
     xT[end] = xt[end] |> copy
     RT[end] = Rt[end]'*Rt[end]  # Convert to covariance for output compatibility
 
+    Rlag = lag_one ? similar(RT, T-1) : nothing
     for t = T-1:-1:1
         # A_t propagates step t -> t+1 and must be evaluated at the same point as in the forward pass
         A = kf.Ajac(xt[t], u[t], p, (t-1)*kf.Ts)
@@ -270,6 +271,7 @@ p=parameters(kf))
         Rt_cov = Rt[t]'*Rt[t]
         C = Rt_cov*A'/Cholesky(R[t+1], 'U', 0)
 
+        lag_one && (Rlag[t] = C * RT[t+1])
         Ce = C*(xT[t+1] .- x[t+1])
         @bangbang Ce .+= xt[t]
         xT[t] = Ce
@@ -287,13 +289,13 @@ p=parameters(kf))
         RT[t] = @bangbang R0 .+= Rt_cov
     end
 
-    KalmanSmoothingSolution(sol, xT, RT)
+    KalmanSmoothingSolution(sol, xT, RT, Rlag)
 end
 
-function smooth(kf::SqExtendedKalmanFilter, u::AbstractVector, y::AbstractVector, args...)
+function smooth(kf::SqExtendedKalmanFilter, u::AbstractVector, y::AbstractVector, args...; lag_one=false)
     reset!(kf)
     sol = forward_trajectory(kf, u, y, args...)
-    smooth(sol, kf, u, y, args...)
+    smooth(sol, kf, u, y, args...; lag_one)
 end
 
 # Reuse sampling functions from ExtendedKalmanFilter
