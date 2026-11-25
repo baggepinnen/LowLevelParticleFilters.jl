@@ -8,6 +8,7 @@ export RBPF, RBParticle, RBMeasurementModel
 export MUKF, LinearizedDynamics
 export ReactantParticleFilter, randn_noise
 export UIKalmanFilter, FilterPosDefException
+export correct_observed!
 export LinearMeasurementModel, EKFMeasurementModel, IEKFMeasurementModel, UKFMeasurementModel, CompositeMeasurementModel, QuantizedMeasurementModel
 export KalmanFilteringSolution, KalmanSmoothingSolution, ParticleFilteringSolution
 export FFBSi, GenealogySmoother, ParticleGibbsSmoother
@@ -168,6 +169,7 @@ include("utils.jl")
 include("smoothing.jl")
 include("plotting.jl")
 include("ekf.jl")
+include("observed.jl")
 include("iekf.jl")
 include("sq_kalman.jl")
 include("sq_ekf.jl")

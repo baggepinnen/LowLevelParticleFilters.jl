@@ -693,6 +693,8 @@ end
     include("test_indexing_matrix.jl")
 end
 
+include("test_observed_channels.jl")
+
 @testset "missing_data" begin
     @info "Testing missing_data"
     include("test_missing_data.jl")
