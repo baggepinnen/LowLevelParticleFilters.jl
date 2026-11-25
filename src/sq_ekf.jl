@@ -289,7 +289,7 @@ p=parameters(kf); lag_one=false)
         RT[t] = @bangbang R0 .+= Rt_cov
     end
 
-    KalmanSmoothingSolution(sol, xT, RT, nothing, Rlag)
+    KalmanSmoothingSolution(sol, xT, RT, Rlag)
 end
 
 function smooth(kf::SqExtendedKalmanFilter, u::AbstractVector, y::AbstractVector, args...; lag_one=false)

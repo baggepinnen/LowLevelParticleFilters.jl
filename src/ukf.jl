@@ -937,7 +937,7 @@ function smooth(sol::KalmanFilteringSolution, kf::UnscentedKalmanFilter{IPD,IPM,
         xT[t] = m + D*(xT[t+1]-m⁻[xi])
         RT[t] = Rt[t] + symmetrize(D*(RT[t+1] .- P⁻)*D')
     end
-    KalmanSmoothingSolution(sol, xT, RT, nothing, Rlag)
+    KalmanSmoothingSolution(sol, xT, RT, Rlag)
 end
 
 

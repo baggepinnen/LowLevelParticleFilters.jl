@@ -230,8 +230,11 @@ A structure representing the solution to a Kalman smoothing problem.
 - `sol`: A solution object containing the results of the _filtering_ process.
 - `xT`: The smoothed state estimate.
 - `RT`: The smoothed state covariance.
-- `Rlag`: Optional lag-one covariances. With `smooth(sol; lag_one=true)` on a KF, EKF, square-root EKF or UKF, `Rlag[t]` is `Cov(x[t], x[t+1] | y[1:T])`, with the earlier estimate indexing rows. Its length is `T-1` and it defaults to `nothing`.
-- `extraT`: Additional smoothing output that is specific to the filter type, `nothing` by default. For an [`IMM`](@ref) filter, this is a matrix of smoothed mode probabilities of size `(n_modes, T)`, mirroring the field `extra` of the filtering solution which holds the filtered mode probabilities.
+- `extraT`: Additional smoother output, `nothing` by default.
+  - For a Gaussian RTS smoother with `lag_one=true`, `extraT[t]` is the lag-one covariance
+    `Cov(x[t], x[t+1] | y[1:T])`, with the earlier estimate indexing rows. The vector has length `T-1`.
+  - For an [`IMM`](@ref), `extraT` is the matrix of smoothed mode probabilities of size `(n_modes, T)`.
+    The filtering solution stores the corresponding filtered probabilities in `extra`.
 
 The solution object can be plotted
 ```
@@ -251,10 +254,8 @@ struct KalmanSmoothingSolution <: AbstractKalmanFilteringSolution
     xT
     RT
     extraT
-    Rlag
 end
 
-KalmanSmoothingSolution(sol, xT, RT, extraT) = KalmanSmoothingSolution(sol, xT, RT, extraT, nothing)
 KalmanSmoothingSolution(sol, xT, RT) = KalmanSmoothingSolution(sol, xT, RT, nothing)
 
 function Base.getproperty(sol::KalmanSmoothingSolution, s::Symbol)

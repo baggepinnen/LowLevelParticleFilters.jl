@@ -5,7 +5,7 @@
 
 Returns a [`KalmanSmoothingSolution`](@ref) with smoothed estimates of state `xT` and covariance `RT` given all input output data `u,y` or an existing filtering solution `filtersol` obtained from [`forward_trajectory`](@ref).
 
-For a Gaussian RTS smoother, request `lag_one=true` to store consecutive-state covariance blocks in `sol.Rlag`. For a linear difference `x[t+1]-x[t]`, its covariance is `RT[t+1] + RT[t] - Rlag[t] - Rlag[t]'`. The option uses the same smoother gain and factorization as the marginal update.
+For a Gaussian RTS smoother, request `lag_one=true` to store consecutive-state covariance blocks in `sol.extraT`. With `L = sol.extraT[t]`, the covariance of `x[t+1]-x[t]` is `sol.RT[t+1] + sol.RT[t] - L - L'`. The option uses the same smoother gain and factorization as the marginal update.
 
 The return smoothing can be plotted using `plot(sol)`, see [`KalmanSmoothingSolution`](@ref) and [`KalmanFilteringSolution`](@ref) for details.
 """
@@ -25,7 +25,7 @@ function smooth(sol::KalmanFilteringSolution, kf::KalmanFilter, u::AbstractVecto
         xT[t] = xt[t] .+ C*(xT[t+1] .- x[t+1])
         RT[t] = Rt[t] .+ symmetrize(C*(RT[t+1] .- R[t+1])*C')
     end
-    KalmanSmoothingSolution(sol, xT, RT, nothing, Rlag)
+    KalmanSmoothingSolution(sol, xT, RT, Rlag)
 end
 
 smooth(sol::KalmanFilteringSolution; kwargs...) = smooth(sol, sol.f; kwargs...)

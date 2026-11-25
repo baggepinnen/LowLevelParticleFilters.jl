@@ -29,13 +29,13 @@ using Test, LinearAlgebra, LowLevelParticleFilters
         sol = forward_trajectory(kf, inputs, outputs)
         base = smooth(sol)
         joint = smooth(sol; lag_one=true)
-        @test isnothing(base.Rlag)
+        @test isnothing(base.extraT)
         @test base.xT == joint.xT && base.RT == joint.RT
-        @test length(joint.Rlag) == n-1
+        @test length(joint.extraT) == n-1
         for i in 1:n-1
-            @test joint.Rlag[i] ≈ post[blocks[i],blocks[i+1]]
+            @test joint.extraT[i] ≈ post[blocks[i],blocks[i+1]]
         end
     end
     kf = KalmanFilter(A,B,C,0,Q,V,prior)
-    @test isempty(smooth(kf, inputs[1:1], outputs[1:1]; lag_one=true).Rlag)
+    @test isempty(smooth(kf, inputs[1:1], outputs[1:1]; lag_one=true).extraT)
 end
