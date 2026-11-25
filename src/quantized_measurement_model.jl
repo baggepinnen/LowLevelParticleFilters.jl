@@ -236,10 +236,10 @@ terms of the unquantized outputs, such that `sum(abs2, r) + c == -ret.ll`. See [
 """
 function quantized_loglik_terms!(r, ret)
     length(r) == length(ret.lls) || throw(DimensionMismatch("The quantized measurement model has $(length(ret.lls)) outputs, but the residual block has length $(length(r))"))
-    c = 0 # An exact zero when all outputs are quantized, so that the derivative of the final square root at offset = 0 is not NaN
+    c = zero(eltype(r))
     for i in eachindex(ret.lls)
         if ret.quantized[i]
-            r[i] = sqrt(max(-ret.lls[i], zero(ret.lls[i])))
+            r[i] = sqrt_residual(-ret.lls[i]) # -log P_i is zero when the band probability rounds to one
         else
             r[i] = ret.r[i]/sqrt(2*one(eltype(r)))
             c += -ret.lls[i] - ret.r[i]^2/2 # log σ + log(2π)/2

@@ -383,9 +383,22 @@ function loglik_residuals!(res, ret, offset=0)
     length(res) == ny + 1 || throw(DimensionMismatch("The residual vector must have length ny+1 = $(ny+1), got $(length(res))"))
     c = loglik_terms!(view(res, 1:ny), ret) + offset
     c < 0 && negative_radicand_error(c, offset)
-    res[end] = sqrt(c)
+    res[end] = sqrt_residual(c)
     res
 end
+
+"""
+    sqrt_residual(x)
+
+Square root of a nonnegative residual term `x`, with value and derivative zero at `x = 0`. The
+derivative of `sqrt` is unbounded at zero and evaluates to `NaN` for a dual number with zero partials,
+which occurs, e.g., for the constant term of a correction with only quantized outputs and `offset = 0`.
+"""
+sqrt_residual(x) = x > 0 ? sqrt(x) : zero(sqrt(one(x)))
+
+# Results of correct! with a CompositeMeasurementModel and a QuantizedMeasurementModel
+const CompositeCorrection = NamedTuple{(:ll, :e, :S, :Sᵪ, :K, :parts)}
+const QuantizedCorrection = NamedTuple{(:ll, :e, :S, :Sᵪ, :K, :lls, :r, :quantized)}
 
 """
     c = loglik_terms!(r, ret)
@@ -394,28 +407,25 @@ Write the log-likelihood residuals of the `ny` outputs of the correction result 
 return the remaining constant term `c`, such that `sum(abs2, r) + c == -ret.ll`.
 """
 function loglik_terms!(r, ret)
-    if hasproperty(ret, :parts) # CompositeMeasurementModel: the component corrections are independent factors of the likelihood
-        c = 0 # See quantized_loglik_terms!
-        i = 0
-        for part in ret.parts
-            n = length(part[2])
-            c += loglik_terms!(view(r, i+1:i+n), part)
-            i += n
-        end
-        c
-    elseif hasproperty(ret, :lls)
-        quantized_loglik_terms!(r, ret)
-    else
-        gaussian_loglik_terms!(r, ret)
-    end
-end
-
-function gaussian_loglik_terms!(r, ret)
     _, e, _, Sᵪ = ret
     ldiv!(r, Sᵪ.L, e) # r'r = e'S⁻¹e since S = LL'
     r ./= sqrt(2*one(eltype(r)))
     (logdet(Sᵪ) + length(e)*log(2*one(eltype(r))*π))/2
 end
+
+# The component corrections are sequential, the likelihood is the product of their likelihoods
+function loglik_terms!(r, ret::CompositeCorrection)
+    c = zero(eltype(r))
+    i = 0
+    for part in ret.parts
+        n = length(part.e)
+        c += loglik_terms!(view(r, i+1:i+n), part)
+        i += n
+    end
+    c
+end
+
+loglik_terms!(r, ret::QuantizedCorrection) = quantized_loglik_terms!(r, ret)
 
 """
     prediction_errors!(res, f::AbstractFilter, u, y, p = parameters(f), λ = 1; loglik = false)

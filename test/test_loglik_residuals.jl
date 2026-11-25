@@ -58,6 +58,16 @@ end
     ret2 = correct!(ekf(), SA[0.0], [1.0, 2.0]) # More measurements than outputs of the model
     @test_throws DimensionMismatch loglik_residuals!(ones(3), ret2, 1)
 
+    # A band whose probability rounds to one gives a zero residual with a finite derivative
+    qwide = QuantizedMeasurementModel(LinearMeasurementModel(SA[1.0;;], 0, SA[1.0;;]), 256.0)
+    function wide(μ)
+        f = ExtendedKalmanFilter(dynamics, qwide, SA[0.1;;], LowLevelParticleFilters.SimpleMvNormal(SA[μ], SA[one(μ);;]); nu = 1)
+        r = zeros(typeof(μ), 2)
+        loglik_residuals!(r, correct!(f, SA[0.0], SA[0.0]))
+    end
+    @test wide(0.1) == [0, 0]
+    @test all(isfinite, ForwardDiff.derivative(wide, 0.1))
+
     # Missing measurements in a filter with a quantized measurement model
     u = fill(SA[0.0], 4)
     y = [SA[1.0], missing, SA[0.0], SA[1.0]]
