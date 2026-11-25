@@ -116,7 +116,7 @@ function residuals!(r, θ)
     try
         LLPF.prediction_errors!(r, kf, u, y; loglik=true, offset)
     catch err
-        err isa PosDefException || rethrow()
+        err isa Union{PosDefException, FilterPosDefException} || rethrow()
         r .= Inf
     end
     r
@@ -184,7 +184,7 @@ function residuals_fixed!(r, θ)
     try
         LLPF.prediction_errors!(r, kf, u, y; loglik=true, offset)
     catch err
-        err isa PosDefException || rethrow()
+        err isa Union{PosDefException, FilterPosDefException} || rethrow()
         r .= Inf
     end
     r
@@ -273,7 +273,7 @@ function residuals_multi!(r, θ, experiments)
         try
             LLPF.prediction_errors!(@view(r[i0+1:i0+n]), kf, e.u, e.y; loglik=true, offset)
         catch err
-            err isa PosDefException || rethrow()
+            err isa Union{PosDefException, FilterPosDefException} || rethrow()
             r .= Inf
         end
         i0 += n

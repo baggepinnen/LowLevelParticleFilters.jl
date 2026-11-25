@@ -101,7 +101,7 @@ function correct!(uikf::UIKalmanFilter, u, y, p=parameters(uikf), t::Real=index(
     # R̃(k) = C(k) * P(k|k-1) * C'(k) + R2(k)
     R̃ = symmetrize(C * R * C') + R2
     R̃_chol = cholesky(Symmetric(R̃); check=false)
-    issuccess(R̃_chol) || throw_factorization_failure(R̃_chol, "innovation covariance", t, "R̃", R̃)
+    issuccess(R̃_chol) || throw_factorization_failure(R̃_chol, "innovation covariance", index(uikf), "R̃", R̃)
 
     # Compute F matrix: F(k) = C(k) * G(k-1)
     F = C * G_mat
@@ -111,7 +111,7 @@ function correct!(uikf::UIKalmanFilter, u, y, p=parameters(uikf), t::Real=index(
     FtRinv = F' / R̃_chol
     FtRinvF = FtRinv * F
     FtRinvF_chol = cholesky(Symmetric(FtRinvF); check=false)
-    issuccess(FtRinvF_chol) || throw_factorization_failure(FtRinvF_chol, "F'*R̃⁻¹*F", t, "F'*R̃⁻¹*F", FtRinvF, "Check that rank(C*G) = size(G,2)")
+    issuccess(FtRinvF_chol) || throw_factorization_failure(FtRinvF_chol, "F'*R̃⁻¹*F", index(uikf), "F'*R̃⁻¹*F", FtRinvF, "Check that rank(C*G) = size(G,2)")
     M = (FtRinvF_chol \ FtRinv)
 
     # Estimate unknown input (equation 4)
@@ -163,7 +163,7 @@ function correct!(uikf::UIKalmanFilter, u, y, p=parameters(uikf), t::Real=index(
     # Compute α * R̃* * α' (this should be invertible)
     α_Rˣ_αT = α * R̃ˣ * α'
     α_Rˣ_αT_chol = cholesky(Symmetric(α_Rˣ_αT); check=false)
-    issuccess(α_Rˣ_αT_chol) || throw_factorization_failure(α_Rˣ_αT_chol, "α*R̃*α'", t, "α*R̃*α'", α_Rˣ_αT)
+    issuccess(α_Rˣ_αT_chol) || throw_factorization_failure(α_Rˣ_αT_chol, "α*R̃ˣ*α'", index(uikf), "α*R̃ˣ*α'", α_Rˣ_αT)
 
     # Compute Kalman gain
     K = Vˣ * (α' / α_Rˣ_αT_chol) * α

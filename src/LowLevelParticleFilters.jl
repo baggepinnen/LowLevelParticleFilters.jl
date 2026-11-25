@@ -7,7 +7,7 @@ export IMM, interact!, combine!
 export RBPF, RBParticle, RBMeasurementModel
 export MUKF, LinearizedDynamics
 export ReactantParticleFilter, randn_noise
-export UIKalmanFilter
+export UIKalmanFilter, FilterPosDefException
 export LinearMeasurementModel, EKFMeasurementModel, IEKFMeasurementModel, UKFMeasurementModel, CompositeMeasurementModel, QuantizedMeasurementModel
 export KalmanFilteringSolution, KalmanSmoothingSolution, ParticleFilteringSolution
 export FFBSi, GenealogySmoother, ParticleGibbsSmoother
@@ -93,27 +93,65 @@ function printarray(A::AbstractMatrix)
 end
 
 """
+    FilterPosDefException <: Exception
+
+Thrown by the filters of this package when a Cholesky factorization fails because the matrix
+is not positive definite: the innovation covariance, the state covariance when generating
+sigma points, and the factorizations of the [`UIKalmanFilter`](@ref). In contrast to
+`LinearAlgebra.PosDefException`, it records which matrix failed, at which time step, and its
+value, and prints this description when shown.
+
+Factorizations outside the filters, for example of a covariance matrix supplied by the user
+or of a static matrix factorized by StaticArrays, still throw `LinearAlgebra.PosDefException`.
+During parameter estimation, catch both and return an infinite cost:
+```julia
+try
+    -loglik(kf, u, y)
+catch err
+    err isa Union{PosDefException, FilterPosDefException} || rethrow()
+    Inf
+end
+```
+
+# Fields
+- `what`: description of the matrix that failed to factorize.
+- `t`: time step of the filter, or `nothing`.
+- `name`: name of the matrix in the description.
+- `M`: the matrix, or `nothing`.
+- `hint`: additional advice, or an empty string.
+- `info`: the `info` field of the failed factorization, as in `LinearAlgebra.PosDefException`.
+"""
+struct FilterPosDefException <: Exception
+    what::String
+    t::Any
+    name::String
+    M::Any
+    hint::String
+    info::Int
+end
+
+function Base.showerror(io::IO, e::FilterPosDefException)
+    print(io, "FilterPosDefException: Cholesky factorization of ", e.what, " failed")
+    e.t === nothing || print(io, " at time step ", e.t)
+    e.M === nothing || print(io, ", got ", e.name, " = ", printarray(e.M))
+    print(io, ".")
+    isempty(e.hint) || print(io, " ", e.hint)
+    print(io, " See https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/#Troubleshooting-Kalman-filters")
+end
+
+"""
     throw_factorization_failure(F, what, t, name, M, hint = "")
 
-Throw a `LinearAlgebra.PosDefException` for the failed Cholesky factorization `F` of the
-matrix `M` (called `name` in the description) of `what`, at time `t`. All failed
-factorizations of a filter thereby raise the same exception type. `F`, `t`, `name` and `M`
-may be `nothing`.
-
-A `PosDefException` cannot carry a message, so the description is emitted as a debug log
-message, shown with `ENV["JULIA_DEBUG"] = "LowLevelParticleFilters"`. It is only formatted
-when debug logging is enabled, which keeps failures cheap inside optimization loops. The
-arguments are passed explicitly rather than through a closure, since a closure that captures
-a reassigned local variable makes the caller allocate on every call.
+Throw a [`FilterPosDefException`](@ref) for the failed Cholesky factorization `F` of the
+matrix `M` (called `name` in the description) of `what`, at time `t`. `F`, `t` and `M` may be
+`nothing`. The description is formatted only when the exception is shown, which keeps
+failures cheap inside optimization loops. The arguments are passed explicitly rather than
+through a closure, since a closure that captures a reassigned local variable makes the caller
+allocate on every call.
 """
 @noinline function throw_factorization_failure(F, what, t, name, M, hint = "")
-    @debug string("Cholesky factorization of ", what, " failed",
-        t === nothing ? "" : string(" at time step ", t),
-        M === nothing ? "" : string(", got ", name, " = ", printarray(M)), ".",
-        isempty(hint) ? "" : string(" ", hint),
-        " See https://baggepinnen.github.io/LowLevelParticleFilters.jl/stable/#Troubleshooting-Kalman-filters")
     info = F isa LinearAlgebra.Factorization && hasfield(typeof(F), :info) ? Int(F.info) : 1
-    throw(PosDefException(info == 0 ? 1 : info))
+    throw(FilterPosDefException(what, t, name, M === nothing ? nothing : copy(M), hint, info == 0 ? 1 : info))
 end
 
 include("indexing_matrix.jl")

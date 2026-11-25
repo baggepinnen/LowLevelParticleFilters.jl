@@ -389,7 +389,7 @@ If either of the following conditions are met, you may experience failure in int
 
 The error message may look like
 ```
-ERROR: PosDefException: matrix is not positive definite; Factorization failed.
+ERROR: FilterPosDefException: Cholesky factorization of state covariance failed at time step 1, got R = [...]. See ...
 ```
 In such situations, it is advicable to reconsider the noise model and covariance matrices, alternatively, you may provide a custom Cholesky factorization function to the UKF constructor through the keyword argument `cholesky!`. The function should have the signature `cholesky!(A::AbstractMatrix)::Cholesky`. A useful alternative factorizaiton when covariance matrices are expected to be singular is `cholesky! = R->cholesky!(Positive, Matrix(R))` where the "positive" Cholesky factorization is provided by the package PositiveFactorizations.jl, which must be manually installed and loaded by the user.
 """
