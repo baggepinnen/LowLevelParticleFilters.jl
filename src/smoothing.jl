@@ -359,6 +359,9 @@ function for each time step.
   ``\\sqrt{\\frac{1}{2}(\\log\\det S + n_y \\log 2π) + \\text{offset}}``.
 - For a correction with a [`QuantizedMeasurementModel`](@ref), the residuals are those described
   in [`LowLevelParticleFilters.prediction_errors!`](@ref).
+- For a correction with a [`CompositeMeasurementModel`](@ref), the first `ny` entries are the
+  concatenated residuals of the component models, and the last entry is the square root of the sum
+  of their constant terms plus `offset`. The component models may be Gaussian or quantized.
 - For a missing measurement, the first entries are zero and the last entry is `sqrt(offset)`.
   The returned `ret` does not contain the number of outputs, and the length of `res` is therefore
   not validated in this case; the caller must provide a vector of length `ny+1`.
@@ -368,31 +371,61 @@ nonnegative over the parameter domain explored during estimation, and to be held
 optimization. An error is thrown if the expression is negative.
 """
 function loglik_residuals!(res, ret, offset=0)
-    if ret[2] === missing
+    e = ret[2]
+    if e === missing
         isempty(res) && throw(DimensionMismatch("The residual vector must have length ny+1, got an empty vector"))
         offset < 0 && negative_radicand_error(offset, offset)
         fill!(res, 0)
         res[end] = sqrt(offset)
-        res
-    elseif hasproperty(ret, :lls)
-        quantized_loglik_residuals!(res, ret, offset)
-    else
-        gaussian_loglik_residuals!(res, ret, offset)
+        return res
     end
-end
-
-function gaussian_loglik_residuals!(res, ret, offset)
-    _, e, _, Sᵪ = ret
     ny = length(e)
     length(res) == ny + 1 || throw(DimensionMismatch("The residual vector must have length ny+1 = $(ny+1), got $(length(res))"))
-    c = (logdet(Sᵪ) + ny*log(2*one(eltype(res))*π))/2 + offset
+    c = loglik_terms!(view(res, 1:ny), ret) + offset
     c < 0 && negative_radicand_error(c, offset)
-    r = view(res, 1:ny)
-    ldiv!(r, Sᵪ.L, e) # r'r = e'S⁻¹e since S = LL'
-    r ./= sqrt(2*one(eltype(r)))
-    res[end] = sqrt(c)
+    res[end] = sqrt_residual(c)
     res
 end
+
+"""
+    sqrt_residual(x)
+
+Square root of a nonnegative residual term `x`, with value and derivative zero at `x = 0`. The
+derivative of `sqrt` is unbounded at zero and evaluates to `NaN` for a dual number with zero partials,
+which occurs, e.g., for the constant term of a correction with only quantized outputs and `offset = 0`.
+"""
+sqrt_residual(x) = x > 0 ? sqrt(x) : zero(sqrt(one(x)))
+
+# Results of correct! with a CompositeMeasurementModel and a QuantizedMeasurementModel
+const CompositeCorrection = NamedTuple{(:ll, :e, :S, :Sᵪ, :K, :parts)}
+const QuantizedCorrection = NamedTuple{(:ll, :e, :S, :Sᵪ, :K, :lls, :r, :quantized)}
+
+"""
+    c = loglik_terms!(r, ret)
+
+Write the log-likelihood residuals of the `ny` outputs of the correction result `ret` into `r` and
+return the remaining constant term `c`, such that `sum(abs2, r) + c == -ret.ll`.
+"""
+function loglik_terms!(r, ret)
+    _, e, _, Sᵪ = ret
+    ldiv!(r, Sᵪ.L, e) # r'r = e'S⁻¹e since S = LL'
+    r ./= sqrt(2*one(eltype(r)))
+    (logdet(Sᵪ) + length(e)*log(2*one(eltype(r))*π))/2
+end
+
+# The component corrections are sequential, the likelihood is the product of their likelihoods
+function loglik_terms!(r, ret::CompositeCorrection)
+    c = zero(eltype(r))
+    i = 0
+    for part in ret.parts
+        n = length(part.e)
+        c += loglik_terms!(view(r, i+1:i+n), part)
+        i += n
+    end
+    c
+end
+
+loglik_terms!(r, ret::QuantizedCorrection) = quantized_loglik_terms!(r, ret)
 
 """
     prediction_errors!(res, f::AbstractFilter, u, y, p = parameters(f), λ = 1; loglik = false)
