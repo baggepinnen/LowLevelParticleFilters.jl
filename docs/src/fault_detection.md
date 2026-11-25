@@ -1,7 +1,7 @@
 # Fault detection
 This is also a video tutorial, available below:
 ```@raw html
-<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/NgDcMuewPbI?si=6_bgIDiz9PFIE_gQ" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<iframe style="height: 315px; width: 560px" src="https://www.youtube.com/embed/NgDcMuewPbI?si=6_bgIDiz9PFIE_gQ" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 ```
 
 # Fault detection using state estimation
