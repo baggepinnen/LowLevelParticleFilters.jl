@@ -227,27 +227,22 @@ function check_quantization_support(f, fname)
 end
 
 """
-    quantized_loglik_residuals!(res, ret, offset)
+    c = quantized_loglik_terms!(r, ret)
 
-Residuals of one time step for [`LowLevelParticleFilters.prediction_errors!`](@ref) with
-`loglik = true` from the result `ret` of `correct!` with a [`QuantizedMeasurementModel`](@ref):
-``\\sqrt{-\\log P_i}`` for a quantized output, the whitened innovation ``r_i/\\sqrt{2}`` for an
-unquantized output, and in the last entry the square root of the constant terms of the unquantized
-outputs plus `offset`, such that `sum(abs2, res) == -ret.ll + offset`.
+Write the `ny` log-likelihood residuals of the result `ret` of `correct!` with a
+[`QuantizedMeasurementModel`](@ref) into `r`: ``\\sqrt{-\\log P_i}`` for a quantized output and the
+whitened innovation ``r_i/\\sqrt{2}`` for an unquantized output. Return the sum `c` of the constant
+terms of the unquantized outputs, such that `sum(abs2, r) + c == -ret.ll`. See [`loglik_residuals!`](@ref).
 """
-function quantized_loglik_residuals!(res, ret, offset)
-    ny = length(ret.lls)
-    length(res) == ny + 1 || throw(DimensionMismatch("The residual vector must have length ny+1 = $(ny+1), got $(length(res))"))
-    c = offset
-    for i in 1:ny
+function quantized_loglik_terms!(r, ret)
+    c = 0 # An exact zero when all outputs are quantized, so that the derivative of the final square root at offset = 0 is not NaN
+    for i in eachindex(ret.lls)
         if ret.quantized[i]
-            res[i] = sqrt(max(-ret.lls[i], zero(ret.lls[i])))
+            r[i] = sqrt(max(-ret.lls[i], zero(ret.lls[i])))
         else
-            res[i] = ret.r[i]/sqrt(2)
+            r[i] = ret.r[i]/sqrt(2*one(eltype(r)))
             c += -ret.lls[i] - ret.r[i]^2/2 # log σ + log(2π)/2
         end
     end
-    c < 0 && negative_radicand_error(c, offset)
-    res[ny+1] = sqrt(c)
-    res
+    c
 end

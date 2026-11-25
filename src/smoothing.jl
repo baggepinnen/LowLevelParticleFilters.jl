@@ -359,6 +359,9 @@ function for each time step.
   ``\\sqrt{\\frac{1}{2}(\\log\\det S + n_y \\log 2π) + \\text{offset}}``.
 - For a correction with a [`QuantizedMeasurementModel`](@ref), the residuals are those described
   in [`LowLevelParticleFilters.prediction_errors!`](@ref).
+- For a correction with a [`CompositeMeasurementModel`](@ref), the first `ny` entries are the
+  concatenated residuals of the component models, and the last entry contains the sum of their
+  constant terms. The component models may be Gaussian or quantized.
 - For a missing measurement, the first entries are zero and the last entry is `sqrt(offset)`.
   The returned `ret` does not contain the number of outputs, and the length of `res` is therefore
   not validated in this case; the caller must provide a vector of length `ny+1`.
@@ -368,30 +371,50 @@ nonnegative over the parameter domain explored during estimation, and to be held
 optimization. An error is thrown if the expression is negative.
 """
 function loglik_residuals!(res, ret, offset=0)
-    if ret[2] === missing
+    e = ret[2]
+    if e === missing
         isempty(res) && throw(DimensionMismatch("The residual vector must have length ny+1, got an empty vector"))
         offset < 0 && negative_radicand_error(offset, offset)
         fill!(res, 0)
         res[end] = sqrt(offset)
-        res
+        return res
+    end
+    ny = length(e)
+    length(res) == ny + 1 || throw(DimensionMismatch("The residual vector must have length ny+1 = $(ny+1), got $(length(res))"))
+    c = loglik_terms!(view(res, 1:ny), ret) + offset
+    c < 0 && negative_radicand_error(c, offset)
+    res[end] = sqrt(c)
+    res
+end
+
+"""
+    c = loglik_terms!(r, ret)
+
+Write the log-likelihood residuals of the `ny` outputs of the correction result `ret` into `r` and
+return the remaining constant term `c`, such that `sum(abs2, r) + c == -ret.ll`.
+"""
+function loglik_terms!(r, ret)
+    if hasproperty(ret, :parts) # CompositeMeasurementModel: the component corrections are independent factors of the likelihood
+        c = 0 # See quantized_loglik_terms!
+        i = 0
+        for part in ret.parts
+            n = length(part[2])
+            c += loglik_terms!(view(r, i+1:i+n), part)
+            i += n
+        end
+        c
     elseif hasproperty(ret, :lls)
-        quantized_loglik_residuals!(res, ret, offset)
+        quantized_loglik_terms!(r, ret)
     else
-        gaussian_loglik_residuals!(res, ret, offset)
+        gaussian_loglik_terms!(r, ret)
     end
 end
 
-function gaussian_loglik_residuals!(res, ret, offset)
+function gaussian_loglik_terms!(r, ret)
     _, e, _, Sᵪ = ret
-    ny = length(e)
-    length(res) == ny + 1 || throw(DimensionMismatch("The residual vector must have length ny+1 = $(ny+1), got $(length(res))"))
-    c = (logdet(Sᵪ) + ny*log(2*one(eltype(res))*π))/2 + offset
-    c < 0 && negative_radicand_error(c, offset)
-    r = view(res, 1:ny)
     ldiv!(r, Sᵪ.L, e) # r'r = e'S⁻¹e since S = LL'
     r ./= sqrt(2*one(eltype(r)))
-    res[end] = sqrt(c)
-    res
+    (logdet(Sᵪ) + length(e)*log(2*one(eltype(r))*π))/2
 end
 
 """

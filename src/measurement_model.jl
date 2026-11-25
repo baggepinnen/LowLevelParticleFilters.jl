@@ -21,12 +21,13 @@ end
 """
     CompositeMeasurementModel(model1, model2, ...)
 
-A composite measurement model that combines multiple measurement models. This model acts as all component models concatenated. The tuple returned from [`correct!`](@ref) will be
+A composite measurement model that combines multiple measurement models. This model acts as all component models concatenated. The component models correct the state sequentially, in the order in which they are given. The named tuple returned from [`correct!`](@ref) contains
 - `ll`: The sum of the log-likelihood of all component models
 - `e`: The concatenated innovation vector
-- `S`: A vector of the innovation covariance matrices of the component models
-- `Sᵪ`: A vector of the Cholesky factorizations of the innovation covariance matrices of the component models
-- `K`: A vector of the Kalman gains of the component models
+- `S`: A tuple of the innovation covariance matrices of the component models
+- `Sᵪ`: A tuple of the Cholesky factorizations of the innovation covariance matrices of the component models
+- `K`: A tuple of the Kalman gains of the component models
+- `parts`: A tuple of the results of `correct!` of the component models
 
 If all sensors operate on at the same rate, and all measurement models are of the same type, it's more efficient to use a single measurement model with a vector-valued measurement function.
 
@@ -65,23 +66,14 @@ function correct!(
     R2 = nothing,
 )
     R2 === nothing || @warn("correct! with a composite measurement model ignores the custom R2 argument, open an issue if you need this feature.", maxlog=3)
-    ll = 0.0
-    e = zeros(measurement_model.ny)
-    S = []
-    Sᵪ = []
-    K = []
-    last_ind = 0
-    for i = 1:length(measurement_model.models)
-        lli, ei, Si, Sᵪi, Ki = correct!(kf, measurement_model.models[i], u, y, p, t)
-        ll += lli
-        inds = (1:measurement_model.models[i].ny) .+ last_ind
-        e[inds] .= ei
-        last_ind = inds[end]
-        push!(S, Si)
-        push!(Sᵪ, Sᵪi)
-        push!(K, Ki)
-    end
-    ll, e, S, Sᵪ, K
+    # The component models correct the state sequentially, map over the tuple preserves this order
+    parts = map(m -> correct!(kf, m, u, y, p, t), measurement_model.models)
+    ll = sum(part -> part[1], parts)
+    e = reduce(vcat, map(part -> part[2], parts))
+    S = map(part -> part[3], parts)
+    Sᵪ = map(part -> part[4], parts)
+    K = map(part -> part[5], parts)
+    (; ll, e, S, Sᵪ, K, parts)
 end
 
 struct UKFMeasurementModel{IPM,AUGM,MT,RT,IT,MET,CT,CCT,CAT,WP} <: AbstractMeasurementModel
