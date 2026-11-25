@@ -217,6 +217,48 @@ end
 
 n_integrator_covariance_smooth(n::Int, Ts, σ2=1) = n_integrator_covariance_smooth(Val(n), Ts, σ2)
 
+"""
+    interval_output_rk4(f, g, nx, Ts; supersample=1)
+
+Discretize out-of-place continuous dynamics `f(x,u,p,t)` together with vector
+output rates `g(x,u,p,t)` under a held input over a positive interval `Ts`.
+The returned function accepts `(z,u,p,t)`, with `z = [x; s]` and physical
+state dimension `nx`. It resets the accumulators `s` to zero and returns
+the terminal state followed by the output integrals. Both use the same RK4
+stages, including their dependence on the initial state and parameters.
+
+For an interval mean use the integrand `h(x,u,p,t)/Ts`. Different channels
+may represent means and totals in the same step. For an EKF, use this function
+as the discrete dynamics, call `predict!` with the interval input and then
+`correct!` with the measured totals or means at its end. Specify the process
+covariance for the augmented discrete model according to its noise timing.
+"""
+function interval_output_rk4(f, g, nx::Integer, Ts; supersample::Integer=1)
+    nx > 0 || throw(ArgumentError("nx must be positive"))
+    Ts > 0 || throw(ArgumentError("Ts must be positive"))
+    _interval_output_rk4(f, g, Val(nx), Ts, supersample)
+end
+
+_interval_state(z, ::Val{N}) where N = z[1:N]
+_interval_state(z::StaticVector, ::Val{N}) where N = z[SOneTo(N)]
+
+function _interval_output_rk4(f, g, nx::Val{N}, Ts, supersample) where N
+    function augmented(z, u, p, t)
+        x = _interval_state(z, nx)
+        dx = f(x, u, p, t)
+        rates = g(x, u, p, t)
+        length(dx) == N && length(rates) == length(z)-N ||
+            throw(DimensionMismatch("dynamics and output rates must match the augmented state"))
+        vcat(dx, rates)
+    end
+    integrate = rk4(augmented, Ts; supersample)
+    function step(z, u, p, t)
+        length(z) >= N || throw(DimensionMismatch("augmented state is shorter than nx"))
+        initial = map((v, i) -> i <= N ? v : zero(v), z, eachindex(z))
+        integrate(initial, u, p, t)
+    end
+end
+
 function rk4(f::F, Ts0; supersample::Integer = 1) where {F}
     supersample ≥ 1 || throw(ArgumentError("supersample must be positive."))
     # Runge-Kutta 4 method

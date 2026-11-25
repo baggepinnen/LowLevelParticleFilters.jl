@@ -17,6 +17,25 @@ where the integer `supersample` determines the number of RK4 steps that is taken
     - The performance is often dictated by the disturbances acting on the system.
     - State-estimation enjoys feedback from measurements that corrects for slight errors due to integration.
 
+## Interval totals and means
+
+A flow meter can report the volume delivered during a sampling interval. For continuous
+dynamics `f` and volumetric flow rate `q`, use [`interval_output_rk4`](@ref) to
+predict the terminal state and the volume with the same integration stages.
+
+```julia
+step = interval_output_rk4(f, (x,u,p,t) -> [q(x,u,p,t)], nx, Ts; supersample=4)
+z = step([x0; 0.0], u, p, t)
+volume = z[end]
+```
+
+To model a mean flow rate, use `q(x,u,p,t)/Ts` as the integrand.
+In an augmented EKF, predict with the input held during this interval, then
+correct the last coordinate using the interval measurement. If continuous
+process noise affects the output within the interval, the discrete noise
+model must include its contribution to the accumulator covariance and its
+cross-covariance with the terminal state.
+
 ## Linear systems
 A linear system on the form 
 ```math

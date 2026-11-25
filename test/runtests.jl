@@ -678,6 +678,8 @@ end
     include("test_enkf.jl")
 end
 
+include("test_interval_output.jl")
+
 @testset "function_versions" begin
     @info "Testing function_versions"
     include("test_function_versions.jl")
