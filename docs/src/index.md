@@ -249,27 +249,21 @@ plot!(xbm', lab="pf smooth")
 plot!(vecvec_to_mat(x), lab="true")
 ```
 
-### Uncertainty in a change in stored thermal energy
+### Smoothed uncertainty of state change
 
-Suppose a tank has known heat capacity `Cth` in J/K. Its change in stored energy over a measurement interval is the temperature change multiplied by `Cth`. Consecutive smoothed temperatures depend on the same observations, so the variance of their difference includes their covariance. Request `lag_one=true` to obtain this covariance in `sol.extraT[k]`, with rows corresponding to time `k` and columns to time `k+1`.
+How much did a state variable change between consecutive samples? For example, if the variable is position, the change is displacement. Subtracting the two smoothed means gives the estimated change. Its uncertainty also depends on the covariance between the two samples, since both estimates use the full measurement record.
 
-```@example tank_energy
-using LowLevelParticleFilters
+Pass `lag_one=true` to [`smooth`](@ref) to compute that covariance. The following computes the change over the first interval and its covariance matrix.
 
-# Model the tank temperature as a random walk observed by a noisy thermometer.
-prior = LowLevelParticleFilters.SimpleMvNormal([20.0], [1.0;;])
-kf = KalmanFilter([1.0;;], [0.0;;], [1.0;;], 0, [0.01;;], [0.25;;], prior)
-y = [[20.0], [20.1], [20.3]]
-sol = smooth(kf, fill([0.0], length(y)), y; lag_one=true)
+```@example lingauss
+s = smooth(sol; lag_one=true)
+k = 1
+Δx = s.xT[k+1] - s.xT[k]
+L = s.extraT[k]  # Covariance between x[k] (rows) and x[k+1] (columns)
+P_Δx = s.RT[k+1] + s.RT[k] - L - L'
 
-k = 2
-Cth = 4200.0  # J/K
-ΔE = Cth * (sol.xT[k+1][1] - sol.xT[k][1])
-var_ΔT = sol.RT[k+1][1,1] + sol.RT[k][1,1] - 2 * sol.extraT[k][1,1]
-(energy_change_J = ΔE, standard_deviation_J = Cth * sqrt(var_ΔT))
+(change = Δx[1], standard_deviation = sqrt(P_Δx[1, 1]))
 ```
-
-The posterior standard deviation is about 0.41 kJ. Treating the two temperatures as independent would give 1.69 kJ because it would omit their positive covariance.
 
 ## Kalman filter tuning tutorial
 The tutorial ["How to tune a Kalman filter"](https://juliahub.com/pluto/editor.html?id=ad9ecbf9-bf83-45e7-bbe8-d2e5194f2240) details how to figure out appropriate covariance matrices for the Kalman filter, as well as how to add disturbance models to the system model.
