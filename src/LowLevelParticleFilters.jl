@@ -6,7 +6,7 @@ export UKFWeights, TrivialParams, MerweParams, WikiParams
 export IMM, interact!, combine!
 export RBPF, RBParticle, RBMeasurementModel
 export MUKF, LinearizedDynamics
-export ReactantParticleFilter, randn_noise
+export ReactantParticleFilter, randn_noise, batched_loglik
 export UIKalmanFilter
 export LinearMeasurementModel, EKFMeasurementModel, IEKFMeasurementModel, UKFMeasurementModel, CompositeMeasurementModel, QuantizedMeasurementModel
 export KalmanFilteringSolution, KalmanSmoothingSolution, ParticleFilteringSolution
