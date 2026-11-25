@@ -713,6 +713,8 @@ end
     include("test_logchol.jl")
 end
 
+include("test_gaussian_residuals.jl")
+
 @testset "autotune_covariances" begin
     @info "Testing autotune_covariances"
     include("test_autotune_covariances.jl")
